@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
-import { http, HttpResponse } from "msw"
+import { delay, http, HttpResponse } from "msw"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 import type { Faq } from "@/payload-types"
 import { faqContent, landingBlocks, richText } from "@/cms/seed-content"
@@ -41,7 +41,16 @@ const meta = {
   title: "CMS/Marketing",
   component: MarketingShell,
   args: { children: null },
-  parameters: { layout: "fullscreen" },
+  parameters: {
+    layout: "fullscreen",
+    msw: {
+      handlers: [
+        http.get("https://api.github.com/repos/vinipace/datool", () =>
+          HttpResponse.json({ stargazers_count: 1240 })
+        ),
+      ],
+    },
+  },
   render: () => (
     <MarketingShell>
       <StructuredData
@@ -118,6 +127,43 @@ export const ProductNavigation: Story = {
       "href",
       "/docs"
     )
+  },
+}
+
+export const GitHubStarsLoading: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get("https://api.github.com/repos/vinipace/datool", async () => {
+          await delay("infinite")
+        }),
+      ],
+    },
+  },
+}
+
+export const GitHubStarsUnavailable: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(
+          "https://api.github.com/repos/vinipace/datool",
+          () => new HttpResponse(null, { status: 503 })
+        ),
+      ],
+    },
+  },
+}
+
+export const GitHubStarsZero: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get("https://api.github.com/repos/vinipace/datool", () =>
+          HttpResponse.json({ stargazers_count: 0 })
+        ),
+      ],
+    },
   },
 }
 

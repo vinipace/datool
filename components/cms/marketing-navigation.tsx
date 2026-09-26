@@ -1,7 +1,8 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ChevronDown, Menu } from "lucide-react"
+import { ChevronDown, Github, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -42,10 +43,59 @@ function ProductLinks() {
 const links = [
   { href: "/pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" },
-  { href: "/faq", label: "FAQ" },
 ]
 
+const githubRepository = "https://github.com/vinipace/datool"
+
 export function MarketingNavigation() {
+  const [stars, setStars] = useState<number | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+
+    void fetch("https://api.github.com/repos/vinipace/datool", {
+      signal: controller.signal,
+      credentials: "omit",
+      headers: { Accept: "application/vnd.github+json" },
+    })
+      .then(async (response) => {
+        if (!response.ok) return
+        const data: { stargazers_count?: unknown } = await response.json()
+        const count = data.stargazers_count
+        if (
+          typeof count === "number" &&
+          Number.isSafeInteger(count) &&
+          count >= 0
+        ) {
+          setStars(count)
+        }
+      })
+      .catch(() => {
+        // The repository link remains usable when GitHub is unavailable.
+      })
+      .finally(() => clearTimeout(timeout))
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [])
+
+  const githubLabel = `Star Datool on GitHub${stars === null ? "" : ` (${stars.toLocaleString("en-US")} ${stars === 1 ? "star" : "stars"})`} (opens in a new tab)`
+  const starCount =
+    stars === null ? null : (
+      <span
+        className="text-xs text-foreground-muted tabular-nums"
+        aria-hidden="true"
+      >
+        {new Intl.NumberFormat("en", {
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(stars)}
+      </span>
+    )
+
   return (
     <div className="flex items-center gap-1 sm:gap-2">
       <div className="hidden items-center gap-1 md:flex">
@@ -70,6 +120,18 @@ export function MarketingNavigation() {
             <Link href={link.href}>{link.label}</Link>
           </Button>
         ))}
+        <Button asChild variant="outline" size="sm">
+          <a
+            href={githubRepository}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={githubLabel}
+          >
+            <Github aria-hidden="true" />
+            Star
+            {starCount}
+          </a>
+        </Button>
       </div>
       <Button asChild variant="ghost" size="sm">
         <Link href="/sign-in">Log in</Link>
@@ -96,6 +158,18 @@ export function MarketingNavigation() {
                 <Link href={link.href}>{link.label}</Link>
               </DropdownMenuItem>
             ))}
+            <DropdownMenuItem asChild>
+              <a
+                href={githubRepository}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={githubLabel}
+              >
+                <Github aria-hidden="true" />
+                Star on GitHub
+                {starCount}
+              </a>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
