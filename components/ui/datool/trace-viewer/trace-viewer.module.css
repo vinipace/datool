@@ -1,0 +1,1395 @@
+.traceNode {
+  position: relative;
+}
+
+.childRow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.spanNode {
+  position: absolute;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0;
+  background-color: var(--span-background);
+  color: var(--span-text);
+  border: 1px solid var(--span-icon-color, var(--span-border));
+  border-radius: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  content-visibility: auto;
+  cursor: pointer;
+  user-select: none;
+  z-index: 2;
+
+  &.huge {
+    overflow: visible;
+
+    & .spanName {
+      flex: 0 1 auto;
+      position: sticky;
+      left: 0;
+    }
+
+    & .spanSpacer {
+      flex: 1 0 0;
+    }
+
+    & .spanDuration {
+      position: sticky;
+      right: 0;
+      background-color: var(--span-background);
+      padding-left: 6px;
+      box-shadow: -8px 0 16px 8px var(--span-background);
+    }
+  }
+
+  &::after {
+    position: absolute;
+    left: -1px;
+    top: -1px;
+    width: var(--span-width);
+    height: var(--row-height);
+    content: "";
+  }
+
+  &:hover:not([data-selected]) {
+    --span-background: var(--surface-row-hover);
+  }
+
+  &.xHover {
+    z-index: 3;
+    min-width: var(--span-width);
+    max-width: 75%;
+    background: linear-gradient(
+      90deg,
+      var(--span-background) calc(var(--span-width) - 1px),
+      var(--span-line),
+      var(--background) calc(var(--span-width) + 1px)
+    );
+
+    &[data-right-side="true"] {
+      background: linear-gradient(
+        270deg,
+        var(--span-background) calc(var(--span-width) - 1px),
+        var(--span-line),
+        var(--background) calc(var(--span-width) + 1px)
+      );
+    }
+
+    & .spanName {
+      max-width: max(var(--span-width), 40vw);
+    }
+
+    & .spanDuration {
+      background: none;
+      box-shadow: none;
+    }
+  }
+
+  &.small:not(.xHover) {
+    background-color: var(--span-background);
+    border-radius: 4px;
+  }
+
+  &[data-selected] {
+    --span-background: var(--selection);
+    --span-text: var(--selection-foreground);
+    --span-secondary: var(--selection-foreground);
+    border-color: var(--span-icon-color, var(--selection-control));
+    border-width: 2px;
+    outline: 2px solid var(--span-icon-color, var(--selection-control));
+    outline-offset: -1px;
+
+    &:hover {
+      --span-background: var(--selection);
+    }
+  }
+
+}
+
+.spanNodeEvent {
+  position: absolute;
+  height: var(--row-height);
+  pointer-events: none;
+  z-index: 4;
+
+  & .eventDiamond {
+    --size: 7px;
+    --offset: -4px;
+    position: absolute;
+    left: var(--offset);
+    bottom: calc(var(--offset) + 1px);
+    width: var(--size);
+    height: var(--size);
+    border: 1px solid var(--span-secondary);
+    border-radius: 2px;
+    background: var(--span-background);
+    transform-origin: 50% 50% 0;
+    transform: rotate(45deg);
+  }
+
+  /* Workflow-specific: Use custom event color if provided */
+  &.customEventColor .eventDiamond {
+    border-color: var(--event-color, var(--span-border));
+    background: var(--event-color, var(--span-background));
+    opacity: 0.8;
+  }
+  &.customEventColor .hoverInfo {
+    border-color: var(--span-border);
+    background: var(--span-background);
+  }
+  &.customEventColor .hoverInfo .eventName {
+    color: var(--span-text);
+    font-weight: 500;
+  }
+  &.customEventColor .hoverInfo .eventTimestamp {
+    color: var(--span-secondary);
+  }
+
+  & .hoverInfo {
+    position: absolute;
+    margin-top: -1px;
+    top: 100%;
+    display: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+    line-height: 1;
+    background: var(--span-background);
+    border: 1px solid var(--span-border);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px var(--overlay);
+    transform: translateY(-50%);
+
+    &.alignStart {
+      left: -10px;
+      padding-left: 18px;
+    }
+    &.alignEnd {
+      right: -10px;
+      padding-right: 18px;
+    }
+
+    & .eventName {
+      color: var(--span-text);
+    }
+    & .eventTimestamp {
+      color: var(--span-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  &[data-hovered="true"] {
+    z-index: 4;
+
+    & .eventDiamond {
+      background: var(--span-text);
+      border-color: var(--span-text);
+    }
+    & .hoverInfo {
+      display: flex;
+    }
+  }
+}
+
+/* Match trace rows; explicit status classes below carry status colors. */
+.colorVercel,
+.color0,
+.color1,
+.color2,
+.color3,
+.color4 {
+  --span-background: var(--muted);
+  --span-border: var(--border-strong);
+  --span-line: var(--foreground-subtle);
+  --span-text: var(--foreground);
+  --span-secondary: var(--foreground-muted);
+}
+
+.colorHighlight {
+  --span-background: var(--selection);
+  --span-border: var(--selection-control);
+  --span-line: var(--selection-control);
+  --span-text: var(--selection-foreground);
+  --span-secondary: var(--selection-foreground);
+}
+
+.unlit {
+  opacity: 0.3;
+}
+
+
+.spanName {
+  flex: 1 1 auto;
+  padding-inline: 6px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  z-index: 1;
+}
+
+.spanDuration {
+  flex: 0 0 auto;
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--span-secondary, var(--foreground-muted));
+  position: relative;
+  z-index: 1;
+}
+
+.spanNameWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-inline-start: 4px;
+}
+
+.spanIcon {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.spanNameText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* SPAN DETAIL PANEL */
+.spanDetailPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex: 0 1 auto;
+}
+
+.spanDetailPanelResizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+
+  display: none;
+  @media (hover: hover) {
+    display: block;
+  }
+}
+
+.spanDetailPanelTop {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 0 1 auto;
+  justify-content: space-between;
+  position: relative;
+}
+
+.spanDetailPanelBody {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 12px;
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 16px 12px 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.spanDetailPanelTopInfo {
+  --row-height: 32px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  width: 100%;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-color);
+  flex: 0 1 auto;
+}
+
+.spanNameDetailPanel {
+  font-size: inherit;
+  color: var(--foreground);
+  word-break: break-word;
+}
+
+.spanDetailPanelTruncatedHeading {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 100%;
+  overflow: hidden;
+  justify-content: flex-start;
+}
+
+.spanDetailPanelName {
+  flex: 1 1 0;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+
+.spanDetailPanelDuration {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground-muted);
+  background-color: var(--surface-emphasis);
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.spanDetailPanelCorner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: var(--row-height);
+  justify-content: flex-end;
+}
+
+.spanDetailPanelCornerInner {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex: 0 1 auto;
+}
+
+.spanDetailPanelCloseVerticalRule {
+  border-left: 1px solid var(--border);
+  height: 16px;
+}
+
+.spanDetailPanelClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--surface-emphasis);
+  }
+}
+
+.spanDetailPanelAttribute {
+  margin: 0;
+  padding-block: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border-color);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.spanDetailPanelAttributeKey {
+  flex: 0 0 auto;
+  margin: 0;
+  padding-left: 8px;
+  font-size: inherit;
+  color: var(--foreground-secondary);
+}
+
+.spanDetailPanelAttributeValue {
+  flex: 0 1 auto;
+  margin: 0;
+  padding-right: 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow-x: hidden;
+  text-overflow: ellipsis;
+}
+
+.spanDetailPanelQuickLink {
+  color: inherit;
+  text-decoration: none;
+  &:hover .spanDetailPanelQuickLinkLabel {
+    text-decoration: underline;
+  }
+}
+
+.spanDetailPanelQuickLinkLabel {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+}
+
+.detailGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex: 0 1 auto;
+  &::after {
+    margin: 12px -12px 0;
+    height: 1px;
+    background: var(--border-color);
+    content: "";
+  }
+}
+
+.expanded,
+.collapsed,
+.ancestorGroup {
+  /* Explicit class tokens used by TS for CSS Modules */
+}
+
+.detailHeading {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  background: none;
+  color: var(--foreground);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--muted);
+  }
+}
+
+/* Local replacements for external UI */
+.buttonLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--foreground);
+  text-decoration: none;
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.buttonLink:hover,
+.buttonLink:focus-visible {
+  background-color: var(--muted);
+}
+
+.note {
+  padding: 8px 10px;
+  color: var(--foreground-secondary);
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.skeleton {
+  display: inline-block;
+  background-color: var(--surface-emphasis);
+  border-radius: 4px;
+}
+
+.skeletonRounded {
+  border-radius: 50%;
+}
+
+.detailGroup.collapsed .detailHeadingIcon {
+  transform: rotate(-90deg);
+}
+
+.infraSpanDescription {
+  padding: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--foreground-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ancestorNode {
+  padding: 8px 8px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--muted);
+  }
+}
+
+.ancestorText {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  color: var(--foreground-secondary);
+  white-space: nowrap;
+}
+
+.ancestorName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ancestorDuration {
+  /* font-family: var(--font-mono); */
+  font-variant-numeric: tabular-nums;
+}
+
+.ancestorLineContainer {
+  position: relative;
+  margin-top: 6px;
+  display: block;
+  width: 100%;
+  height: 1px;
+  background-color: var(--border-strong);
+
+  &::before,
+  &::after {
+    position: absolute;
+    top: -2px;
+    width: 1px;
+    height: 5px;
+    background-color: inherit;
+    content: "";
+  }
+
+  &::before {
+    left: 0;
+  }
+
+  &::after {
+    right: 0;
+  }
+}
+
+.ancestorLine {
+  position: absolute;
+  top: -2px;
+  height: 5px;
+  background-color: var(--span-background);
+  border: 1px solid var(--span-line);
+  border-radius: 1px;
+}
+
+.ancestorNode {
+  &:hover,
+  &:focus-visible,
+  &:last-of-type {
+    & .ancestorName {
+      color: var(--foreground);
+    }
+
+    & .ancestorLine {
+      background-color: var(--span-line);
+      border-color: var(--span-border);
+    }
+  }
+}
+
+/* ZOOM BUTTON */
+.zoomButtonGroup {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex: 0 1 auto;
+  background-color: var(--background);
+  border-radius: 10ex;
+  box-shadow: 0 2px 8px var(--overlay);
+  border: 1px solid var(--border);
+  animation: zoom-buttons-fade-in 0.3s ease 0.3s backwards;
+}
+
+@keyframes zoom-buttons-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.zoomButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  height: 32px;
+  width: 38px;
+  background-color: transparent;
+  border: none;
+  color: var(--foreground-muted);
+  box-shadow: none !important;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--foreground);
+  }
+}
+
+.zoomButton:hover {
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.zoomButton:focus-visible {
+  /* TODO */
+}
+
+.divider {
+  width: 1px;
+  background-color: var(--border);
+  margin: -1px;
+}
+
+/* TRACE */
+.markersContainer {
+  position: absolute;
+  left: -8px;
+  top: -8px;
+  width: 100%;
+  height: calc(100% - var(--scrollbar-width));
+  line-height: 1;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.markers {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: row;
+  gap: calc(var(--marker-width) - 1px);
+  height: var(--marker-height);
+  padding-left: 8px;
+  background: var(--muted);
+  overflow: hidden;
+  box-shadow: 0 4px 8px 0 var(--muted);
+  border-bottom: 1px solid var(--marker-color);
+}
+
+.marker {
+  position: relative;
+  flex: 0 0 1px;
+  border-left: 1px solid var(--marker-color);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground-secondary);
+
+  height: var(--marker-height);
+  &.notch {
+    top: calc(var(--marker-height) - var(--marker-notch-height));
+    height: var(--marker-notch-height);
+  }
+}
+
+.markerLabel {
+  position: absolute;
+  left: 2px;
+  bottom: 6px;
+  color: var(--foreground-secondary);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.markerClockTime {
+  display: block;
+  font-size: 9px;
+  color: var(--foreground-muted);
+  margin-top: 1px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.eventMarkersContainer {
+  position: absolute;
+  top: -8px;
+  width: var(--timeline-scroll-width);
+  height: calc(100% - var(--scrollbar-width));
+  line-height: 1;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.eventMarkers {
+  position: sticky;
+  top: 0;
+  height: calc(100% + 2 * var(--timeline-padding));
+  overflow: hidden;
+}
+
+.eventMarker {
+  position: absolute;
+  border-left: 1px dotted var(--foreground-subtle);
+  height: 100%;
+}
+
+.cursorMarkerStickyParent {
+  position: absolute;
+  left: 0;
+  top: -8px;
+  width: var(--timeline-scroll-width);
+  height: calc(100% + 2 * var(--timeline-padding));
+  pointer-events: none;
+}
+
+.cursorMarkerLabelContainer {
+  position: sticky;
+  top: 0;
+  left: 0;
+  display: none;
+  width: 1px;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.cursorMarkerLabel {
+  position: sticky;
+  top: 4px;
+  width: 1px;
+  height: var(--marker-height);
+  background-color: var(--marker-color);
+
+  &[data-text]::before {
+    margin: 0;
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding: 0 6px;
+    height: 18px;
+    line-height: 16px;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    background-color: var(--background);
+    color: var(--foreground-secondary);
+    border: 1px solid var(--foreground-subtle);
+    border-radius: 10ex;
+    box-shadow: 0 2px 8px var(--overlay);
+    content: attr(data-text);
+  }
+
+  &[data-align="left"]::before {
+    left: -6px;
+    transform: unset;
+  }
+
+  &[data-align="right"]::before {
+    left: unset;
+    right: -6px;
+    transform: unset;
+  }
+}
+
+.cursorMarkerContainer {
+  position: sticky;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.cursorMarker {
+  position: sticky;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  display: none;
+  background-color: var(--marker-color);
+  z-index: 1;
+}
+
+.cursorSelection {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: none;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  background-color: var(--muted);
+  border-inline: 1px solid var(--border);
+
+  &::before,
+  &::after {
+    position: sticky;
+    bottom: 8px;
+    padding: 0 6px;
+    height: 18px;
+    line-height: 16px;
+    font-size: 10px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    background-color: var(--background);
+    color: var(--foreground-secondary);
+    border: 1px solid var(--foreground-subtle);
+    border-radius: 10ex;
+    box-shadow: 0 2px 8px var(--overlay);
+    white-space: nowrap;
+  }
+
+  &::before {
+    margin-left: 8px;
+    content: attr(data-range);
+  }
+  &::after {
+    margin-right: 8px;
+    content: attr(data-duration);
+  }
+}
+
+@keyframes span-skeleton {
+  from {
+    opacity: 0.6;
+  }
+
+  to {
+    opacity: 0.3;
+  }
+}
+
+.traceViewer {
+  &.skeleton {
+    & * {
+      pointer-events: none !important;
+    }
+
+    & .mapCanvas {
+      display: none;
+    }
+
+    & .markerLabel {
+      display: none;
+    }
+
+    & .spanNode {
+      animation: span-skeleton 1s infinite alternate;
+
+      & * {
+        display: none;
+      }
+    }
+
+    & .zoomButtonTraceViewer {
+      display: none;
+    }
+  }
+
+  & .markers {
+    border-top: 1px solid var(--marker-color);
+    border-bottom: none;
+  }
+
+  & .marker.notch {
+    top: 0;
+  }
+
+  & .markerLabel {
+    bottom: 3px;
+  }
+
+  & .cursorMarkerLabel {
+    top: 8px;
+  }
+}
+
+.timeline:hover {
+  & .cursorMarkerLabelContainer,
+  & .cursorMarker {
+    display: block;
+  }
+}
+
+/* SEARCH BAR */
+.searchBar {
+  position: absolute;
+  left: 0;
+  top: var(--search-gap);
+  display: flex;
+  flex-direction: row;
+  gap: var(--search-gap);
+  width: 100%;
+  padding-inline: var(--search-gap);
+  height: var(--search-height);
+}
+
+.searchInput {
+  flex: 0 1 100%;
+  position: relative;
+  height: var(--search-height);
+  background: var(--background);
+}
+
+.searchInputLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--border-color, var(--border-strong));
+
+  & input {
+    margin-left: -16px;
+    padding-inline: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    background: transparent;
+    border: none;
+    outline: none;
+
+    &::-webkit-search-decoration,
+    &::-webkit-search-cancel-button,
+    &::-webkit-search-results-button,
+    &::-webkit-search-results-decoration {
+      display: none;
+    }
+  }
+}
+
+.searchInputPrefix {
+  width: var(--search-height);
+  height: var(--search-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground-secondary);
+}
+
+/* MINI MAP */
+.mapContainer {
+  position: absolute;
+  left: 0;
+  top: calc(var(--search-height) + 2 * var(--search-gap));
+  /* border-bottom: 1px solid var(--border-color); */
+  cursor: move;
+}
+
+.mapCanvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+
+.mapThumb {
+  position: absolute;
+  top: 0;
+  height: var(--map-height);
+  background: var(--surface-emphasis);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  box-shadow: 0 2px 8px var(--overlay);
+  transform: translateX(var(--timeline-padding));
+  pointer-events: none;
+}
+
+/* TRACE VIEWER */
+.traceViewer,
+.spanDetailPanelTraceViewer {
+  --border-color: var(--border);
+  --marker-color: var(--border);
+  color: var(--foreground);
+}
+
+.traceViewer {
+  --scrollbar-width: 0;
+  position: relative;
+  display: flex;
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  text-size-adjust: 100%;
+  background-color: var(--background);
+
+  & button {
+    font-family: inherit;
+  }
+}
+
+.traceViewerContent {
+  position: absolute;
+  left: 0;
+  top: calc(var(--search-height) + 3 * var(--search-gap) + var(--map-height));
+  width: calc(var(--timeline-width) + 2 * var(--timeline-padding));
+  height: calc(
+    var(--timeline-height) - 2 * var(--timeline-padding) -
+      var(--scrollbar-width) - var(--marker-height) - var(--search-height)
+  );
+
+  &.inert {
+    display: none;
+  }
+}
+
+.timeline {
+  width: calc(var(--timeline-width) + 2 * var(--timeline-padding));
+  height: var(--timeline-height);
+  font-size: 13px;
+  overflow-y: scroll;
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+.zoomButtonTraceViewer {
+  position: absolute;
+  bottom: calc(-12px - var(--search-height) - var(--scrollbar-width));
+  right: calc(var(--scrollbar-width) + 12px);
+  z-index: 10;
+}
+
+.spanDetailPanelTraceViewer {
+  position: absolute;
+  margin-top: -1px;
+  right: 0;
+  top: calc(
+    var(--search-height) + 2 * var(--search-gap) + var(--map-height) + 9px
+  );
+  bottom: 0;
+  width: var(--panel-width);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background-color: var(--background);
+  z-index: 10;
+
+  &.hidden {
+    display: none;
+  }
+
+  &.mobile {
+    --panel-width: calc(var(--timeline-width) + 2 * var(--timeline-padding));
+    top: 0;
+    border-left: none;
+  }
+}
+
+/* Workflow-specific styles */
+
+/* Step statuses */
+.spanRunning,
+.spanPending {
+  --span-background: var(--info-background);
+  --span-border: var(--info-border);
+  --span-line: var(--info-border);
+  --span-text: var(--foreground);
+  --span-secondary: var(--info-foreground);
+}
+
+.spanCompleted {
+  --span-background: var(--success-background);
+  --span-border: var(--success-border);
+  --span-line: var(--success-border);
+  --span-text: var(--foreground);
+  --span-secondary: var(--success-foreground);
+}
+
+.spanCancelled {
+  --span-background: var(--warning-background);
+  --span-border: var(--warning-border);
+  --span-line: var(--warning-border);
+  --span-text: var(--foreground);
+  --span-secondary: var(--warning-foreground);
+}
+
+.spanFailed {
+  --span-background: var(--destructive-background);
+  --span-border: var(--destructive-border);
+  --span-line: var(--destructive-border);
+  --span-text: var(--foreground);
+  --span-secondary: var(--destructive);
+}
+
+/* Striped background for pending status */
+.spanPendingStriped {
+  --span-background: repeating-linear-gradient(
+    45deg,
+    var(--info-background),
+    var(--info-background) 10px,
+    color-mix(in srgb, var(--info-background) 70%, var(--foreground)) 10px,
+    color-mix(in srgb, var(--info-background) 70%, var(--foreground)) 20px
+  );
+  --span-border: var(--info-border);
+  --span-line: var(--info-border);
+  --span-text: var(--foreground);
+  --span-secondary: var(--info-foreground);
+}
+
+.hasQueuedTime {
+  &::before {
+    content: "";
+    position: absolute;
+    left: var(--queued-width);
+    height: 100%;
+    border-left: 2px dotted var(--foreground-muted);
+    pointer-events: none;
+  }
+}
+
+/* Sleep step - light yellow/orange */
+.spanSleep {
+  --span-background: var(--warning-background);
+  --span-border: var(--warning-border);
+  --span-line: var(--warning-border);
+  --span-text: var(--foreground);
+  --span-secondary: var(--warning-foreground);
+}
+
+/* Hooks - gray color scheme */
+.spanHook {
+  --span-background: var(--surface-emphasis);
+  --span-border: var(--foreground-subtle);
+  --span-line: var(--border-strong);
+  --span-text: var(--foreground);
+  --span-secondary: var(--foreground-secondary);
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* Span segments — colored sections overlaid inside span bars              */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+.segmentLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.segmentLabel {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 4px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--foreground-secondary);
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Inline segment tags rendered next to the span name */
+.segmentTag {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+/* Queued: hatched — waiting to start */
+.segQueued {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-emphasis),
+    var(--surface-emphasis) 6px,
+    var(--muted) 6px,
+    var(--muted) 12px
+  );
+}
+
+/* Running: soft blue — actively executing */
+.segRunning {
+  background-color: var(--info-background);
+}
+
+/* Failed: soft red — attempt ended in failure */
+.segFailed {
+  background-color: var(--destructive-background);
+}
+
+/* Retrying: hatched — waiting between retry attempts */
+.segRetrying {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-emphasis),
+    var(--surface-emphasis) 6px,
+    var(--muted) 6px,
+    var(--muted) 12px
+  );
+}
+
+/* Succeeded: soft green — final successful attempt */
+.segSucceeded {
+  background-color: var(--success-background);
+}
+
+/* Waiting: hatched — hook waiting for payload */
+.segWaiting {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface-emphasis),
+    var(--surface-emphasis) 6px,
+    var(--muted) 6px,
+    var(--muted) 12px
+  );
+}
+
+/* Sleeping: soft amber — sleep in progress */
+.segSleeping {
+  background-color: var(--warning-background);
+}
+
+/* Received: soft blue — hook received payload */
+.segReceived {
+  background-color: var(--info-background);
+}
+
+/* Boundary markers — workflow events shown as thin vertical lines instead of diamonds */
+.boundaryMarker {
+  & .boundaryLine {
+    position: absolute;
+    left: -0.5px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: transparent;
+    z-index: 0;
+    transition: background-color 0.15s ease;
+  }
+
+  &[data-hovered="true"] .boundaryLine {
+    background-color: var(--border-strong);
+  }
+
+  /* Tooltip must sit above the boundary line */
+  & .hoverInfo {
+    z-index: 1;
+  }
+}
+
+/* When segments are active, make span background transparent so segments show */
+.spanNode.hasSegments {
+  background-color: transparent;
+
+  &.small:not(.xHover) {
+    background-color: transparent;
+  }
+
+  /* Suppress hover expansion gradient — segments handle the background */
+  &.xHover {
+    background: none;
+    min-width: var(--span-width);
+    max-width: var(--span-width);
+
+    &[data-right-side="true"] {
+      background: none;
+    }
+  }
+
+  /* Remove duration label background bleed — segments provide the visual */
+  & .spanDuration {
+    background-color: transparent;
+    box-shadow: none;
+  }
+
+  /* Let segment tooltips receive pointer events */
+  &::after {
+    pointer-events: none;
+  }
+
+  & .segmentLayer {
+    pointer-events: auto;
+  }
+}
+
+/* Event markers */
+
+/* Failure events - Red */
+.eventFailed {
+  --event-color: var(--destructive);
+  --span-background: var(--destructive-background);
+  --span-border: var(--destructive-border);
+  --span-text: var(--destructive);
+  --span-secondary: var(--destructive);
+}
+
+/* Retry events - Orange/Yellow */
+.eventRetrying {
+  --event-color: var(--warning);
+  --span-background: var(--warning-background);
+  --span-border: var(--warning-border);
+  --span-text: var(--warning-foreground);
+  --span-secondary: var(--warning);
+}
+
+/* Webhook-related events - Purple */
+.eventHook {
+  --event-color: var(--selection-control);
+  --span-background: var(--selection);
+  --span-border: var(--selection-control);
+  --span-text: var(--selection-foreground);
+  --span-secondary: var(--selection-control);
+}
+
+/* Default event - Blue */
+.eventDefault {
+  --event-color: var(--info);
+  --span-background: var(--info-background);
+  --span-border: var(--info-border);
+  --span-text: var(--info-foreground);
+  --span-secondary: var(--info);
+}

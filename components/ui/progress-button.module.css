@@ -1,0 +1,30 @@
+.button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.progress {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--progress-color, var(--primary));
+  opacity: 0.2;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: progress-fill var(--progress-duration) linear forwards;
+}
+.progress[data-paused="true"] {
+  animation-play-state: paused;
+}
+@keyframes progress-fill {
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress {
+    animation: none;
+    transform: scaleX(1);
+  }
+}

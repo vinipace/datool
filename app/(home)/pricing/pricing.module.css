@@ -1,0 +1,299 @@
+.plans {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 3rem;
+}
+.labels {
+  display: none;
+}
+.withCredits .customDetails {
+  grid-row: 2 / span 6;
+}
+.plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--muted);
+}
+.featured {
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--foreground);
+}
+.name {
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.tierIcon {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 1.5rem;
+  color: var(--foreground);
+  fill: color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+.description {
+  margin-top: 0.5rem;
+  color: var(--foreground-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.intro {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 1.75rem;
+}
+.price {
+  margin-top: auto;
+  padding-top: 2.25rem;
+}
+.amount {
+  font-size: clamp(1.8rem, 2.7vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+}
+.featured .amount {
+  color: var(--marketing-signal);
+}
+.cadence {
+  min-height: 3em;
+  margin-top: 0.65rem;
+  color: var(--foreground-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.detailRow,
+.labelRow {
+  padding-block: 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.rowLabel {
+  margin-bottom: 0.5rem;
+  color: var(--foreground-muted);
+  font-size: 0.75rem;
+}
+.customDetails {
+  grid-row: 2 / span 5;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+.customDetails p + p {
+  margin-top: 1.25rem;
+  color: var(--foreground-muted);
+}
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: auto;
+  padding-top: 2.5rem;
+}
+.labelIntro {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 1.75rem;
+}
+.labelIntro h2 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.labelIntro p {
+  margin-top: 0.75rem;
+  color: var(--foreground-muted);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.labelRow {
+  color: var(--foreground-muted);
+}
+.comparison {
+  margin-top: 5rem;
+  scroll-margin-top: 2rem;
+}
+.comparisonIntro {
+  max-width: 42rem;
+  margin-bottom: 2.5rem;
+}
+.comparisonIntro h2 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.comparisonIntro p {
+  margin-top: 1rem;
+  color: var(--foreground-muted);
+  line-height: 1.75;
+}
+.comparisonScroll {
+  max-height: 75svh;
+  overflow: auto;
+  contain: layout paint;
+  border-radius: 0.5rem;
+  outline: none;
+}
+.comparisonScroll:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.comparisonTable {
+  width: 100%;
+  min-width: 640px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.featureColumn {
+  width: 160px;
+}
+.comparisonTable th,
+.comparisonTable td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.comparisonTable th {
+  text-align: left;
+  font-weight: 400;
+}
+.comparisonTable td {
+  text-align: center;
+}
+.comparisonTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding-block: 1.25rem;
+  background: var(--background);
+}
+.comparisonTable thead .featureHeading {
+  z-index: 4;
+  font-size: 1rem;
+}
+.comparisonTable thead .proColumn {
+  background: var(--muted);
+  box-shadow: inset 0 2px 0 var(--foreground);
+}
+.comparisonTable tbody th[scope="row"],
+.featureHeading {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--background);
+}
+.comparisonTable tbody .proColumn {
+  background: var(--muted);
+}
+.comparisonPlanName {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+.comparisonPrice {
+  min-height: 2.75rem;
+  margin-block: 0.5rem 0.75rem;
+  color: var(--foreground-muted);
+  text-align: center;
+  font-size: 0.75rem;
+}
+.comparisonTable .comparisonGroup th {
+  padding-block: 2rem 1rem;
+  background: var(--background);
+  font-size: 1rem;
+  font-weight: 500;
+}
+.comparisonGroup th > span {
+  position: sticky;
+  left: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.featureDescription {
+  margin-top: 0.35rem;
+  color: var(--foreground-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.included {
+  display: inline-flex;
+  color: var(--foreground);
+}
+@media (min-width: 768px) {
+  .comparisonScroll {
+    max-height: none;
+    overflow: visible;
+    contain: none;
+  }
+  .featureColumn {
+    width: 40%;
+  }
+  .plans {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 0.75rem;
+    row-gap: 0;
+  }
+  .plan {
+    display: grid;
+    grid-row: span 7;
+    grid-template-rows: subgrid;
+    padding: 1.25rem;
+  }
+  .withCredits .plan {
+    grid-row: span 8;
+  }
+}
+@media (min-width: 900px) {
+  .plans {
+    grid-template-columns: minmax(0, 0.75fr) repeat(3, minmax(0, 1fr));
+  }
+  .labels {
+    display: grid;
+    grid-row: span 7;
+    grid-template-rows: subgrid;
+    padding-block: 1.25rem;
+    padding-right: 0.5rem;
+  }
+  .withCredits .labels {
+    grid-row: span 8;
+  }
+  .rowLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+@media (min-width: 1024px) {
+  .plans {
+    column-gap: 1rem;
+  }
+  .plan {
+    padding: 1.5rem;
+  }
+  .labels {
+    padding-block: 1.5rem;
+  }
+}

@@ -1,0 +1,46 @@
+import {
+  Activity,
+  Bell,
+  BookOpenCheck,
+  Bot,
+  Box,
+  ClipboardCheck,
+  Cpu,
+  Database,
+  FlaskConical,
+  KeyRound,
+  LayoutDashboard,
+  ListChecks,
+  MessagesSquare,
+  Play,
+  Plug,
+  Settings,
+  Workflow,
+  Users,
+} from "lucide-react"
+import { ScorerIcon } from "@/components/tracer/scorer-icon"
+import { SessionIcon } from "@/components/tracer/session-icon"
+
+/** Shared by the workspace and public docs navigation. */
+export const productIcons = {
+  traces: Activity,
+  playground: Play,
+  dashboards: LayoutDashboard,
+  agents: Bot,
+  workflows: Workflow,
+  sessions: SessionIcon,
+  reviews: ClipboardCheck,
+  humanScores: ListChecks,
+  evals: FlaskConical,
+  prompts: MessagesSquare,
+  scorers: ScorerIcon,
+  datasets: Database,
+  alerts: Bell,
+  settings: Settings,
+  aiProviders: Cpu,
+  sandboxProviders: Box,
+  apiKeys: KeyRound,
+  members: Users,
+  mcpConnections: Plug,
+  documentation: BookOpenCheck,
+} as const

@@ -1,0 +1,41 @@
+---
+title: Investigate traces
+description: Follow an execution, inspect its evidence, and keep useful examples for evaluation.
+icon: traces
+---
+
+## Find an execution
+
+Open **Traces** in your project. Narrow the date range and add collection filters for the behavior you are investigating. Saved views keep useful table configurations and filters available for later investigations.
+
+Open a trace to inspect its input, output, status, timing, and metadata. Follow the span tree to see which model, tool, or function produced each result. A successful parent result does not remove the need to inspect errors in its child operations.
+
+## Turn a failure into a regression test
+
+For the uppercase example, the request can complete successfully while returning the wrong text. Search for the application by name, then inspect its output:
+
+```text
+startedAt >= -7d name = 'Docs uppercase'
+```
+
+Find the request whose input is `{"text":" hello "}`. Its output `{"text":" HELLO "}` preserves spaces. The trace's completed status means execution succeeded; it does not establish that the requirement was met. Confirm the intended behavior before labeling a reference answer.
+
+In an instrumented application, follow the span tree from the input to the step that introduced the incorrect value. Check model messages, tool responses, exceptions, and retries. Do not attribute a failure to a model from the final output alone. For execution failures, begin with `status = 'errored'`; for content failures, use the input/output evidence and review criteria.
+
+Create a dataset case with the original input and the reviewed expected output `{"text":"HELLO"}`. Keep the observed output as evidence. If promoting a particular span, use **Create dataset case** in the span inspector and preview the captured subtree before saving. Supply explicit mapped app input when span messages differ from the app's variable schema.
+
+Run the case with Exact match, fix the handler, and compare frozen cases following [your first evaluation](/docs/get-started/first-evaluation). Use [a review](/docs/guides/reviews) when the expectation requires a person's judgment. More [filter examples](/docs/reference/filters) cover descendant spans, literal dotted attributes, and saved queries.
+
+## Read usage and cost
+
+Token usage comes from recorded model activity. Cost is an estimate based on captured usage and known model rates. A missing estimate means the evidence or pricing coverage is unavailable; avoid treating it as zero cost.
+
+## Follow related work
+
+Use **Sessions** for related requests, such as conversation turns. Use **Agents** and **Workflows** for explicitly grouped operations and versions. The trace's group details connect it to those collections.
+
+## Keep an example
+
+When you find a regression or a representative success, add it to a [dataset](/docs/evaluation/datasets). Include an expected output or metadata that makes the desired behavior explicit. Add it to a [review](/docs/guides/reviews) when the next step requires a person's judgment.
+
+For investigations from a terminal or assistant, use the [CLI](/docs/reference/cli) or [MCP](/docs/reference/mcp).

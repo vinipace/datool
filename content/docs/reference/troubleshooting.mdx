@@ -1,0 +1,61 @@
+---
+title: Troubleshooting
+description: Diagnose missing traces, unavailable apps, prompt reads, evaluation failures, and empty dashboards.
+icon: reference
+---
+
+Start by checking the configured host and project. For the CLI, run `npx datool doctor --json`; SDK applications need their own `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY` even when the CLI is logged in.
+
+## Traces do not appear
+
+1. Run the [first-trace example](/docs/get-started/first-trace) in the same environment. Check its exit status and delivery error.
+2. Verify that the key belongs to the project's organization and grants `traces:write`. Use the project ID, not its slug.
+3. Clear trace filters and check the time window and project in the UI.
+4. Await the enclosing workflow and, for OpenTelemetry, `processor.forceFlush()`. End streams before flushing.
+5. On a self-hosted instance, confirm Redis and the ingestion worker are running. HTTP 202 is queue acceptance; saved persistence receipts establish delivery.
+
+If only model spans are missing, check the model instrumentation and OpenTelemetry provider registration. A connected app automatically records its invocation but cannot infer its internal tool or model calls.
+
+## Authentication and permissions
+
+| Symptom | Likely check |
+| --- | --- |
+| HTTP 401 | Missing, revoked, expired, or wrong-host credential. |
+| HTTP 403 | Required scope, project/organization membership, or OAuth resource mismatch. |
+| Project-scope error | Supply `x-project-id` and the actual project ID. |
+| CLI login cannot save credentials | Unlock the OS credential store; headless CI should use an API key. |
+| Login method unavailable | Ask the instance administrator which of Google or email magic links is configured. |
+
+See [authentication](/docs/reference/authentication) for scopes and OAuth audiences. Agent API failures include `error.code`, `error.message`, and `error.hint`; retain these without logging credentials.
+
+## Connected app unavailable or stale
+
+Keep `datool connect` alive in a separate terminal. Confirm it registered the expected app in the same project. The bridge makes outbound requests; your laptop does not need a public inbound port. Restart the connection after editing code when watch mode is disabled. An HTTP app being listed as available is not a health check of its endpoint.
+
+Check [package and server compatibility](/docs/reference/compatibility) before upgrading just one side of a connection. HTTP correlation headers identify an invocation; the app must still authenticate its webhook requests.
+
+## Prompt missing or an old version returned
+
+Confirm the slug and project and publish the draft. Explicit version pins keep returning that immutable version. Latest lookups use SDK and server caches; see [cache behavior](/docs/guides/prompts#native-sdk). An evaluation freezes prompt defaults at run creation, so publishing during the run does not change its baseline. Missing template variables throw before generation; dotted variable names are literal keys.
+
+## Evaluation completed but quality failed
+
+A score of zero can be a correctly executed failing judgment. A null score, provider error, or missing evidence is an execution problem. Inspect the individual result and frozen evidence before changing thresholds.
+
+For library scorers, confirm the mapped field exists and has the expected type. For code and LLM scorers, check project provider configuration, then explicitly run a bounded [runtime probe](/docs/evaluation/scorers#preview-readiness-and-calibration) if needed. A configuration check does not contact the provider; a probe can incur usage.
+
+After an interruption, inspect the saved run. Recovery reuses durable outputs and judgments and does not redispatch an ambiguous app call. Changing app code requires **Run app again**; **Re-score saved traces** only judges saved outputs.
+
+## Empty charts or missing cost
+
+Check the shared filter expression, date window, and selected data source. Trace start time, span start time, and evaluation completion time describe different populations. An unsupported filter should be corrected, not interpreted as an empty result.
+
+Cost requires recorded usage and price coverage. Missing cost is not zero. Compare a chart with its underlying traces, and inspect the source's available metrics before adding dimensions. See [dashboards](/docs/guides/dashboards).
+
+## Alert did not fire
+
+Confirm the rule is enabled, the worker is online, and the filter matches the intended resource. Log-event rules do not replay old traces. A cooldown discards matching log events rather than queuing one notification per event. Inspect notification history for webhook attempts and rule evaluation errors. See [alerts](/docs/guides/alerts).
+
+## Information to retain for support
+
+Retain the instance origin, package versions, command or operation name, timestamp with timezone, request/run/trace ID, and sanitized error code and message. Include a minimal reproduction and whether the problem also occurs in the first-trace or first-evaluation tutorial. Exclude API keys, cookies, and unrelated trace contents.

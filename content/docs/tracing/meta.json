@@ -1,0 +1,12 @@
+{
+  "title": "Tracing",
+  "pages": [
+    "instrumentation",
+    "ai-sdk",
+    "openai",
+    "hermes",
+    "investigation",
+    "langgraph"
+  ],
+  "icon": "traces"
+}

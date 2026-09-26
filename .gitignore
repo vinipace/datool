@@ -1,0 +1,63 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+!examples/file-tail/fixtures/*.log
+
+node_modules
+dist
+client-dist
+**/.datool/generated/
+**/.datool/client-dist/
+**/.datool/*.log
+dist-ssr
+.tmp
+*.tsbuildinfo
+*.local
+
+# Python test caches
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.next
+.next-*/
+.source/
+.env
+.env.*
+!.env.example
+!.env.self-hosting.example
+.data/
+
+# Generated local Monaco worker bundles
+public/monaco/
+
+# Generated reports, screenshots, recordings, traces, and npm release artifacts.
+# Keep real execution evidence outside the public source repository.
+/artifacts/
+
+# Private implementation plans and local planning records.
+/plans/
+
+# Generated Storybook catalog
+storybook-static/
+
+# Generated custom-view runtime, compiler, charts and theme.
+/public/trace-views/

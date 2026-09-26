@@ -1,0 +1,3 @@
+Defaults:datool-monitor env_reset
+Defaults:datool-monitor secure_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+datool-monitor ALL=(dokku) NOPASSWD: /usr/bin/python3 -I /usr/local/lib/datool-disk/maintenance.py disk\:status datool

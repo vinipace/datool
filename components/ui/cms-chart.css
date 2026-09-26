@@ -1,0 +1,27 @@
+/* Reuse dashboard utilities without importing the product's global reset into Payload. */
+@reference "../../app/globals.css";
+@source "../tracer/dashboard-time-chart.tsx";
+@source "../tracer/dashboard-chart-style.ts";
+@source "./chart.tsx";
+
+.cms-chart {
+  --background: var(--theme-elevation-50);
+  --foreground: var(--theme-text);
+  --foreground-muted: var(--theme-elevation-600);
+  --muted-foreground: var(--foreground-muted);
+  --muted: var(--theme-elevation-150);
+  --border: var(--theme-elevation-250);
+  --radius: 0.5rem;
+  --text-xs: 12px;
+  --data-series-1: --theme(--color-data-palette-1);
+  --data-series-2: --theme(--color-data-palette-2);
+  --data-series-3: --theme(--color-data-palette-3);
+  --data-series-4: --theme(--color-data-palette-4);
+  --data-series-total: var(--theme-elevation-500);
+  height: 300px;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--foreground);
+
+  @tailwind utilities source(none);
+}

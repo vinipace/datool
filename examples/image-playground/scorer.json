@@ -1,0 +1,23 @@
+{
+  "name": "Image quality and prompt adherence",
+  "slug": "image-quality-and-prompt-adherence",
+  "description": "Visually grades the generated image against the requested scene and checks composition, clarity, and artifacts.",
+  "type": "llm",
+  "model": "gpt-4.1-mini",
+  "imagePaths": ["output.image.url"],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Inspect the attached generated image. Requested image: {{input.prompt}}\nEvaluate visible adherence to every requested subject, color, object count, composition, and style (70%), plus visual quality, clarity, and absence of unwanted artifacts or text (30%). Do not infer success from the prompt or metadata: judge the actual pixels. Give a concise explanation of what matches and what does not. Choose Excellent for near-complete adherence and clean execution, Good for minor issues, Partial for substantial omissions, Poor for a mostly incorrect image, or Fail for an unusable image."
+    }
+  ],
+  "choices": [
+    { "label": "Fail", "score": 0 },
+    { "label": "Poor", "score": 0.25 },
+    { "label": "Partial", "score": 0.5 },
+    { "label": "Good", "score": 0.75 },
+    { "label": "Excellent", "score": 1 }
+  ],
+  "threshold": 0.75,
+  "allowSkip": false
+}

@@ -1,0 +1,13 @@
+# OPTIONAL: grants the app and worker control of this host's Docker daemon.
+# Use a dedicated host with trusted administrators. See docs/self-hosting.md.
+services:
+  app:
+    group_add:
+      - ${DATOOL_DOCKER_GID:?Set the Docker socket group ID before opting in}
+    volumes:
+      - ${DATOOL_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+  worker:
+    group_add:
+      - ${DATOOL_DOCKER_GID:?Set the Docker socket group ID before opting in}
+    volumes:
+      - ${DATOOL_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock

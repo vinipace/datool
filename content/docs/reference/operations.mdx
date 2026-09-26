@@ -1,0 +1,2408 @@
+---
+title: Operation reference
+description: Browse request fields, response fields, and required scopes for every REST, CLI, and MCP operation.
+icon: reference
+---
+
+This reference is generated from the server's registered inputs and typed service results. Call each operation with `POST /api/agent/OPERATION_NAME`. See [API setup](/docs/reference/api) for authentication, examples, pagination, and error handling. The [OpenAPI specification](/openapi.json) includes nested schemas and constraints; the tables below summarize top-level fields. An older deployment may expose fewer operations. Use live discovery on the target server.
+
+All successful REST responses wrap the documented result in `{ "data": ... }`. Required fields describe the serialized response; null is distinct from an omitted field. Application inputs, outputs, metadata, and JSON Schemas can contain arbitrary JSON.
+
+## list_apps
+
+List registered apps, connection types, input/output schemas and availability. HTTP apps are always available; availability is not a health check.
+
+Required scopes: `apps:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `codeProvenance` | JSON | No |
+| `connection` | object | Yes |
+| `defaultInput` | JSON | No |
+| `evaluatorIds` | array of string | Yes |
+| `id` | string | Yes |
+| `inputSchema` | object | Yes |
+| `internalTracing` | boolean | Yes |
+| `mode` | "input" or "agent" | Yes |
+| `name` | string | Yes |
+| `online` | boolean | Yes |
+| `outputSchema` | object | Yes |
+| `revision` | number | Yes |
+
+## get_app
+
+Read one app and its connection configuration. Credential values are never returned.
+
+Required scopes: `apps:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `codeProvenance` | JSON | No |
+| `connection` | object | Yes |
+| `defaultInput` | JSON | No |
+| `evaluatorIds` | array of string | Yes |
+| `id` | string | Yes |
+| `inputSchema` | object | Yes |
+| `internalTracing` | boolean | Yes |
+| `mode` | "input" or "agent" | Yes |
+| `name` | string | Yes |
+| `online` | boolean | Yes |
+| `outputSchema` | object | Yes |
+| `revision` | number | Yes |
+
+## register_app
+
+Register an app with a local bridge or HTTP webhook connection. Use expectedRevision when editing. Omitted webhook headers preserve saved credentials; \{\} clears them. Registration does not call the app.
+
+Required scopes: `apps:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `app` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `codeProvenance` | JSON | No |
+| `connection` | object | Yes |
+| `defaultInput` | JSON | No |
+| `evaluatorIds` | array of string | Yes |
+| `id` | string | Yes |
+| `inputSchema` | object | Yes |
+| `internalTracing` | boolean | Yes |
+| `mode` | "input" or "agent" | Yes |
+| `name` | string | Yes |
+| `outputSchema` | object | Yes |
+| `revision` | number | Yes |
+
+## run_app
+
+Run one input through a registered app and save its experiment and traces. Reuse requestKey after uncertain delivery to prevent duplicate execution; inspect eval runs if the request is still starting. scorerIds omitted uses app defaults; [] runs without scorers. Calls may incur cost.
+
+Required scopes: `apps:read`, `apps:write`, `evals:read`, `evals:write`, `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `input` | string or number or boolean or null or array of string or number or boolean or null or array of JSON or object or object | Yes |
+| `requestKey` | string | Yes |
+| `scorerIds` | array of string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `completedAt` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `datasetId` | null or string | Yes |
+| `evaluatorIds` | array of string | Yes |
+| `evaluatorVersionIds` | JSON | No |
+| `execution` | JSON | No |
+| `groups` | array of object | No |
+| `groupsResolvedAt` | null or string | No |
+| `id` | string | Yes |
+| `metadata` | object | Yes |
+| `name` | null or string | Yes |
+| `nextCursor` | null or string | No |
+| `resultCount` | number | Yes |
+| `results` | array of object | Yes |
+| `rows` | array of object | No |
+| `score` | null or number | Yes |
+| `scorerProgress` | array of object | No |
+| `scores` | array of object | No |
+| `status` | "cancelled" or "completed" or "failed" or "partial" or "running" | Yes |
+| `targetCount` | number | Yes |
+| `traceCount` | number | Yes |
+| `url` | string | Yes |
+
+## get_metrics_metadata
+
+Discover semantic sources, measures, dimensions, time dimensions, segments, and query limits before constructing metric queries. Prefer source.visibility=primary for new queries: Traces (traces), Spans (spans), Evaluation Runs (evalRuns), Evaluation Results (evalResults), Scores (scoreValues). Inspect member definitions, denominators, grouping/filter capabilities and source.unavailable; legacy scores is not the Scores ratings source.
+
+Required scopes: `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `models` | array of object | Yes |
+
+## query_metrics
+
+Run a bounded read-only semantic query using discovered catalog members and the source's time dimension. Score measures marked requiresDefinition need one compatible scoreValues.definitionId or grouping by it. Returns data, annotations, quality, and execution metadata; does not accept SQL or executable definitions. On READ_BUSY, honor details.retryAfterSeconds and retry this read with bounded backoff.
+
+Required scopes: `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `query` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `annotation` | object | Yes |
+| `data` | array of object | Yes |
+| `meta` | object | Yes |
+| `query` | object | Yes |
+
+## batch_metrics
+
+Run 1–40 read-only semantic queries sequentially against one consistent snapshot. Returns results in query order with shared snapshot metadata. Use discovered catalog members and source-specific time dimensions; on READ_BUSY, honor details.retryAfterSeconds and retry this read with bounded backoff.
+
+Required scopes: `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `queries` | array of object | Yes |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `annotation` | object | Yes |
+| `data` | array of object | Yes |
+| `meta` | object | Yes |
+| `query` | object | Yes |
+
+## list_human_scores
+
+Read the project Human Score library and reusable collections. Human Scores are review criteria, separate from automated Scorers.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `collections` | array of object | Yes |
+| `scores` | array of object | Yes |
+
+## get_human_score
+
+Read one Human Score definition, including type, numeric range or enum options and revision.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+Type: **object**.
+
+## create_human_score
+
+Create a reusable numeric, categorical (single or multiple choice), or text Human Score in this project.
+
+Required scopes: `reviews:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `score` | object | Yes |
+
+**Result**
+
+Type: **object**.
+
+## update_human_score
+
+Update a Human Score with its current revision. Existing session and rating snapshots retain their definitions.
+
+Required scopes: `reviews:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `score` | object | Yes |
+
+**Result**
+
+Type: **object**.
+
+## get_human_score_collection
+
+Read an ordered collection with full Human Score definitions.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `archived` | boolean | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `revision` | number | Yes |
+| `scoreIds` | array of string | Yes |
+| `scores` | array of object | Yes |
+| `updatedAt` | string | Yes |
+
+## create_human_score_collection
+
+Create an ordered reusable collection of project Human Score IDs. Attach it to a review session using collectionId.
+
+Required scopes: `reviews:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `description` | string | No |
+| `scoreIds` | array of string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `archived` | boolean | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `revision` | number | Yes |
+| `scoreIds` | array of string | Yes |
+| `scores` | array of object | Yes |
+| `updatedAt` | string | Yes |
+
+## update_human_score_collection
+
+Update an ordered Human Score collection. Attached sessions retain their snapshot.
+
+Required scopes: `reviews:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `collection` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `archived` | boolean | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `revision` | number | Yes |
+| `scoreIds` | array of string | Yes |
+| `scores` | array of object | Yes |
+| `updatedAt` | string | Yes |
+
+## list_review_sessions
+
+List project review sessions with assignment, explicit AI labels, and separate human/AI completion counts. reviewedCount is total score completion, not human verification. Filters include name, status, and assigneeName.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `filter` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_review_session
+
+Read a review session, its review prompt, and up to 500 trace items in their fixed playback order.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `aiLabelledCount` | number | No |
+| `aiReviewedCount` | number | No |
+| `assigneeName` | null or string | Yes |
+| `assigneeUserId` | null or string | Yes |
+| `collection` | null or object | Yes |
+| `collectionId` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `createdBy` | null or string | Yes |
+| `humanReviewedCount` | number | No |
+| `id` | string | Yes |
+| `items` | array of object | Yes |
+| `label` | "AI-labelled" or "Human-reviewed" or "Unreviewed" | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `prompt` | string | Yes |
+| `reviewedCount` | number | Yes |
+| `reviewers` | array of object | Yes |
+| `revision` | number | Yes |
+| `skippedCount` | number | Yes |
+| `status` | "completed" or "pending" or "in_progress" | Yes |
+| `traceCount` | number | Yes |
+| `updatedAt` | string | Yes |
+
+## get_review_options
+
+List members who can be assigned to this project and the current reviewer identity. Use list_human_scores for the separate Human Score library.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `currentUserId` | null or string | Yes |
+| `members` | array of object | Yes |
+
+## create_review_session
+
+Create an ordered collection of traces for review. Use list_traces to find traces for a prompt, then pass their IDs in the desired order. The prompt field supplies review instructions. Optional collectionId attaches a snapshot of a Human Score collection to every trace. Does not run a model or execute the traces.
+
+Required scopes: `reviews:write`, `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `idempotencyKey` | string | No |
+| `name` | string | No |
+| `prompt` | string | No |
+| `assigneeUserId` | string or null | No |
+| `reviewerUserIds` | array of string | No |
+| `collectionId` | string or null | No |
+| `traceIds` | array of string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `aiLabelledCount` | number | No |
+| `aiReviewedCount` | number | No |
+| `assigneeName` | null or string | Yes |
+| `assigneeUserId` | null or string | Yes |
+| `collection` | null or object | Yes |
+| `collectionId` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `createdBy` | null or string | Yes |
+| `humanReviewedCount` | number | No |
+| `id` | string | Yes |
+| `items` | array of object | Yes |
+| `label` | "AI-labelled" or "Human-reviewed" or "Unreviewed" | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `prompt` | string | Yes |
+| `reviewedCount` | number | Yes |
+| `reviewers` | array of object | Yes |
+| `revision` | number | Yes |
+| `skippedCount` | number | Yes |
+| `status` | "completed" or "pending" or "in_progress" | Yes |
+| `traceCount` | number | Yes |
+| `updatedAt` | string | Yes |
+
+## update_review_session
+
+Edit the review prompt, name, assigned project members, or collection using the current revision. Collection changes recalculate completion while retaining existing ratings and their provenance.
+
+Required scopes: `reviews:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `collectionId` | string or null | No |
+| `name` | string | No |
+| `prompt` | string | No |
+| `assigneeUserId` | string or null | No |
+| `reviewerUserIds` | array of string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `aiLabelledCount` | number | No |
+| `aiReviewedCount` | number | No |
+| `assigneeName` | null or string | Yes |
+| `assigneeUserId` | null or string | Yes |
+| `collection` | null or object | Yes |
+| `collectionId` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `createdBy` | null or string | Yes |
+| `humanReviewedCount` | number | No |
+| `id` | string | Yes |
+| `items` | array of object | Yes |
+| `label` | "AI-labelled" or "Human-reviewed" or "Unreviewed" | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `prompt` | string | Yes |
+| `reviewedCount` | number | Yes |
+| `reviewers` | array of object | Yes |
+| `revision` | number | Yes |
+| `skippedCount` | number | Yes |
+| `status` | "completed" or "pending" or "in_progress" | Yes |
+| `traceCount` | number | Yes |
+| `updatedAt` | string | Yes |
+
+## get_review_item
+
+Read one review item's scores, notes, revision, trace ID and previous/next IDs. Use get_trace to inspect the actual prompt and output before reviewing.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sessionId` | string | Yes |
+| `itemId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `annotations` | array of object | Yes |
+| `completionKind` | null or "ai" or "human" | No |
+| `definitions` | array of object | Yes |
+| `humanVerified` | false or true | No |
+| `id` | string | Yes |
+| `label` | "AI-labelled" or "Human-reviewed" or "Unreviewed" or "Unknown provenance" | No |
+| `lastSubmission` | null or object | No |
+| `nextItemId` | null or string | Yes |
+| `notes` | string | Yes |
+| `notesProvenance` | null or object | No |
+| `ordinal` | number | Yes |
+| `previousItemId` | null or string | Yes |
+| `reviewedAt` | null or string | Yes |
+| `reviewedBy` | null or string | Yes |
+| `revision` | number | Yes |
+| `scores` | array of object | Yes |
+| `sessionId` | string | Yes |
+| `skippedAt` | null or string | Yes |
+| `traceId` | string | Yes |
+| `traceName` | string | Yes |
+
+## export_review_items
+
+Export a bounded page of review items with complete scores, notes, annotations and trusted provenance. AI-labelled rows are not human-verified ground truth. Follow nextCursor to export the session.
+
+Required scopes: `reviews:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `cursor` | string or null | No |
+| `limit` | integer | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+
+## record_review
+
+Save AI-labelled scores, notes or annotations for one trace using an organization API key or user OAuth with reviews:write. Attribution is derived server-side from the authenticated principal; optional agent \{name, model\} is descriptive metadata only. Providing scores replaces the complete score set; include every required criterion to complete it. Omit scores for notes/annotations-only updates that preserve scores and completion. Use humanScoreId and humanScoreRevision from get_review_item or list_human_scores; null is an unanswered draft. Values must follow the rubric's numeric range, option values, multiple-choice array or text type. Requires expectedRevision from get_review_item; on conflict refetch before retrying. AI completion is separate from human verification and never updates dataset ground truth. Returns provenance, completionKind, humanVerified and nextItemId.
+
+Required scopes: `reviews:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sessionId` | string | Yes |
+| `itemId` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `scores` | array of object | No |
+| `notes` | string | No |
+| `annotations` | array of object | No |
+| `agent` | object | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `annotations` | array of object | Yes |
+| `completionKind` | null or "ai" or "human" | No |
+| `definitions` | array of object | Yes |
+| `humanVerified` | false or true | No |
+| `id` | string | Yes |
+| `label` | "AI-labelled" or "Human-reviewed" or "Unreviewed" or "Unknown provenance" | No |
+| `lastSubmission` | null or object | No |
+| `nextItemId` | null or string | Yes |
+| `notes` | string | Yes |
+| `notesProvenance` | null or object | No |
+| `ordinal` | number | Yes |
+| `previousItemId` | null or string | Yes |
+| `reviewedAt` | null or string | Yes |
+| `reviewedBy` | null or string | Yes |
+| `revision` | number | Yes |
+| `scores` | array of object | Yes |
+| `sessionId` | string | Yes |
+| `skippedAt` | null or string | Yes |
+| `traceId` | string | Yes |
+| `traceName` | string | Yes |
+
+## list_scorer_libraries
+
+Discover supported evaluator libraries, pinned package/adapter versions, required arguments and model requirements. Create a type=library scorer with library \{package, version, adapterVersion, evaluator, mappings, options\}. Input mappings use trace or datasetItem dotted paths. Factuality uses the project's Vercel AI Gateway language model; deterministic evaluators need no provider.
+
+Required scopes: `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `defaultMappings` | object | Yes |
+| `libraries` | array of object | Yes |
+
+## use_library_scorer
+
+Select a library evaluator using its default input mappings. Creates or reuses its saved project scorer without overwriting edits. Factuality defaults to openai/gpt-4.1-mini via the project's Gateway. Use the returned ID anywhere scorer IDs are accepted.
+
+Required scopes: `scorers:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `evaluator` | "ExactMatch" or "Levenshtein" or "NumericDiff" or "ValidJSON" or "JSONDiff" or "Factuality" | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `allowSkip` | boolean | Yes |
+| `chainOfThought` | boolean | Yes |
+| `choices` | array of object | Yes |
+| `code` | string | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `imagePaths` | array of string | No |
+| `library` | JSON | No |
+| `messages` | array of object | Yes |
+| `model` | string | Yes |
+| `modelType` | "language" or "evaluation" | No |
+| `name` | string | Yes |
+| `provider` | "datool" or "vercel-ai-gateway" or "openai" or "typesafe-ai" | No |
+| `revision` | number | Yes |
+| `slug` | string | Yes |
+| `threshold` | null or number | Yes |
+| `type` | "llm" or "javascript" or "python" or "library" | Yes |
+| `updatedAt` | string | Yes |
+
+## list_scorers
+
+List saved LLM, JavaScript, Python and library scorer configurations.
+
+Required scopes: `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `allowSkip` | boolean | Yes |
+| `chainOfThought` | boolean | Yes |
+| `choices` | array of object | Yes |
+| `code` | string | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `imagePaths` | array of string | No |
+| `library` | JSON | No |
+| `messages` | array of object | Yes |
+| `model` | string | Yes |
+| `modelType` | "language" or "evaluation" | No |
+| `name` | string | Yes |
+| `provider` | "datool" or "vercel-ai-gateway" or "openai" or "typesafe-ai" | No |
+| `revision` | number | Yes |
+| `slug` | string | Yes |
+| `threshold` | null or number | Yes |
+| `type` | "llm" or "javascript" or "python" or "library" | Yes |
+| `updatedAt` | string | Yes |
+
+## get_scorer
+
+Read a scorer by ID.
+
+Required scopes: `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `allowSkip` | boolean | Yes |
+| `chainOfThought` | boolean | Yes |
+| `choices` | array of object | Yes |
+| `code` | string | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `imagePaths` | array of string | No |
+| `library` | JSON | No |
+| `messages` | array of object | Yes |
+| `model` | string | Yes |
+| `modelType` | "language" or "evaluation" | No |
+| `name` | string | Yes |
+| `provider` | "datool" or "vercel-ai-gateway" or "openai" or "typesafe-ai" | No |
+| `revision` | number | Yes |
+| `slug` | string | Yes |
+| `threshold` | null or number | Yes |
+| `type` | "llm" or "javascript" or "python" or "library" | Yes |
+| `updatedAt` | string | Yes |
+
+## create_scorer
+
+Create a scorer configuration; does not execute code or call a model.
+
+Required scopes: `scorers:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `scorer` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `allowSkip` | boolean | Yes |
+| `chainOfThought` | boolean | Yes |
+| `choices` | array of object | Yes |
+| `code` | string | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `imagePaths` | array of string | No |
+| `library` | JSON | No |
+| `messages` | array of object | Yes |
+| `model` | string | Yes |
+| `modelType` | "language" or "evaluation" | No |
+| `name` | string | Yes |
+| `provider` | "datool" or "vercel-ai-gateway" or "openai" or "typesafe-ai" | No |
+| `revision` | number | Yes |
+| `slug` | string | Yes |
+| `threshold` | null or number | Yes |
+| `type` | "llm" or "javascript" or "python" or "library" | Yes |
+| `updatedAt` | string | Yes |
+
+## update_scorer
+
+Replace the complete scorer configuration by ID.
+
+Required scopes: `scorers:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `scorer` | object | Yes |
+| `expectedRevision` | integer | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `allowSkip` | boolean | Yes |
+| `chainOfThought` | boolean | Yes |
+| `choices` | array of object | Yes |
+| `code` | string | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `imagePaths` | array of string | No |
+| `library` | JSON | No |
+| `messages` | array of object | Yes |
+| `model` | string | Yes |
+| `modelType` | "language" or "evaluation" | No |
+| `name` | string | Yes |
+| `provider` | "datool" or "vercel-ai-gateway" or "openai" or "typesafe-ai" | No |
+| `revision` | number | Yes |
+| `slug` | string | Yes |
+| `threshold` | null or number | Yes |
+| `type` | "llm" or "javascript" or "python" or "library" | Yes |
+| `updatedAt` | string | Yes |
+
+## delete_scorer
+
+Permanently delete a scorer configuration.
+
+Required scopes: `scorers:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## list_views
+
+List custom eval-run table views.
+
+Required scopes: `views:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `revision` | number | Yes |
+| `settings` | object | Yes |
+| `updatedAt` | string | Yes |
+
+## get_view
+
+Read a custom eval-run view including its revision.
+
+Required scopes: `views:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `revision` | number | Yes |
+| `settings` | object | Yes |
+| `updatedAt` | string | Yes |
+
+## create_view
+
+Create a custom eval-run view.
+
+Required scopes: `views:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `resource` | "eval-runs" or "playground-traces" or "agents" or "workflows" or "scorers" or "prompts" | Yes |
+| `name` | string | Yes |
+| `settings` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `revision` | number | Yes |
+| `settings` | object | Yes |
+| `updatedAt` | string | Yes |
+
+## update_view
+
+Replace a custom view with revision conflict protection.
+
+Required scopes: `views:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `resource` | "eval-runs" or "playground-traces" or "agents" or "workflows" or "scorers" or "prompts" | Yes |
+| `name` | string | Yes |
+| `settings` | object | Yes |
+| `expectedRevision` | integer | Yes |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `revision` | number | Yes |
+| `settings` | object | Yes |
+| `updatedAt` | string | Yes |
+
+## delete_view
+
+Permanently delete a custom view at its expected revision.
+
+Required scopes: `views:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `expectedRevision` | integer | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## list_saved_views
+
+List saved trace and eval-result selector views (distinct from custom eval-run views).
+
+Required scopes: `views:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_saved_view
+
+Read a saved selector view.
+
+Required scopes: `views:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `columns` | array of object | Yes |
+| `createdAt` | string | Yes |
+| `filters` | array of object | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `resource` | "traces" or "eval-results" | Yes |
+| `sort` | null or object | Yes |
+| `updatedAt` | string | Yes |
+
+## create_saved_view
+
+Create a saved trace or eval-result selector view.
+
+Required scopes: `views:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `columns` | array of object | Yes |
+| `filters` | array of object | No |
+| `id` | string | No |
+| `name` | string | Yes |
+| `resource` | "eval-results" or "traces" | Yes |
+| `sort` | object or null | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `columns` | array of object | Yes |
+| `createdAt` | string | Yes |
+| `filters` | array of object | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `resource` | "traces" or "eval-results" | Yes |
+| `sort` | null or object | Yes |
+| `updatedAt` | string | Yes |
+
+## update_saved_view
+
+Patch a saved selector view.
+
+Required scopes: `views:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `patch` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `columns` | array of object | Yes |
+| `createdAt` | string | Yes |
+| `filters` | array of object | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `resource` | "traces" or "eval-results" | Yes |
+| `sort` | null or object | Yes |
+| `updatedAt` | string | Yes |
+
+## delete_saved_view
+
+Permanently delete a saved selector view.
+
+Required scopes: `views:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## list_datasets
+
+List datasets with cursor pagination.
+
+Required scopes: `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `filter` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_dataset
+
+Read a dataset summary and its first item page. Use list_dataset_items for more.
+
+Required scopes: `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `description` | null or string | Yes |
+| `fieldSchemas` | JSON | No |
+| `id` | string | Yes |
+| `itemCount` | number | Yes |
+| `items` | array of object | Yes |
+| `metadata` | JSON | No |
+| `name` | string | Yes |
+| `nextCursor` | null or string | No |
+| `revision` | number | No |
+| `updatedAt` | string | Yes |
+| `versionId` | string | No |
+
+## list_dataset_items
+
+Read a bounded page of dataset items.
+
+Required scopes: `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## create_dataset
+
+Create a dataset.
+
+Required scopes: `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `description` | string | No |
+| `id` | string | No |
+| `name` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `description` | null or string | Yes |
+| `fieldSchemas` | JSON | No |
+| `id` | string | Yes |
+| `itemCount` | number | Yes |
+| `metadata` | JSON | No |
+| `name` | string | Yes |
+| `revision` | number | No |
+| `updatedAt` | string | Yes |
+| `versionId` | string | No |
+
+## update_dataset
+
+Patch dataset name or description.
+
+Required scopes: `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `patch` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `description` | null or string | Yes |
+| `fieldSchemas` | JSON | No |
+| `id` | string | Yes |
+| `itemCount` | number | Yes |
+| `metadata` | JSON | No |
+| `name` | string | Yes |
+| `revision` | number | No |
+| `updatedAt` | string | Yes |
+| `versionId` | string | No |
+
+## delete_dataset
+
+Permanently delete a dataset and its items. Datasets referenced by eval runs cannot be deleted.
+
+Required scopes: `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## create_dataset_item
+
+Add input, expected output, metadata, and an optional source trace to a dataset.
+
+Required scopes: `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `datasetId` | string | Yes |
+| `item` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `datasetId` | string | Yes |
+| `datasetRevision` | number | No |
+| `datasetVersionId` | string | No |
+| `expectedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `id` | string | Yes |
+| `input` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `metadata` | object | Yes |
+| `observedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | No |
+| `sourceSpanEvidence` | null or object | No |
+| `sourceSpanId` | null or string | No |
+| `sourceTraceId` | null or string | Yes |
+| `updatedAt` | string | Yes |
+| `versionId` | string | No |
+
+## update_dataset_item
+
+Patch a dataset item.
+
+Required scopes: `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `patch` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `datasetId` | string | Yes |
+| `datasetRevision` | number | No |
+| `datasetVersionId` | string | No |
+| `expectedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `id` | string | Yes |
+| `input` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `metadata` | object | Yes |
+| `observedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | No |
+| `sourceSpanEvidence` | null or object | No |
+| `sourceSpanId` | null or string | No |
+| `sourceTraceId` | null or string | Yes |
+| `updatedAt` | string | Yes |
+| `versionId` | string | No |
+
+## delete_dataset_item
+
+Permanently delete a dataset item.
+
+Required scopes: `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## list_dashboards
+
+List saved dashboard configurations.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `defaultWindowDays` | number | No |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `revision` | number | Yes |
+| `schemaVersion` | 1 | Yes |
+| `updatedAt` | string | Yes |
+| `widgets` | array of object | Yes |
+
+## get_dashboard
+
+Read a dashboard, its widgets and current revision.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `defaultWindowDays` | number | No |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `revision` | number | Yes |
+| `schemaVersion` | 1 | Yes |
+| `updatedAt` | string | Yes |
+| `widgets` | array of object | Yes |
+
+## create_dashboard
+
+Create a dashboard with validated widget queries. Does not execute queries.
+
+Required scopes: `dashboards:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `config` | object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `defaultWindowDays` | number | No |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `revision` | number | Yes |
+| `schemaVersion` | 1 | Yes |
+| `updatedAt` | string | Yes |
+| `widgets` | array of object | Yes |
+
+## update_dashboard
+
+Replace dashboard configuration with revision conflict protection.
+
+Required scopes: `dashboards:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `config` | object | Yes |
+| `expectedRevision` | integer | Yes |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `defaultWindowDays` | number | No |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `revision` | number | Yes |
+| `schemaVersion` | 1 | Yes |
+| `updatedAt` | string | Yes |
+| `widgets` | array of object | Yes |
+
+## delete_dashboard
+
+Permanently delete a dashboard at its expected revision.
+
+Required scopes: `dashboards:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `expectedRevision` | integer | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## list_traces
+
+Filter and page trace summaries. Filter syntax includes status = "errored", name contains "agent", and startedAt \>= "-24h". Use get_trace for full evidence.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `filter` | string | No |
+| `sessionId` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_trace
+
+Get complete trace evidence including spans and scores; capped at 8 MiB. Use paged child tools for larger traces.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `attributes` | object | Yes |
+| `durationMs` | null or number | Yes |
+| `endedAt` | null or string | Yes |
+| `group` | null or object | No |
+| `id` | string | Yes |
+| `input` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `name` | string | Yes |
+| `nextScoreCursor` | null or string | No |
+| `nextSpanCursor` | null or string | No |
+| `operation` | string | Yes |
+| `output` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `scores` | array of object | Yes |
+| `sessionId` | null or string | Yes |
+| `spans` | array of object | Yes |
+| `spanStats` | JSON | No |
+| `startedAt` | string | Yes |
+| `status` | "cancelled" or "completed" or "running" or "errored" | Yes |
+
+## list_trace_spans
+
+Page spans in a trace in start-time order.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_span_path
+
+Get the ancestor path of a span within its trace.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `traceId` | string | Yes |
+| `spanId` | string | Yes |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `attributes` | object | Yes |
+| `durationMs` | null or number | Yes |
+| `endedAt` | null or string | Yes |
+| `group` | null or object | No |
+| `id` | string | Yes |
+| `input` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `kind` | "function" or "agent" or "custom" or "llm" or "score" or "workflow" or "task" or "tool" | Yes |
+| `name` | string | Yes |
+| `output` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `parentId` | null or string | Yes |
+| `startedAt` | string | Yes |
+| `status` | "cancelled" or "completed" or "running" or "errored" | Yes |
+| `traceId` | string | Yes |
+
+## list_trace_scores
+
+Page the scores attached to a trace.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## list_sessions
+
+Filter and page sessions; use list_traces with sessionId to page their traces.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `filter` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_session
+
+Read a session and its initial trace page.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `attributes` | object | Yes |
+| `createdAt` | string | Yes |
+| `id` | string | Yes |
+| `name` | null or string | Yes |
+| `nextCursor` | null or string | No |
+| `traceCount` | number | Yes |
+| `traces` | array of object | Yes |
+| `updatedAt` | string | Yes |
+
+## list_scorer_versions
+
+Page immutable scorer version metadata. Use get_scorer_version to retrieve executable configuration.
+
+Required scopes: `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_scorer_version
+
+Read an immutable executable version belonging to a scorer.
+
+Required scopes: `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `versionId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `code` | string | Yes |
+| `config` | JSON | No |
+| `createdAt` | string | Yes |
+| `evaluatorId` | string | Yes |
+| `id` | string | Yes |
+| `language` | "javascript" or "python" | Yes |
+| `version` | number | Yes |
+
+## check_scorer_runtime
+
+Read-only configuration diagnostics for selected pinned scorers. Does not call providers or launch sandboxes, and does not establish connectivity or successful execution. Use probe_scorer_runtime explicitly for a bounded, potentially billable representative execution.
+
+Required scopes: `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `scorerIds` | array of string | Yes |
+| `evaluatorVersionIds` | object | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `checks` | array of object | Yes |
+| `incurredProviderUsage` | boolean | Yes |
+| `mode` | string | Yes |
+
+## probe_scorer_runtime
+
+Explicitly execute up to 3 pinned scorers on one representative trace/span or dataset case using their actual provider/model/sandbox. May incur usage and retain execution spans. Reports configuration, connectivity, and execution separately; creates no saved evaluation. Use start_eval_run for multi-case calibration.
+
+Required scopes: `scorers:read`, `scorers:write`, `traces:read`, `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `scorerIds` | array of string | Yes |
+| `evaluatorVersionIds` | object | No |
+| `traceId` | string | Yes |
+| `spanId` | string | No |
+| `datasetId` | string | No |
+| `datasetItemId` | string | No |
+| `datasetVersionId` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `checks` | array of object | Yes |
+| `evaluationRunCreated` | boolean | Yes |
+| `mode` | string | Yes |
+
+## test_scorer
+
+Preview a saved, pinned, or inline scorer on trace or selected span evidence. Does not create a saved evaluation run or score result; a scorer execution span is retained. Use start_eval_run for a named persistent evaluation. LLM scorers may incur model cost. Optional dataset context requires both datasetId and datasetItemId.
+
+Required scopes: `scorers:read`, `scorers:write`, `traces:read`, `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `traceId` | string | Yes |
+| `spanId` | string | No |
+| `scorerId` | string | No |
+| `versionId` | string | No |
+| `scorer` | object | No |
+| `datasetId` | string | No |
+| `datasetItemId` | string | No |
+| `datasetVersionId` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `evaluationRunCreated` | boolean | Yes |
+| `executionSpanRetained` | boolean | Yes |
+| `mode` | string | Yes |
+| `persisted` | boolean | Yes |
+| `result` | object | Yes |
+| `scorerId` | string | Yes |
+| `traceId` | string | Yes |
+| `versionId` | string | Yes |
+
+## list_eval_runs
+
+Filter and page evaluation run summaries, including saved groups (type/name/version) and groupsResolvedAt. Filter membership with workflow = 'Name' or agent = 'Name'; multiple memberships are supported. Null groupsResolvedAt means historical attribution has not been resolved; an empty groups array with a timestamp means unassigned.
+
+Required scopes: `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `filter` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## list_eval_run_groups
+
+Group all matching evaluation runs by saved workflow or agent membership, with exact run counts and cursor-paged groups. A mixed run can belong to several groups. Each returned filter can be passed to list_eval_runs to page that group's runs. Unresolved historical runs are separate from resolved, unassigned runs.
+
+Required scopes: `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `filter` | string | No |
+| `groupBy` | "workflow" or "agent" | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## cancel_eval_run
+
+Stop scheduling work and fence late result writes. Already dispatched application calls may finish; retained outputs and judgments are preserved. Cancelled runs cannot be recovered.
+
+Required scopes: `evals:read`, `evals:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `completedAt` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `datasetId` | null or string | Yes |
+| `evaluatorIds` | array of string | Yes |
+| `evaluatorVersionIds` | JSON | No |
+| `execution` | JSON | No |
+| `groups` | array of object | No |
+| `groupsResolvedAt` | null or string | No |
+| `id` | string | Yes |
+| `metadata` | object | Yes |
+| `name` | null or string | Yes |
+| `nextCursor` | null or string | No |
+| `resultCount` | number | Yes |
+| `results` | array of object | Yes |
+| `rows` | array of object | No |
+| `score` | null or number | Yes |
+| `scorerProgress` | array of object | No |
+| `scores` | array of object | No |
+| `status` | "cancelled" or "completed" or "failed" or "partial" or "running" | Yes |
+| `targetCount` | number | Yes |
+| `traceCount` | number | Yes |
+
+## recover_eval_run
+
+Resume unfinished cases after a worker lease expires, or retry scoring errors on retained evidence. Reuses completed judgments and durable app/bridge output. Never re-dispatches an uncertain app call. Live workers and cancelled runs reject recovery.
+
+Required scopes: `evals:read`, `evals:write`, `traces:read`, `datasets:read`, `scorers:read`, `apps:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `completedAt` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `datasetId` | null or string | Yes |
+| `evaluatorIds` | array of string | Yes |
+| `evaluatorVersionIds` | JSON | No |
+| `execution` | JSON | No |
+| `groups` | array of object | No |
+| `groupsResolvedAt` | null or string | No |
+| `id` | string | Yes |
+| `metadata` | object | Yes |
+| `name` | null or string | Yes |
+| `nextCursor` | null or string | No |
+| `resultCount` | number | Yes |
+| `results` | array of object | Yes |
+| `rows` | array of object | No |
+| `score` | null or number | Yes |
+| `scorerProgress` | array of object | No |
+| `scores` | array of object | No |
+| `status` | "cancelled" or "completed" or "failed" or "partial" or "running" | Yes |
+| `targetCount` | number | Yes |
+| `traceCount` | number | Yes |
+
+## get_eval_run
+
+Read a run's status, worker/stage progress, per-case execution errors, resolved evaluatorVersionIds and one lightweight result page with exact frozen inputs/outputs. Frozen and scorer spans are omitted by default; use get_eval_target with the run id and a row id for full case evidence, or opt in with includeEvidence. Batches shrink automatically to fit 8 MiB; continue with nextCursor, even if fewer rows than requested are returned.
+
+Required scopes: `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `id` | string | Yes |
+| `includeEvidence` | boolean | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `completedAt` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `datasetId` | null or string | Yes |
+| `evaluatorIds` | array of string | Yes |
+| `evaluatorVersionIds` | JSON | No |
+| `execution` | JSON | No |
+| `groups` | array of object | No |
+| `groupsResolvedAt` | null or string | No |
+| `id` | string | Yes |
+| `metadata` | object | Yes |
+| `name` | null or string | Yes |
+| `nextCursor` | null or string | No |
+| `resultCount` | number | Yes |
+| `results` | array of object | Yes |
+| `rows` | array of object | No |
+| `score` | null or number | Yes |
+| `scorerProgress` | array of object | No |
+| `scores` | array of object | No |
+| `status` | "cancelled" or "completed" or "failed" or "partial" or "running" | Yes |
+| `targetCount` | number | Yes |
+| `traceCount` | number | Yes |
+
+## get_eval_target
+
+Read one evaluation case's complete frozen evidence, scorer execution spans and results, capped at 8 MiB. Pass the run id and targetId from get_eval_run rows[].id or a comparison row's id. Does not substitute the current live trace for saved evidence.
+
+Required scopes: `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `targetId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `datasetCaseId` | null or string | No |
+| `datasetItemId` | null or string | Yes |
+| `executionError` | null or string | No |
+| `expectedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `id` | string | Yes |
+| `results` | array of object | Yes |
+| `scorerStatuses` | JSON | No |
+| `scoringTrace` | JSON | No |
+| `sourceSpanId` | null or string | No |
+| `stage` | string | No |
+| `trace` | object | Yes |
+
+## start_eval_run
+
+Create a named, persistent asynchronous evaluation and return its URL promptly. Execution completion, quality failures, and infrastructure errors are distinct. Choose trace IDs, a dataset (optionally datasetVersionId), or sourceRunId to re-score frozen evidence without calling the app again. Connected dataset runs accept promptOverrides keyed by managed prompt slug with optional version and model; all published prompt defaults are frozen at run creation, including lazy discovery. These are separate from inputs and expected outputs, forbidden for re-scoring, and part of requestKey identity. Connected dataset runs accept inputOverrides: shallow merge over each object case input, override keys win, nested values replace whole values and null is literal. The effective app input and overrides are frozen; dataset inputs and expected outputs remain unchanged. Overrides are forbidden for re-scoring and included in requestKey identity. Use parentRunId to execute the app again on a prior run's frozen cases/references, inheriting its settings and resolving latest prompts/scorers by default; optional overrides change those settings. useRecordedVersions=true holds recorded prompt/scorer revisions for reproduction or comparison. sourceRunId only re-scores saved outputs; its judges also default to latest. Each run records resolved versions, parentRunId and configurationChanges. Pin individual scorers with evaluatorVersionIds. Supply a stable requestKey: retries with the same key and inputs return the same run. Connected runs and LLM scorers may incur cost. Poll get_eval_run and use gate_eval_run when terminal.
+
+Required scopes: `evals:write`, `evals:read`, `traces:read`, `datasets:read`, `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `parentRunId` | string | No |
+| `useRecordedVersions` | boolean | No |
+| `promptOverrides` | object | No |
+| `inputOverrides` | object | No |
+| `datasetVersionId` | string | No |
+| `evaluatorVersionIds` | object | No |
+| `sourceRunId` | string | No |
+| `background` | boolean | No |
+| `mode` | "connected" or "traces" | No |
+| `appId` | string | No |
+| `concurrency` | integer | No |
+| `metadata` | object | No |
+| `datasetId` | string | No |
+| `datasetItemIds` | array of string | No |
+| `evaluatorIds` | array of string | No |
+| `name` | string | No |
+| `traceIds` | array of string | No |
+| `requestKey` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `completedAt` | null or string | Yes |
+| `createdAt` | string | Yes |
+| `datasetId` | null or string | Yes |
+| `evaluatorIds` | array of string | Yes |
+| `evaluatorVersionIds` | JSON | No |
+| `execution` | JSON | No |
+| `groups` | array of object | No |
+| `groupsResolvedAt` | null or string | No |
+| `id` | string | Yes |
+| `metadata` | object | Yes |
+| `name` | null or string | Yes |
+| `nextCursor` | null or string | No |
+| `resultCount` | number | Yes |
+| `results` | array of object | Yes |
+| `rows` | array of object | No |
+| `score` | null or number | Yes |
+| `scorerProgress` | array of object | No |
+| `scores` | array of object | No |
+| `status` | "cancelled" or "completed" or "failed" or "partial" or "running" | Yes |
+| `targetCount` | number | Yes |
+| `traceCount` | number | Yes |
+| `url` | string | Yes |
+
+## compare_eval_runs
+
+Compare runs and their resolved configurationChanges, separating extractor changes from judge-version changes. Changed judges remain viewable but cannot pass a baseline quality gate. Use exact frozen inputs/outputs, matching dataset item, trace, then unique input. Full spans are omitted by default; use get_eval_target to inspect a case or opt in with includeEvidence. Batches shrink automatically to fit 8 MiB; always continue with nextOffset instead of assuming a fixed page size.
+
+Required scopes: `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `leftId` | string | Yes |
+| `rightId` | string | Yes |
+| `offset` | integer | No |
+| `includeEvidence` | boolean | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `configurationChanges` | array of object | Yes |
+| `left` | object | Yes |
+| `limit` | number | Yes |
+| `nextOffset` | null or number | Yes |
+| `offset` | number | Yes |
+| `pairs` | array of object | Yes |
+| `right` | object | Yes |
+| `total` | number | Yes |
+
+## gate_eval_run
+
+Evaluate CI thresholds across ALL results. Fails closed on nonterminal, empty, missing or unscored results. Optional baseline checks mean-score regression. Returns passed plus reasons; CLI exits 2 on failure.
+
+Required scopes: `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `minScore` | number | No |
+| `minPassRate` | number | No |
+| `maxErrors` | integer | No |
+| `allowUnscored` | boolean | No |
+| `baselineId` | string | No |
+| `maxRegression` | number | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `baseline` | null or object | Yes |
+| `passed` | boolean | Yes |
+| `reasons` | array of string | Yes |
+| `run` | object | Yes |
+| `thresholds` | object | Yes |
+
+## promote_spans
+
+Preview or atomically promote 1–100 exact production spans into dataset cases. Defaults to preview=true. Captures only the selected subtree with provenance; observed output is separate and expectedOutput defaults to null. mappedInput is explicit app input, never inferred from prompt text. Save with preview=false and the preview's expectedEvidenceHash. No new production traces are created.
+
+Required scopes: `datasets:read`, `datasets:write`, `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `datasetId` | string | Yes |
+| `preview` | boolean | No |
+| `expectedHash` | string | No |
+| `expectedEvidenceHash` | string | No |
+| `spans` | array of object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `cases` | array of object | Yes |
+| `created` | array of string | Yes |
+| `datasetId` | string | Yes |
+| `evidenceHash` | string | Yes |
+| `preview` | boolean | Yes |
+
+## bulk_dataset_items
+
+Atomically create, update and delete at most 100 dataset items. Any failure rolls back the batch. expectedHash optionally guards the content hash returned by a snapshot or prior bulk edit.
+
+Required scopes: `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `datasetId` | string | Yes |
+| `expectedHash` | string | No |
+| `create` | array of object | No |
+| `update` | array of object | No |
+| `delete` | array of string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contentHash` | string | Yes |
+| `created` | array of string | Yes |
+| `datasetId` | string | Yes |
+| `deleted` | array of string | Yes |
+| `updated` | array of string | Yes |
+
+## create_dataset_snapshot
+
+Freeze dataset inputs, expected outputs, metadata and captured span evidence as immutable per-case content. Aggregate captured evidence can exceed 8 MiB; item reads remain bounded to 8 MiB per page. Legacy trace references resolve evidence at evaluation start. Identical content returns the existing snapshot. Pass its id as datasetVersionId to an evaluation.
+
+Required scopes: `datasets:read`, `datasets:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `datasetId` | string | Yes |
+| `label` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contentHash` | string | Yes |
+| `createdAt` | string | Yes |
+| `datasetId` | string | Yes |
+| `id` | string | Yes |
+| `itemCount` | number | Yes |
+| `label` | null or string | Yes |
+
+## list_dataset_snapshots
+
+Page immutable dataset snapshot metadata.
+
+Required scopes: `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `datasetId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | null or string | Yes |
+| `total` | number | No |
+
+## get_dataset_snapshot
+
+Read a frozen dataset and one immutable item page. Pages shrink to fit 8 MiB; continue with nextCursor even when fewer rows than requested are returned.
+
+Required scopes: `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeTotal` | boolean | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `datasetId` | string | Yes |
+| `versionId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `description` | null or string | Yes |
+| `fieldSchemas` | JSON | No |
+| `id` | string | Yes |
+| `itemCount` | number | Yes |
+| `items` | array of object | Yes |
+| `metadata` | JSON | No |
+| `name` | string | Yes |
+| `nextCursor` | null or string | Yes |
+| `revision` | number | No |
+| `updatedAt` | string | Yes |
+| `versionId` | string | Yes |
+
+## preview_dashboard
+
+Execute stored dashboard widget queries with their saved date windows. Returns configuration and ordered query results. Each batch of at most 40 expanded queries shares a snapshot; larger previews use multiple snapshots, not one dashboard-wide snapshot. On READ_BUSY, honor details.retryAfterSeconds and retry this read with bounded backoff.
+
+Required scopes: `dashboards:read`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `comparisons` | array of object | Yes |
+| `dashboard` | object | Yes |
+| `results` | array of object | Yes |
+
+## get_saved_view_data
+
+Execute a saved selector view and return a bounded row page. Eval-result views can be restricted to runId.
+
+Required scopes: `views:read`, `traces:read`, `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `runId` | string | No |
+| `offset` | integer | No |
+| `limit` | integer | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `columns` | array of object | Yes |
+| `limit` | number | Yes |
+| `nextOffset` | null or number | Yes |
+| `offset` | number | Yes |
+| `rows` | array of object | Yes |
+| `total` | number | Yes |
+| `view` | object | Yes |
+
+## resolve_trace
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## resolve_session
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `traces:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## resolve_dataset
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## resolve_scorer
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `scorers:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## resolve_eval
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `evals:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## resolve_dashboard
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## resolve_view
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `views:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## describe_agent_operations
+
+Discover agent operation names, required permissions and JSON input schemas shared by MCP and CLI.
+
+Required scopes: no additional operation scopes (authentication and project access still required).
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | No |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `description` | string | Yes |
+| `inputSchema` | object | Yes |
+| `name` | string | Yes |
+| `scopes` | array of "apps:read" or "apps:write" or "reviews:read" or "reviews:write" or "metrics:read" or "scorers:read" or "scorers:write" or "views:read" or "views:write" or "datasets:read" or "datasets:write" or "dashboards:read" or "dashboards:write" or "traces:read" or "evals:read" or "evals:write" or "prompts:read" or "prompts:write" or "traces:write" or "playgrounds:read" or "playgrounds:write" | Yes |

@@ -1,0 +1,209 @@
+[
+  {
+    "component": "components/tracer/span-promotion-dialog.tsx",
+    "kind": "direct",
+    "story": "components/tracer/span-promotion-dialog.stories.tsx"
+  },
+  {
+    "component": "components/tracer/connected-eval-button.tsx",
+    "kind": "direct",
+    "story": "components/tracer/connected-eval-button.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-details-inspector.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-details-inspector.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-import-dialog.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-import-dialog.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-item-inspector.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-item-inspector.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-items-table.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-items-table.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-kind-icon.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-kind-icon.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-library-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-library-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-schema-dialog.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-schema-dialog.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dataset-version-history.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dataset-version-history.stories.tsx"
+  },
+  {
+    "component": "components/tracer/datasets-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/datasets-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/eval-compare-picker.tsx",
+    "kind": "direct",
+    "story": "components/tracer/eval-compare-picker.stories.tsx"
+  },
+  {
+    "component": "components/tracer/eval-computed-columns.tsx",
+    "kind": "direct",
+    "story": "components/tracer/eval-computed-columns.stories.tsx"
+  },
+  {
+    "component": "components/tracer/eval-run-actions.tsx",
+    "kind": "direct",
+    "story": "components/tracer/eval-run-actions.stories.tsx"
+  },
+  {
+    "component": "components/tracer/eval-run-detail.tsx",
+    "kind": "direct",
+    "story": "components/tracer/eval-run-detail.stories.tsx"
+  },
+  {
+    "component": "components/tracer/eval-score-cell.tsx",
+    "kind": "direct",
+    "story": "components/tracer/eval-score-cell.stories.tsx"
+  },
+  {
+    "component": "components/tracer/evals-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/evals-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/legacy-playground.tsx",
+    "kind": "direct",
+    "story": "components/tracer/legacy-playground.stories.tsx"
+  },
+  {
+    "component": "components/tracer/playground-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/playground-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/app-editor.tsx",
+    "kind": "direct",
+    "story": "components/tracer/app-editor.stories.tsx"
+  },
+  {
+    "component": "components/tracer/playground-traces.tsx",
+    "kind": "direct",
+    "story": "components/tracer/playground-traces.stories.tsx"
+  },
+  {
+    "component": "components/tracer/scorer-code-editor.tsx",
+    "kind": "direct",
+    "story": "components/tracer/scorer-code-editor.stories.tsx"
+  },
+  {
+    "component": "components/tracer/scorer-icon.tsx",
+    "kind": "direct",
+    "story": "components/tracer/scorer-icon.stories.tsx"
+  },
+  {
+    "component": "components/tracer/scorers-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/scorers-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/scorer-trace-picker.tsx",
+    "kind": "composite",
+    "story": "components/tracer/scorers-page.stories.tsx",
+    "reason": "The new-scorer stories exercise trace selection, full evidence previews and results in the editor."
+  },
+  {
+    "component": "components/tracer/playground-input-form.tsx",
+    "kind": "composite",
+    "story": "components/tracer/playground-app.stories.tsx",
+    "reason": "App input stories exercise form fields, format switching, invalid drafts, and run submissions."
+  },
+  {
+    "component": "components/tracer/scorer-model-field.tsx",
+    "kind": "composite",
+    "story": "components/tracer/scorers-page.stories.tsx",
+    "reason": "LLM scorer stories exercise model selection and missing-model validation in the editor."
+  },
+  {
+    "component": "components/tracer/scorer-test-panel.tsx",
+    "kind": "composite",
+    "story": "components/tracer/scorers-page.stories.tsx",
+    "reason": "Scorer stories run selected traces and JSON cases through the real test panel."
+  },
+  {
+    "component": "components/tracer/eval-run-summary.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-detail.stories.tsx",
+    "reason": "Evaluation detail stories render scoring progress and the experiment summary."
+  },
+  {
+    "component": "components/tracer/playground-scorers.tsx",
+    "kind": "composite",
+    "story": "components/tracer/playground-app.stories.tsx",
+    "reason": "Playground stories render the scorer selection controls beside the app input."
+  },
+  {
+    "component": "components/tracer/project-model-field.tsx",
+    "kind": "composite",
+    "story": "components/tracer/prompts-page.stories.tsx",
+    "reason": "Prompt creation exercises the shared project model picker also used by LLM scorers."
+  },
+  {
+    "component": "components/tracer/prompt-editor.tsx",
+    "kind": "composite",
+    "story": "components/tracer/prompts-page.stories.tsx",
+    "reason": "Prompt editor stories cover autosave, publishing, read-only version history, restoration, preview, validation, and request failures."
+  },
+  {
+    "component": "components/tracer/prompts-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/prompts-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/scorer-picker.tsx",
+    "kind": "direct",
+    "story": "components/tracer/scorer-picker.stories.tsx"
+  },
+  {
+    "component": "components/tracer/library-scorer-form.tsx",
+    "kind": "composite",
+    "story": "components/tracer/scorers-page.stories.tsx",
+    "reason": "Library scorer settings are edited and validated in the existing scorer editor."
+  },
+  {
+    "component": "components/tracer/eval-run-progress.tsx",
+    "kind": "direct",
+    "story": "components/tracer/eval-run-progress.stories.tsx"
+  },
+  {
+    "component": "components/tracer/eval-comparison-summary.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-detail.stories.tsx",
+    "reason": "Numeric and narrow comparison stories render per-run score summaries."
+  },
+  {
+    "component": "components/tracer/eval-metric-difference.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-detail.stories.tsx",
+    "reason": "Comparison stories check score and duration changes against the baseline."
+  },
+  {
+    "component": "components/tracer/eval-group-links.tsx",
+    "kind": "composite",
+    "story": "components/tracer/evals-page.stories.tsx",
+    "reason": "Saved membership stories exercise operation links, overflow and narrow layouts."
+  }
+]

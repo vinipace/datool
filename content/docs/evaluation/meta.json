@@ -1,0 +1,10 @@
+{
+  "title": "Evaluation",
+  "pages": [
+    "datasets",
+    "runs",
+    "scorers",
+    "ci"
+  ],
+  "icon": "evals"
+}

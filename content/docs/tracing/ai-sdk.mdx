@@ -1,0 +1,73 @@
+---
+title: AI SDK
+description: Record a complete AI SDK 7 model call with Datool's OpenTelemetry processor.
+icon: traces
+---
+
+This Node.js recipe records your normal `generateText` call. It uses AI SDK 7's telemetry registration and the legacy AI SDK span adapter supported by Datool. No manual workflow or span wrapper is needed.
+
+## Install and configure
+
+Use Node.js 22.18 or later:
+
+```sh
+npm init -y
+npm install @datool/sdk@0.3.1 ai@7 @ai-sdk/otel @opentelemetry/api@1 @opentelemetry/sdk-trace-node@2
+```
+
+Create `.env` with `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY` as in [your first trace](/docs/get-started/first-trace). The key needs `traces:write`. Add `AI_GATEWAY_API_KEY` for Vercel AI Gateway. The model call incurs provider usage; the Datool key is not a model-provider key.
+
+## Record the call
+
+Save `ai-sdk.mjs`:
+
+```js
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node"
+import { generateText, registerTelemetry } from "ai"
+import { LegacyOpenTelemetry } from "@ai-sdk/otel"
+import { DatoolSpanProcessor } from "@datool/sdk/otel"
+
+const processor = new DatoolSpanProcessor()
+const provider = new NodeTracerProvider({ spanProcessors: [processor] })
+provider.register()
+registerTelemetry(new LegacyOpenTelemetry())
+
+try {
+  const result = await generateText({
+    model: "openai/gpt-4.1-mini",
+    prompt: "Explain AI observability in one sentence.",
+    telemetry: { functionId: "docs-greeting" },
+  })
+  console.log(result.text)
+} finally {
+  try {
+    await processor.forceFlush()
+  } finally {
+    await provider.shutdown()
+  }
+}
+```
+
+```sh
+node --env-file=.env ai-sdk.mjs
+```
+
+Open **Traces** in the configured project and find the latest **docs-greeting** call. Expect a completed trace with nested model spans, captured prompt and response, and token usage when reported by the provider. The `functionId` supplies an application name for [dashboard attribution](/docs/guides/dashboards). A model error should appear on the recorded execution; a Datool delivery error is surfaced by the flush.
+
+![Trace inspector showing the docs-greeting function, its nested model call, and the recorded prompt and response.](/docs-assets/ai-sdk-trace.png)
+
+The inspector above uses a synthetic model response inside an additional application workflow. The recipe here starts directly at the AI SDK call. Select the nested LLM span to inspect its model and token usage; the parent function shows the application-level prompt and result. Live responses and timings vary.
+
+## Use an existing provider
+
+Register the Datool processor on your existing OpenTelemetry provider once. Avoid creating a second global provider. AI SDK calls inherit the active OpenTelemetry context, so calls made inside an existing span become its children. See [manual instrumentation](/docs/tracing/instrumentation) when you need to trace application work outside model calls.
+
+AI SDK 6 enables telemetry through `experimental_telemetry: { isEnabled: true }` on each call; it does not use this AI SDK 7 registration recipe. Follow the [AI SDK telemetry documentation](https://ai-sdk.dev/docs/ai-sdk-core/telemetry) for your installed major version and retain your lockfile.
+
+## Streaming and capture
+
+For `streamText`, consume the stream fully before flushing or shutting down the provider. A server that returns a streaming response must keep telemetry work alive until the stream ends. In a serverless request, use the platform's supported post-response lifetime hook.
+
+To omit sensitive model content, use `telemetry: { recordInputs: false, recordOutputs: false }` on the call. These settings do not redact independently recorded application payloads. The processor's `transform` hook can apply your redaction policy before delivery.
+
+If model spans are missing, check the adapter registration and provider initialization order. If nothing appears, check project selection, key scope, and the ingestion worker before changing model settings. See [troubleshooting](/docs/reference/troubleshooting).

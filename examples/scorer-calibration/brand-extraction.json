@@ -1,0 +1,36 @@
+{
+  "rubric": "Extract only brands supported by the response. Known-brand context is not answer evidence. Grounding rejects every unsupported emitted entity, even when isTextMentioned=false or mentionCount=0. Coverage assesses only omissions of supported brands; extra entities do not lower coverage. A loading placeholder supports no brands, so coverage passes vacuously while input validity fails. Missing response evidence yields skip for grounding and coverage. These are explicit decisions for this rubric, not universal extraction rules.",
+  "origin": "synthetic, deliberately reviewed fixtures; never production gold",
+  "fixtures": [
+    {
+      "id": "known-pass",
+      "input": { "response": "Acme and Nexa both sell shoes.", "knownBrands": ["Acme", "Nexa", "Omni"] },
+      "output": { "brands": [{ "name": "Acme", "isTextMentioned": true, "mentionCount": 1 }, { "name": "Nexa", "isTextMentioned": true, "mentionCount": 1 }] },
+      "expectedJudgments": { "grounding": "pass", "coverage": "pass", "inputValidity": "pass" }
+    },
+    {
+      "id": "loading-placeholder-unsupported-brands",
+      "input": { "response": "<html><body><div>Loading...</div></body></html>", "knownBrands": ["Acme", "Nexa", "Omni"] },
+      "output": { "brands": [{ "name": "Acme", "isTextMentioned": false, "mentionCount": 0 }, { "name": "Nexa", "isTextMentioned": false, "mentionCount": 0 }, { "name": "Omni", "isTextMentioned": false, "mentionCount": 0 }] },
+      "expectedJudgments": { "grounding": "fail", "coverage": "pass", "inputValidity": "fail" }
+    },
+    {
+      "id": "grounded-but-incomplete",
+      "input": { "response": "Acme and Nexa both sell shoes.", "knownBrands": ["Acme", "Nexa"] },
+      "output": { "brands": [{ "name": "Acme", "isTextMentioned": true, "mentionCount": 1 }] },
+      "expectedJudgments": { "grounding": "pass", "coverage": "fail", "inputValidity": "pass" }
+    },
+    {
+      "id": "complete-with-unsupported-extra",
+      "input": { "response": "Acme sells shoes.", "knownBrands": ["Acme", "Nexa"] },
+      "output": { "brands": [{ "name": "Acme", "isTextMentioned": true, "mentionCount": 1 }, { "name": "Nexa", "isTextMentioned": false, "mentionCount": 0 }] },
+      "expectedJudgments": { "grounding": "fail", "coverage": "pass", "inputValidity": "pass" }
+    },
+    {
+      "id": "missing-evidence",
+      "input": { "response": null, "knownBrands": ["Acme", "Nexa"] },
+      "output": { "brands": [] },
+      "expectedJudgments": { "grounding": "skip", "coverage": "skip", "inputValidity": "fail" }
+    }
+  ]
+}

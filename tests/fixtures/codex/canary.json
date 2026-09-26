@@ -1,0 +1,2644 @@
+{
+  "provenance": "Reduced and sanitized from a real Codex CLI 0.154.0 canary, 2026-09-17. No fabricated usage counters.",
+  "traces": {
+    "resourceSpans": [
+      {
+        "scopeSpans": [
+          {
+            "spans": [
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "ca06f30ac12cd682",
+                "traceState": "",
+                "parentSpanId": "",
+                "flags": 257,
+                "name": "turn/start",
+                "kind": 2,
+                "startTimeUnixNano": "1789626262228046000",
+                "endTimeUnixNano": "1789626262235847000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "app-server/src/app_server_tracing.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_app_server::app_server_tracing"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "100"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_app_server::app_server_tracing"
+                    }
+                  },
+                  {
+                    "key": "rpc.system",
+                    "value": {
+                      "stringValue": "jsonrpc"
+                    }
+                  },
+                  {
+                    "key": "rpc.method",
+                    "value": {
+                      "stringValue": "turn/start"
+                    }
+                  },
+                  {
+                    "key": "rpc.transport",
+                    "value": {
+                      "stringValue": "in-process"
+                    }
+                  },
+                  {
+                    "key": "rpc.request_id",
+                    "value": {
+                      "stringValue": "2"
+                    }
+                  },
+                  {
+                    "key": "app_server.connection_id",
+                    "value": {
+                      "stringValue": "0"
+                    }
+                  },
+                  {
+                    "key": "app_server.api_version",
+                    "value": {
+                      "stringValue": "v2"
+                    }
+                  },
+                  {
+                    "key": "app_server.client_name",
+                    "value": {
+                      "stringValue": "codex_exec"
+                    }
+                  },
+                  {
+                    "key": "app_server.client_version",
+                    "value": {
+                      "stringValue": "0.154.0"
+                    }
+                  },
+                  {
+                    "key": "turn.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "2218749"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "5582459"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "b70a04b6ea7ae4d9",
+                "traceState": "",
+                "parentSpanId": "adb2f629b082c9f7",
+                "flags": 257,
+                "name": "handle_responses",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265484409000",
+                "endTimeUnixNano": "1789626265505223000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "2349"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "codex.request.reasoning_effort",
+                    "value": {
+                      "stringValue": "low"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.input_tokens",
+                    "value": {
+                      "intValue": "17166"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.cache_read.input_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.cache_write.input_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.output_tokens",
+                    "value": {
+                      "intValue": "40"
+                    }
+                  },
+                  {
+                    "key": "codex.usage.reasoning_output_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "codex.usage.total_tokens",
+                    "value": {
+                      "intValue": "17206"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "b19c98c5da457a1c74f42f2e6f722df4",
+                "spanId": "08932ba4d0318152",
+                "traceState": "",
+                "parentSpanId": "d8f69659201190f6",
+                "flags": 257,
+                "name": "exec_command",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265768432000",
+                "endTimeUnixNano": "1789626265859435000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tools/parallel.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "138"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "12"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "exec_command"
+                    }
+                  },
+                  {
+                    "key": "call_id",
+                    "value": {
+                      "stringValue": "exec-16b64cd8-b88e-44e0-a323-6721feece677"
+                    }
+                  },
+                  {
+                    "key": "aborted",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "33016463"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "57985621"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "b19c98c5da457a1c74f42f2e6f722df4",
+                "spanId": "d8f69659201190f6",
+                "traceState": "",
+                "parentSpanId": "d3b904c2d7a62283",
+                "flags": 257,
+                "name": "handle_tool_call_with_source",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265768416000",
+                "endTimeUnixNano": "1789626265859446000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tools/parallel.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "94"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "12"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "22125"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "91007500"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "b19c98c5da457a1c74f42f2e6f722df4",
+                "spanId": "d3b904c2d7a62283",
+                "traceState": "",
+                "parentSpanId": "",
+                "flags": 257,
+                "name": "code_mode.broker.invoke_tool",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265768031000",
+                "endTimeUnixNano": "1789626265859471000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tools/code_mode/delegate.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tools::code_mode::delegate"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "258"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "12"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tools::code_mode::delegate"
+                    }
+                  },
+                  {
+                    "key": "cell.id",
+                    "value": {
+                      "stringValue": "1"
+                    }
+                  },
+                  {
+                    "key": "runtime_tool_call_id",
+                    "value": {
+                      "stringValue": "tool-1"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "exec_command"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "329626"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "91110499"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "f667656babd36c26",
+                "traceState": "",
+                "parentSpanId": "a64bcfd1fff415e7",
+                "flags": 257,
+                "name": "exec",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265483841000",
+                "endTimeUnixNano": "1789626265861850000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tools/parallel.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "138"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "exec"
+                    }
+                  },
+                  {
+                    "key": "call_id",
+                    "value": {
+                      "stringValue": "call_QYDEotKYigYz6DCRTTzUFc1F"
+                    }
+                  },
+                  {
+                    "key": "aborted",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "8576083"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "369430084"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "a64bcfd1fff415e7",
+                "traceState": "",
+                "parentSpanId": "421151952afeedbc",
+                "flags": 257,
+                "name": "handle_tool_call_with_source",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265483834000",
+                "endTimeUnixNano": "1789626265861899000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tools/parallel.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "94"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "570125"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "377491584"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "421151952afeedbc",
+                "traceState": "",
+                "parentSpanId": "7459f6154ab4d70a",
+                "flags": 257,
+                "name": "handle_tool_call",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265483828000",
+                "endTimeUnixNano": "1789626265861903000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tools/parallel.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "73"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tools::parallel"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "580417"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "377491750"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "7459f6154ab4d70a",
+                "traceState": "",
+                "parentSpanId": "251c46b6d8643a9d",
+                "flags": 257,
+                "name": "handle_output_item_done",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265481668000",
+                "endTimeUnixNano": "1789626265484402000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/stream_events_utils.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::stream_events_utils"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "289"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "5"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::stream_events_utils"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "1780125"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "955000"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "251c46b6d8643a9d",
+                "traceState": "",
+                "parentSpanId": "adb2f629b082c9f7",
+                "flags": 257,
+                "name": "handle_responses",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265438189000",
+                "endTimeUnixNano": "1789626265484403000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "2349"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "12"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "codex.request.reasoning_effort",
+                    "value": {
+                      "stringValue": "low"
+                    }
+                  },
+                  {
+                    "key": "from",
+                    "value": {
+                      "stringValue": "output_item_done"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "1801834"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "44414374"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "adb2f629b082c9f7",
+                "traceState": "",
+                "parentSpanId": "0cab142d08f3f3a6",
+                "flags": 257,
+                "name": "receiving_stream",
+                "kind": 1,
+                "startTimeUnixNano": "1789626263651351000",
+                "endTimeUnixNano": "1789626265864172000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "2347"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "0cab142d08f3f3a6",
+                "traceState": "",
+                "parentSpanId": "37682dd2f20b85a9",
+                "flags": 257,
+                "name": "try_run_sampling_request",
+                "kind": 1,
+                "startTimeUnixNano": "1789626263650716000",
+                "endTimeUnixNano": "1789626265864181000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "2267"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "turn_id",
+                    "value": {
+                      "stringValue": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "9972914"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "2203473086"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "37682dd2f20b85a9",
+                "traceState": "",
+                "parentSpanId": "90e4c85c4f15881b",
+                "flags": 257,
+                "name": "run_sampling_request",
+                "kind": 1,
+                "startTimeUnixNano": "1789626263650694000",
+                "endTimeUnixNano": "1789626265864190000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "1408"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "turn_id",
+                    "value": {
+                      "stringValue": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "cwd",
+                    "value": {
+                      "stringValue": "/workspace/canary"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "10170544"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "2203305664"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "0272c0aea82097b4",
+                "traceState": "",
+                "parentSpanId": "e6406fea7f4a6df3",
+                "flags": 257,
+                "name": "handle_responses",
+                "kind": 1,
+                "startTimeUnixNano": "1789626267012360000",
+                "endTimeUnixNano": "1789626267020778000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "2349"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "12"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "codex.request.reasoning_effort",
+                    "value": {
+                      "stringValue": "low"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.input_tokens",
+                    "value": {
+                      "intValue": "17239"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.cache_read.input_tokens",
+                    "value": {
+                      "intValue": "17024"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.cache_write.input_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "gen_ai.usage.output_tokens",
+                    "value": {
+                      "intValue": "13"
+                    }
+                  },
+                  {
+                    "key": "codex.usage.reasoning_output_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "codex.usage.total_tokens",
+                    "value": {
+                      "intValue": "17252"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "e6406fea7f4a6df3",
+                "traceState": "",
+                "parentSpanId": "7f53e9e30b023bbe",
+                "flags": 257,
+                "name": "receiving_stream",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265867303000",
+                "endTimeUnixNano": "1789626267022695000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "2347"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "3"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "7f53e9e30b023bbe",
+                "traceState": "",
+                "parentSpanId": "ecd3864691a26d4b",
+                "flags": 257,
+                "name": "try_run_sampling_request",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265866949000",
+                "endTimeUnixNano": "1789626267022700000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "2267"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "3"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "turn_id",
+                    "value": {
+                      "stringValue": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "3416997"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "1152324086"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "ecd3864691a26d4b",
+                "traceState": "",
+                "parentSpanId": "90e4c85c4f15881b",
+                "flags": 257,
+                "name": "run_sampling_request",
+                "kind": 1,
+                "startTimeUnixNano": "1789626265866924000",
+                "endTimeUnixNano": "1789626267022702000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/turn.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "1408"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "3"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::turn"
+                    }
+                  },
+                  {
+                    "key": "turn_id",
+                    "value": {
+                      "stringValue": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "cwd",
+                    "value": {
+                      "stringValue": "/workspace/canary"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "3488835"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "1152279332"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "90e4c85c4f15881b",
+                "traceState": "",
+                "parentSpanId": "b75ec1d50b815bbb",
+                "flags": 257,
+                "name": "run_turn",
+                "kind": 1,
+                "startTimeUnixNano": "1789626262235542000",
+                "endTimeUnixNano": "1789626267023466000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tasks/regular.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tasks::regular"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "47"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "12"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tasks::regular"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "112467415"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "4675415127"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "b75ec1d50b815bbb",
+                "traceState": "",
+                "parentSpanId": "af2bfd92a7717f5e",
+                "flags": 257,
+                "name": "session_task.run",
+                "kind": 1,
+                "startTimeUnixNano": "1789626262235539000",
+                "endTimeUnixNano": "1789626267023664000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tasks/mod.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tasks"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "370"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "12"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tasks"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "120731792"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "4667351708"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "af2bfd92a7717f5e",
+                "traceState": "",
+                "parentSpanId": "873c48a7b2d75577",
+                "flags": 257,
+                "name": "session_task.turn",
+                "kind": 1,
+                "startTimeUnixNano": "1789626262235519000",
+                "endTimeUnixNano": "1789626267030846000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/tasks/mod.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::tasks"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "345"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "5"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::tasks"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92"
+                    }
+                  },
+                  {
+                    "key": "turn.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.reasoning_effort",
+                    "value": {
+                      "stringValue": "low"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.token_usage.input_tokens",
+                    "value": {
+                      "intValue": "34405"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.token_usage.cached_input_tokens",
+                    "value": {
+                      "intValue": "17024"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.token_usage.cache_write_input_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.token_usage.non_cached_input_tokens",
+                    "value": {
+                      "intValue": "17381"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.token_usage.output_tokens",
+                    "value": {
+                      "intValue": "53"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.token_usage.reasoning_output_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "codex.turn.token_usage.total_tokens",
+                    "value": {
+                      "intValue": "34458"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "124370283"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "4670914633"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              },
+              {
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "873c48a7b2d75577",
+                "traceState": "",
+                "parentSpanId": "ca06f30ac12cd682",
+                "flags": 769,
+                "name": "op.dispatch.turn_input",
+                "kind": 1,
+                "startTimeUnixNano": "1789626262230157000",
+                "endTimeUnixNano": "1789626262235533000",
+                "attributes": [
+                  {
+                    "key": "code.file.path",
+                    "value": {
+                      "stringValue": "core/src/session/handlers.rs"
+                    }
+                  },
+                  {
+                    "key": "code.module.name",
+                    "value": {
+                      "stringValue": "codex_core::session::handlers"
+                    }
+                  },
+                  {
+                    "key": "code.line.number",
+                    "value": {
+                      "intValue": "782"
+                    }
+                  },
+                  {
+                    "key": "thread.id",
+                    "value": {
+                      "intValue": "13"
+                    }
+                  },
+                  {
+                    "key": "thread.name",
+                    "value": {
+                      "stringValue": "tokio-rt-worker"
+                    }
+                  },
+                  {
+                    "key": "target",
+                    "value": {
+                      "stringValue": "codex_core::session::handlers"
+                    }
+                  },
+                  {
+                    "key": "submission.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd"
+                    }
+                  },
+                  {
+                    "key": "codex.op",
+                    "value": {
+                      "stringValue": "turn_input"
+                    }
+                  },
+                  {
+                    "key": "busy_ns",
+                    "value": {
+                      "intValue": "5043833"
+                    }
+                  },
+                  {
+                    "key": "idle_ns",
+                    "value": {
+                      "intValue": "332417"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "droppedEventsCount": 0,
+                "links": [],
+                "droppedLinksCount": 0,
+                "status": {
+                  "message": "",
+                  "code": 0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "resourceLogs": [
+      {
+        "scopeLogs": [
+          {
+            "logRecords": [
+              {
+                "timeUnixNano": "0",
+                "observedTimeUnixNano": "1789626262232384000",
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": null,
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.user_prompt"
+                    }
+                  },
+                  {
+                    "key": "prompt_length",
+                    "value": {
+                      "stringValue": "249"
+                    }
+                  },
+                  {
+                    "key": "prompt",
+                    "value": {
+                      "stringValue": "This is a local Datool telemetry canary. Run exactly one shell command: printf \"datool-codex-canary-42\\n\". Then answer with the exact command output. Do not read files, change files, access the network, use external tools, or perform any other work."
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-09-17T06:24:22.232Z"
+                    }
+                  },
+                  {
+                    "key": "conversation.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92"
+                    }
+                  },
+                  {
+                    "key": "app.version",
+                    "value": {
+                      "stringValue": "0.154.0"
+                    }
+                  },
+                  {
+                    "key": "originator",
+                    "value": {
+                      "stringValue": "Codex_Desktop"
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "dumb"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "slug",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "flags": 1,
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "873c48a7b2d75577",
+                "eventName": "event otel/src/events/session_telemetry.rs:1059"
+              },
+              {
+                "timeUnixNano": "0",
+                "observedTimeUnixNano": "1789626263228283000",
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": null,
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.sse_event"
+                    }
+                  },
+                  {
+                    "key": "event.kind",
+                    "value": {
+                      "stringValue": "response.completed"
+                    }
+                  },
+                  {
+                    "key": "input_token_count",
+                    "value": {
+                      "stringValue": "12340"
+                    }
+                  },
+                  {
+                    "key": "output_token_count",
+                    "value": {
+                      "stringValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cached_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cache_write_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "reasoning_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "tool_token_count",
+                    "value": {
+                      "stringValue": "12340"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-09-17T06:24:23.228Z"
+                    }
+                  },
+                  {
+                    "key": "conversation.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92"
+                    }
+                  },
+                  {
+                    "key": "app.version",
+                    "value": {
+                      "stringValue": "0.154.0"
+                    }
+                  },
+                  {
+                    "key": "originator",
+                    "value": {
+                      "stringValue": "Codex_Desktop"
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "dumb"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "slug",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "flags": 0,
+                "traceId": "",
+                "spanId": "",
+                "eventName": "event otel/src/events/session_telemetry.rs:1012"
+              },
+              {
+                "timeUnixNano": "0",
+                "observedTimeUnixNano": "1789626265503846000",
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": null,
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.sse_event"
+                    }
+                  },
+                  {
+                    "key": "event.kind",
+                    "value": {
+                      "stringValue": "response.completed"
+                    }
+                  },
+                  {
+                    "key": "input_token_count",
+                    "value": {
+                      "stringValue": "17166"
+                    }
+                  },
+                  {
+                    "key": "output_token_count",
+                    "value": {
+                      "stringValue": "40"
+                    }
+                  },
+                  {
+                    "key": "cached_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cache_write_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "reasoning_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "tool_token_count",
+                    "value": {
+                      "stringValue": "17206"
+                    }
+                  },
+                  {
+                    "key": "ttft_ms",
+                    "value": {
+                      "intValue": "1243"
+                    }
+                  },
+                  {
+                    "key": "model_reasoning_effort",
+                    "value": {
+                      "stringValue": "low"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-09-17T06:24:25.503Z"
+                    }
+                  },
+                  {
+                    "key": "conversation.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92"
+                    }
+                  },
+                  {
+                    "key": "app.version",
+                    "value": {
+                      "stringValue": "0.154.0"
+                    }
+                  },
+                  {
+                    "key": "originator",
+                    "value": {
+                      "stringValue": "Codex_Desktop"
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "dumb"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "slug",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "flags": 0,
+                "traceId": "",
+                "spanId": "",
+                "eventName": "event otel/src/events/session_telemetry.rs:1012"
+              },
+              {
+                "timeUnixNano": "0",
+                "observedTimeUnixNano": "1789626265857583000",
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": null,
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.tool_result"
+                    }
+                  },
+                  {
+                    "key": "tool_result_seq",
+                    "value": {
+                      "intValue": "1"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "exec_command"
+                    }
+                  },
+                  {
+                    "key": "tool_namespace",
+                    "value": {
+                      "stringValue": "functions"
+                    }
+                  },
+                  {
+                    "key": "call_id",
+                    "value": {
+                      "stringValue": "exec-16b64cd8-b88e-44e0-a323-6721feece677"
+                    }
+                  },
+                  {
+                    "key": "duration_ms",
+                    "value": {
+                      "stringValue": "81"
+                    }
+                  },
+                  {
+                    "key": "success",
+                    "value": {
+                      "stringValue": "true"
+                    }
+                  },
+                  {
+                    "key": "output_truncated",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "agent_name",
+                    "value": {
+                      "stringValue": "/root"
+                    }
+                  },
+                  {
+                    "key": "arguments",
+                    "value": {
+                      "stringValue": "{\"cmd\":\"printf \\\"datool-codex-canary-42\\\\n\\\"\"}"
+                    }
+                  },
+                  {
+                    "key": "output",
+                    "value": {
+                      "stringValue": "Chunk ID: 4a5ee1\nWall time: 0.0000 seconds\nProcess exited with code 0\nOriginal token count: 6\nOutput:\ndatool-codex-canary-42\n"
+                    }
+                  },
+                  {
+                    "key": "mcp_server",
+                    "value": {
+                      "stringValue": ""
+                    }
+                  },
+                  {
+                    "key": "mcp_server_origin",
+                    "value": {
+                      "stringValue": ""
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-09-17T06:24:25.857Z"
+                    }
+                  },
+                  {
+                    "key": "conversation.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92"
+                    }
+                  },
+                  {
+                    "key": "app.version",
+                    "value": {
+                      "stringValue": "0.154.0"
+                    }
+                  },
+                  {
+                    "key": "originator",
+                    "value": {
+                      "stringValue": "Codex_Desktop"
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "dumb"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "slug",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "flags": 1,
+                "traceId": "b19c98c5da457a1c74f42f2e6f722df4",
+                "spanId": "2f2e3a240e5758f1",
+                "eventName": "event otel/src/tool_result.rs:54"
+              },
+              {
+                "timeUnixNano": "0",
+                "observedTimeUnixNano": "1789626265861821000",
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": null,
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.tool_result"
+                    }
+                  },
+                  {
+                    "key": "tool_result_seq",
+                    "value": {
+                      "intValue": "2"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "exec"
+                    }
+                  },
+                  {
+                    "key": "tool_namespace",
+                    "value": {
+                      "stringValue": "functions"
+                    }
+                  },
+                  {
+                    "key": "call_id",
+                    "value": {
+                      "stringValue": "call_QYDEotKYigYz6DCRTTzUFc1F"
+                    }
+                  },
+                  {
+                    "key": "duration_ms",
+                    "value": {
+                      "stringValue": "376"
+                    }
+                  },
+                  {
+                    "key": "success",
+                    "value": {
+                      "stringValue": "true"
+                    }
+                  },
+                  {
+                    "key": "output_truncated",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "agent_name",
+                    "value": {
+                      "stringValue": "/root"
+                    }
+                  },
+                  {
+                    "key": "arguments",
+                    "value": {
+                      "stringValue": "const r=await tools.exec_command({cmd:'printf \"datool-codex-canary-42\\\\n\"'});text(r.output)\n"
+                    }
+                  },
+                  {
+                    "key": "output",
+                    "value": {
+                      "stringValue": "Script completed\nWall time 0.2 seconds\nOutput:\n\ndatool-codex-canary-42\n"
+                    }
+                  },
+                  {
+                    "key": "mcp_server",
+                    "value": {
+                      "stringValue": ""
+                    }
+                  },
+                  {
+                    "key": "mcp_server_origin",
+                    "value": {
+                      "stringValue": ""
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-09-17T06:24:25.861Z"
+                    }
+                  },
+                  {
+                    "key": "conversation.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92"
+                    }
+                  },
+                  {
+                    "key": "app.version",
+                    "value": {
+                      "stringValue": "0.154.0"
+                    }
+                  },
+                  {
+                    "key": "originator",
+                    "value": {
+                      "stringValue": "Codex_Desktop"
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "dumb"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "slug",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "flags": 1,
+                "traceId": "63b5bde990ca0c5ef889a7570c593765",
+                "spanId": "8624c451444e1854",
+                "eventName": "event otel/src/tool_result.rs:54"
+              },
+              {
+                "timeUnixNano": "0",
+                "observedTimeUnixNano": "1789626267020056000",
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": null,
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.sse_event"
+                    }
+                  },
+                  {
+                    "key": "event.kind",
+                    "value": {
+                      "stringValue": "response.completed"
+                    }
+                  },
+                  {
+                    "key": "input_token_count",
+                    "value": {
+                      "stringValue": "17239"
+                    }
+                  },
+                  {
+                    "key": "output_token_count",
+                    "value": {
+                      "stringValue": "13"
+                    }
+                  },
+                  {
+                    "key": "cached_token_count",
+                    "value": {
+                      "intValue": "17024"
+                    }
+                  },
+                  {
+                    "key": "cache_write_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "reasoning_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "tool_token_count",
+                    "value": {
+                      "stringValue": "17252"
+                    }
+                  },
+                  {
+                    "key": "ttft_ms",
+                    "value": {
+                      "intValue": "914"
+                    }
+                  },
+                  {
+                    "key": "model_reasoning_effort",
+                    "value": {
+                      "stringValue": "low"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-09-17T06:24:27.020Z"
+                    }
+                  },
+                  {
+                    "key": "conversation.id",
+                    "value": {
+                      "stringValue": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92"
+                    }
+                  },
+                  {
+                    "key": "app.version",
+                    "value": {
+                      "stringValue": "0.154.0"
+                    }
+                  },
+                  {
+                    "key": "originator",
+                    "value": {
+                      "stringValue": "Codex_Desktop"
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "dumb"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  },
+                  {
+                    "key": "slug",
+                    "value": {
+                      "stringValue": "gpt-5.6-sol"
+                    }
+                  }
+                ],
+                "droppedAttributesCount": 0,
+                "flags": 0,
+                "traceId": "",
+                "spanId": "",
+                "eventName": "event otel/src/events/session_telemetry.rs:1012"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "thread": {
+    "id": "01a0ae09-a1df-7ac1-af6c-0d4c7c3edf92",
+    "name": null,
+    "cwd": "/workspace/canary",
+    "model": "gpt-5.6-sol",
+    "modelProvider": "openai",
+    "cliVersion": "0.154.0",
+    "createdAt": 1789626261,
+    "parentThreadId": null,
+    "forkedFromId": null,
+    "turns": [
+      {
+        "id": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd",
+        "items": [
+          {
+            "type": "userMessage",
+            "id": "01a0ae09-a85a-7812-88b3-d3ac0f60007a",
+            "clientId": null,
+            "content": [
+              {
+                "type": "text",
+                "text": "This is a local Datool telemetry canary. Run exactly one shell command: printf \"datool-codex-canary-42\\n\". Then answer with the exact command output. Do not read files, change files, access the network, use external tools, or perform any other work.",
+                "text_elements": []
+              }
+            ]
+          },
+          {
+            "type": "commandExecution",
+            "id": "exec-16b64cd8-b88e-44e0-a323-6721feece677",
+            "pluginId": null,
+            "scriptPath": null,
+            "command": "/bin/zsh -lc \"printf \\\"datool-codex-canary-42\\\\n\\\"\"",
+            "cwd": "/workspace/canary",
+            "processId": "85910",
+            "source": "unifiedExecStartup",
+            "status": "completed",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "command": "printf \"datool-codex-canary-42\\n\""
+              }
+            ],
+            "aggregatedOutput": "datool-codex-canary-42\n",
+            "exitCode": 0,
+            "durationMs": 0
+          },
+          {
+            "type": "agentMessage",
+            "id": "msg_0660a2aa0d32f82e016aab879ac5a487d2b2f8b886540d561e",
+            "text": "datool-codex-canary-42",
+            "phase": "final_answer",
+            "memoryCitation": null,
+            "delivery": null,
+            "questions": null
+          }
+        ],
+        "itemsView": "full",
+        "status": "completed",
+        "error": null,
+        "startedAt": 1789626262,
+        "completedAt": 1789626267,
+        "durationMs": 4791
+      }
+    ],
+    "historyCoverage": "recorded_items",
+    "recordedItems": [
+      {
+        "at": 1789626263641.0,
+        "item": {
+          "type": "message",
+          "id": "msg_01a0ae09-a859-7c12-a13f-53f4b824da28",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "This is a local Datool telemetry canary. Run exactly one shell command: printf \"datool-codex-canary-42\\n\". Then answer with the exact command output. Do not read files, change files, access the network, use external tools, or perform any other work."
+            }
+          ],
+          "internal_chat_message_metadata_passthrough": {
+            "turn_id": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd",
+            "create_time": 1789626263.641585,
+            "content_item_kinds": [
+              "user.text"
+            ]
+          }
+        }
+      },
+      {
+        "at": 1789626265481.0,
+        "item": {
+          "type": "custom_tool_call",
+          "id": "ctc_0660a2aa0d32f82e016aab8798e27487d291853eecbbfbd432",
+          "status": "completed",
+          "call_id": "call_QYDEotKYigYz6DCRTTzUFc1F",
+          "name": "exec",
+          "input": "const r=await tools.exec_command({cmd:'printf \"datool-codex-canary-42\\\\n\"'});text(r.output)\n",
+          "internal_chat_message_metadata_passthrough": {
+            "turn_id": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd",
+            "create_time": 1789626264.200502
+          }
+        }
+      },
+      {
+        "at": 1789626265861.0,
+        "item": {
+          "type": "custom_tool_call_output",
+          "id": "ctco_01a0ae09-b105-7132-8292-c349e4b121b7",
+          "call_id": "call_QYDEotKYigYz6DCRTTzUFc1F",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "Script completed\nWall time 0.2 seconds\nOutput:\n"
+            },
+            {
+              "type": "input_text",
+              "text": "datool-codex-canary-42\n"
+            }
+          ],
+          "internal_chat_message_metadata_passthrough": {
+            "turn_id": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd",
+            "create_time": 1789626265.861922
+          }
+        }
+      },
+      {
+        "at": 1789626267011.0,
+        "item": {
+          "type": "message",
+          "id": "msg_0660a2aa0d32f82e016aab879ac5a487d2b2f8b886540d561e",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "datool-codex-canary-42"
+            }
+          ],
+          "phase": "final_answer",
+          "internal_chat_message_metadata_passthrough": {
+            "turn_id": "01a0ae09-a2d5-7a03-af3a-7f31c470b4dd",
+            "create_time": 1789626266.192575,
+            "content_item_kinds": [
+              "unknown"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

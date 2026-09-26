@@ -1,0 +1,102 @@
+[
+  {
+    "component": "components/ui/datool/search-bar/index.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/search-bar/search-bar.stories.tsx",
+    "reason": "The controlled search story imports the public SearchBar and exercises its suggestions."
+  },
+  {
+    "component": "components/ui/datool/search-bar/search-input.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/search-bar/search-bar.stories.tsx",
+    "reason": "The public SearchBar mounts the production token-aware editor and suggestion list."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/map.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "ZoomAndSelection renders the standard TraceViewer minimap with fixed trace rows."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/markers.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "ZoomAndSelection renders timeline and event markers for fixed span timing."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/node.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "ZoomAndSelection renders and selects production span nodes."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/search-input.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "The standard viewer includes the production span-search input."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/search.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "The standard viewer includes the production span-search bar."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/span-content.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "Production span content is rendered inside the fixture timeline nodes."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/span-detail-panel.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "ZoomAndSelection opens the attached detail panel and DetachedDetailPanel exercises its standalone layout."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/ui.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "DetailPrimitives renders every visual helper export from the trace detail UI module."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/zoom-button.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "ZoomAndSelection clicks the production ZoomButton in the viewer timeline."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/components/zoom-icons.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "The rendered ZoomButton reaches all three production zoom icons."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/context-provider.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx",
+    "reason": "TraceViewer and the detached timeline both mount the production context provider and selection state."
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/trace-viewer.tsx",
+    "kind": "direct",
+    "story": "components/ui/datool/trace-viewer/trace-viewer.stories.tsx"
+  },
+  {
+    "component": "components/ui/datool/trace-viewer/util/use-trackpad-zoom.tsx",
+    "kind": "helper",
+    "reason": "Nonvisual wheel and pinch event hook, exercised indirectly by the marker interaction but with no standalone visual export."
+  },
+  {
+    "component": "components/ui/datool/search-bar/filter-token.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/search-bar/search-bar.stories.tsx",
+    "reason": "Interactive token stories edit and remove field and full-text filter chips."
+  },
+  {
+    "component": "components/ui/datool/search-bar/token-filter-input.tsx",
+    "kind": "composite",
+    "story": "components/tracer/background-refresh.stories.tsx",
+    "reason": "Polling and recovery stories render the shared token filter input and verify that background reads keep its loading feedback quiet."
+  }
+]

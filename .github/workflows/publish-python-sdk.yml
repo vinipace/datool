@@ -1,0 +1,69 @@
+name: Publish Python SDK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact stable version in packages/python-sdk/pyproject.toml
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-publish
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'vinipace/datool' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/python-sdk.yml
+    with:
+      release-version: ${{ inputs.version }}
+
+  publish:
+    needs: verify
+    if: github.repository == 'vinipace/datool' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/datool
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-sdk-3.12
+          path: dist
+      - name: Publish the verified wheel and source archive
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+
+  verify-published:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-sdk-3.12
+          path: verified-python-dist
+      - name: Verify PyPI has the exact tested files
+        run: python packages/python-sdk/scripts/release.py verify --dist verified-python-dist --version "$RELEASE_VERSION"
+      - name: Install the release from PyPI in a fresh consumer and run contracts
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/datool-pypi-consumer"
+          uv export --project packages/python-sdk --locked --only-group langgraph --only-group agents --no-emit-project --output-file "$RUNNER_TEMP/datool-pypi-requirements.txt" > /dev/null
+          uv pip install --no-config --no-cache --python "$RUNNER_TEMP/datool-pypi-consumer/bin/python" --index-url https://pypi.org/simple "datool[langchain]==$RELEASE_VERSION" pytest -r "$RUNNER_TEMP/datool-pypi-requirements.txt"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/datool-pypi-consumer/bin/python" -m pytest "$GITHUB_WORKSPACE/packages/python-sdk/tests" -q

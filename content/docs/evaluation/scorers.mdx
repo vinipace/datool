@@ -1,0 +1,98 @@
+---
+title: Scorers
+description: Define how to judge an output, test the rule, and save a version for evaluations.
+icon: scorers
+---
+
+Open **Scorers**, create a scorer, and choose its type. Code scorers work well for deterministic checks. LLM scorers work well for criteria expressed as a rubric.
+
+## Library scorers
+
+The shared scorer selector lists saved scorers under **This project** and library evaluators under **AutoEvals**. Select an evaluator directly to add it using its default input mappings. The first selection saves a reusable project scorer; later selections reuse it without overwriting edits. You can adjust fields, thresholds, model and JSON Schema in the existing scorer editor.
+
+AutoEvals 0.3.0 includes **Exact match**, **Text similarity** (Levenshtein), **Numeric similarity**, **Valid JSON**, **JSON similarity** and **Factuality**. The first five run without a model or sandbox-provider account. Factuality defaults to `openai/gpt-4.1-mini` through your project's Vercel AI Gateway credentials and incurs model usage. RAG evaluators and arbitrary package imports are not supported.
+
+Map the evaluator's inputs to dotted field paths. Defaults are `trace.input`, `trace.output` and `datasetItem.expectedOutput`; select narrower fields such as `trace.output.answer` for structured traces. Array indexes work, for example `trace.output.answers.0`. Text and numeric evaluators require matching value types. Missing fields are execution errors, not failing quality scores. Valid JSON optionally accepts a JSON Schema object.
+
+The package version, adapter version, evaluator, mappings, options, selected model and threshold are saved in each immutable scorer version. Upgrades must retain their runtime or report an unavailable version rather than silently substitute another. Reasoning, provider usage and library metadata are retained in execution evidence. A null library score is recorded as skipped; request failures remain errors.
+
+Discover the same catalog with `datool scorers libraries`, the MCP operation `list_scorer_libraries`, or authenticated `GET /api/scorers/libraries`. Select a default evaluator with `datool scorers use-library --input '{"evaluator":"ExactMatch"}'`, MCP `use_library_scorer`, or `POST /api/scorers/libraries` with the same body (`scorers:write`). The returned project scorer ID works in existing evaluation flows. Create and update customized scorers using the existing scorer operations with `type: "library"`:
+
+```json
+{
+  "name": "Answer equality",
+  "slug": "answer-equality",
+  "type": "library",
+  "threshold": 1,
+  "library": {
+    "package": "autoevals",
+    "version": "0.3.0",
+    "adapterVersion": 1,
+    "evaluator": "ExactMatch",
+    "mappings": {
+      "output": "trace.output.answer",
+      "expected": "datasetItem.expectedOutput.answer"
+    },
+    "options": {}
+  }
+}
+```
+
+## JavaScript
+
+A JavaScript scorer defines a plain `evaluate` function. It receives a recorded `trace` and an optional `datasetItem`.
+
+```js
+function evaluate({ trace, datasetItem }) {
+  const expected = datasetItem?.expectedOutput?.text
+  if (typeof expected !== "string") {
+    throw new Error("This scorer requires expectedOutput.text")
+  }
+
+  const passed = trace.output?.text === expected
+  return {
+    score: passed ? 1 : 0,
+    passed,
+    reason: passed ? "Output matches" : "Output differs from the expected text",
+  }
+}
+```
+
+Return a finite `score` between 0 and 1. Optional fields include `passed`, `reason`, `label`, and `metrics`. Use `reason` for the explanation. Keep JavaScript code self-contained; do not add imports, exports, or TypeScript syntax.
+
+## Python
+
+Python scorers receive dictionaries and return the same score contract:
+
+```python
+def evaluate(trace, dataset_item=None):
+    expected = (dataset_item or {}).get("expectedOutput", {}).get("text")
+    if not isinstance(expected, str):
+        raise ValueError("This scorer requires expectedOutput.text")
+    passed = trace.get("output", {}).get("text") == expected
+    return {"score": 1 if passed else 0, "passed": passed}
+```
+
+Available runtimes depend on your project's sandbox configuration. Ask an owner or admin to configure **Project settings → Sandbox providers** if execution is unavailable.
+
+## LLM scorers
+
+Configure **Project settings → AI providers**, choose a model, and write the judgment criteria. Choose the actual project provider and model: Gateway supports chat and native evaluation models; TypeSafe AI supports native evaluation models. Legacy scorer versions without a provider use the server OpenAI configuration. A configured key still needs access to the chosen model and the output format required by the scorer.
+
+Prompt templates can refer to `{{trace}}`, `{{input}}`, `{{output}}`, and `{{expected}}`. Use a small sample to check the rubric before running it over a dataset. Model calls consume provider usage.
+
+## Test before saving
+
+Test with custom input or recorded traces, including an example that should fail. Inspect the explanation and any execution error, not just the score. A timeout, invalid return value, or failed model request is an execution problem and can produce a null score.
+
+Saving creates a version used by evaluation runs. Re-scoring saved evidence can show how a revised scorer changes a judgment without calling the app again.
+
+## Preview, readiness and calibration
+
+A preview tests evidence without creating a saved evaluation or score result. Recorded-trace previews retain execution spans. Use a named saved evaluation for multi-case calibration or an evaluation request, and keep its URL and pinned versions. Completed execution does not mean quality passed; infrastructure failures have null scores.
+
+`check_scorer_runtime` checks configuration without contacting providers. Explicitly use `probe_scorer_runtime` to execute up to three selected scorers on one representative case. Model and hosted sandbox probes may incur usage. Diagnostics distinguish configuration from connectivity and execution, sanitize provider errors, and retain safe HTTP status, request IDs and retry guidance. HTTP 429 alone does not establish a credit restriction.
+
+Calibrate known passing, failing, missing-evidence and criterion-disagreement examples. Recalibrate after changing judge provider/model. In an extraction rubric that permits only response-supported brands, a loading placeholder provides no brand evidence: grounding must reject context-only brands even when mention flags are false or counts are zero. Coverage can independently pass when no supported brands were omitted; input validity can fail separately. State these rubric choices explicitly.
+
+Native evaluation providers map choices to configured numeric scores and may return confidence/probabilities. They currently return no explanations; do not invent them. Successful execution is not evidence of judge quality.

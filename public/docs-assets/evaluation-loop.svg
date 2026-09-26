@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="388" viewBox="0 0 1120 388" role="img" aria-labelledby="title description">
+  <title id="title">From recorded execution to a repeatable evaluation</title>
+  <desc id="description">An application produces a trace and its child spans. A reviewed example becomes a dataset case. The case and a versioned scorer feed a saved evaluation. Compare the same cases and judge versions after changing the application.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#929292"/></marker></defs>
+  <rect width="1120" height="388" rx="16" fill="#141414"/>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#fafafa">
+    <text x="32" y="43" font-size="22" font-weight="700">Record evidence. Define expectations. Measure a change.</text>
+    <g fill="#202020" stroke="#454545"><rect x="32" y="91" width="225" height="134" rx="10"/><rect x="303" y="91" width="225" height="134" rx="10"/><rect x="574" y="91" width="225" height="134" rx="10"/><rect x="845" y="91" width="243" height="134" rx="10"/></g>
+    <g font-size="19" font-weight="700"><text x="49" y="123">Trace + spans</text><text x="320" y="123">Dataset case</text><text x="591" y="123">Saved evaluation</text><text x="862" y="123">Run comparison</text></g>
+    <g font-size="15" fill="#c2c2c2"><text x="49" y="156">Actual input and output</text><text x="49" y="182">Model / tool / function</text><text x="49" y="208">Timing, status, errors</text><text x="320" y="156">Representative input</text><text x="320" y="182">Reviewed reference</text><text x="320" y="208">Frozen case snapshot</text><text x="591" y="156">App output + scorer</text><text x="591" y="182">Score, pass/fail, error</text><text x="591" y="208">Preserved evidence</text><text x="862" y="156">Same cases and judges</text><text x="862" y="182">Changed application</text><text x="862" y="208">Inspect each regression</text></g>
+    <g stroke="#929292" stroke-width="2" marker-end="url(#arrow)"><path d="M 263 156 H 296"/><path d="M 534 156 H 567"/><path d="M 805 156 H 838"/><path d="M 687 293 V 233"/></g>
+    <rect x="574" y="297" width="225" height="56" rx="10" fill="#202020" stroke="#454545"/>
+    <text x="597" y="332" font-size="17" font-weight="700">Versioned scorer</text>
+    <text x="32" y="292" font-size="15" fill="#c2c2c2">A review supplies a judgment.</text><text x="32" y="317" font-size="15" fill="#c2c2c2">Curate reference answers explicitly.</text>
+    <text x="845" y="292" font-size="15" fill="#c2c2c2">Re-scoring reuses outputs.</text><text x="845" y="317" font-size="15" fill="#c2c2c2">Running again calls the app.</text>
+  </g>
+</svg>

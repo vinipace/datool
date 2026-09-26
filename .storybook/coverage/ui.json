@@ -1,0 +1,390 @@
+[
+  {
+    "component": "components/ui/reviewer-combobox.tsx",
+    "kind": "direct",
+    "story": "components/ui/reviewer-combobox.stories.tsx"
+  },
+  {
+    "component": "components/ui/datool/search-bar/search-bar-surface.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/search-bar/search-bar.stories.tsx",
+    "reason": "Search bar stories exercise the shared surface, focus ring and floating expansion."
+  },
+  {
+    "component": "components/ui/datool/search-bar/text-search-input.tsx",
+    "kind": "composite",
+    "story": "components/tracer/collection-page.stories.tsx",
+    "reason": "Plain text search covers typing, accessible labeling, clearing and restored focus."
+  },
+  {
+    "component": "components/ui/panel-action-label.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboards-page.stories.tsx",
+    "reason": "Dashboard collection stories cover accessible action labels and compact panel controls."
+  },
+  {
+    "component": "components/ui/organization-role.tsx",
+    "kind": "composite",
+    "story": "components/workspace/members-page.stories.tsx",
+    "reason": "Member stories render role badges and exercise role selection inside the invitation dialog."
+  },
+  {
+    "component": "components/ui/collection-skeleton.tsx",
+    "kind": "composite",
+    "story": "components/ui/loading-state.stories.tsx",
+    "reason": "Route fallback stories cover the shared toolbar and table skeleton, accessible loading status and narrow panel clipping."
+  },
+  {
+    "component": "components/ui/selection-toolbar.tsx",
+    "kind": "composite",
+    "story": "components/tracer/trace-selection-actions.stories.tsx",
+    "reason": "Trace selection stories cover compact actions, clear selection, keyboard focus and narrow panel layout."
+  },
+  {
+    "component": "components/ui/alert-dialog.tsx",
+    "kind": "direct",
+    "story": "components/ui/alert-dialog.stories.tsx"
+  },
+  {
+    "component": "components/ui/base-select.tsx",
+    "kind": "direct",
+    "story": "components/ui/base-select.stories.tsx"
+  },
+  {
+    "component": "components/ui/button.tsx",
+    "kind": "direct",
+    "story": "components/ui/button.stories.tsx"
+  },
+  {
+    "component": "components/ui/card.tsx",
+    "kind": "direct",
+    "story": "components/ui/card.stories.tsx"
+  },
+  {
+    "component": "components/ui/chart.tsx",
+    "kind": "direct",
+    "story": "components/ui/chart.stories.tsx"
+  },
+  {
+    "component": "components/ui/checkbox.tsx",
+    "kind": "direct",
+    "story": "components/ui/checkbox.stories.tsx"
+  },
+  {
+    "component": "components/ui/code-editor.tsx",
+    "kind": "direct",
+    "story": "components/ui/code-editor.stories.tsx"
+  },
+  {
+    "component": "components/ui/context-menu.tsx",
+    "kind": "direct",
+    "story": "components/ui/context-menu.stories.tsx"
+  },
+  {
+    "component": "components/ui/dialog.tsx",
+    "kind": "direct",
+    "story": "components/ui/dialog.stories.tsx"
+  },
+  {
+    "component": "components/ui/dropdown-menu.tsx",
+    "kind": "direct",
+    "story": "components/ui/dropdown-menu.stories.tsx"
+  },
+  {
+    "component": "components/ui/hover-card.tsx",
+    "kind": "direct",
+    "story": "components/ui/hover-card.stories.tsx"
+  },
+  {
+    "component": "components/ui/input.tsx",
+    "kind": "direct",
+    "story": "components/ui/input.stories.tsx"
+  },
+  {
+    "component": "components/ui/inspector-section.tsx",
+    "kind": "direct",
+    "story": "components/ui/inspector-section.stories.tsx"
+  },
+  {
+    "component": "components/ui/json-schema-form.tsx",
+    "kind": "direct",
+    "story": "components/ui/json-schema-form.stories.tsx"
+  },
+  {
+    "component": "components/ui/kind-icon.tsx",
+    "kind": "direct",
+    "story": "components/ui/kind-icon.stories.tsx"
+  },
+  {
+    "component": "components/ui/loading-state.tsx",
+    "kind": "direct",
+    "story": "components/ui/loading-state.stories.tsx"
+  },
+  {
+    "component": "components/ui/notice.tsx",
+    "kind": "direct",
+    "story": "components/ui/notice.stories.tsx"
+  },
+  {
+    "component": "components/ui/resizable.tsx",
+    "kind": "direct",
+    "story": "components/ui/resizable.stories.tsx"
+  },
+  {
+    "component": "components/ui/resource-switcher.tsx",
+    "kind": "direct",
+    "story": "components/ui/resource-switcher.stories.tsx"
+  },
+  {
+    "component": "components/ui/select.tsx",
+    "kind": "direct",
+    "story": "components/ui/select.stories.tsx"
+  },
+  {
+    "component": "components/ui/sidebar.tsx",
+    "kind": "direct",
+    "story": "components/ui/sidebar.stories.tsx"
+  },
+  {
+    "component": "components/ui/skeleton.tsx",
+    "kind": "direct",
+    "story": "components/ui/skeleton.stories.tsx"
+  },
+  {
+    "component": "components/ui/slider.tsx",
+    "kind": "direct",
+    "story": "components/ui/slider.stories.tsx"
+  },
+  {
+    "component": "components/ui/structured-value-editor.tsx",
+    "kind": "direct",
+    "story": "components/ui/structured-value-editor.stories.tsx"
+  },
+  {
+    "component": "components/ui/structured-value-view.tsx",
+    "kind": "direct",
+    "story": "components/ui/structured-value-view.stories.tsx"
+  },
+  {
+    "component": "components/ui/switch.tsx",
+    "kind": "direct",
+    "story": "components/ui/switch.stories.tsx"
+  },
+  {
+    "component": "components/ui/tabs.tsx",
+    "kind": "direct",
+    "story": "components/ui/tabs.stories.tsx"
+  },
+  {
+    "component": "components/ui/textarea.tsx",
+    "kind": "direct",
+    "story": "components/ui/textarea.stories.tsx"
+  },
+  {
+    "component": "components/ui/tooltip.tsx",
+    "kind": "direct",
+    "story": "components/ui/tooltip.stories.tsx"
+  },
+  {
+    "component": "components/ui/tree-table.tsx",
+    "kind": "direct",
+    "story": "components/ui/tree-table.stories.tsx"
+  },
+  {
+    "component": "components/ui/virtual-list.tsx",
+    "kind": "direct",
+    "story": "components/ui/virtual-list.stories.tsx"
+  },
+  {
+    "component": "components/ui/combobox.tsx",
+    "kind": "direct",
+    "story": "components/ui/combobox.stories.tsx"
+  },
+  {
+    "component": "components/ui/structured-value-viewer.tsx",
+    "kind": "direct",
+    "story": "components/ui/structured-value-viewer.stories.tsx"
+  },
+  {
+    "component": "components/ui/choice-card.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review player stories select native single-choice and multiple-choice rating cards."
+  },
+  {
+    "component": "components/ui/message-transcript.tsx",
+    "kind": "composite",
+    "story": "components/tracer/playground-chat.stories.tsx",
+    "reason": "Conversation, retry, and saved-run stories render user and assistant transcripts and preserve their history across input formats."
+  },
+  {
+    "component": "components/ui/metric-delta.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-widget-result.stories.tsx",
+    "reason": "Metric comparison stories render improved, regressed, unchanged and neutral deltas."
+  },
+  {
+    "component": "components/ui/numeric-score-input.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review player stories enter numeric Human Scores through the shared input."
+  },
+  {
+    "component": "components/ui/overlay-container.tsx",
+    "kind": "helper",
+    "reason": "Nonvisual React context and hook that keep popup portals inside their modal focus boundary."
+  },
+  {
+    "component": "components/ui/pie-progress.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review collection and player stories display session completion progress."
+  },
+  {
+    "component": "components/ui/popover.tsx",
+    "kind": "composite",
+    "story": "components/ui/datool/search-bar/search-bar.stories.tsx",
+    "reason": "Search suggestion and date-range stories open and interact with the shared popover."
+  },
+  {
+    "component": "components/ui/radio-card.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboards-page.stories.tsx",
+    "reason": "Template creation stories choose dashboard templates with native radio cards."
+  },
+  {
+    "component": "components/ui/syntax-code.tsx",
+    "kind": "composite",
+    "story": "components/ui/structured-value-viewer.stories.tsx",
+    "reason": "Structured value stories render syntax-highlighted JSON, YAML and message content."
+  },
+  {
+    "component": "components/ui/toast.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review player stories save ratings and assert the shared review-saved toast."
+  },
+  {
+    "component": "components/ui/user-avatar.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Editor avatar stories render reviewer images and fallback identities."
+  },
+  {
+    "component": "components/ui/value-view-select.tsx",
+    "kind": "composite",
+    "story": "components/ui/structured-value-viewer.stories.tsx",
+    "reason": "Structured value viewer stories switch formats and retain independent selections."
+  },
+  {
+    "component": "components/ui/chat.tsx",
+    "kind": "direct",
+    "story": "components/ui/chat.stories.tsx"
+  },
+  {
+    "component": "components/ui/dashboard-skeleton.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-detail-page.stories.tsx",
+    "reason": "Loading and RouteLoading render the dashboard fallback and its widget placeholders."
+  },
+  {
+    "component": "components/ui/model-combobox.tsx",
+    "kind": "direct",
+    "story": "components/ui/model-combobox.stories.tsx"
+  },
+  {
+    "component": "components/ui/model-details.tsx",
+    "kind": "composite",
+    "story": "components/ui/model-combobox.stories.tsx",
+    "reason": "SharedModelDetails exercises the model preview card and its price and context details."
+  },
+  {
+    "component": "components/ui/model-price-indicator.tsx",
+    "kind": "composite",
+    "story": "components/ui/model-combobox.stories.tsx",
+    "reason": "RelativePricePies checks the price indicators in options and the selected model."
+  },
+  {
+    "component": "components/ui/model-provider-logo.tsx",
+    "kind": "composite",
+    "story": "components/ui/model-combobox.stories.tsx",
+    "reason": "Model options and preview details render provider logos."
+  },
+  {
+    "component": "components/ui/provider-settings.tsx",
+    "kind": "composite",
+    "story": "components/workspace/sandbox-provider-settings.stories.tsx",
+    "reason": "Sandbox provider stories exercise the shared settings table, loading and empty rows, and provider picker used by both provider pages."
+  },
+  {
+    "component": "components/ui/payload-section.tsx",
+    "kind": "composite",
+    "story": "components/tracer/trace-inspector.stories.tsx",
+    "reason": "Trace inspector stories render the shared input and output payload sections."
+  },
+  {
+    "component": "components/ui/scorer-type-badge.tsx",
+    "kind": "composite",
+    "story": "components/tracer/scorers-page.stories.tsx",
+    "reason": "Scorer catalog and editor stories render the type badges."
+  },
+  {
+    "component": "components/ui/text-annotation.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Input, output, and custom-field annotation stories exercise text selection and saved highlights."
+  },
+  {
+    "component": "components/ui/messages-form.tsx",
+    "kind": "direct",
+    "story": "components/ui/messages-form.stories.tsx"
+  },
+  {
+    "component": "components/ui/form-row.tsx",
+    "kind": "composite",
+    "story": "components/tracer/prompts-page.stories.tsx",
+    "reason": "Prompt editor stories exercise horizontal configuration fields alongside vertical message sections."
+  },
+  {
+    "component": "components/ui/execution-status.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-detail.stories.tsx",
+    "reason": "Evaluation detail stories render the shared execution status."
+  },
+  {
+    "component": "components/ui/image-value-preview.tsx",
+    "kind": "composite",
+    "story": "components/ui/structured-value-view.stories.tsx",
+    "reason": "The image value story renders the shared preview through the structured value renderer."
+  },
+  {
+    "component": "components/ui/prompt-editor-skeleton.tsx",
+    "kind": "composite",
+    "story": "components/tracer/prompts-page.stories.tsx",
+    "reason": "EditorLoading renders the prompt configuration and chat loading geometry."
+  },
+  {
+    "component": "components/ui/scorer-combobox.tsx",
+    "kind": "composite",
+    "story": "components/tracer/playground-app.stories.tsx",
+    "reason": "The playground scorer picker composes the shared scorer combobox."
+  },
+  {
+    "component": "components/ui/donut-progress.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-progress.stories.tsx",
+    "reason": "Scoring progress stories cover completed, running, failed, cancelled and empty states with accessible progress values."
+  },
+  {
+    "component": "components/ui/segmented-progress.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-progress.stories.tsx",
+    "reason": "Scoring progress stories cover completed, running, failed, cancelled and empty states with accessible progress values."
+  },
+  {
+    "component": "components/ui/comparison-series.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-detail.stories.tsx",
+    "reason": "Comparison stories render the shared baseline and comparison series markers."
+  }
+]

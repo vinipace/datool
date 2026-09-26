@@ -1,0 +1,15 @@
+{
+  "mode": "connected",
+  "appId": "app-id",
+  "datasetId": "dataset-id",
+  "datasetVersionId": "snapshot-id",
+  "evaluatorIds": ["scorer-id"],
+  "requestKey": "brand-extraction-model-b-prompt-v2",
+  "inputOverrides": {
+    "model": "provider/model",
+    "promptSlug": "brand-extraction",
+    "promptVersion": 2,
+    "discoveryPromptSlug": "brand-discovery",
+    "discoveryPromptVersion": 3
+  }
+}

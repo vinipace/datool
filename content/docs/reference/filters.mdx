@@ -1,0 +1,54 @@
+---
+title: Filters and saved views
+description: Search traces, sessions, and evaluations with typed comparisons and reusable URL filters.
+icon: reference
+---
+
+Trace, session, and evaluation collections accept the same expression format through the filter bar, CLI `--filter`, or a list operation's `filter` field. Available fields depend on the resource; the UI suggests its registered fields and values.
+
+## Common trace queries
+
+```text
+startedAt >= -7d status = 'errored'
+name contains 'checkout' durationMs >= 1000
+"payment failed" status = 'errored'
+attributes.env = 'production' output.messages.0.role = 'assistant'
+metadata."ai.model.id" = 'gpt-4.1-mini'
+traceOrSpanName contains 'generate'
+```
+
+Adjacent clauses are ANDed. There is no `AND` keyword, `OR`, grouping, or arbitrary SQL in collection filters. [Alert filters](/docs/guides/alerts#filter-examples) use a separate SQL-style language.
+
+| Syntax | Meaning |
+| --- | --- |
+| `=`, `!=`, `<`, `<=`, `>`, `>=` | Typed comparisons. Numbers do not coerce strings. |
+| `contains` | Case-insensitive substring for text; equality for other scalar values. |
+| `startedAt >= -3d` | Rolling time range; units include minutes, hours, days, and weeks. |
+| `startedAt >= '2026-09-01T00:00:00Z'` | Explicit ISO date/time boundary. |
+| `attributes.flag = true` | A boolean value; `'true'` would be a string. |
+| `attributes.value = null` | Explicit null. Missing paths do not match, including `!= null`. |
+| `metadata."ai.model.id"` | A literal dotted JSON key. Without quotes, dots traverse nested objects. |
+
+Duration fields are milliseconds. For traces and sessions, `metadata` aliases `attributes`; evaluation metadata belongs to the run. Trace `metrics` aliases captured `attributes.metrics` and does not infer values or convert units.
+
+## Search execution evidence
+
+A standalone quoted phrase searches registered text fields and nested JSON string values. For traces, it also searches descendant span names, inputs, outputs, and attributes. A matching span includes its trace once. Numbers and JSON key names are not free-text matches.
+
+Use `traceOrSpanName` when you only want names, or `functionName` to match the application identity used by LLM-call charts. The time filter still applies to the trace's start time.
+
+## Apply and reuse a query
+
+Enter an expression, then press Enter or choose a suggestion to apply it. Typing or blurring alone does not submit the draft. Applied chips can be edited individually. Changing a filter resets pagination.
+
+Page filters persist in the `filter` URL parameter. Share that URL with an authorized teammate to preserve the expression; relative dates remain relative when reopened. To encode a programmatic URL, use `URLSearchParams` instead of string concatenation.
+
+For reusable saved selector views, use the project's view controls or the `list_saved_views`, `create_saved_view`, and `get_saved_view_data` [API operations](/docs/reference/operations). Discover the operation's schema before constructing a selector: a saved selector view differs from a custom rendered view.
+
+## CLI example
+
+```sh
+npx datool traces list --filter "startedAt >= -7d status = 'errored'" --limit 25
+```
+
+Continue with the returned `nextCursor`; a page is not the entire matching collection. Filters run before pagination and totals. Invalid expressions return HTTP 400 rather than silently matching nothing. Expressions are bounded to 4,000 characters, 50 clauses, and 20 path segments.

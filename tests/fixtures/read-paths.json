@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "contract": "datool-semantic-v2",
+  "scope": "The audited tracer and semantic read surfaces; auth and app execution are separate services.",
+  "paths": [
+    {
+      "resource": "logs",
+      "surface": "semantic",
+      "entry": "src/server/metrics/logs.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": 4,
+      "statementScope": "model statements excluding snapshot setup; complete-population count regression"
+    },
+    {
+      "resource": "traces",
+      "surface": "semantic",
+      "entry": "src/server/metrics/traces.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": 4,
+      "statementScope": "model statements excluding snapshot setup; complete-population count regression"
+    },
+    {
+      "resource": "evalRuns",
+      "surface": "semantic",
+      "entry": "src/server/metrics/eval-runs.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": 4,
+      "statementScope": "model statements excluding snapshot setup; complete-population count regression"
+    },
+    {
+      "resource": "scores",
+      "surface": "semantic",
+      "entry": "src/server/metrics/scores.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": 4,
+      "statementScope": "model statements excluding snapshot setup; complete-population count regression"
+    },
+    {
+      "resource": "agents",
+      "surface": "semantic",
+      "entry": "src/server/metrics/performance.ts",
+      "scope": "project",
+      "projection": "SQL invocation aggregates; requested cost traversal",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "15-second visible single-flight",
+      "statementCeiling": 4,
+      "statementScope": "model statements excluding snapshot setup; complete-population count regression"
+    },
+    {
+      "resource": "workflows",
+      "surface": "semantic",
+      "entry": "src/server/metrics/performance.ts",
+      "scope": "project",
+      "projection": "SQL invocation aggregates; requested cost traversal",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "15-second visible single-flight",
+      "statementCeiling": 4,
+      "statementScope": "model statements excluding snapshot setup; complete-population count regression"
+    },
+    {
+      "resource": "traces",
+      "surface": "HTTP collection",
+      "entry": "app/api/traces/route.ts",
+      "scope": "project plus optional session/filter",
+      "projection": "trace fields plus SQL span statistics; payload narrowing outstanding",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "head only; totals on initial/explicit refresh",
+      "statementCeiling": null
+    },
+    {
+      "resource": "sessions",
+      "surface": "HTTP collection",
+      "entry": "app/api/sessions/route.ts",
+      "scope": "project",
+      "projection": "session and SQL trace count",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "head only; totals on initial/explicit refresh",
+      "statementCeiling": null
+    },
+    {
+      "resource": "datasets",
+      "surface": "HTTP/MCP collection",
+      "entry": "app/api/datasets/route.ts",
+      "scope": "project",
+      "projection": "dataset and SQL item count",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "head only",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evals",
+      "surface": "HTTP collection",
+      "entry": "app/api/evals/route.ts",
+      "scope": "project",
+      "projection": "summary counts and named metrics without target-ID arrays",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "head only",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evaluators",
+      "surface": "HTTP collection",
+      "entry": "app/api/evaluators/route.ts",
+      "scope": "project",
+      "projection": "bounded active-version join; picker summaries outstanding",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "manual",
+      "statementCeiling": null
+    },
+    {
+      "resource": "savedViews",
+      "surface": "HTTP/MCP collection",
+      "entry": "app/api/views/route.ts",
+      "scope": "project",
+      "projection": "view definitions",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "manual",
+      "statementCeiling": null
+    },
+    {
+      "resource": "savedViewRows",
+      "surface": "HTTP detail",
+      "entry": "app/api/views/[id]/data/route.ts",
+      "scope": "project plus optional run",
+      "projection": "SQL selected columns",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "manual",
+      "statementCeiling": null
+    },
+    {
+      "resource": "datasetItems",
+      "surface": "HTTP/MCP child page",
+      "entry": "app/api/datasets/[id]/items/route.ts",
+      "scope": "project and dataset",
+      "projection": "item payload page",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "manual",
+      "statementCeiling": null
+    },
+    {
+      "resource": "traceSpans",
+      "surface": "HTTP child page",
+      "entry": "app/api/traces/[id]/spans/route.ts",
+      "scope": "project and trace",
+      "projection": "span payload page",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "head only",
+      "statementCeiling": null
+    },
+    {
+      "resource": "traceScores",
+      "surface": "HTTP child page",
+      "entry": "app/api/traces/[id]/scores/route.ts",
+      "scope": "project and trace",
+      "projection": "score page with batched result definitions",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "head only",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evalTargets",
+      "surface": "HTTP/MCP detail",
+      "entry": "app/api/evals/[id]/route.ts",
+      "scope": "project and run",
+      "projection": "adaptive batches of exact table values; includeEvidence=false projects out frozen spans before transfer",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "running only",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evalComparison",
+      "surface": "HTTP comparison",
+      "entry": "app/api/evals/compare/route.ts",
+      "scope": "project and both runs",
+      "projection": "whole-population matched IDs then adaptive batches; table reads omit frozen and scorer spans",
+      "pageLimit": 50,
+      "maxBytes": 8388608,
+      "polling": "running only",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evalTargetEvidence",
+      "surface": "HTTP/CLI/MCP focused detail",
+      "entry": "app/api/evals/[id]/targets/[targetId]/route.ts",
+      "scope": "project and run and target",
+      "projection": "one frozen target with its scorer execution spans and results",
+      "pageLimit": 1,
+      "maxBytes": 8388608,
+      "polling": "on case selection",
+      "statementCeiling": null
+    },
+    {
+      "resource": "configurationCatalogs",
+      "surface": "HTTP/MCP",
+      "entry": "src/server/tracer/catalog-read.ts",
+      "scope": "project",
+      "projection": "complete small configuration records with explicit overflow",
+      "pageLimit": 500,
+      "maxBytes": 8388608,
+      "polling": "manual",
+      "statementCeiling": null
+    },
+    {
+      "resource": "completeEvidence",
+      "surface": "internal evaluation artifact",
+      "entry": "src/server/tracer/service.ts",
+      "scope": "project and trace/dataset",
+      "projection": "complete evidence with preflight byte guard",
+      "pageLimit": null,
+      "maxBytes": 8388608,
+      "polling": "none",
+      "statementCeiling": null,
+      "exception": "Complete evidence needed for evaluation; broader job streaming and mutation response narrowing remain outstanding."
+    },
+    {
+      "resource": "spanAncestry",
+      "surface": "HTTP focused detail",
+      "entry": "app/api/traces/[id]/spans/[spanId]/route.ts",
+      "scope": "project and trace and span",
+      "projection": "selected span and bounded ancestor path",
+      "pageLimit": 200,
+      "maxBytes": 8388608,
+      "polling": "on selected span change",
+      "statementCeiling": null
+    },
+    {
+      "resource": "traceOverview",
+      "surface": "HTTP detail",
+      "entry": "app/api/traces/[id]/overview/route.ts",
+      "scope": "project and trace",
+      "projection": "Complete span hierarchy and compact display metrics; first open also includes the visible root payload",
+      "pageLimit": null,
+      "exception": "Complete navigation snapshot, preflighted and response bounded to 8 MiB with existing read deadline",
+      "maxBytes": 8388608,
+      "polling": "visible single-flight snapshot replacement without the initial root payload"
+    },
+    {
+      "resource": "spanDetail",
+      "surface": "HTTP detail",
+      "entry": "app/api/traces/[id]/spans/[spanId]/detail/route.ts",
+      "scope": "project, trace and span",
+      "projection": "One selected full span without ancestors",
+      "pageLimit": 1,
+      "maxBytes": 8388608,
+      "polling": "selected live record only; terminal payload cache per inspector session"
+    },
+    {
+      "resource": "tracePayload",
+      "surface": "HTTP detail",
+      "entry": "app/api/traces/[id]/payload/route.ts",
+      "scope": "project and trace",
+      "projection": "Trace-level fields without child spans or scores",
+      "pageLimit": 1,
+      "maxBytes": 8388608,
+      "polling": "selected live record only; terminal payload cache per inspector session"
+    }
+  ],
+  "unverified": [
+    "SQL statement ceilings and DB-to-app telemetry require instrumentation",
+    "Catalog scorer and picker admission/search coverage remains incomplete",
+    "Multi-statement collection hard cancellation remains incomplete",
+    "Authenticated retained-volume mixed-workload qualification remains incomplete"
+  ]
+}

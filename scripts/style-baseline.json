@@ -1,0 +1,68 @@
+{
+  "components/tracer/app-shell.tsx": {
+  },
+  "components/tracer/connected-eval-button.tsx": {
+    "bg-black/30": 1
+  },
+  "components/tracer/custom-view-controls.tsx": {
+    "bg-black/50": 1
+  },
+  "components/tracer/dashboard-renderer.tsx": {
+    "bg-[#f7f7f8]": 1,
+    "bg-[#0e0e0f]": 1
+  },
+  "components/tracer/datasets-page.tsx": {
+    "text-red-700": 2,
+    "text-red-300": 2,
+    "text-amber-700": 1,
+    "text-amber-300": 1
+  },
+  "components/tracer/eval-computed-columns.tsx": {
+    "bg-black/40": 1,
+    "border-white/[0.18]": 2
+  },
+  "components/tracer/eval-run-detail.tsx": {
+  },
+  "components/tracer/legacy-playground.tsx": {
+  },
+  "components/tracer/log-table.tsx": {
+  },
+  "components/tracer/playground-page.tsx": {
+    "bg-black": 6,
+    "#facc15": 1,
+    "#4ade80": 1,
+    "#f87171": 1,
+    "#000": 1,
+    "#52525b": 1,
+    "#000000": 1,
+    "#27272a": 1,
+    "bg-black/70": 1
+  },
+  "components/tracer/playground-traces.tsx": {
+  },
+  "components/tracer/primitives.tsx": {
+  },
+  "components/tracer/react-trace-views.tsx": {
+    "#000": 1,
+    "#eee": 1
+  },
+  "components/tracer/trace-inspector.tsx": {
+    "border-white/[0.12]": 5,
+    "bg-black": 5,
+    "shadow-black/40": 1,
+    "bg-white/[0.07]": 5,
+    "bg-white/[0.06]": 1,
+    "bg-white/[0.1]": 2,
+    "border-white/[0.18]": 2
+  },
+  "components/ui/chart.tsx": {
+    "#ccc": 3,
+    "#fff": 2
+  },
+  "components/ui/datool/trace-viewer/components/map.tsx": {
+    "#ccc": 1
+  },
+  "components/ui/sidebar.tsx": {
+    "bg-black/35": 1
+  }
+}

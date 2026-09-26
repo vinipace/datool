@@ -1,0 +1,104 @@
+---
+title: Alerts
+description: Configure request-failure alerts, count repeated errors, and diagnose webhook delivery.
+icon: alerts
+---
+
+Alerts evaluate recorded traces and spans and create in-app or webhook notifications. Owners and administrators manage rules; project members can read rules and notification history.
+
+## Alert on a failed request
+
+1. Open **Alerts → New alert**.
+2. Choose **Request failures**, then **Continue**.
+3. Keep **Log event** as the rule type and use this filter:
+
+```sql
+resource = 'trace' AND status = 'errored'
+```
+
+4. Select **In-app notification** and a five-minute notification interval.
+5. Save the rule. Its notification history opens.
+6. Send a new failing request after saving the rule. Open its notification and follow the trace link to inspect the error.
+
+A log-event rule evaluates new and materially updated logs after creation. Existing traces are not replayed. Matching events during the notification interval are discarded; they do not become delayed individual notifications.
+
+## Detect an error burst
+
+Choose **Error burst** or enter these settings in a new rule:
+
+| Setting | Value |
+| --- | --- |
+| Name | Repeated request failures |
+| Type | Time-window count |
+| Filter | `resource = 'trace' AND status = 'errored'` |
+| Window | 5 minutes |
+| Threshold | 10 |
+| Notification interval | 5 minutes |
+| Action | In-app notification |
+
+The worker checks time-window rules every minute. The rule fires when at least ten matching requests started within the window. It can fire again after the notification interval while the threshold remains met. Including `resource = 'trace'` prevents nested spans from being counted as additional requests.
+
+## Filter examples
+
+| Question | Filter |
+| --- | --- |
+| Which LLM steps take more than five seconds? | `resource = 'span' AND kind = 'llm' AND duration_ms > 5000` |
+| Which requests have recorded cost over $0.50? | `resource = 'trace' AND cost_usd > 0.5` |
+| Did an instrumented guardrail fail? | `span_attributes.guardrail_failed = true` |
+| Did the app report a model fallback? | `span_attributes.fallback_used = true` |
+
+Guardrail and fallback rules require those boolean attributes in your instrumentation. They do not infer the events from text. Missing cost and duration values are null.
+
+Alert filters use a bounded SQL-style predicate language. They support comparisons, `LIKE`, `IS NULL`, `IS NOT NULL`, `AND`, `OR`, and parentheses. Supported fields include `resource`, `id`, `trace_id`, `name`, `status`, `kind`, `duration_ms`, `cost_usd`, `created`, and `span_attributes.<key>`. Attribute keys are flat, including dots. For example:
+
+```sql
+span_attributes.gen_ai.request.model = 'gpt-4.1-mini'
+```
+
+A blank filter matches all logs. SQL statements, subqueries, and arbitrary functions are not supported. This language differs from the [trace collection filter](/docs/reference/filters).
+
+## Deliver to a webhook
+
+Select **Webhook** and enter a public HTTPS endpoint. The endpoint must accept a JSON POST and return HTTP 2xx for success. Datool sends alert/project identity, the alert name, match count, occurrence time, and minimal log identity/status. Trace inputs, outputs, and attributes are not included.
+
+An illustrative log-event notification has this shape (identifiers and time below are examples):
+
+```json
+{
+  "id": "notification-id",
+  "alertId": "alert-id",
+  "projectId": "project-id",
+  "alertName": "Request failures",
+  "type": "log_event",
+  "occurredAt": "2026-09-25T12:00:00.000Z",
+  "matchCount": 1,
+  "log": {
+    "id": "trace-id",
+    "trace_id": "trace-id",
+    "resource": "trace",
+    "name": "Checkout",
+    "status": "errored"
+  }
+}
+```
+
+Use the stable `Idempotency-Key` header, also supplied as the JSON notification `id`, to deduplicate deliveries. Delivery is at least once: a receiver can accept a request before Datool records its success, causing a repeat after recovery. Deduplicate before performing an external action.
+
+Failed deliveries make up to five total attempts, with retry delays of 5, 10, 20, and 40 seconds. Open the rule's notification history to inspect status, attempt count, and the latest delivery error. Redirects are not followed. Private/loopback destinations, URL credentials, and fragments are rejected.
+
+## Diagnose a missing notification
+
+| Symptom | Check |
+| --- | --- |
+| Worker offline | Self-hosted operators must run the ingestion/alerts worker and configure its restricted database reader. |
+| No match | Check resource type, exact status, attribute name/type, and whether the log arrived after rule creation. |
+| Matches but no new notification | Check the cooldown and the last notification time. |
+| Time-window rule errors | Shorten the window or narrow the workload; a scan exceeding 20,000 candidate logs fails without sending a partial count. |
+| Rule auto-paused | Three consecutive evaluation budget failures pause the rule. Fix the filter/window, then resume. |
+| Webhook failed | Check destination availability and HTTP status in notification history. |
+
+Pausing stops new work and cancels pending deliveries, but an HTTP request already in flight can finish. Deleting a rule removes its history. Edits use revision checks; reload after a conflict.
+
+For self-hosting, the ingestion worker also runs alerts. A deployment without Redis ingestion can run `bun run worker:alerts`. Both require `DATOOL_ALERT_DATABASE_URL` with a separate restricted reader role provisioned by the operator. The worker does not fall back to a writable application database connection. See [self-hosting](/docs/self-hosting).
+
+Use the matching [trace](/docs/tracing/investigation) to diagnose a notification, [dashboards](/docs/guides/dashboards) to assess the broader pattern, and a [dataset](/docs/evaluation/datasets) to preserve a regression case.

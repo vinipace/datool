@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+if ! command -v bun >/dev/null 2>&1; then
+  printf '%s\n' 'Datool pre-push checks require Bun. Install dependencies with bun install first.' >&2
+  exit 1
+fi
+
+exec bun run check:pre-push

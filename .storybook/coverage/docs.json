@@ -1,0 +1,13 @@
+[
+  {
+    "component": "components/docs/header.tsx",
+    "kind": "direct",
+    "story": "components/docs/header.stories.tsx"
+  },
+  {
+    "component": "components/docs/provider.tsx",
+    "kind": "composite",
+    "story": "components/docs/header.stories.tsx",
+    "reason": "The docs header story opens the search dialog supplied by DocsProvider."
+  }
+]

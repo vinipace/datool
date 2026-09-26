@@ -1,0 +1,72 @@
+[
+  {
+    "component": "components/cms/system-overview.tsx",
+    "kind": "direct",
+    "story": "components/cms/system-overview.stories.tsx"
+  },
+  {
+    "component": "components/ui/cms-system.tsx",
+    "kind": "composite",
+    "story": "components/cms/system-overview.stories.tsx",
+    "reason": "System oversight stories exercise shared tables, quota indicators, missing usage, status badges and monthly history."
+  },
+  {
+    "component": "components/cms/marketing-shell.tsx",
+    "kind": "direct",
+    "story": "components/cms/marketing-shell.stories.tsx"
+  },
+  {
+    "component": "components/cms/admin-login.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "EditorSignInFailure exercises denied login feedback and retry availability."
+  },
+  {
+    "component": "components/cms/admin-logout.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "EditorSignOutFailure exercises failed logout feedback and retry availability."
+  },
+  {
+    "component": "components/cms/faq-accordion.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "ExpandedQuestion renders a selected question with its full answer and related links."
+  },
+  {
+    "component": "components/cms/faq-content.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "AnswerWithConnections renders the complete rich answer and related question and page links."
+  },
+  {
+    "component": "components/cms/live-preview.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "Preview stories render the page, FAQ answer and FAQ introduction placeholders."
+  },
+  {
+    "component": "components/cms/page-blocks.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "LandingPage and NarrowLanding render all CMS blocks and expand complete FAQ answers."
+  },
+  {
+    "component": "components/cms/structured-data.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "LandingPage includes the nonvisual JSON-LD script alongside its rendered content."
+  },
+  {
+    "component": "components/ui/content-disclosure.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "KeyboardDisclosure exercises Space and Enter activation, expanded state and full-answer visibility."
+  },
+  {
+    "component": "components/ui/content-link.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "AnswerWithConnections renders the shared question and related-page links."
+  }
+]

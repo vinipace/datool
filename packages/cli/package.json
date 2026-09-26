@@ -1,0 +1,43 @@
+{
+  "name": "@datool/cli",
+  "description": "Debug traces, run evaluations, manage datasets, and connect apps with Datool.",
+  "version": "0.4.1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vinipace/datool.git",
+    "directory": "packages/cli"
+  },
+  "scripts": {
+    "build": "bun ../../scripts/build-packages.ts cli",
+    "prepack": "bun run build"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@napi-rs/keyring": "2.0.0",
+    "ajv": "^8.20.0",
+    "zod": "^4.5.4"
+  },
+  "bin": {
+    "datool": "./dist/datool.js"
+  }
+}

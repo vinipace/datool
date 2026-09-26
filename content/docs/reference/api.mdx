@@ -1,0 +1,74 @@
+---
+title: REST API
+description: Call project operations with typed inputs and results, explicit pagination, and structured errors.
+icon: reference
+---
+
+Datool exposes the operation surface shared by REST, CLI, and MCP through `POST /api/agent/{operation}`. Browse the [operation reference](/docs/reference/operations), download [OpenAPI 3.1](/openapi.json), or discover the current server through `datool agent tools`.
+
+The specification describes operation input constraints, result fields, pagination, error responses, and scopes. Application-defined inputs, outputs, metadata, and JSON Schema values remain open JSON. Browser-internal endpoints and the MCP JSON-RPC transport are outside this REST contract.
+
+## Make a request
+
+Create an organization API key with `traces:read`. Set `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY`, then list one trace:
+
+```sh
+curl --fail-with-body "$DATOOL_BASE_URL/api/agent/list_traces" \
+  -H "Authorization: Bearer $DATOOL_API_KEY" \
+  -H "x-project-id: $DATOOL_PROJECT_ID" \
+  -H "Content-Type: application/json" \
+  --data '{"limit":1}'
+```
+
+Successful responses use a `data` envelope. An empty trace collection returns:
+
+```json
+{
+  "data": {
+    "items": [],
+    "nextCursor": null
+  }
+}
+```
+
+When records exist, each item includes its ID, name, lifecycle status, input/output, attributes, and timing fields. Some fields can be null, and `total` is optional unless requested. Use the schema for the selected operation; not every list operation has the same envelope shape.
+
+## Authentication and project scope
+
+Every request needs a valid credential and project access. Organization API keys use the bearer header above. Datool OAuth tokens must be authorized for the REST/CLI resource `<origin>/api/cli`; MCP tokens use a different audience. Supply the project ID in `x-project-id`.
+
+Required scopes are listed per operation. Read operations can need several scopes when they join resources, and execution operations can incur app, model, or sandbox usage. See [authentication](/docs/reference/authentication).
+
+## Pagination and evidence size
+
+Paged operations return a continuation field such as `nextCursor` or `nextOffset`. Pass it back with the same filters and continue until it is null. Pages can shrink to stay within the response limit; fewer items than your requested `limit` does not prove completion.
+
+Trace and evaluation evidence reads are bounded to 8 MiB. For large traces, use `list_trace_spans` and `list_trace_scores`. For evaluations, use lightweight `get_eval_run` pages and `get_eval_target` for one case's full frozen evidence. CLI exports follow pagination and expose their own row bounds.
+
+## Errors and retry decisions
+
+Errors use a separate envelope:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "The request input is invalid.",
+    "hint": "Inspect the operation's input schema and correct the request."
+  }
+}
+```
+
+This is an illustrative shape; read the returned message and hint. `error.details` may supply additional context.
+
+| HTTP status | Typical next action |
+| --- | --- |
+| 400 / 422 | Correct invalid input or constraints. |
+| 401 / 403 | Check credentials, scope, membership, project, and OAuth audience. |
+| 404 | Verify the operation/resource ID and current project. |
+| 409 | Reload the resource or run state and reconcile a conflict. |
+| 413 | Reduce the request or use bounded evidence reads. |
+| 429 | Honor `Retry-After`; use bounded backoff. |
+| 500 / 503 / 504 | Inspect the error and saved state before retrying. |
+
+Reads can be retried with bounded backoff. Do not blindly replay a mutation after a timeout. Evaluation creation uses a stable `requestKey`: the same key and inputs retrieve the same logical run; changed inputs conflict. Revision-protected edits require the current revision. See [CI gates](/docs/evaluation/ci) for a complete asynchronous execution flow.

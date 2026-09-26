@@ -1,0 +1,90 @@
+[
+  {
+    "component": "components/tracer/dashboard-dimension-label.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-renderer.stories.tsx",
+    "reason": "OptionalGroupIcons exercises category icons in the existing legend; CostPresentation keeps them off by default."
+  },
+  {
+    "component": "components/tracer/dashboard-bar-chart.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dashboard-bar-chart.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dashboard-detail-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dashboard-detail-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dashboard-renderer.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dashboard-renderer.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dashboard-time-chart.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dashboard-time-chart.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dashboards-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dashboards-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/performance-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/performance-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dashboard-widget-editor.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dashboard-widget-editor.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dashboard-widget-result.tsx",
+    "kind": "direct",
+    "story": "components/tracer/dashboard-widget-result.stories.tsx"
+  },
+  {
+    "component": "components/tracer/dashboard-widget-filters.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-widget-editor.stories.tsx",
+    "reason": "Widget editor stories exercise agent, workflow, version filters and comparisons."
+  },
+  {
+    "component": "components/tracer/dashboard-query-filters.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-widget-editor.stories.tsx",
+    "reason": "Widget editor stories exercise adding and configuring metric and metadata predicates."
+  },
+  {
+    "component": "components/tracer/dashboard-create-dialog.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboards-page.stories.tsx",
+    "reason": "Dashboard creation stories exercise template selection, keyboard cancellation, pending requests and retry."
+  },
+  {
+    "component": "components/tracer/dashboard-donut-chart.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-widget-result.stories.tsx",
+    "reason": "Widget result stories render donut categories, pagination and empty or negative values."
+  },
+  {
+    "component": "components/tracer/dashboard-gap-lines.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-widget-result.stories.tsx",
+    "reason": "Time-series stories render missing values and omitted buckets through the shared gap guides."
+  },
+  {
+    "component": "components/tracer/dashboard-metric-chart.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-widget-result.stories.tsx",
+    "reason": "Daily history stories render metric trends and preserve missing daily observations."
+  },
+  {
+    "component": "components/tracer/dashboard-metric-tile.tsx",
+    "kind": "composite",
+    "story": "components/tracer/dashboard-widget-result.stories.tsx",
+    "reason": "Metric stories cover history, comparisons, zero baselines, unavailable data and direction overrides."
+  }
+]

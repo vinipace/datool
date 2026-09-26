@@ -1,0 +1,10 @@
+{
+  "title": "Get started",
+  "pages": [
+    "first-trace",
+    "first-evaluation",
+    "first-prompt",
+    "concepts"
+  ],
+  "icon": "quickstart"
+}

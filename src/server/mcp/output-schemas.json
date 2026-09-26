@@ -1,0 +1,6890 @@
+{
+  "operations": {
+    "batch_metrics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_query_metrics"
+      }
+    },
+    "bulk_dataset_items": {
+      "$ref": "#/components/schemas/Output_bulk_dataset_items"
+    },
+    "cancel_eval_run": {
+      "$ref": "#/components/schemas/Output_EvalRunDetail"
+    },
+    "check_scorer_runtime": {
+      "$ref": "#/components/schemas/Output_check_scorer_runtime"
+    },
+    "compare_eval_runs": {
+      "$ref": "#/components/schemas/Output_compare_eval_runs"
+    },
+    "create_dashboard": {
+      "$ref": "#/components/schemas/Output_Dashboard"
+    },
+    "create_dataset": {
+      "$ref": "#/components/schemas/Output_Dataset"
+    },
+    "create_dataset_item": {
+      "$ref": "#/components/schemas/Output_DatasetItem"
+    },
+    "create_dataset_snapshot": {
+      "$ref": "#/components/schemas/Output_create_dataset_snapshot"
+    },
+    "create_human_score": {
+      "$ref": "#/components/schemas/Output_HumanScore"
+    },
+    "create_human_score_collection": {
+      "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
+    },
+    "create_review_session": {
+      "$ref": "#/components/schemas/Output_ReviewSessionDetail"
+    },
+    "create_saved_view": {
+      "$ref": "#/components/schemas/Output_SavedView"
+    },
+    "create_scorer": {
+      "$ref": "#/components/schemas/Output_Scorer"
+    },
+    "create_view": {
+      "$ref": "#/components/schemas/Output_CustomView"
+    },
+    "delete_dashboard": {
+      "$ref": "#/components/schemas/Output_delete_dashboard"
+    },
+    "delete_dataset": {
+      "$ref": "#/components/schemas/Output_delete_dataset"
+    },
+    "delete_dataset_item": {
+      "$ref": "#/components/schemas/Output_delete_dataset_item"
+    },
+    "delete_saved_view": {
+      "$ref": "#/components/schemas/Output_delete_saved_view"
+    },
+    "delete_scorer": {
+      "$ref": "#/components/schemas/Output_delete_scorer"
+    },
+    "delete_view": {
+      "$ref": "#/components/schemas/Output_delete_view"
+    },
+    "describe_agent_operations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_describe_agent_operations_item"
+      }
+    },
+    "export_review_items": {
+      "$ref": "#/components/schemas/Output_export_review_items"
+    },
+    "gate_eval_run": {
+      "$ref": "#/components/schemas/Output_gate_eval_run"
+    },
+    "get_app": {
+      "$ref": "#/components/schemas/Output_list_apps_item"
+    },
+    "get_dashboard": {
+      "$ref": "#/components/schemas/Output_Dashboard"
+    },
+    "get_dataset": {
+      "$ref": "#/components/schemas/Output_DatasetDetail"
+    },
+    "get_dataset_snapshot": {
+      "$ref": "#/components/schemas/Output_get_dataset_snapshot"
+    },
+    "get_eval_run": {
+      "$ref": "#/components/schemas/Output_EvalRunDetail"
+    },
+    "get_eval_target": {
+      "$ref": "#/components/schemas/Output_run_app_rows_item"
+    },
+    "get_human_score": {
+      "$ref": "#/components/schemas/Output_HumanScore"
+    },
+    "get_human_score_collection": {
+      "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
+    },
+    "get_metrics_metadata": {
+      "$ref": "#/components/schemas/Output_Readonly"
+    },
+    "get_review_item": {
+      "$ref": "#/components/schemas/Output_ReviewItemDetail"
+    },
+    "get_review_options": {
+      "$ref": "#/components/schemas/Output_ReviewOptions"
+    },
+    "get_review_session": {
+      "$ref": "#/components/schemas/Output_ReviewSessionDetail"
+    },
+    "get_saved_view": {
+      "$ref": "#/components/schemas/Output_SavedView"
+    },
+    "get_saved_view_data": {
+      "$ref": "#/components/schemas/Output_SavedViewData"
+    },
+    "get_scorer": {
+      "$ref": "#/components/schemas/Output_Scorer"
+    },
+    "get_scorer_version": {
+      "$ref": "#/components/schemas/Output_EvaluatorVersion"
+    },
+    "get_session": {
+      "$ref": "#/components/schemas/Output_SessionDetail"
+    },
+    "get_span_path": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_Span"
+      }
+    },
+    "get_trace": {
+      "$ref": "#/components/schemas/Output_TraceDetail"
+    },
+    "get_view": {
+      "$ref": "#/components/schemas/Output_CustomView"
+    },
+    "list_apps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_list_apps_item"
+      }
+    },
+    "list_dashboards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_Dashboard"
+      }
+    },
+    "list_dataset_items": {
+      "$ref": "#/components/schemas/Output_list_dataset_items"
+    },
+    "list_dataset_snapshots": {
+      "$ref": "#/components/schemas/Output_list_dataset_snapshots"
+    },
+    "list_datasets": {
+      "$ref": "#/components/schemas/Output_list_datasets"
+    },
+    "list_eval_run_groups": {
+      "$ref": "#/components/schemas/Output_list_eval_run_groups"
+    },
+    "list_eval_runs": {
+      "$ref": "#/components/schemas/Output_list_eval_runs"
+    },
+    "list_human_scores": {
+      "$ref": "#/components/schemas/Output_HumanScoreLibrary"
+    },
+    "list_review_sessions": {
+      "$ref": "#/components/schemas/Output_list_review_sessions"
+    },
+    "list_saved_views": {
+      "$ref": "#/components/schemas/Output_list_saved_views"
+    },
+    "list_scorer_libraries": {
+      "$ref": "#/components/schemas/Output_list_scorer_libraries"
+    },
+    "list_scorer_versions": {
+      "$ref": "#/components/schemas/Output_list_scorer_versions"
+    },
+    "list_scorers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_Scorer"
+      }
+    },
+    "list_sessions": {
+      "$ref": "#/components/schemas/Output_list_sessions"
+    },
+    "list_trace_scores": {
+      "$ref": "#/components/schemas/Output_list_trace_scores"
+    },
+    "list_trace_spans": {
+      "$ref": "#/components/schemas/Output_list_trace_spans"
+    },
+    "list_traces": {
+      "$ref": "#/components/schemas/Output_list_traces"
+    },
+    "list_views": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_CustomView"
+      }
+    },
+    "preview_dashboard": {
+      "$ref": "#/components/schemas/Output_preview_dashboard"
+    },
+    "probe_scorer_runtime": {
+      "$ref": "#/components/schemas/Output_probe_scorer_runtime"
+    },
+    "promote_spans": {
+      "$ref": "#/components/schemas/Output_SpanPromotionResult"
+    },
+    "query_metrics": {
+      "$ref": "#/components/schemas/Output_query_metrics"
+    },
+    "record_review": {
+      "$ref": "#/components/schemas/Output_ReviewItemDetail"
+    },
+    "recover_eval_run": {
+      "$ref": "#/components/schemas/Output_EvalRunDetail"
+    },
+    "register_app": {
+      "$ref": "#/components/schemas/Output_register_app"
+    },
+    "resolve_dashboard": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
+    "resolve_dataset": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
+    "resolve_eval": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
+    "resolve_scorer": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
+    "resolve_session": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
+    "resolve_trace": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
+    "resolve_view": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
+    "run_app": {
+      "$ref": "#/components/schemas/Output_run_app"
+    },
+    "start_eval_run": {
+      "$ref": "#/components/schemas/Output_run_app"
+    },
+    "test_scorer": {
+      "$ref": "#/components/schemas/Output_test_scorer"
+    },
+    "update_dashboard": {
+      "$ref": "#/components/schemas/Output_Dashboard"
+    },
+    "update_dataset": {
+      "$ref": "#/components/schemas/Output_Dataset"
+    },
+    "update_dataset_item": {
+      "$ref": "#/components/schemas/Output_DatasetItem"
+    },
+    "update_human_score": {
+      "$ref": "#/components/schemas/Output_HumanScore"
+    },
+    "update_human_score_collection": {
+      "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
+    },
+    "update_review_session": {
+      "$ref": "#/components/schemas/Output_ReviewSessionDetail"
+    },
+    "update_saved_view": {
+      "$ref": "#/components/schemas/Output_SavedView"
+    },
+    "update_scorer": {
+      "$ref": "#/components/schemas/Output_Scorer"
+    },
+    "update_view": {
+      "$ref": "#/components/schemas/Output_CustomView"
+    },
+    "use_library_scorer": {
+      "$ref": "#/components/schemas/Output_Scorer"
+    }
+  },
+  "schemas": {
+    "Output_bulk_dataset_items": {
+      "type": "object",
+      "properties": {
+        "contentHash": {
+          "type": "string"
+        },
+        "created": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "datasetId": {
+          "type": "string"
+        },
+        "deleted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updated": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "contentHash",
+        "created",
+        "datasetId",
+        "deleted",
+        "updated"
+      ]
+    },
+    "Output_check_scorer_runtime": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JsonObject"
+          }
+        },
+        "incurredProviderUsage": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "checks",
+        "incurredProviderUsage",
+        "mode"
+      ]
+    },
+    "Output_compare_eval_runs": {
+      "type": "object",
+      "properties": {
+        "configurationChanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_RunConfigurationChange"
+          }
+        },
+        "left": {
+          "$ref": "#/components/schemas/Output_EvalRunDetail"
+        },
+        "limit": {
+          "type": "number"
+        },
+        "nextOffset": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "offset": {
+          "type": "number"
+        },
+        "pairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_EvalPair"
+          }
+        },
+        "right": {
+          "$ref": "#/components/schemas/Output_EvalRunDetail"
+        },
+        "total": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "configurationChanges",
+        "left",
+        "limit",
+        "nextOffset",
+        "offset",
+        "pairs",
+        "right",
+        "total"
+      ]
+    },
+    "Output_compare_eval_runs_configurationChanges_item_kind": {
+      "enum": [
+        "extractor",
+        "judge"
+      ]
+    },
+    "Output_compare_eval_runs_pairs_item_left": {
+      "$ref": "#/components/schemas/Output_run_app_rows_item"
+    },
+    "Output_compare_eval_runs_pairs_item_matchedBy": {
+      "enum": [
+        "input",
+        "trace",
+        "dataset item"
+      ]
+    },
+    "Output_create_dataset_snapshot": {
+      "type": "object",
+      "properties": {
+        "contentHash": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "itemCount": {
+          "type": "number"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        }
+      },
+      "required": [
+        "contentHash",
+        "createdAt",
+        "datasetId",
+        "id",
+        "itemCount",
+        "label"
+      ]
+    },
+    "Output_CustomView": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "resource": {
+          "$ref": "#/components/schemas/Output_list_views_item_resource"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "settings": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "id",
+        "name",
+        "resource",
+        "revision",
+        "settings",
+        "updatedAt"
+      ]
+    },
+    "Output_Dashboard": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "defaultWindowDays": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item"
+          }
+        }
+      },
+      "required": [
+        "createdAt",
+        "description",
+        "id",
+        "name",
+        "revision",
+        "schemaVersion",
+        "updatedAt",
+        "widgets"
+      ]
+    },
+    "Output_Dataset": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "fieldSchemas": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas"
+        },
+        "id": {
+          "type": "string"
+        },
+        "itemCount": {
+          "type": "number"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_metadata"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "versionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "createdAt",
+        "description",
+        "id",
+        "itemCount",
+        "name",
+        "updatedAt"
+      ]
+    },
+    "Output_DatasetDetail": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "fieldSchemas": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas"
+        },
+        "id": {
+          "type": "string"
+        },
+        "itemCount": {
+          "type": "number"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_DatasetItem"
+          }
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_metadata"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "revision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "versionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "createdAt",
+        "description",
+        "id",
+        "itemCount",
+        "items",
+        "name",
+        "updatedAt"
+      ]
+    },
+    "Output_DatasetItem": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "type": "string"
+        },
+        "datasetRevision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "datasetVersionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "expectedOutput": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "observedOutput": {
+          "$ref": "#/components/schemas/Output_run_app_metadata_value"
+        },
+        "sourceSpanEvidence": {
+          "$ref": "#/components/schemas/Output_get_dataset_items_item_sourceSpanEvidence"
+        },
+        "sourceSpanId": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "sourceTraceId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "versionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "createdAt",
+        "datasetId",
+        "expectedOutput",
+        "id",
+        "input",
+        "metadata",
+        "sourceTraceId",
+        "updatedAt"
+      ]
+    },
+    "Output_delete_dashboard": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_delete_dataset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_delete_dataset_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_delete_saved_view": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_delete_scorer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_delete_view": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_describe_agent_operations_item": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "inputSchema": {
+          "$ref": "#/components/schemas/Output_Record"
+        },
+        "name": {
+          "type": "string"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_describe_agent_operations_item_scopes_item"
+          }
+        }
+      },
+      "required": [
+        "description",
+        "inputSchema",
+        "name",
+        "scopes"
+      ]
+    },
+    "Output_describe_agent_operations_item_scopes_item": {
+      "enum": [
+        "apps:read",
+        "apps:write",
+        "reviews:read",
+        "reviews:write",
+        "metrics:read",
+        "scorers:read",
+        "scorers:write",
+        "views:read",
+        "views:write",
+        "datasets:read",
+        "datasets:write",
+        "dashboards:read",
+        "dashboards:write",
+        "traces:read",
+        "evals:read",
+        "evals:write",
+        "prompts:read",
+        "prompts:write",
+        "traces:write",
+        "playgrounds:read",
+        "playgrounds:write"
+      ]
+    },
+    "Output_EvalPair": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "inputChanged": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "left": {
+          "$ref": "#/components/schemas/Output_compare_eval_runs_pairs_item_left"
+        },
+        "matchedBy": {
+          "$ref": "#/components/schemas/Output_compare_eval_runs_pairs_item_matchedBy"
+        },
+        "referenceChanged": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "right": {
+          "$ref": "#/components/schemas/Output_compare_eval_runs_pairs_item_left"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_EvalResult": {
+      "type": "object",
+      "properties": {
+        "completedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "datasetItemId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "definition": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition"
+        },
+        "error": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorId": {
+          "type": "string"
+        },
+        "evaluatorName": {
+          "type": "string"
+        },
+        "evaluatorVersion": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "passed": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_passed"
+        },
+        "reasoning": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_EvalResultStatus"
+        },
+        "traceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "completedAt",
+        "datasetItemId",
+        "error",
+        "evaluatorId",
+        "evaluatorName",
+        "evaluatorVersion",
+        "id",
+        "metadata",
+        "passed",
+        "reasoning",
+        "runId",
+        "score",
+        "status",
+        "traceId"
+      ]
+    },
+    "Output_EvalResultStatus": {
+      "enum": [
+        "error",
+        "completed",
+        "failed",
+        "passed"
+      ]
+    },
+    "Output_EvalRunDetail": {
+      "type": "object",
+      "properties": {
+        "completedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evaluatorVersionIds": {
+          "$ref": "#/components/schemas/Output_run_app_evaluatorVersionIds"
+        },
+        "execution": {
+          "$ref": "#/components/schemas/Output_run_app_execution"
+        },
+        "groups": {
+          "$ref": "#/components/schemas/Output_run_app_groups"
+        },
+        "groupsResolvedAt": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "name": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "resultCount": {
+          "type": "number"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_EvalResult"
+          }
+        },
+        "rows": {
+          "$ref": "#/components/schemas/Output_run_app_rows"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "scorerProgress": {
+          "$ref": "#/components/schemas/Output_run_app_scorerProgress"
+        },
+        "scores": {
+          "$ref": "#/components/schemas/Output_run_app_scores"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_EvalRunStatus"
+        },
+        "targetCount": {
+          "type": "number"
+        },
+        "traceCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "completedAt",
+        "createdAt",
+        "datasetId",
+        "evaluatorIds",
+        "id",
+        "metadata",
+        "name",
+        "resultCount",
+        "results",
+        "score",
+        "status",
+        "targetCount",
+        "traceCount"
+      ]
+    },
+    "Output_EvalRunStatus": {
+      "enum": [
+        "cancelled",
+        "completed",
+        "failed",
+        "partial",
+        "running"
+      ]
+    },
+    "Output_EvalRunSummary": {
+      "type": "object",
+      "properties": {
+        "completedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "groups": {
+          "$ref": "#/components/schemas/Output_run_app_groups"
+        },
+        "groupsResolvedAt": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "name": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "resultCount": {
+          "type": "number"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "scores": {
+          "$ref": "#/components/schemas/Output_run_app_scores"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_EvalRunStatus"
+        },
+        "targetCount": {
+          "type": "number"
+        },
+        "traceCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "completedAt",
+        "createdAt",
+        "datasetId",
+        "evaluatorIds",
+        "id",
+        "metadata",
+        "name",
+        "resultCount",
+        "score",
+        "status",
+        "targetCount",
+        "traceCount"
+      ]
+    },
+    "Output_EvalScorerProgress": {
+      "type": "object",
+      "properties": {
+        "completed": {
+          "type": "number"
+        },
+        "error": {
+          "type": "number"
+        },
+        "evaluatorId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "queued": {
+          "type": "number"
+        },
+        "running": {
+          "type": "number"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "skipped": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "version": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "completed",
+        "error",
+        "evaluatorId",
+        "name",
+        "queued",
+        "running",
+        "score",
+        "skipped",
+        "total",
+        "version"
+      ]
+    },
+    "Output_EvaluatorLanguage": {
+      "enum": [
+        "javascript",
+        "python"
+      ]
+    },
+    "Output_EvaluatorRunErrorKind": {
+      "enum": [
+        "protocol",
+        "runtime",
+        "sandbox",
+        "timeout",
+        "validation"
+      ]
+    },
+    "Output_EvaluatorRunResult": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/components/schemas/Output_test_scorer_result_error"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_metadata"
+        },
+        "passed": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_passed"
+        },
+        "reasoning": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        }
+      },
+      "required": [
+        "passed",
+        "score"
+      ]
+    },
+    "Output_EvaluatorVersion": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "evaluatorId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "language": {
+          "$ref": "#/components/schemas/Output_EvaluatorLanguage"
+        },
+        "version": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "code",
+        "createdAt",
+        "evaluatorId",
+        "id",
+        "language",
+        "version"
+      ]
+    },
+    "Output_export_review_items": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_export_review_items_items_item"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_export_review_items_items_item": {
+      "type": "object",
+      "properties": {
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewAnnotation"
+          }
+        },
+        "completionKind": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_completionKind"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_HumanScore"
+          }
+        },
+        "humanVerified": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_label"
+        },
+        "lastSubmission": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission"
+        },
+        "nextItemId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "notesProvenance": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission"
+        },
+        "ordinal": {
+          "type": "number"
+        },
+        "previousItemId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "reviewedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "reviewedBy": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewScore"
+          }
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "skippedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "traceName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "annotations",
+        "definitions",
+        "id",
+        "nextItemId",
+        "notes",
+        "ordinal",
+        "previousItemId",
+        "reviewedAt",
+        "reviewedBy",
+        "revision",
+        "scores",
+        "sessionId",
+        "skippedAt",
+        "traceId",
+        "traceName"
+      ]
+    },
+    "Output_gate_eval_run": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "$ref": "#/components/schemas/Output_gate_eval_run_baseline"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "run": {
+          "$ref": "#/components/schemas/Output_gate_eval_run_baseline_2"
+        },
+        "thresholds": {
+          "$ref": "#/components/schemas/Output_gate_eval_run_thresholds"
+        }
+      },
+      "required": [
+        "baseline",
+        "passed",
+        "reasons",
+        "run",
+        "thresholds"
+      ]
+    },
+    "Output_gate_eval_run_baseline": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_gate_eval_run_baseline_2"
+        }
+      ]
+    },
+    "Output_gate_eval_run_baseline_2": {
+      "type": "object",
+      "properties": {
+        "actual": {
+          "type": "number"
+        },
+        "errors": {
+          "type": "number"
+        },
+        "expected": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "passRate": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "status": {
+          "type": "string"
+        },
+        "unscored": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "actual",
+        "errors",
+        "expected",
+        "id",
+        "passRate",
+        "score",
+        "status",
+        "unscored"
+      ]
+    },
+    "Output_gate_eval_run_thresholds": {
+      "type": "object",
+      "properties": {
+        "allowUnscored": {
+          "type": "boolean"
+        },
+        "baselineId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "id": {
+          "type": "string"
+        },
+        "maxErrors": {
+          "type": "number"
+        },
+        "maxRegression": {
+          "type": "number"
+        },
+        "minPassRate": {
+          "type": "number"
+        },
+        "minScore": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "allowUnscored",
+        "id",
+        "maxErrors",
+        "maxRegression",
+        "minPassRate",
+        "minScore"
+      ]
+    },
+    "Output_get_dataset_items_item_sourceSpanEvidence": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_TraceForEvaluation"
+        }
+      ]
+    },
+    "Output_get_dataset_snapshot": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "fieldSchemas": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas"
+        },
+        "id": {
+          "type": "string"
+        },
+        "itemCount": {
+          "type": "number"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_DatasetItem"
+          }
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_metadata"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "revision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "description",
+        "id",
+        "itemCount",
+        "items",
+        "name",
+        "nextCursor",
+        "updatedAt",
+        "versionId"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_defaultMeasures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "Output_get_metrics_metadata_models_item_defaultOrder": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultOrder_item_1"
+          }
+        ],
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "Output_get_metrics_metadata_models_item_defaultOrder_item_1": {
+      "enum": [
+        "asc",
+        "desc"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_maxLimit": {
+      "type": "number"
+    },
+    "Output_get_metrics_metadata_models_item_members_item_aggregation": {
+      "enum": [
+        "minimum",
+        "maximum",
+        "sum",
+        "count",
+        "countDistinct",
+        "average",
+        "percentile",
+        "ratio"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_members_item_cardinality": {
+      "enum": [
+        "low",
+        "high"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_members_item_filterOperators_item": {
+      "enum": [
+        "set",
+        "in",
+        "equals",
+        "notEquals",
+        "contains",
+        "notContains",
+        "startsWith",
+        "endsWith",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "notIn",
+        "notSet"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_members_item_filterValueType": {
+      "enum": [
+        "date",
+        "json"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_members_item_granularities_item": {
+      "enum": [
+        "day",
+        "week",
+        "month"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_members_item_multiplicity": {
+      "enum": [
+        "one",
+        "many"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_members_item_type": {
+      "enum": [
+        "string",
+        "number",
+        "boolean"
+      ]
+    },
+    "Output_get_metrics_metadata_models_item_source": {
+      "$ref": "#/components/schemas/Output_Readonly_3"
+    },
+    "Output_get_metrics_metadata_models_item_source_unavailable": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_Readonly_4"
+      }
+    },
+    "Output_get_metrics_metadata_models_item_source_visibility": {
+      "enum": [
+        "primary",
+        "legacy"
+      ]
+    },
+    "Output_get_review_item_annotations_item_author": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "image": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "image",
+        "name"
+      ]
+    },
+    "Output_get_review_item_annotations_item_provenance": {
+      "$ref": "#/components/schemas/Output_ReviewProvenance"
+    },
+    "Output_get_review_item_annotations_item_reference": {
+      "type": "object",
+      "properties": {
+        "customField": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_customField"
+        },
+        "end": {
+          "type": "number"
+        },
+        "exact": {
+          "type": "string"
+        },
+        "field": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_field"
+        },
+        "outputHash": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "spanId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "spanName": {
+          "type": "string"
+        },
+        "start": {
+          "type": "number"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_view"
+        }
+      },
+      "required": [
+        "end",
+        "exact",
+        "field",
+        "outputHash",
+        "prefix",
+        "spanId",
+        "spanName",
+        "start",
+        "suffix",
+        "traceId",
+        "view"
+      ]
+    },
+    "Output_get_review_item_annotations_item_reference_customField": {
+      "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_customField_2"
+    },
+    "Output_get_review_item_annotations_item_reference_customField_2": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_customField_format"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_customField_mode"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sourceHash": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "format",
+        "id",
+        "mode",
+        "name",
+        "sourceHash",
+        "value"
+      ]
+    },
+    "Output_get_review_item_annotations_item_reference_customField_format": {
+      "enum": [
+        "text",
+        "markdown"
+      ]
+    },
+    "Output_get_review_item_annotations_item_reference_customField_mode": {
+      "enum": [
+        "expression",
+        "template"
+      ]
+    },
+    "Output_get_review_item_annotations_item_reference_field": {
+      "enum": [
+        "input",
+        "output",
+        "custom"
+      ]
+    },
+    "Output_get_review_item_annotations_item_reference_view": {
+      "enum": [
+        "llm",
+        "json",
+        "text",
+        "image",
+        "llm-raw",
+        "yaml",
+        "pretty",
+        "tree"
+      ]
+    },
+    "Output_get_review_item_scores_item_source": {
+      "enum": [
+        "human",
+        "mcp",
+        "api"
+      ]
+    },
+    "Output_get_review_item_scores_item_value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "Output_get_review_session_items_item_completionKind": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "const": "ai"
+        },
+        {
+          "type": "string",
+          "const": "human"
+        }
+      ]
+    },
+    "Output_get_review_session_items_item_label": {
+      "enum": [
+        "AI-labelled",
+        "Human-reviewed",
+        "Unreviewed",
+        "Unknown provenance"
+      ]
+    },
+    "Output_get_review_session_items_item_lastSubmission": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_ReviewProvenance"
+        }
+      ]
+    },
+    "Output_get_review_session_items_item_lastSubmission_agent": {
+      "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission_agent_2"
+    },
+    "Output_get_review_session_items_item_lastSubmission_agent_2": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "name": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      }
+    },
+    "Output_get_review_session_items_item_lastSubmission_authType": {
+      "enum": [
+        "unknown",
+        "session",
+        "api-key",
+        "oauth"
+      ]
+    },
+    "Output_get_review_session_items_item_lastSubmission_label": {
+      "enum": [
+        "AI-labelled",
+        "Human-reviewed",
+        "Unknown provenance"
+      ]
+    },
+    "Output_get_review_session_items_item_lastSubmission_principal": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission_principal_2"
+        }
+      ]
+    },
+    "Output_get_review_session_items_item_lastSubmission_principal_2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission_principal_type"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type"
+      ]
+    },
+    "Output_get_review_session_items_item_lastSubmission_principal_type": {
+      "enum": [
+        "user",
+        "api-key"
+      ]
+    },
+    "Output_get_trace_scores_item_external": {
+      "$ref": "#/components/schemas/Output_ImportedScore"
+    },
+    "Output_get_trace_scores_item_external_author": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JSONType"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options_schema_value"
+        }
+      ]
+    },
+    "Output_get_trace_scores_item_external_data": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_data_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_data_3"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_data_4"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_data_5"
+        }
+      ]
+    },
+    "Output_get_trace_scores_item_external_data_2": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "numeric"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ]
+    },
+    "Output_get_trace_scores_item_external_data_3": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "boolean"
+        },
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ]
+    },
+    "Output_get_trace_scores_item_external_data_4": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "categorical"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ]
+    },
+    "Output_get_trace_scores_item_external_data_5": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ]
+    },
+    "Output_get_trace_scores_item_external_definition": {
+      "$ref": "#/components/schemas/Output_get_trace_scores_item_external_definition_2"
+    },
+    "Output_get_trace_scores_item_external_definition_2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "max": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "min": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ]
+    },
+    "Output_get_trace_scores_item_external_source": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "instance",
+        "projectId",
+        "provider"
+      ]
+    },
+    "Output_get_trace_scores_item_external_target": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_target_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_target_3"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_target_4"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_target_5"
+        }
+      ]
+    },
+    "Output_get_trace_scores_item_external_target_2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "trace"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ]
+    },
+    "Output_get_trace_scores_item_external_target_3": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "span"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ]
+    },
+    "Output_get_trace_scores_item_external_target_4": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "session"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ]
+    },
+    "Output_get_trace_scores_item_external_target_5": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "evalRun"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ]
+    },
+    "Output_get_trace_scores_item_passed": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        }
+      ]
+    },
+    "Output_HumanScore": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_list_human_scores_scores_item"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_human_scores_scores_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_human_scores_scores_item_3"
+        }
+      ]
+    },
+    "Output_HumanScoreCollection": {
+      "type": "object",
+      "properties": {
+        "archived": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "scoreIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "archived",
+        "createdAt",
+        "description",
+        "id",
+        "name",
+        "revision",
+        "scoreIds",
+        "updatedAt"
+      ]
+    },
+    "Output_HumanScoreCollectionSnapshot": {
+      "type": "object",
+      "properties": {
+        "archived": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "scoreIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_HumanScore"
+          }
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "archived",
+        "createdAt",
+        "description",
+        "id",
+        "name",
+        "revision",
+        "scoreIds",
+        "scores",
+        "updatedAt"
+      ]
+    },
+    "Output_HumanScoreLibrary": {
+      "type": "object",
+      "properties": {
+        "collections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_HumanScoreCollection"
+          }
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_HumanScore"
+          }
+        }
+      },
+      "required": [
+        "collections",
+        "scores"
+      ]
+    },
+    "Output_ImportedScore": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_author"
+        },
+        "comment": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "data": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_data"
+        },
+        "definition": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_definition"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options_schema"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_source"
+        },
+        "target": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_target"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "name",
+        "source",
+        "target",
+        "timestamp"
+      ]
+    },
+    "Output_JsonObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_run_app_metadata_value"
+      }
+    },
+    "Output_JSONType": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JSONType"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options_schema_value"
+        }
+      ]
+    },
+    "Output_JsonValue": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        },
+        {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JsonValue"
+          }
+        }
+      ]
+    },
+    "Output_list_apps_item": {
+      "type": "object",
+      "properties": {
+        "codeProvenance": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance"
+        },
+        "connection": {
+          "$ref": "#/components/schemas/Output_PublicAppConnection"
+        },
+        "defaultInput": {
+          "description": "Application-defined JSON value."
+        },
+        "evaluatorIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputSchema": {
+          "$ref": "#/components/schemas/Output_Record"
+        },
+        "internalTracing": {
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/Output_list_apps_item_mode"
+        },
+        "name": {
+          "type": "string"
+        },
+        "online": {
+          "type": "boolean"
+        },
+        "outputSchema": {
+          "$ref": "#/components/schemas/Output_Record"
+        },
+        "revision": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "connection",
+        "evaluatorIds",
+        "id",
+        "inputSchema",
+        "internalTracing",
+        "mode",
+        "name",
+        "online",
+        "outputSchema",
+        "revision"
+      ]
+    },
+    "Output_list_apps_item_codeProvenance": {
+      "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_2"
+    },
+    "Output_list_apps_item_codeProvenance_2": {
+      "type": "object",
+      "properties": {
+        "dirty": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "fingerprint": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "revision": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_source"
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
+    "Output_list_apps_item_codeProvenance_dirty": {
+      "enum": [
+        false,
+        true
+      ]
+    },
+    "Output_list_apps_item_codeProvenance_fingerprint": {
+      "type": "string"
+    },
+    "Output_list_apps_item_codeProvenance_source": {
+      "enum": [
+        "unknown",
+        "local-git",
+        "declared"
+      ]
+    },
+    "Output_list_apps_item_connection": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "bridge"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "Output_list_apps_item_connection_2": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "$ref": "#/components/schemas/Output_list_apps_item_connection_body"
+        },
+        "headerNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "method": {
+          "$ref": "#/components/schemas/Output_list_apps_item_connection_method"
+        },
+        "timeoutMs": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string",
+          "const": "webhook"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "body",
+        "headerNames",
+        "method",
+        "timeoutMs",
+        "type",
+        "url"
+      ]
+    },
+    "Output_list_apps_item_connection_body": {
+      "enum": [
+        "input",
+        "envelope"
+      ]
+    },
+    "Output_list_apps_item_connection_method": {
+      "enum": [
+        "POST",
+        "PUT",
+        "PATCH"
+      ]
+    },
+    "Output_list_apps_item_mode": {
+      "enum": [
+        "input",
+        "agent"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item": {
+      "type": "object",
+      "properties": {
+        "compare": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_compare"
+        },
+        "groups": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_groups"
+        },
+        "id": {
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_layout"
+        },
+        "query": {
+          "$ref": "#/components/schemas/Output_query_metrics_query"
+        },
+        "series": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_imagePaths"
+        },
+        "showGroupIcons": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "title": {
+          "type": "string"
+        },
+        "trendDirection": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_trendDirection"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_type"
+        },
+        "width": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_width"
+        }
+      },
+      "required": [
+        "id",
+        "query",
+        "title",
+        "type",
+        "width"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_compare": {
+      "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_compare_2"
+    },
+    "Output_list_dashboards_item_widgets_item_compare_2": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_type"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_groups_item"
+      }
+    },
+    "Output_list_dashboards_item_widgets_item_groups_item": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_type"
+        },
+        "versions": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_groups_item_versions"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_groups_item_versions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_run_app_completedAt"
+      }
+    },
+    "Output_list_dashboards_item_widgets_item_layout": {
+      "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_layout_2"
+    },
+    "Output_list_dashboards_item_widgets_item_layout_2": {
+      "type": "object",
+      "properties": {
+        "h": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "h",
+        "w",
+        "x",
+        "y"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_trendDirection": {
+      "enum": [
+        "increase",
+        "decrease",
+        "neutral"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_type": {
+      "enum": [
+        "table",
+        "metric",
+        "bar",
+        "donut",
+        "stacked",
+        "line"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_width": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "Output_list_dataset_items": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_DatasetItem"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_dataset_snapshots": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Snapshot"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_datasets": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Dataset"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_datasets_items_item_fieldSchemas": {
+      "$ref": "#/components/schemas/Output_Partial"
+    },
+    "Output_list_datasets_items_item_fieldSchemas_expectedOutput": {
+      "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas_expectedOutput_2"
+    },
+    "Output_list_datasets_items_item_fieldSchemas_expectedOutput_2": {
+      "type": "object",
+      "properties": {
+        "enforced": {
+          "type": "boolean"
+        },
+        "schema": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas_expectedOutput_schema"
+        }
+      },
+      "required": [
+        "enforced",
+        "schema"
+      ]
+    },
+    "Output_list_datasets_items_item_fieldSchemas_expectedOutput_schema": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        }
+      ]
+    },
+    "Output_list_datasets_items_item_metadata": {
+      "$ref": "#/components/schemas/Output_JsonObject"
+    },
+    "Output_list_eval_run_groups": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_eval_run_groups_items_item"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_eval_run_groups_items_item": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "runCount": {
+          "type": "number"
+        },
+        "state": {
+          "$ref": "#/components/schemas/Output_list_eval_run_groups_items_item_state"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_type"
+        }
+      },
+      "required": [
+        "filter",
+        "id",
+        "name",
+        "runCount",
+        "state",
+        "type"
+      ]
+    },
+    "Output_list_eval_run_groups_items_item_state": {
+      "enum": [
+        "assigned",
+        "unassigned",
+        "unresolved"
+      ]
+    },
+    "Output_list_eval_runs": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_EvalRunSummary"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_human_scores_scores_item": {
+      "type": "object",
+      "properties": {
+        "archived": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "max": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "step": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string",
+          "const": "numeric"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "archived",
+        "createdAt",
+        "description",
+        "id",
+        "max",
+        "min",
+        "name",
+        "revision",
+        "step",
+        "type",
+        "updatedAt"
+      ]
+    },
+    "Output_list_human_scores_scores_item_2": {
+      "type": "object",
+      "properties": {
+        "archived": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "multiple": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_human_scores_scores_item_options_item"
+          }
+        },
+        "revision": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string",
+          "const": "categorical"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "archived",
+        "createdAt",
+        "description",
+        "id",
+        "multiple",
+        "name",
+        "options",
+        "revision",
+        "type",
+        "updatedAt"
+      ]
+    },
+    "Output_list_human_scores_scores_item_3": {
+      "type": "object",
+      "properties": {
+        "archived": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "maxLength": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "archived",
+        "createdAt",
+        "description",
+        "id",
+        "maxLength",
+        "name",
+        "revision",
+        "type",
+        "updatedAt"
+      ]
+    },
+    "Output_list_human_scores_scores_item_options_item": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ]
+    },
+    "Output_list_review_sessions": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewSession"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_review_sessions_items_item_collection": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
+        }
+      ]
+    },
+    "Output_list_review_sessions_items_item_label": {
+      "enum": [
+        "AI-labelled",
+        "Human-reviewed",
+        "Unreviewed"
+      ]
+    },
+    "Output_list_review_sessions_items_item_status": {
+      "enum": [
+        "completed",
+        "pending",
+        "in_progress"
+      ]
+    },
+    "Output_list_saved_views": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SavedView"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_saved_views_items_item_filters_item_operator": {
+      "enum": [
+        "equals",
+        "notEquals",
+        "exists"
+      ]
+    },
+    "Output_list_saved_views_items_item_sort": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_SavedViewSort"
+        }
+      ]
+    },
+    "Output_list_scorer_libraries": {
+      "type": "object",
+      "properties": {
+        "defaultMappings": {
+          "$ref": "#/components/schemas/Output_list_scorer_libraries_defaultMappings"
+        },
+        "libraries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item"
+          }
+        }
+      },
+      "required": [
+        "defaultMappings",
+        "libraries"
+      ]
+    },
+    "Output_list_scorer_libraries_defaultMappings": {
+      "type": "object",
+      "properties": {
+        "expected": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expected",
+        "input",
+        "output"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item": {
+      "type": "object",
+      "properties": {
+        "adapterVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "docsUrl": {
+          "type": "string"
+        },
+        "evaluators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item"
+          }
+        },
+        "id": {
+          "type": "string",
+          "const": "autoevals"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "const": "0.3.0"
+        }
+      },
+      "required": [
+        "adapterVersion",
+        "docsUrl",
+        "evaluators",
+        "id",
+        "name",
+        "version"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_3"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_4"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_5"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_6"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_7"
+        }
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_2": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_arguments_item"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "const": "ExactMatch"
+        },
+        "modelRequired": {
+          "type": "boolean",
+          "const": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "valueType": {
+          "type": "string",
+          "const": "json"
+        }
+      },
+      "required": [
+        "arguments",
+        "description",
+        "id",
+        "modelRequired",
+        "name",
+        "valueType"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_3": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_arguments_item"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "const": "Levenshtein"
+        },
+        "modelRequired": {
+          "type": "boolean",
+          "const": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "valueType": {
+          "type": "string",
+          "const": "string"
+        }
+      },
+      "required": [
+        "arguments",
+        "description",
+        "id",
+        "modelRequired",
+        "name",
+        "valueType"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_4": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_arguments_item"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "const": "NumericDiff"
+        },
+        "modelRequired": {
+          "type": "boolean",
+          "const": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "valueType": {
+          "type": "string",
+          "const": "number"
+        }
+      },
+      "required": [
+        "arguments",
+        "description",
+        "id",
+        "modelRequired",
+        "name",
+        "valueType"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_5": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "const": "output"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "const": "ValidJSON"
+        },
+        "modelRequired": {
+          "type": "boolean",
+          "const": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "valueType": {
+          "type": "string",
+          "const": "json"
+        }
+      },
+      "required": [
+        "arguments",
+        "description",
+        "id",
+        "modelRequired",
+        "name",
+        "valueType"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_6": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_arguments_item"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "const": "JSONDiff"
+        },
+        "modelRequired": {
+          "type": "boolean",
+          "const": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "valueType": {
+          "type": "string",
+          "const": "json"
+        }
+      },
+      "required": [
+        "arguments",
+        "description",
+        "id",
+        "modelRequired",
+        "name",
+        "valueType"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_7": {
+      "type": "object",
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_libraries_libraries_item_evaluators_item_arguments_item_2"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "const": "Factuality"
+        },
+        "modelRequired": {
+          "type": "boolean",
+          "const": true
+        },
+        "name": {
+          "type": "string"
+        },
+        "valueType": {
+          "type": "string",
+          "const": "string"
+        }
+      },
+      "required": [
+        "arguments",
+        "description",
+        "id",
+        "modelRequired",
+        "name",
+        "valueType"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_arguments_item": {
+      "enum": [
+        "output",
+        "expected"
+      ]
+    },
+    "Output_list_scorer_libraries_libraries_item_evaluators_item_arguments_item_2": {
+      "enum": [
+        "input",
+        "output",
+        "expected"
+      ]
+    },
+    "Output_list_scorer_versions": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_scorer_versions_items_item"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_scorer_versions_items_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_list_sessions": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Session"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_trace_scores": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_trace_scores_items_item"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_trace_scores_items_item": {
+      "type": "object",
+      "properties": {
+        "definition": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition"
+        },
+        "error": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "evalResultId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evalRunId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorName": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorVersion": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "external": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external"
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_metadata"
+        },
+        "name": {
+          "type": "string"
+        },
+        "passed": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_passed"
+        },
+        "reasoning": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_MetricStatus"
+        },
+        "valueLabel": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "evalResultId",
+        "evalRunId",
+        "evaluatorId",
+        "evaluatorName",
+        "id",
+        "name",
+        "score",
+        "status"
+      ]
+    },
+    "Output_list_trace_spans": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Span"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_traces": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_TraceSummary"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_views_item_resource": {
+      "enum": [
+        "prompts",
+        "scorers",
+        "agents",
+        "workflows",
+        "eval-runs",
+        "playground-traces"
+      ]
+    },
+    "Output_list_views_item_settings": {
+      "type": "object",
+      "properties": {
+        "columnOrder": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "columnSizing": {
+          "$ref": "#/components/schemas/Output_Record_3"
+        },
+        "columnVisibility": {
+          "$ref": "#/components/schemas/Output_Record_8"
+        },
+        "computedColumns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_views_item_settings_computedColumns_item"
+          }
+        },
+        "detailsOpen": {
+          "type": "boolean"
+        },
+        "rowHeight": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_rowHeight"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "view": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_view"
+        }
+      },
+      "required": [
+        "columnOrder",
+        "columnSizing",
+        "columnVisibility",
+        "computedColumns",
+        "detailsOpen",
+        "schemaVersion",
+        "view"
+      ]
+    },
+    "Output_list_views_item_settings_computedColumns_item": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_computedColumns_item_format"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_customField_mode"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "id",
+        "mode",
+        "name"
+      ]
+    },
+    "Output_list_views_item_settings_computedColumns_item_format": {
+      "enum": [
+        "text",
+        "markdown"
+      ]
+    },
+    "Output_list_views_item_settings_rowHeight": {
+      "enum": [
+        "compact",
+        "tall"
+      ]
+    },
+    "Output_list_views_item_settings_view": {
+      "enum": [
+        "table",
+        "cards"
+      ]
+    },
+    "Output_MetricStatus": {
+      "enum": [
+        "error",
+        "empty",
+        "ok"
+      ]
+    },
+    "Output_Partial": {
+      "type": "object",
+      "properties": {
+        "expectedOutput": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas_expectedOutput"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas_expectedOutput"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas_expectedOutput"
+        }
+      }
+    },
+    "Output_Pick": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "endedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_SpanKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parentId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "startedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attributes",
+        "endedAt",
+        "id",
+        "kind",
+        "name",
+        "parentId",
+        "startedAt"
+      ]
+    },
+    "Output_Pick_2": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "endedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "id": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attributes",
+        "endedAt",
+        "id",
+        "startedAt"
+      ]
+    },
+    "Output_preview_dashboard": {
+      "type": "object",
+      "properties": {
+        "comparisons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_preview_dashboard_comparisons_item"
+          }
+        },
+        "dashboard": {
+          "$ref": "#/components/schemas/Output_Dashboard"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_query_metrics"
+          }
+        }
+      },
+      "required": [
+        "comparisons",
+        "dashboard",
+        "results"
+      ]
+    },
+    "Output_preview_dashboard_comparisons_item": {
+      "type": "object",
+      "properties": {
+        "cohorts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_preview_dashboard_comparisons_item_cohorts_item"
+          }
+        },
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cohorts",
+        "widgetId"
+      ]
+    },
+    "Output_preview_dashboard_comparisons_item_cohorts_item": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "result": {
+          "$ref": "#/components/schemas/Output_query_metrics"
+        }
+      },
+      "required": [
+        "result"
+      ]
+    },
+    "Output_probe_scorer_runtime": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JsonObject"
+          }
+        },
+        "evaluationRunCreated": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "checks",
+        "evaluationRunCreated",
+        "mode"
+      ]
+    },
+    "Output_promote_spans_cases_item": {
+      "type": "object",
+      "properties": {
+        "expectedOutput": {
+          "$ref": "#/components/schemas/Output_run_app_metadata_value"
+        },
+        "id": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_metadata"
+        },
+        "observedOutput": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "sourceSpanEvidence": {
+          "$ref": "#/components/schemas/Output_TraceForEvaluation"
+        },
+        "sourceSpanId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "sourceTraceId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "input",
+        "observedOutput",
+        "sourceSpanEvidence"
+      ]
+    },
+    "Output_PublicAppConnection": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_list_apps_item_connection"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_apps_item_connection_2"
+        }
+      ]
+    },
+    "Output_query_metrics": {
+      "type": "object",
+      "properties": {
+        "annotation": {
+          "$ref": "#/components/schemas/Output_query_metrics_annotation"
+        },
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Record_7"
+          }
+        },
+        "meta": {
+          "$ref": "#/components/schemas/Output_query_metrics_meta"
+        },
+        "query": {
+          "$ref": "#/components/schemas/Output_query_metrics_query"
+        }
+      },
+      "required": [
+        "annotation",
+        "data",
+        "meta",
+        "query"
+      ]
+    },
+    "Output_query_metrics_annotation": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "$ref": "#/components/schemas/Output_Record_6"
+        },
+        "measures": {
+          "$ref": "#/components/schemas/Output_Record_6"
+        },
+        "segments": {
+          "$ref": "#/components/schemas/Output_Record_6"
+        },
+        "timeDimensions": {
+          "$ref": "#/components/schemas/Output_Record_6"
+        }
+      },
+      "required": [
+        "dimensions",
+        "measures",
+        "segments",
+        "timeDimensions"
+      ]
+    },
+    "Output_query_metrics_annotation_dimensions_value": {
+      "type": "object",
+      "properties": {
+        "aggregation": {
+          "$ref": "#/components/schemas/Output_query_metrics_annotation_dimensions_value_aggregation"
+        },
+        "attribution": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "basis": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "currency": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "denominator": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eligiblePopulation": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "estimated": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "eventTime": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "factIdentity": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_query_metrics_annotation_dimensions_value_kind"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metricVersion": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "overlap": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_query_metrics_annotation_dimensions_value_type"
+        },
+        "unit": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "definition",
+        "description",
+        "kind",
+        "limitations",
+        "metricVersion",
+        "name",
+        "title",
+        "type"
+      ]
+    },
+    "Output_query_metrics_annotation_dimensions_value_aggregation": {
+      "enum": [
+        "minimum",
+        "maximum",
+        "sum",
+        "count",
+        "countDistinct",
+        "average",
+        "percentile",
+        "ratio"
+      ]
+    },
+    "Output_query_metrics_annotation_dimensions_value_kind": {
+      "enum": [
+        "measure",
+        "dimension",
+        "timeDimension",
+        "segment"
+      ]
+    },
+    "Output_query_metrics_annotation_dimensions_value_type": {
+      "enum": [
+        "string",
+        "number",
+        "boolean",
+        "date"
+      ]
+    },
+    "Output_query_metrics_data_item_value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        }
+      ]
+    },
+    "Output_query_metrics_meta": {
+      "type": "object",
+      "properties": {
+        "asOf": {
+          "type": "string"
+        },
+        "contractVersion": {
+          "type": "string",
+          "const": "datool-semantic-v2"
+        },
+        "generatedAt": {
+          "type": "string"
+        },
+        "metricVersions": {
+          "$ref": "#/components/schemas/Output_Record_2"
+        },
+        "page": {
+          "$ref": "#/components/schemas/Output_query_metrics_meta_page"
+        },
+        "quality": {
+          "$ref": "#/components/schemas/Output_query_metrics_meta_quality"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "asOf",
+        "contractVersion",
+        "generatedAt",
+        "metricVersions",
+        "page",
+        "quality",
+        "requestId"
+      ]
+    },
+    "Output_query_metrics_meta_page": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "number"
+        },
+        "offset": {
+          "type": "number"
+        },
+        "total": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "limit",
+        "offset"
+      ]
+    },
+    "Output_query_metrics_meta_quality": {
+      "type": "object",
+      "properties": {
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_query_metrics_meta_quality_status"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "limitations",
+        "status",
+        "warnings"
+      ]
+    },
+    "Output_query_metrics_meta_quality_status": {
+      "enum": [
+        "partial",
+        "complete"
+      ]
+    },
+    "Output_query_metrics_query": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SemanticFilter"
+          }
+        },
+        "having": {
+          "$ref": "#/components/schemas/Output_query_metrics_query_having"
+        },
+        "limit": {
+          "type": "number"
+        },
+        "measures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "offset": {
+          "type": "number"
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultOrder_item_1"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeDimensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_query_metrics_query_timeDimensions_item"
+          }
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "total": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dimensions",
+        "filters",
+        "limit",
+        "measures",
+        "offset",
+        "order",
+        "segments",
+        "timeDimensions",
+        "timezone",
+        "total"
+      ]
+    },
+    "Output_query_metrics_query_filters_item": {
+      "type": "object",
+      "properties": {
+        "member": {
+          "type": "string"
+        },
+        "operator": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_filterOperators_item"
+        },
+        "path": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_imagePaths"
+        },
+        "values": {
+          "$ref": "#/components/schemas/Output_query_metrics_query_filters_item_values"
+        }
+      },
+      "required": [
+        "member",
+        "operator"
+      ]
+    },
+    "Output_query_metrics_query_filters_item_2": {
+      "type": "object",
+      "properties": {
+        "and": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SemanticFilter"
+          }
+        }
+      },
+      "required": [
+        "and"
+      ]
+    },
+    "Output_query_metrics_query_filters_item_3": {
+      "type": "object",
+      "properties": {
+        "or": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SemanticFilter"
+          }
+        }
+      },
+      "required": [
+        "or"
+      ]
+    },
+    "Output_query_metrics_query_filters_item_values": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_query_metrics_data_item_value"
+      }
+    },
+    "Output_query_metrics_query_having": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_query_metrics_query_filters_item"
+      }
+    },
+    "Output_query_metrics_query_timeDimensions_item": {
+      "type": "object",
+      "properties": {
+        "dateRange": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "dimension": {
+          "type": "string"
+        },
+        "granularity": {
+          "$ref": "#/components/schemas/Output_query_metrics_query_timeDimensions_item_granularity"
+        }
+      },
+      "required": [
+        "dateRange",
+        "dimension"
+      ]
+    },
+    "Output_query_metrics_query_timeDimensions_item_granularity": {
+      "enum": [
+        "day",
+        "week",
+        "month"
+      ]
+    },
+    "Output_Readonly": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Readonly_2"
+          }
+        }
+      },
+      "required": [
+        "models"
+      ]
+    },
+    "Output_Readonly_2": {
+      "type": "object",
+      "properties": {
+        "defaultMeasures": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultMeasures"
+        },
+        "defaultOrder": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultOrder"
+        },
+        "maxLimit": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "maxWindowDays": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SemanticMemberDefinition"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_source"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "members",
+        "name",
+        "version"
+      ]
+    },
+    "Output_Readonly_3": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "grain": {
+          "type": "string"
+        },
+        "order": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "replacement": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "title": {
+          "type": "string"
+        },
+        "unavailable": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_source_unavailable"
+        },
+        "visibility": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_source_visibility"
+        }
+      },
+      "required": [
+        "description",
+        "grain",
+        "title",
+        "visibility"
+      ]
+    },
+    "Output_Readonly_4": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "title"
+      ]
+    },
+    "Output_Record": {
+      "type": "object",
+      "additionalProperties": {
+        "description": "Application-defined JSON value."
+      }
+    },
+    "Output_Record_2": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "Output_Record_3": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "Output_Record_4": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_JSONType"
+      }
+    },
+    "Output_Record_5": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_ScorerExecutionStatus"
+      }
+    },
+    "Output_Record_6": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_query_metrics_annotation_dimensions_value"
+      }
+    },
+    "Output_Record_7": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_query_metrics_data_item_value"
+      }
+    },
+    "Output_Record_8": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "Output_Record_9": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_JsonValue"
+      }
+    },
+    "Output_register_app": {
+      "type": "object",
+      "properties": {
+        "codeProvenance": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance"
+        },
+        "connection": {
+          "$ref": "#/components/schemas/Output_PublicAppConnection"
+        },
+        "defaultInput": {
+          "description": "Application-defined JSON value."
+        },
+        "evaluatorIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputSchema": {
+          "$ref": "#/components/schemas/Output_Record"
+        },
+        "internalTracing": {
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/Output_list_apps_item_mode"
+        },
+        "name": {
+          "type": "string"
+        },
+        "outputSchema": {
+          "$ref": "#/components/schemas/Output_Record"
+        },
+        "revision": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "connection",
+        "evaluatorIds",
+        "id",
+        "inputSchema",
+        "internalTracing",
+        "mode",
+        "name",
+        "outputSchema",
+        "revision"
+      ]
+    },
+    "Output_resolve_trace": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_resolve_trace_kind"
+        },
+        "linkKind": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "url": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "linkKind",
+        "path",
+        "projectId",
+        "url"
+      ]
+    },
+    "Output_resolve_trace_kind": {
+      "enum": [
+        "trace",
+        "session",
+        "dataset",
+        "scorer",
+        "eval",
+        "dashboard",
+        "view"
+      ]
+    },
+    "Output_ReviewAnnotation": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_author"
+        },
+        "comment": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_provenance"
+        },
+        "reference": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "updatedBy": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_provenance"
+        }
+      },
+      "required": [
+        "author",
+        "comment",
+        "createdAt",
+        "id",
+        "reference",
+        "updatedAt"
+      ]
+    },
+    "Output_ReviewItem": {
+      "type": "object",
+      "properties": {
+        "completionKind": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_completionKind"
+        },
+        "humanVerified": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_label"
+        },
+        "lastSubmission": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "notesProvenance": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission"
+        },
+        "ordinal": {
+          "type": "number"
+        },
+        "reviewedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "reviewedBy": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "skippedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "traceName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "notes",
+        "ordinal",
+        "reviewedAt",
+        "reviewedBy",
+        "revision",
+        "sessionId",
+        "skippedAt",
+        "traceId",
+        "traceName"
+      ]
+    },
+    "Output_ReviewItemDetail": {
+      "type": "object",
+      "properties": {
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewAnnotation"
+          }
+        },
+        "completionKind": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_completionKind"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_HumanScore"
+          }
+        },
+        "humanVerified": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_label"
+        },
+        "lastSubmission": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission"
+        },
+        "nextItemId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "notesProvenance": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission"
+        },
+        "ordinal": {
+          "type": "number"
+        },
+        "previousItemId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "reviewedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "reviewedBy": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewScore"
+          }
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "skippedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "traceName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "annotations",
+        "definitions",
+        "id",
+        "nextItemId",
+        "notes",
+        "ordinal",
+        "previousItemId",
+        "reviewedAt",
+        "reviewedBy",
+        "revision",
+        "scores",
+        "sessionId",
+        "skippedAt",
+        "traceId",
+        "traceName"
+      ]
+    },
+    "Output_ReviewMember": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "image": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "email",
+        "id",
+        "image",
+        "name"
+      ]
+    },
+    "Output_ReviewOptions": {
+      "type": "object",
+      "properties": {
+        "currentUserId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewMember"
+          }
+        }
+      },
+      "required": [
+        "currentUserId",
+        "members"
+      ]
+    },
+    "Output_ReviewProvenance": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission_agent"
+        },
+        "authType": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission_authType"
+        },
+        "clientId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission_label"
+        },
+        "principal": {
+          "$ref": "#/components/schemas/Output_get_review_session_items_item_lastSubmission_principal"
+        }
+      },
+      "required": [
+        "authType",
+        "label",
+        "principal"
+      ]
+    },
+    "Output_ReviewReviewer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "image": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "image",
+        "name"
+      ]
+    },
+    "Output_ReviewScore": {
+      "type": "object",
+      "properties": {
+        "comment": {
+          "type": "string"
+        },
+        "definition": {
+          "$ref": "#/components/schemas/Output_HumanScore"
+        },
+        "editedBy": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_provenance"
+        },
+        "humanScoreId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_provenance"
+        },
+        "reviewerId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "reviewerImage": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "reviewerName": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "scorerId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "scorerRevision": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_get_review_item_scores_item_source"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/components/schemas/Output_get_review_item_scores_item_value"
+        }
+      },
+      "required": [
+        "comment",
+        "definition",
+        "humanScoreId",
+        "id",
+        "itemId",
+        "name",
+        "reviewerId",
+        "reviewerImage",
+        "reviewerName",
+        "scorerId",
+        "scorerRevision",
+        "source",
+        "traceId",
+        "updatedAt",
+        "value"
+      ]
+    },
+    "Output_ReviewSession": {
+      "type": "object",
+      "properties": {
+        "aiLabelledCount": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "aiReviewedCount": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "assigneeName": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "assigneeUserId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "collection": {
+          "$ref": "#/components/schemas/Output_list_review_sessions_items_item_collection"
+        },
+        "collectionId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "createdBy": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "humanReviewedCount": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_list_review_sessions_items_item_label"
+        },
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "number"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "reviewedCount": {
+          "type": "number"
+        },
+        "reviewers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewReviewer"
+          }
+        },
+        "revision": {
+          "type": "number"
+        },
+        "skippedCount": {
+          "type": "number"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_list_review_sessions_items_item_status"
+        },
+        "traceCount": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assigneeName",
+        "assigneeUserId",
+        "collection",
+        "collectionId",
+        "createdAt",
+        "createdBy",
+        "id",
+        "name",
+        "number",
+        "prompt",
+        "reviewedCount",
+        "reviewers",
+        "revision",
+        "skippedCount",
+        "status",
+        "traceCount",
+        "updatedAt"
+      ]
+    },
+    "Output_ReviewSessionDetail": {
+      "type": "object",
+      "properties": {
+        "aiLabelledCount": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "aiReviewedCount": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "assigneeName": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "assigneeUserId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "collection": {
+          "$ref": "#/components/schemas/Output_list_review_sessions_items_item_collection"
+        },
+        "collectionId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "createdBy": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "humanReviewedCount": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "id": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewItem"
+          }
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_list_review_sessions_items_item_label"
+        },
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "number"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "reviewedCount": {
+          "type": "number"
+        },
+        "reviewers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReviewReviewer"
+          }
+        },
+        "revision": {
+          "type": "number"
+        },
+        "skippedCount": {
+          "type": "number"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_list_review_sessions_items_item_status"
+        },
+        "traceCount": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assigneeName",
+        "assigneeUserId",
+        "collection",
+        "collectionId",
+        "createdAt",
+        "createdBy",
+        "id",
+        "items",
+        "name",
+        "number",
+        "prompt",
+        "reviewedCount",
+        "reviewers",
+        "revision",
+        "skippedCount",
+        "status",
+        "traceCount",
+        "updatedAt"
+      ]
+    },
+    "Output_run_app": {
+      "type": "object",
+      "properties": {
+        "completedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evaluatorVersionIds": {
+          "$ref": "#/components/schemas/Output_run_app_evaluatorVersionIds"
+        },
+        "execution": {
+          "$ref": "#/components/schemas/Output_run_app_execution"
+        },
+        "groups": {
+          "$ref": "#/components/schemas/Output_run_app_groups"
+        },
+        "groupsResolvedAt": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "name": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "resultCount": {
+          "type": "number"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_EvalResult"
+          }
+        },
+        "rows": {
+          "$ref": "#/components/schemas/Output_run_app_rows"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "scorerProgress": {
+          "$ref": "#/components/schemas/Output_run_app_scorerProgress"
+        },
+        "scores": {
+          "$ref": "#/components/schemas/Output_run_app_scores"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_EvalRunStatus"
+        },
+        "targetCount": {
+          "type": "number"
+        },
+        "traceCount": {
+          "type": "number"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "completedAt",
+        "createdAt",
+        "datasetId",
+        "evaluatorIds",
+        "id",
+        "metadata",
+        "name",
+        "resultCount",
+        "results",
+        "score",
+        "status",
+        "targetCount",
+        "traceCount",
+        "url"
+      ]
+    },
+    "Output_run_app_completedAt": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "Output_run_app_evaluatorVersionIds": {
+      "$ref": "#/components/schemas/Output_Record_2"
+    },
+    "Output_run_app_execution": {
+      "$ref": "#/components/schemas/Output_run_app_execution_2"
+    },
+    "Output_run_app_execution_2": {
+      "type": "object",
+      "properties": {
+        "lastProgressAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "stages": {
+          "$ref": "#/components/schemas/Output_Record_3"
+        },
+        "stalled": {
+          "type": "boolean"
+        },
+        "workerOnline": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "lastProgressAt",
+        "stages",
+        "stalled",
+        "workerOnline"
+      ]
+    },
+    "Output_run_app_groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_run_app_groups_item"
+      }
+    },
+    "Output_run_app_groups_item": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_type"
+        },
+        "version": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "Output_run_app_groups_item_type": {
+      "enum": [
+        "agent",
+        "workflow"
+      ]
+    },
+    "Output_run_app_groups_item_version": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "Output_run_app_metadata_value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        },
+        {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JsonValue"
+          }
+        }
+      ]
+    },
+    "Output_run_app_results_item_definition": {
+      "$ref": "#/components/schemas/Output_EvaluatorVersion"
+    },
+    "Output_run_app_results_item_definition_config": {
+      "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_2"
+    },
+    "Output_run_app_results_item_definition_config_2": {
+      "type": "object",
+      "properties": {
+        "allowSkip": {
+          "type": "boolean"
+        },
+        "chainOfThought": {
+          "type": "boolean"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_choices_item"
+          }
+        },
+        "code": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "imagePaths": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_imagePaths"
+        },
+        "library": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_messages_item"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "modelType": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_modelType"
+        },
+        "name": {
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_provider"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "threshold": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_type"
+        }
+      },
+      "required": [
+        "allowSkip",
+        "chainOfThought",
+        "choices",
+        "code",
+        "description",
+        "messages",
+        "model",
+        "name",
+        "slug",
+        "threshold",
+        "type"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_choices_item": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "label",
+        "score"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_imagePaths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "Output_run_app_results_item_definition_config_library": {
+      "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_2"
+    },
+    "Output_run_app_results_item_definition_config_library_2": {
+      "type": "object",
+      "properties": {
+        "adapterVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "evaluator": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_evaluator"
+        },
+        "mappings": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_mappings"
+        },
+        "options": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options"
+        },
+        "package": {
+          "type": "string",
+          "const": "autoevals"
+        },
+        "version": {
+          "type": "string",
+          "const": "0.3.0"
+        }
+      },
+      "required": [
+        "adapterVersion",
+        "evaluator",
+        "mappings",
+        "options",
+        "package",
+        "version"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_library_evaluator": {
+      "enum": [
+        "ExactMatch",
+        "Levenshtein",
+        "NumericDiff",
+        "ValidJSON",
+        "JSONDiff",
+        "Factuality"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_library_mappings": {
+      "type": "object",
+      "properties": {
+        "expected": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "output": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "output"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_library_options": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options_schema"
+        }
+      }
+    },
+    "Output_run_app_results_item_definition_config_library_options_schema": {
+      "$ref": "#/components/schemas/Output_Record_4"
+    },
+    "Output_run_app_results_item_definition_config_library_options_schema_value": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_JSONType"
+      }
+    },
+    "Output_run_app_results_item_definition_config_messages_item": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_messages_item_role"
+        }
+      },
+      "required": [
+        "content",
+        "role"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_messages_item_role": {
+      "enum": [
+        "system",
+        "user"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_modelType": {
+      "enum": [
+        "language",
+        "evaluation"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_provider": {
+      "enum": [
+        "datool",
+        "vercel-ai-gateway",
+        "openai",
+        "typesafe-ai"
+      ]
+    },
+    "Output_run_app_results_item_definition_config_threshold": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "Output_run_app_results_item_definition_config_type": {
+      "enum": [
+        "llm",
+        "javascript",
+        "python",
+        "library"
+      ]
+    },
+    "Output_run_app_results_item_passed": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        }
+      ]
+    },
+    "Output_run_app_rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_run_app_rows_item"
+      }
+    },
+    "Output_run_app_rows_item": {
+      "type": "object",
+      "properties": {
+        "datasetCaseId": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "datasetItemId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "executionError": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "expectedOutput": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "id": {
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_EvalResult"
+          }
+        },
+        "scorerStatuses": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scorerStatuses"
+        },
+        "scoringTrace": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace"
+        },
+        "sourceSpanId": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "stage": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "trace": {
+          "$ref": "#/components/schemas/Output_TraceSummary"
+        }
+      },
+      "required": [
+        "datasetItemId",
+        "expectedOutput",
+        "id",
+        "results",
+        "trace"
+      ]
+    },
+    "Output_run_app_rows_item_scorerStatuses": {
+      "$ref": "#/components/schemas/Output_Record_5"
+    },
+    "Output_run_app_rows_item_scoringTrace": {
+      "$ref": "#/components/schemas/Output_TraceForEvaluation"
+    },
+    "Output_run_app_rows_item_scoringTrace_group": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_run_app_groups_item"
+        }
+      ]
+    },
+    "Output_run_app_rows_item_scoringTrace_linkedTraces": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_TraceForEvaluation"
+      }
+    },
+    "Output_run_app_rows_item_scoringTrace_provenance": {
+      "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace_provenance_2"
+    },
+    "Output_run_app_rows_item_scoringTrace_provenance_2": {
+      "type": "object",
+      "properties": {
+        "ancestors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Pick"
+          }
+        },
+        "trace": {
+          "$ref": "#/components/schemas/Output_Pick_2"
+        }
+      },
+      "required": [
+        "ancestors",
+        "trace"
+      ]
+    },
+    "Output_run_app_rows_item_trace_spanStats": {
+      "$ref": "#/components/schemas/Output_TraceSpanStats"
+    },
+    "Output_run_app_scorerProgress": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_EvalScorerProgress"
+      }
+    },
+    "Output_run_app_scores": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_run_app_scores_item"
+      }
+    },
+    "Output_run_app_scores_item": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/components/schemas/Output_run_app_scores_item_value"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ]
+    },
+    "Output_run_app_scores_item_value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        }
+      ]
+    },
+    "Output_RunConfigurationChange": {
+      "type": "object",
+      "properties": {
+        "after": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "before": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "field": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_compare_eval_runs_configurationChanges_item_kind"
+        }
+      },
+      "required": [
+        "after",
+        "before",
+        "field",
+        "kind"
+      ]
+    },
+    "Output_SavedView": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SavedViewColumn"
+          }
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SavedViewFilter"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "resource": {
+          "$ref": "#/components/schemas/Output_ViewResource"
+        },
+        "sort": {
+          "$ref": "#/components/schemas/Output_list_saved_views_items_item_sort"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "columns",
+        "createdAt",
+        "filters",
+        "id",
+        "name",
+        "resource",
+        "sort",
+        "updatedAt"
+      ]
+    },
+    "Output_SavedViewColumn": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/components/schemas/Output_ViewColumnFormat"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "selector": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "id",
+        "label",
+        "selector"
+      ]
+    },
+    "Output_SavedViewData": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SavedViewColumn"
+          }
+        },
+        "limit": {
+          "type": "number"
+        },
+        "nextOffset": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "offset": {
+          "type": "number"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SavedViewRow"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "view": {
+          "$ref": "#/components/schemas/Output_SavedView"
+        }
+      },
+      "required": [
+        "columns",
+        "limit",
+        "nextOffset",
+        "offset",
+        "rows",
+        "total",
+        "view"
+      ]
+    },
+    "Output_SavedViewFilter": {
+      "type": "object",
+      "properties": {
+        "operator": {
+          "$ref": "#/components/schemas/Output_list_saved_views_items_item_filters_item_operator"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/components/schemas/Output_run_app_metadata_value"
+        }
+      },
+      "required": [
+        "operator",
+        "selector"
+      ]
+    },
+    "Output_SavedViewRow": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "values": {
+          "$ref": "#/components/schemas/Output_Record_9"
+        }
+      },
+      "required": [
+        "id",
+        "values"
+      ]
+    },
+    "Output_SavedViewSort": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultOrder_item_1"
+        },
+        "selector": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "direction",
+        "selector"
+      ]
+    },
+    "Output_Scorer": {
+      "type": "object",
+      "properties": {
+        "allowSkip": {
+          "type": "boolean"
+        },
+        "chainOfThought": {
+          "type": "boolean"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_choices_item"
+          }
+        },
+        "code": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "imagePaths": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_imagePaths"
+        },
+        "library": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_messages_item"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "modelType": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_modelType"
+        },
+        "name": {
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_provider"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "threshold": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_type"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowSkip",
+        "chainOfThought",
+        "choices",
+        "code",
+        "createdAt",
+        "description",
+        "id",
+        "messages",
+        "model",
+        "name",
+        "revision",
+        "slug",
+        "threshold",
+        "type",
+        "updatedAt"
+      ]
+    },
+    "Output_ScorerExecutionStatus": {
+      "enum": [
+        "error",
+        "completed",
+        "running",
+        "queued",
+        "skipped"
+      ]
+    },
+    "Output_SemanticDimensionDefinition": {
+      "type": "object",
+      "properties": {
+        "attribution": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "basis": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "cardinality": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_cardinality"
+        },
+        "currency": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "denominator": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eligiblePopulation": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "estimated": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "eventTime": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "factIdentity": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "filterOperators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_filterOperators_item"
+          }
+        },
+        "filterValueType": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_filterValueType"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "groupable": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "kind": {
+          "type": "string",
+          "const": "dimension"
+        },
+        "limitations": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultMeasures"
+        },
+        "metricVersion": {
+          "type": "string"
+        },
+        "missingBehavior": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "multiplicity": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_multiplicity"
+        },
+        "name": {
+          "type": "string"
+        },
+        "overlap": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "requiresDefinition": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_type"
+        },
+        "unavailableReason": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "unit": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "definition",
+        "description",
+        "filterOperators",
+        "kind",
+        "metricVersion",
+        "name",
+        "title",
+        "type"
+      ]
+    },
+    "Output_SemanticFilter": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_query_metrics_query_filters_item"
+        },
+        {
+          "$ref": "#/components/schemas/Output_query_metrics_query_filters_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_query_metrics_query_filters_item_3"
+        }
+      ]
+    },
+    "Output_SemanticMeasureDefinition": {
+      "type": "object",
+      "properties": {
+        "aggregation": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_aggregation"
+        },
+        "attribution": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "basis": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "currency": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "denominator": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eligiblePopulation": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "estimated": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "eventTime": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "factIdentity": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "kind": {
+          "type": "string",
+          "const": "measure"
+        },
+        "limitations": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultMeasures"
+        },
+        "metricVersion": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "overlap": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "requiresDefinition": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "number"
+        },
+        "unit": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "aggregation",
+        "definition",
+        "description",
+        "kind",
+        "metricVersion",
+        "name",
+        "title",
+        "type"
+      ]
+    },
+    "Output_SemanticMemberDefinition": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_SemanticMeasureDefinition"
+        },
+        {
+          "$ref": "#/components/schemas/Output_SemanticDimensionDefinition"
+        },
+        {
+          "$ref": "#/components/schemas/Output_SemanticTimeDimensionDefinition"
+        },
+        {
+          "$ref": "#/components/schemas/Output_SemanticSegmentDefinition"
+        }
+      ]
+    },
+    "Output_SemanticSegmentDefinition": {
+      "type": "object",
+      "properties": {
+        "attribution": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "basis": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "currency": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "denominator": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eligiblePopulation": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "estimated": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "eventTime": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "factIdentity": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "kind": {
+          "type": "string",
+          "const": "segment"
+        },
+        "limitations": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultMeasures"
+        },
+        "metricVersion": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "overlap": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "requiresDefinition": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "boolean"
+        },
+        "unit": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "definition",
+        "description",
+        "kind",
+        "metricVersion",
+        "name",
+        "title",
+        "type"
+      ]
+    },
+    "Output_SemanticTimeDimensionDefinition": {
+      "type": "object",
+      "properties": {
+        "attribution": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "basis": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "currency": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "denominator": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eligiblePopulation": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "estimated": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "eventTime": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "factIdentity": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "granularities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_members_item_granularities_item"
+          }
+        },
+        "kind": {
+          "type": "string",
+          "const": "timeDimension"
+        },
+        "limitations": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultMeasures"
+        },
+        "metricVersion": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "overlap": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "requiresDefinition": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "date"
+        },
+        "unit": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "definition",
+        "description",
+        "granularities",
+        "kind",
+        "metricVersion",
+        "name",
+        "title",
+        "type"
+      ]
+    },
+    "Output_Session": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "traceCount": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attributes",
+        "createdAt",
+        "id",
+        "name",
+        "traceCount",
+        "updatedAt"
+      ]
+    },
+    "Output_SessionDetail": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "traceCount": {
+          "type": "number"
+        },
+        "traces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_TraceSummary"
+          }
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attributes",
+        "createdAt",
+        "id",
+        "name",
+        "traceCount",
+        "traces",
+        "updatedAt"
+      ]
+    },
+    "Output_Snapshot": {
+      "type": "object",
+      "properties": {
+        "contentHash": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "itemCount": {
+          "type": "number"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        }
+      },
+      "required": [
+        "contentHash",
+        "createdAt",
+        "datasetId",
+        "id",
+        "itemCount",
+        "label"
+      ]
+    },
+    "Output_Span": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "durationMs": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "endedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "group": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace_group"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_SpanKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "parentId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_TraceStatus"
+        },
+        "traceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attributes",
+        "durationMs",
+        "endedAt",
+        "id",
+        "input",
+        "kind",
+        "name",
+        "output",
+        "parentId",
+        "startedAt",
+        "status",
+        "traceId"
+      ]
+    },
+    "Output_SpanKind": {
+      "enum": [
+        "function",
+        "agent",
+        "custom",
+        "llm",
+        "score",
+        "workflow",
+        "task",
+        "tool"
+      ]
+    },
+    "Output_SpanPromotionResult": {
+      "type": "object",
+      "properties": {
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_promote_spans_cases_item"
+          }
+        },
+        "created": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "datasetId": {
+          "type": "string"
+        },
+        "evidenceHash": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cases",
+        "created",
+        "datasetId",
+        "evidenceHash",
+        "preview"
+      ]
+    },
+    "Output_test_scorer": {
+      "type": "object",
+      "properties": {
+        "evaluationRunCreated": {
+          "type": "boolean"
+        },
+        "executionSpanRetained": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "persisted": {
+          "type": "boolean"
+        },
+        "result": {
+          "$ref": "#/components/schemas/Output_EvaluatorRunResult"
+        },
+        "scorerId": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "evaluationRunCreated",
+        "executionSpanRetained",
+        "mode",
+        "persisted",
+        "result",
+        "scorerId",
+        "traceId",
+        "versionId"
+      ]
+    },
+    "Output_test_scorer_result_error": {
+      "$ref": "#/components/schemas/Output_test_scorer_result_error_2"
+    },
+    "Output_test_scorer_result_error_2": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/Output_EvaluatorRunErrorKind"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ]
+    },
+    "Output_TraceDetail": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "durationMs": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "endedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "group": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace_group"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nextScoreCursor": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "nextSpanCursor": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_TraceScore"
+          }
+        },
+        "sessionId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Span"
+          }
+        },
+        "spanStats": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_trace_spanStats"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_TraceStatus"
+        }
+      },
+      "required": [
+        "attributes",
+        "durationMs",
+        "endedAt",
+        "id",
+        "input",
+        "name",
+        "operation",
+        "output",
+        "scores",
+        "sessionId",
+        "spans",
+        "startedAt",
+        "status"
+      ]
+    },
+    "Output_TraceForEvaluation": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "endedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "group": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace_group"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "linkedTraces": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace_linkedTraces"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace_provenance"
+        },
+        "selectedSpanId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "sessionId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_Span"
+          }
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_TraceStatus"
+        }
+      },
+      "required": [
+        "attributes",
+        "endedAt",
+        "id",
+        "input",
+        "name",
+        "operation",
+        "output",
+        "sessionId",
+        "spans",
+        "startedAt",
+        "status"
+      ]
+    },
+    "Output_TraceScore": {
+      "type": "object",
+      "properties": {
+        "definition": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition"
+        },
+        "error": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "evalResultId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evalRunId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorName": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "evaluatorVersion": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "external": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_external"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_datasets_items_item_metadata"
+        },
+        "name": {
+          "type": "string"
+        },
+        "passed": {
+          "$ref": "#/components/schemas/Output_get_trace_scores_item_passed"
+        },
+        "reasoning": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_MetricStatus"
+        },
+        "valueLabel": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "evalResultId",
+        "evalRunId",
+        "evaluatorId",
+        "evaluatorName",
+        "name",
+        "score",
+        "status"
+      ]
+    },
+    "Output_TraceSpanStats": {
+      "type": "object",
+      "properties": {
+        "errorCount": {
+          "type": "number"
+        },
+        "llmCalls": {
+          "type": "number"
+        },
+        "llmDurationMs": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "spanCount": {
+          "type": "number"
+        },
+        "toolCalls": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "errorCount",
+        "llmCalls",
+        "llmDurationMs",
+        "spanCount",
+        "toolCalls"
+      ]
+    },
+    "Output_TraceStatus": {
+      "enum": [
+        "cancelled",
+        "completed",
+        "running",
+        "errored"
+      ]
+    },
+    "Output_TraceSummary": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "durationMs": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "endedAt": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "group": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace_group"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "sessionId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "spanStats": {
+          "$ref": "#/components/schemas/Output_run_app_rows_item_trace_spanStats"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_TraceStatus"
+        }
+      },
+      "required": [
+        "attributes",
+        "durationMs",
+        "endedAt",
+        "id",
+        "input",
+        "name",
+        "operation",
+        "output",
+        "sessionId",
+        "startedAt",
+        "status"
+      ]
+    },
+    "Output_ViewColumnFormat": {
+      "enum": [
+        "number",
+        "boolean",
+        "json",
+        "text"
+      ]
+    },
+    "Output_ViewResource": {
+      "enum": [
+        "traces",
+        "eval-results"
+      ]
+    }
+  }
+}

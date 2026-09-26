@@ -1,0 +1,13 @@
+[
+  {
+    "component": "components/ui/canvas/canvas.tsx",
+    "kind": "direct",
+    "story": "components/ui/canvas/canvas.stories.tsx"
+  },
+  {
+    "component": "components/ui/canvas/props-editor.tsx",
+    "kind": "composite",
+    "story": "components/ui/canvas/canvas.stories.tsx",
+    "reason": "Canvas's JSON editor story opens the real PropsEditor fallback, rejects invalid JSON, and applies a valid object to the selected widget."
+  }
+]

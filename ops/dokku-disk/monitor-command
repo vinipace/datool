@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+if [ "${SSH_ORIGINAL_COMMAND:-}" != 'disk:status datool' ] || [ "$#" -ne 0 ]; then
+  echo 'Only disk:status datool is permitted' >&2
+  exit 64
+fi
+exec /usr/bin/sudo -n -u dokku /usr/bin/python3 -I /usr/local/lib/datool-disk/maintenance.py disk:status datool

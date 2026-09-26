@@ -1,0 +1,64 @@
+---
+title: Datasets
+description: Turn representative inputs and known failures into repeatable evaluation cases.
+icon: datasets
+---
+
+Open **Datasets** to create and organize cases. A useful case includes an **input**, an **expected output** when you have one, and **metadata** that explains its purpose or category. Cases can come from recorded traces or be written directly.
+
+## Choose meaningful cases
+
+Start with a few common requests and known failures. Keep expected outputs aligned with your scorer: an exact-match scorer needs an exact target, while a rubric-based scorer may use requirements or reference facts.
+
+Review input/output formatting in the editor before starting a run. Dataset values may be structured JSON, text, or messages, depending on the connected app's contract.
+
+## Import and export
+
+The CLI supports portable dataset files:
+
+```json
+{
+  "format": 1,
+  "kind": "dataset",
+  "key": "uppercase-examples",
+  "description": "Basic uppercase behavior",
+  "items": [
+    {
+      "key": "greeting",
+      "input": { "text": "hello" },
+      "expectedOutput": { "text": "HELLO" },
+      "metadata": { "category": "greeting" }
+    }
+  ]
+}
+```
+
+Save this as `cases.json`, then use an authenticated [CLI](/docs/reference/cli):
+
+```sh
+npx datool datasets push cases.json --dry-run
+npx datool datasets push cases.json
+npx datool datasets pull uppercase-examples --out exported-cases.json
+```
+
+Keep stable case keys when editing a file. Dataset push retains omitted cases. A sync sidecar tracks revisions; stale changes conflict instead of silently overwriting a newer revision. Current resource imports require both `datasets:write` and `scorers:write`.
+
+## Preserve evaluation evidence
+
+Evaluation runs save case snapshots. Editing a dataset later does not rewrite the input or expected output used by a completed run. The CLI can also create an explicit immutable dataset snapshot:
+
+```sh
+npx datool datasets snapshot dataset-id --label release-1
+```
+
+Next, [define a scorer](/docs/evaluation/scorers) and [run the dataset](/docs/evaluation/runs).
+
+## Promote a production span
+
+In the span inspector, choose **Create dataset case**, select a dataset, preview the case, and save. The case retains source trace/span IDs, timestamps, model/prompt attributes and the selected invocation subtree. Sibling invocations and scorer executions are excluded. Observed output stays separate from expected output; the reference defaults to null. Copy it only after deliberate review.
+
+If captured messages differ from the app's variable schema, enable **Map input to app variables** and supply explicit JSON. The captured input is preserved. Evidence scoring sees the original invocation; a connected run uses the mapped input. Datool does not infer variables from prompt text.
+
+Agents use `promote_spans` or `datool datasets promote dataset-id --input @promotion.json`. Preview defaults to true. Save with `preview: false` and the returned `expectedEvidenceHash`. Batches contain 1–100 spans and are atomic. A selected capture is limited to 1 MiB and 1,000 spans; the batch limit is 8 MiB.
+
+Span-backed snapshots preserve captured evidence. Re-score an evaluation with `sourceRunId` after judge changes. Execute the connected app again after changing its extractor, prompt or model. Keep calibration cases separate from untouched evaluation cases.

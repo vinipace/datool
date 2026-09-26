@@ -1,0 +1,59 @@
+---
+title: MCP reference
+description: Connect an AI assistant to a project through Datool's authenticated MCP server.
+icon: mcpConnections
+---
+
+## Connect
+
+Add your Datool instance's `/api/mcp` URL to an MCP client that supports Streamable HTTP and OAuth:
+
+```text
+https://your-datool-host/api/mcp
+```
+
+The client discovers the authorization server and opens a browser. Sign in, select an organization and project, and approve the requested scopes. A grant is bound to that project; tool arguments cannot switch it to another project.
+
+For non-interactive agents, the same endpoint accepts an organization API key in `Authorization: Bearer <key>` together with `x-project-id`. The key needs explicit resource permissions; `reviews:write` permits submissions, `reviews:read` permits review reads, and `traces:read` permits inspecting evidence. Legacy ingestion keys cannot review.
+
+## What an assistant can do
+
+Depending on granted scopes, an assistant can investigate traces and sessions, manage datasets and scorers, start evaluation runs, inspect metrics, and work with review sessions.
+
+Start with a concrete request, for example:
+
+> Find recent errored traces in this project, inspect a few representative failures, and summarize their recorded causes.
+
+The client should discover tools and their schemas from the server. Read-only investigation needs read scopes. Resource creation, updates, and evaluation execution need the relevant write scopes.
+
+## Manage access
+
+Open **Project settings → MCP connections** to inspect and revoke your connections. Revoking consent also revokes associated refresh tokens. Membership and authorization are rechecked for requests and refreshes.
+
+API-key and OAuth feedback in review sessions is **AI-labelled** and attributed to the authenticated principal. Optional agent/model metadata never establishes identity. AI completion is counted separately from human completion and does not update dataset ground truth. See [Reviews and Human Scores](/docs/guides/reviews).
+
+## Claude Code setup
+
+Register the remote endpoint from the application directory:
+
+```sh
+claude mcp add --transport http datool https://your-datool-host/api/mcp
+claude mcp get datool
+```
+
+Open Claude Code and use `/mcp` to select Datool and complete browser authentication. Choose the intended project and the scopes needed for your work. Verify the connection with a read-only request: “List the latest trace in this project and return its ID and status.” Confirm the project before allowing mutations.
+
+See the [official Claude Code MCP guide](https://code.claude.com/docs/en/mcp) for client-specific scope and authentication behavior. Other clients must support Streamable HTTP and Datool's advertised OAuth flow.
+
+## Troubleshooting
+
+- If sign-in is denied, confirm that your verified email domain is allowed and that you used a configured sign-in method.
+- If a tool returns a permission error, check the grant's scopes and your project access.
+- If you selected the wrong project, establish a new authorization for the intended project.
+- If a client cannot complete login, confirm that it supports the advertised OAuth flow and exact redirect registration.
+
+The [CLI](/docs/reference/cli) exposes the same operations through `datool agent tools` and `datool agent call`.
+
+## Datool agent skills
+
+The maintained [Datool skills repository](https://github.com/vinpac/datool-skills) provides task guidance for tracing, datasets, scorers, evaluations, and analytics. Follow its installation instructions for your agent. Skills guide tool use; they do not grant project access or replace MCP/CLI authentication.

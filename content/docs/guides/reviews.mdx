@@ -1,0 +1,52 @@
+---
+title: Reviews and Human Scores
+description: Collect structured judgments on recorded traces and preserve the reasoning behind them.
+icon: reviews
+---
+
+Use **Human Scores** to define criteria, then create a **Review** containing the traces and criteria to evaluate. A criterion can be numeric, categorical, multi-select, or text-based.
+
+## Create a review with a clear criterion
+
+Use the whitespace failure from [your first evaluation](/docs/get-started/first-evaluation), or two traces from your own application with known outcomes.
+
+1. Open **Human Scores** and create a numeric criterion named **Meets text requirement**. Set minimum 0, maximum 1, and step 1. Describe the rule: “1 if output.text equals the required uppercase text with surrounding whitespace removed; otherwise 0.”
+2. Add it to a score collection. Use the item comment or notes to explain the rating.
+3. Open **Reviews** and create a review containing the selected traces and this collection. Give the review a task-specific name and instructions that include the expected behavior.
+4. Open the first item. Inspect its input and output before assigning a score. For `{"text":" hello "}`, an output of `{"text":" HELLO "}` should receive 0 with a comment explaining the extra spaces.
+5. Move to the next item and repeat. Reopen an item to confirm that the saved rating and explanation are present.
+
+A useful criterion describes a decision a reviewer can make from the captured evidence. Split independent concerns into separate criteria. For model judgments, include known passing and failing examples in the reviewer instructions.
+
+## Review a trace
+
+Open the review, inspect a trace's input, output, and execution evidence, and answer the attached criteria. Add a comment when the rating needs an explanation. The review player saves changes and supports moving between items.
+
+An item is complete when the required criteria have answers. A session completes when every item has a complete review. Optional notes can preserve context without completing an unanswered rating.
+
+## Interpret the results
+
+Numeric Human Scores have normalized numeric values. Text and categorical responses remain typed judgments; they are not automatically averaged as numeric scores.
+
+Browser feedback is human-attributed. API-key and OAuth submissions are **AI-labelled**, with the authenticated principal and optional agent/model metadata. AI completion and human completion have separate counts. A completed AI review is not human-verified ground truth. Notes-only updates preserve scores and completion; review operations never update dataset expectations.
+
+## Review through CLI or MCP
+
+Organization API keys with `reviews:write` can submit notes, scores and annotations. Reading reviews requires `reviews:read`; inspecting evidence and creating a session also requires `traces:read`. Legacy ingestion keys cannot review.
+
+Use `datool agent tools record_review` to inspect the deployed schema, then read a session and item before submitting with its current revision:
+
+```sh
+datool reviews get 1
+datool reviews item 1 --item-id item-id
+datool reviews record 1 --item-id item-id --input @finding.json
+datool reviews export 1 --out review.ndjson
+```
+
+MCP exposes the same operations. API clients cannot choose their reviewer identity or claim a human source. Exported items preserve explicit provenance. See [CLI reference](/docs/reference/cli) and [authentication](/docs/reference/authentication).
+
+## Use feedback in an evaluation
+
+A review preserves a judgment; it does not silently rewrite a dataset. After checking a human review, explicitly curate the reference answer in a [dataset](/docs/evaluation/datasets), preserve the original trace as evidence, and use a snapshot for the next evaluation.
+
+Keep human and AI-labelled counts separate when assessing review coverage. Exported review items include criterion definitions and provenance so another reader can distinguish who made the judgment and what they were asked to decide.

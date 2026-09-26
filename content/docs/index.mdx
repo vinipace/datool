@@ -1,0 +1,51 @@
+---
+title: Documentation
+description: Understand what your AI application did, find what went wrong, and measure improvements.
+icon: documentation
+---
+
+Datool brings traces, datasets, scorers, and evaluation runs into one project. Start with a trace from your application, inspect its inputs and outputs, then turn useful examples into repeatable tests.
+
+## Start here
+
+**[Send your first trace](/docs/get-started/first-trace)** — Choose AI SDK, TypeScript, Python, or LangGraph. The Python function and graph examples need no model API key.
+
+**[Run your first evaluation](/docs/get-started/first-evaluation)** — Connect an app, catch a failing case, fix it, and compare saved runs. No model key is required.
+
+**[Use your first managed prompt](/docs/get-started/first-prompt)** — Publish a template and fetch the latest published version from your application.
+
+**[Understand the concepts](/docs/get-started/concepts)** — Learn how traces, spans, sessions, datasets, and scores fit together.
+
+**[Connect your existing instrumentation](/docs/tracing/instrumentation)** — Export OpenTelemetry spans and instrument AI SDK calls.
+
+## Build an evaluation workflow
+
+1. Inspect a request in **Traces** and identify an example worth testing.
+2. Add cases and expected outputs to a [dataset](/docs/evaluation/datasets).
+3. Define a [scorer](/docs/evaluation/scorers) that expresses what a good result means.
+4. [Run an evaluation](/docs/evaluation/runs) against a connected app and inspect each result.
+
+Use the [Playground](/docs/guides/playground) to try individual inputs, [Prompts](/docs/guides/prompts) to version message templates, and [Dashboards](/docs/guides/dashboards) to follow changes over time.
+
+## Work from your tools
+
+- **[SDK](/docs/reference/sdk):** record application behavior from Node.js.
+- **[API](/docs/reference/api):** call project operations with typed request and response schemas.
+- **[CLI](/docs/reference/cli):** inspect traces, sync resources, connect local handlers, and run evaluation gates.
+- **[MCP](/docs/reference/mcp):** let an authorized AI assistant investigate and work with your project.
+- **[Self-hosting](/docs/self-hosting):** run the web application, database, Redis, and ingestion worker.
+
+These docs are public. Your project's data and API operations require [authentication](/docs/reference/authentication).
+
+## Read docs as Markdown
+
+Every documentation page supports `Accept: text/markdown` or a `.md` suffix. For example, with `DATOOL_BASE_URL` set to your instance's origin:
+
+```sh
+curl -H 'Accept: text/markdown' "$DATOOL_BASE_URL/docs/evaluation/datasets"
+curl "$DATOOL_BASE_URL/docs/evaluation/datasets.md"
+```
+
+Both return the same Markdown with `Content-Type: text/markdown`. Use `/docs.md` for this documentation index. The **View as Markdown** link on each page also works, and agents can discover all pages through [/llms.txt](/llms.txt). Normal browser requests to URLs without `.md` keep the documentation layout.
+
+For installation requirements, see [versions and compatibility](/docs/reference/compatibility). If a workflow fails, start with [troubleshooting](/docs/reference/troubleshooting).

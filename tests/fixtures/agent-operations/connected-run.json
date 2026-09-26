@@ -1,0 +1,11 @@
+{
+  "requestKey": "release-42-connected-1",
+  "mode": "connected",
+  "appId": "app-id",
+  "datasetId": "dataset-id",
+  "datasetVersionId": "snapshot-id",
+  "evaluatorIds": ["scorer-id"],
+  "evaluatorVersionIds": {
+    "scorer-id": "immutable-version-id"
+  }
+}

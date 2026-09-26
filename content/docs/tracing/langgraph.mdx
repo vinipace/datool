@@ -1,0 +1,78 @@
+---
+title: LangGraph and LangChain
+description: Record a complete Python graph with Datool callbacks, including nested steps and their inputs and outputs.
+icon: traces
+---
+
+Datool's Python callback handler records LangChain runnable and LangGraph execution without decorators on each node. The Python SDK is a preview distributed through your Datool administrator; complete the [Python installation](/docs/reference/python-sdk#install) first.
+
+## Install the callback integration
+
+With the supplied wheel in the current directory and your virtual environment active:
+
+```sh
+python -m pip install './datool-0.1.0-py3-none-any.whl[langchain]' 'langgraph>=1,<2'
+```
+
+Set `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY` in the process environment. Python does not automatically load a Node `.env` file. The key needs `traces:write`. This deterministic graph makes no model calls and needs no provider key.
+
+## Run a complete graph
+
+Save `graph.py`:
+
+```python
+from typing import TypedDict
+from langgraph.graph import END, START, StateGraph
+from datool import get_client
+from datool.langchain import CallbackHandler
+
+class State(TypedDict):
+    text: str
+
+def trim(state: State):
+    return {"text": state["text"].strip()}
+
+def uppercase(state: State):
+    return {"text": state["text"].upper()}
+
+builder = StateGraph(State)
+builder.add_node("trim", trim)
+builder.add_node("uppercase", uppercase)
+builder.add_edge(START, "trim")
+builder.add_edge("trim", "uppercase")
+builder.add_edge("uppercase", END)
+graph = builder.compile()
+
+datool = get_client()
+handler = CallbackHandler(client=datool)
+try:
+    result = graph.invoke(
+        {"text": " hello "},
+        config={"callbacks": [handler], "run_name": "Docs uppercase graph"},
+    )
+    print(result)
+    datool.flush()
+    print(handler.last_trace_id)
+finally:
+    datool.shutdown()
+```
+
+```sh
+python graph.py
+```
+
+Expect `{'text': 'HELLO'}` and a trace ID. Open **Traces** and find **Docs uppercase graph**. Inspect the `trim` and `uppercase` steps: the first removes surrounding spaces, and the second changes case. The graph's root and its nodes preserve their parent/child relationships.
+
+## Add models, tools, and agents
+
+Use the same `config={"callbacks": [handler]}` on a LangChain runnable or your initialized agent. Nested model calls, tools, retrievers, and graph steps report through their callbacks. Model names and token usage come from model responses. Costs remain missing unless supplied separately.
+
+The handler also works with LangGraph `create_react_agent`, LangChain `create_agent`, and Deep Agents `create_deep_agent`. Those agent constructors require their own framework/provider setup. Attach the handler to the parent invocation; local nested agents use the propagated callback configuration. Remote agents require instrumentation in their own service.
+
+## Async and streaming
+
+Pass the same callback configuration to `ainvoke`, `stream`, or `astream`. Consume or explicitly close streams before flushing. In async code, use `await datool.aflush()` or `await datool.ashutdown()` to avoid blocking the event loop. On Python 3.10, pass runnable configuration explicitly to async child calls.
+
+Handlers can be reused across concurrent calls, but use one per invocation if you need to read `last_trace_id` afterward. A graph invoked inside an existing Datool observation joins its trace. Callback instrumentation does not change the active OpenTelemetry context, so a manually created observation inside a node is not automatically parented to that node.
+
+The client's `mask` callback applies to callback input/output. Metadata and tags must already be safe to record. Callback export failures do not replace application exceptions; flush reports delivery failures. See [Python lifecycle and redaction](/docs/reference/python-sdk#configuration-sessions-and-redaction).

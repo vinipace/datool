@@ -1,0 +1,136 @@
+---
+title: Instrumentation
+description: Record manual operations or export existing OpenTelemetry spans to Datool.
+icon: traces
+---
+
+Start with the [first-trace guide](/docs/get-started/first-trace) to configure `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY`.
+
+## Choose an integration
+
+| Application | Start with | Coverage |
+| --- | --- | --- |
+| Node.js function or workflow | [First trace](/docs/get-started/first-trace) | Explicit inputs, outputs, timing, errors, and nested operations. |
+| AI SDK 7 | [AI SDK recipe](/docs/tracing/ai-sdk) | Model and tool spans through OpenTelemetry. |
+| OpenAI Chat Completions | [OpenAI recipe](/docs/tracing/openai) | Non-streaming HTTP attempts and reported usage. |
+| Python / LangGraph / LangChain | [Python SDK](/docs/reference/python-sdk) | Preview package, decorators, and callback instrumentation. |
+| Hermes Agent | [Hermes plugin](/docs/tracing/hermes) | Sessions, turns, model calls, and tools. |
+| Existing OpenTelemetry provider | Setup below | Add the Datool processor to the existing provider. |
+
+## Manual tracing
+
+Use `createTracer()` when you want to record operations directly. Its callbacks preserve your return values and record the operation's result. Explicit groups make related operations appear under Agents or Workflows.
+
+```ts
+import { createTracer } from "@datool/sdk"
+
+const tracer = createTracer()
+await tracer.workflow(
+  {
+    name: "Review request",
+    input: { requestId: "example-1" },
+    group: { type: "workflow", name: "review", version: "v1" },
+  },
+  async () => ({ approved: true })
+)
+```
+
+## OpenTelemetry
+
+If your application already creates OpenTelemetry spans, attach `DatoolSpanProcessor` to its provider. Configure the provider once, before instrumented work begins.
+
+```sh
+npm install @datool/sdk @opentelemetry/sdk-node
+```
+
+```ts
+import { NodeSDK } from "@opentelemetry/sdk-node"
+import { DatoolSpanProcessor } from "@datool/sdk/otel"
+
+const processor = new DatoolSpanProcessor()
+const sdk = new NodeSDK({ spanProcessors: [processor] })
+sdk.start()
+
+try {
+  // Run your instrumented application here.
+} finally {
+  try {
+    await processor.forceFlush()
+  } finally {
+    await sdk.shutdown()
+  }
+}
+```
+
+`forceFlush()` waits for PostgreSQL persistence receipts. Keep it inside your request or shutdown lifecycle, and handle delivery failures. In short-lived runtimes, schedule the flush through a facility that keeps work alive after the response.
+
+## AI SDK integration
+
+Use the telemetry API for your installed AI SDK version. Versions using `experimental_telemetry` enable it on model calls with `{ isEnabled: true }`. AI SDK 7 uses `registerTelemetry` with the `LegacyOpenTelemetry` adapter from `@ai-sdk/otel`.
+
+When combining your own workflow spans with model instrumentation, `createTracer({ transport: "otel" })` uses the registered provider. This keeps operations in the same context without a second manual HTTP export of those operations.
+
+Datool's processor captures model and tool inputs, outputs, timings, errors, and reported token usage. Cost estimates depend on available usage and pricing information; missing coverage is not free usage.
+
+## Groups and sessions
+
+For OpenTelemetry groups, set `datool.group.type`, `datool.group.name`, and optionally `datool.group.version` in the span's initial attributes. Use `datool.trace.root: true` for a trace container. Group fields do not propagate to children automatically.
+
+Use session correlation to connect related turns. A session groups traces; it does not replace their individual parent/child span trees.
+
+## Delivery and sensitive content
+
+Datool uses a JSON ingestion protocol. Its main ingestion API is not a general OTLP collector, so a generic OTLP exporter cannot point directly at it.
+
+Queued delivery needs Redis and a running ingestion worker. HTTP 202 means the event was accepted into the queue. Persistence is confirmed separately. See [self-hosting](/docs/self-hosting) for operations and recovery.
+
+Decide which inputs and outputs your application should record. The processor's `shouldExport` and `transform` hooks let you filter spans and redact payloads before export. Keep credentials and sensitive content out of recorded data.
+
+## Correlate two turns in a session
+
+This complete manual-tracing example reuses one session ID for two independent traces. Save it as `session.mjs` and run with the SDK and `.env` from the first-trace guide:
+
+```js
+import { createTracer } from "@datool/sdk"
+
+const tracer = createTracer()
+const session = await tracer.createSession({ name: "Docs support conversation" })
+await tracer.withSession(session.id, async () => {
+  for (const text of ["hello", "thank you"]) {
+    await tracer.workflow(
+      { name: "Conversation turn", input: { text } },
+      async () => ({ text: text.toUpperCase() }),
+    )
+  }
+})
+console.log(session.id)
+```
+
+```sh
+node --env-file=.env session.mjs
+```
+
+Open **Sessions**, find **Docs support conversation**, and verify that both traces belong to it. Each trace still has its own execution tree. Reuse a stored session ID for later turns; do not create a new session on every request if they belong to one conversation.
+
+## Redact before recording
+
+For manual tracing, construct the safe value before passing it as `input`, and return only the output you intend to record. OTel applications can use a recursive `transform` policy. For example, this processor configuration removes specifically named credential fields at any object depth:
+
+```ts
+import { DatoolSpanProcessor } from "@datool/sdk/otel"
+
+const sensitiveKeys = new Set(["authorization", "api_key", "apikey", "password"])
+function redact(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redact)
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+      key,
+      sensitiveKeys.has(key.toLowerCase()) ? "[redacted]" : redact(child),
+    ]))
+  }
+  return value
+}
+const processor = new DatoolSpanProcessor({ transform: redact })
+```
+
+Attach this processor to your provider using the setup above. The example only matches named object fields; it does not detect secrets inside free text or serialized JSON strings. Extend the policy for your payloads and verify a representative recorded trace. SDK redaction does not remove previously stored data.

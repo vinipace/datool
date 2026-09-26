@@ -1,0 +1,612 @@
+# CI runs without secrets. Release contexts must be restricted to main and this project.
+# See docs/ci.md for activation, scheduled monitoring, and npm trusted publishing.
+version: 2.1
+orbs:
+  node: circleci/node@7.2.1
+parameters:
+  operation:
+    type: enum
+    enum:
+      - verify
+      - publish
+      - publish-hermes
+      - disk-health
+    default: verify
+  verify-image:
+    type: boolean
+    default: false
+    description: Also build and test the production image on a feature branch; never deploys that branch.
+  release-version:
+    type: string
+    default: ""
+  release-package:
+    type: enum
+    enum:
+      - sdk
+      - cli
+      - all
+    default: sdk
+executors:
+  linux:
+    machine:
+      image: ubuntu-2404:2026.05.1
+    resource_class: medium
+    environment:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATOOL_TEST_DATABASE_URL: postgresql://postgres:package-fixture@127.0.0.1:5432/postgres
+      DATOOL_TEST_REDIS_URL: redis://127.0.0.1:6379
+      DATOOL_PROJECT_ID: package-fixture-project
+      DATOOL_API_KEY: package-fixture-key
+  ssh:
+    docker:
+      - image: cimg/base:2026.09
+    resource_class: small
+commands:
+  install-github-release-client:
+    steps:
+      - run:
+          name: Install verified GitHub CLI 2.101.0
+          command: |
+            curl --fail --silent --show-error --location --retry 3 https://github.com/cli/cli/releases/download/v2.101.0/gh_2.101.0_linux_amd64.tar.gz --output /tmp/hermes-gh.tar.gz
+            echo '9bca2d1c16825f109907a23307628a2f0698fbf99662b73a5cf0b020293072b8  /tmp/hermes-gh.tar.gz' | sha256sum --check -
+            tar -xzf /tmp/hermes-gh.tar.gz -C /tmp
+            sudo install -m 0755 /tmp/gh_2.101.0_linux_amd64/bin/gh /usr/local/bin/gh
+            gh --version
+  configure-restricted-ssh:
+    parameters:
+      key-variable:
+        type: string
+      hosts-variable:
+        type: string
+      key-file:
+        type: string
+      hosts-file:
+        type: string
+        default: known_hosts
+    steps:
+      - run:
+          name: Restore and validate restricted SSH credentials
+          environment:
+            DATOOL_SSH_KEY_VARIABLE: << parameters.key-variable >>
+            DATOOL_SSH_HOSTS_VARIABLE: << parameters.hosts-variable >>
+            DATOOL_SSH_KEY_FILE: << parameters.key-file >>
+            DATOOL_SSH_HOSTS_FILE: << parameters.hosts-file >>
+          command: |
+            set +x
+            test -n "$DOKKU_SSH_HOST" || { echo "Configure DOKKU_SSH_HOST in the restricted CircleCI context" >&2; exit 1; }
+            umask 077
+            install -d -m 700 "$HOME/.ssh"
+            key_path="$HOME/.ssh/$DATOOL_SSH_KEY_FILE"
+            hosts_path="$HOME/.ssh/$DATOOL_SSH_HOSTS_FILE"
+            # CircleCI's single-line secret input removes pasted line breaks.
+            # Rewrap OpenSSH armor without changing its base64 payload.
+            printenv "$DATOOL_SSH_KEY_VARIABLE" | awk '
+              { gsub(/\r/, ""); key = key $0 }
+              END {
+                header = "-----BEGIN OPENSSH PRIVATE KEY-----"
+                footer = "-----END OPENSSH PRIVATE KEY-----"
+                if (index(key, header) != 1 || substr(key, length(key) - length(footer) + 1) != footer) {
+                  print "Invalid OpenSSH private key format" > "/dev/stderr"
+                  exit 1
+                }
+                key = substr(key, length(header) + 1, length(key) - length(header) - length(footer))
+                gsub(/[[:space:]]/, "", key)
+                if (key !~ /^[A-Za-z0-9+\/=]+$/) exit 1
+                print header
+                for (i = 1; i <= length(key); i += 64) print substr(key, i, 64)
+                print footer
+              }
+            ' > "$key_path"
+            chmod 600 "$key_path"
+            ssh-keygen -y -P '' -f "$key_path" > /dev/null
+            printenv "$DATOOL_SSH_HOSTS_VARIABLE" > "$hosts_path"
+            test -s "$hosts_path"
+            chmod 600 "$hosts_path"
+  install-dependencies:
+    steps:
+      - node/install:
+          node-version: 24.18.0
+          install-yarn: false
+      - run:
+          name: Install Bun 1.3.14
+          command: |-
+            curl --fail --silent --show-error --location https://bun.com/install --output /tmp/install-bun.sh
+            bash /tmp/install-bun.sh bun-v1.3.14
+            printf 'export PATH="$HOME/.bun/bin:$PATH"\n' >> "$BASH_ENV"
+      - restore_cache:
+          keys:
+            - v1-bun-1.3.14-{{ arch }}-{{ checksum "bun.lock" }}
+      - run:
+          name: Install locked dependencies
+          command: bun install --frozen-lockfile
+      - save_cache:
+          key: v1-bun-1.3.14-{{ arch }}-{{ checksum "bun.lock" }}
+          paths:
+            - ~/.bun/install/cache
+  start-services:
+    steps:
+      - run:
+          name: Start isolated PostgreSQL 18 and Redis 7
+          command: |-
+            docker run -d --name datool-ci-postgres -e POSTGRES_PASSWORD=package-fixture -p 127.0.0.1:5432:5432 postgres:18-alpine
+            docker run -d --name datool-ci-redis -p 127.0.0.1:6379:6379 redis:7-alpine
+            for attempt in $(seq 1 60); do
+              if docker exec datool-ci-postgres pg_isready -U postgres && docker exec datool-ci-redis redis-cli ping | grep -q PONG; then
+                exit 0
+              fi
+              sleep 2
+            done
+            docker logs datool-ci-postgres
+            docker logs datool-ci-redis
+            exit 1
+  install-uv:
+    steps:
+      - run:
+          name: Install uv 0.12.6
+          command: |-
+            curl --fail --silent --show-error --location https://astral.sh/uv/0.12.6/install.sh --output /tmp/install-uv.sh
+            UV_UNMANAGED_INSTALL="$HOME/.local/bin" sh /tmp/install-uv.sh
+            printf 'export PATH="$HOME/.local/bin:$PATH"\n' >> "$BASH_ENV"
+jobs:
+  hermes-verify:
+    docker:
+      - image: cimg/python:3.12
+    resource_class: small
+    environment:
+      RELEASE_VERSION: << pipeline.parameters.release-version >>
+      CI_OPERATION: << pipeline.parameters.operation >>
+    steps:
+      - checkout
+      - install-github-release-client
+      - run:
+          name: Test Hermes delivery, packaging, and extracted installation
+          command: python3 -m unittest discover -s tests/hermes -v
+      - run:
+          name: Build and checksum the source-only plugin
+          command: |
+            if [ "$CI_OPERATION" = publish-hermes ]; then
+              test "$CIRCLE_BRANCH" = main
+              test -n "$RELEASE_VERSION"
+              python3 scripts/package-hermes-plugin.py --tag "hermes-v$RELEASE_VERSION" --output-dir dist/hermes
+            else
+              python3 scripts/package-hermes-plugin.py --output-dir dist/hermes
+            fi
+            (cd dist/hermes && sha256sum --check *.sha256)
+            git rev-parse HEAD > dist/hermes/commit.txt
+      - store_artifacts:
+          path: dist/hermes
+          destination: hermes-plugin
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/hermes
+  hermes-publish:
+    docker:
+      - image: cimg/python:3.12
+    resource_class: small
+    environment:
+      RELEASE_VERSION: << pipeline.parameters.release-version >>
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - install-github-release-client
+      - run:
+          name: Publish and verify the tested Hermes ZIP
+          command: bash scripts/publish-hermes-plugin.sh
+  verify:
+    executor: linux
+    steps:
+      - checkout
+      - install-dependencies
+      - start-services
+      - run:
+          name: Verify ingestion retries, retention, and safe diagnostics
+          command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-sequence.test.ts
+      - run:
+          name: Verify release safety contracts
+          command: |-
+            python3 -m unittest discover -s tests -p 'dokku_*_test.py'
+            python3 -m unittest discover -s tests -p 'deployment_notifications_test.py'
+            bun test tests/release-command.test.ts tests/deployment-image-handoff.test.ts tests/cms-seed-options.test.ts tests/circleci-ssh-key.test.ts
+      - run:
+          name: Verify Hermes delivery and conversation rendering
+          command: |
+            bun test tests/hermes-value-messages.test.ts tests/tool-message-results.test.ts tests/trace-output.test.ts tests/value-views.test.ts
+      - run:
+          name: Verify session hierarchy and complete trace loading
+          command: bun test tests/session-detail-loader.test.ts tests/session-conversation.test.ts tests/trace-inspector-data.test.ts tests/trace-detail-loader.test.ts
+      - run:
+          name: Verify public agent discovery contracts
+          command: |
+            bun run check:docs
+            bun test tests/agent-readiness.test.ts tests/project-api-response.test.ts
+      - run:
+          name: Prepare JavaScript scorer sandbox
+          command: docker pull node:22-bookworm-slim
+      - run:
+          name: Verify sandbox execution, fallback, and project isolation
+          command: |
+            docker pull python:3.13-slim
+            bun test tests/sandbox-providers.test.ts tests/sandbox-providers-integration.test.ts
+          environment:
+            DATOOL_TEST_SANDBOX_CONTAINERS: "1"
+      - run:
+          name: Build and pack SDK and CLI once
+          command: bun run pack:packages
+      - run:
+          name: Verify CLI source and packed packages on Node 24
+          command: bun run test:packages
+      - run:
+          name: Verify relay reload races and source watching
+          command: bun test tests/relay-reload.test.ts tests/connect-source-watch.test.ts tests/cli-connect-watch.test.ts
+      - run:
+          name: Verify the built watched CLI with the real relay under Node 24 and Bun
+          command: |
+            export DATOOL_TEST_CLI_BINARY="$PWD/packages/cli/dist/datool.js"
+            for runtime in node bun; do
+              DATOOL_TEST_CLI_RUNTIME="$runtime" bun test tests/cli-watch-relay.test.ts
+            done
+      - run:
+          name: Verify CLI distribution on Node 24 and Bun
+          command: node scripts/test-cli-distribution.mjs "artifacts/npm/datool-cli-$(node -p 'require("./packages/cli/package.json").version').tgz"
+      - run:
+          name: bun test tests/managed-prompt-sdk.test.ts tests/prompts.test.ts tests/eval-input-overrides.test.ts tests/eval-recovery-iteration.test.ts
+          command: bun test tests/managed-prompt-sdk.test.ts tests/prompts.test.ts tests/eval-input-overrides.test.ts tests/eval-recovery-iteration.test.ts
+      - run:
+          name: Verify saved eval attribution and historical backfill
+          command: bun test tests/eval-attribution.test.ts tests/eval-quality-filters.test.ts tests/eval-attribution-backfill.test.ts tests/eval-attribution-performance.test.ts tests/tracer-postgres-migration.test.ts
+      - run:
+          name: bun run scripts/test-managed-prompts-e2e.ts
+          command: bun run scripts/test-managed-prompts-e2e.ts
+      - run:
+          name: Verify native evaluation resilience and large immutable snapshots
+          command: |
+            bun test tests/dataset-snapshot-scale.test.ts tests/app-relay.test.ts
+            bun --no-env-file scripts/test-evaluation-workflow-e2e.ts
+      - run:
+          name: bun test tests/organization-auth.test.ts tests/organization-settings.test.ts tests/system-overview.test.ts tests/invitations.test.ts tests/launch-access.test.ts tests/auth-magic-link.test.ts tests/mcp.test.ts
+          command: bun test tests/organization-auth.test.ts tests/organization-settings.test.ts tests/system-overview.test.ts tests/invitations.test.ts tests/launch-access.test.ts tests/auth-magic-link.test.ts tests/mcp.test.ts
+      - run:
+          name: Verify Stripe billing, reconciliation, and managed execution credits
+          command: bun test tests/billing.test.ts tests/billing-reconciliation.test.ts tests/execution-credits.test.ts tests/product-events.test.ts tests/product-events-billing.test.ts
+      - run:
+          name: Verify dashboard sources, bounded reads, and analytics agent contracts
+          command: bun test tests/dashboard-sources.test.ts tests/dashboard-sources-scale.test.ts tests/dashboard-read-retry.test.ts tests/dashboard-trace-links.test.ts tests/dashboard-health.test.ts tests/dashboard-templates.test.ts tests/semantic-snapshot.test.ts tests/semantic-tracer-service.test.ts tests/agent-operation-fixtures.test.ts tests/mcp-metrics.test.ts
+      - run:
+          name: Verify trace, session and evaluation refresh caching
+          command: bun test tests/trace-read-cache.test.ts tests/shared-read-cache.test.ts tests/eval-comparison-pagination.test.ts tests/polling-cache-budget.test.ts
+      - run:
+          name: Verify managed prompt caching and authorization
+          command: bun test tests/prompt-cache.test.ts tests/prompts.test.ts tests/prompts-integration.test.ts tests/prompt-publishing-migration.test.ts tests/redis-swr.test.ts tests/stale-while-revalidate.test.ts
+      - run:
+          name: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
+          command: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
+      - node/install:
+          node-version: 22.18.0
+          install-yarn: false
+      - run:
+          name: Verify the same packed packages on Node 22
+          command: bun run scripts/test-packages.ts
+      - run:
+          name: Verify the built watched CLI with the real relay under Node 22
+          command: |-
+            export DATOOL_TEST_CLI_BINARY="$PWD/packages/cli/dist/datool.js"
+            bun test tests/cli-watch-relay.test.ts
+          environment:
+            DATOOL_TEST_CLI_RUNTIME: node
+      - run:
+          name: Verify CLI distribution on Node 22
+          command: node scripts/test-cli-distribution.mjs "artifacts/npm/datool-cli-$(node -p 'require("./packages/cli/package.json").version').tgz"
+          environment:
+            DATOOL_TEST_NODE_ONLY: "1"
+      - store_artifacts:
+          path: artifacts/npm
+          destination: npm-packages
+  production-image:
+    machine:
+      image: ubuntu-2404:2026.05.1
+    resource_class: large
+    environment:
+      CI: "true"
+      CIRCLE_PIPELINE_NUMBER: << pipeline.number >>
+    steps:
+      - checkout
+      - run:
+          name: Set unique image reference
+          command: printf 'export DATOOL_DOCKER_TEST_IMAGE="datool-release:%s-%s-%s"\n' "$CIRCLE_SHA1" "$CIRCLE_PIPELINE_NUMBER" "$CIRCLE_BUILD_NUM" >> "$BASH_ENV"
+      - run:
+          name: Test deployment access and disk import safety
+          command: python3 -m unittest discover -s tests -p 'dokku_*_test.py'
+      - run:
+          name: Build the production image on the CI runner
+          command: docker build --label "org.opencontainers.image.revision=$CIRCLE_SHA1" --tag "$DATOOL_DOCKER_TEST_IMAGE" .
+      - run:
+          name: Test release command, image handoff, and CMS seed guards
+          command: |
+            docker run --rm --network none --read-only --tmpfs /tmp:exec \
+              --mount "type=bind,source=$PWD/tests,target=/app/tests,readonly" \
+              --mount "type=bind,source=$PWD/.circleci,target=/app/.circleci,readonly" \
+              --entrypoint bun "$DATOOL_DOCKER_TEST_IMAGE" test tests/release-command.test.ts tests/deployment-image-handoff.test.ts tests/cms-seed-options.test.ts
+      - run:
+          name: Exercise the production image with isolated services
+          command: bash scripts/test-docker.sh
+          environment:
+            DATOOL_DOCKER_SKIP_BUILD: "1"
+      - run:
+          name: Export the verified image
+          command: |
+            docker image save "$DATOOL_DOCKER_TEST_IMAGE" | gzip -1 > image.tar.gz
+            printf '%s\n' "$DATOOL_DOCKER_TEST_IMAGE" > image-ref.txt
+            docker image inspect "$DATOOL_DOCKER_TEST_IMAGE" --format '{{.Size}}' > image-size.txt
+            sha256sum image.tar.gz image-ref.txt image-size.txt > image.sha256
+            sha256sum ops/notify-deployment.py > notification.sha256
+      - persist_to_workspace:
+          root: .
+          paths:
+            - image.tar.gz
+            - image-ref.txt
+            - image-size.txt
+            - image.sha256
+            - ops/notify-deployment.py
+            - notification.sha256
+  deploy:
+    executor: ssh
+    environment:
+      CIRCLE_PIPELINE_NUMBER: << pipeline.number >>
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Verify the image archive
+          command: sha256sum --check image.sha256
+      - run:
+          name: Verify the notification script
+          command: sha256sum --check notification.sha256
+      - run:
+          name: Announce deployment in Slack
+          environment:
+            DEPLOYMENT_STATUS: started
+          command: &notify_datool_deployment |
+            python3 ops/notify-deployment.py "$DEPLOYMENT_STATUS" \
+              --app Datool --environment production \
+              --deployment-id "$CIRCLE_WORKFLOW_ID-$CIRCLE_BUILD_NUM" --commit "$CIRCLE_SHA1" \
+              --url "$CIRCLE_BUILD_URL" --state-file /tmp/datool-deployment-slack.json || true
+      - configure-restricted-ssh:
+          key-variable: DOKKU_NETCUP_SSH_PRIVATE_KEY
+          hosts-variable: DOKKU_NETCUP_SSH_KNOWN_HOSTS
+          key-file: datool_deploy
+      - run:
+          name: Import and release the verified image through Dokku
+          command: |
+            test "$CIRCLE_BRANCH" = main
+            read -r image < image-ref.txt
+            read -r image_bytes < image-size.txt
+            if ! [[ "$image" =~ ^datool-release:${CIRCLE_SHA1}-${CIRCLE_PIPELINE_NUMBER}-[0-9]+$ ]]; then
+              echo "Image reference does not belong to this workflow commit and run" >&2
+              exit 1
+            fi
+            if ! [[ "$image_bytes" =~ ^[1-9][0-9]*$ ]]; then
+              echo "Invalid image size" >&2
+              exit 1
+            fi
+            ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+              "datool-deploy@$DOKKU_SSH_HOST" disk:load-image datool "$image" "$image_bytes" < image.tar.gz
+      - run:
+          name: Verify web and worker processes
+          command: |
+            ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "datool-deploy@$DOKKU_SSH_HOST" ps:report datool > process-report.txt
+            cat process-report.txt
+            grep -Eq 'Status web 1:[[:space:]]+running' process-report.txt
+            grep -Eq 'Status worker 1:[[:space:]]+running' process-report.txt
+            test "$(ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "datool-deploy@$DOKKU_SSH_HOST" ps:report datool --running)" = true
+      - run:
+          name: Verify public endpoint
+          command: |
+            test -n "$DATOOL_URL"
+            for path in / /faq /faq.md /cms/api/cms-users/me /sign-in /docs /llms.txt; do
+              curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+                --retry 6 --retry-all-errors --retry-delay 5 "$DATOOL_URL$path" --output /dev/null
+            done
+      - run:
+          name: Remove deployment key
+          command: rm -f ~/.ssh/datool_deploy
+          when: always
+      - run:
+          name: Reply with deployment success
+          environment:
+            DEPLOYMENT_STATUS: succeeded
+          command: *notify_datool_deployment
+      - run:
+          name: Reply with deployment failure
+          when: on_fail
+          environment:
+            DEPLOYMENT_STATUS: failed
+          command: *notify_datool_deployment
+  publish:
+    executor: linux
+    environment:
+      RELEASE_VERSION: << pipeline.parameters.release-version >>
+      RELEASE_PACKAGE: << pipeline.parameters.release-package >>
+    steps:
+      - checkout
+      - install-dependencies
+      - start-services
+      - run:
+          name: Require main and an explicit version
+          command: |-
+            test "$CIRCLE_BRANCH" = main
+            test -n "$RELEASE_VERSION"
+      - run:
+          name: npm install --global npm@11.16.0
+          command: npm install --global npm@11.16.0
+      - run:
+          name: Verify release metadata
+          command: bun run check:release "$RELEASE_VERSION" "$RELEASE_PACKAGE"
+          environment:
+            RELEASE_VERSION: << pipeline.parameters.release-version >>
+            RELEASE_PACKAGE: << pipeline.parameters.release-package >>
+      - run:
+          name: bun run pack:packages
+          command: bun run pack:packages
+      - run:
+          name: bun run test:packages
+          command: bun run test:packages
+      - run:
+          name: Verify relay reload races and source watching
+          command: bun test tests/relay-reload.test.ts tests/connect-source-watch.test.ts tests/app-relay.test.ts
+      - run:
+          name: Verify the built watched CLI with the real relay under Node and Bun
+          command: |
+            export DATOOL_TEST_CLI_BINARY="$PWD/packages/cli/dist/datool.js"
+            for runtime in node bun; do
+              DATOOL_TEST_CLI_RUNTIME="$runtime" bun test tests/cli-watch-relay.test.ts
+            done
+      - run:
+          name: Test the CLI tarball in clean Node and Bun consumers
+          command: |-
+            if [ "$RELEASE_PACKAGE" = cli ] || [ "$RELEASE_PACKAGE" = all ]; then
+              node scripts/test-cli-distribution.mjs "artifacts/npm/datool-cli-$RELEASE_VERSION.tgz"
+            fi
+          environment:
+            RELEASE_VERSION: << pipeline.parameters.release-version >>
+      - run:
+          name: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
+          command: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
+      - store_artifacts:
+          path: artifacts/npm
+          destination: npm-release
+      - run:
+          name: Publish the tested tarballs with npm trusted publishing
+          command: |
+            set +x
+            NPM_ID_TOKEN=$(circleci run oidc get --claims '{"aud":"npm:registry.npmjs.org"}')
+            export NPM_ID_TOKEN
+            if [ "$RELEASE_PACKAGE" = sdk ] || [ "$RELEASE_PACKAGE" = all ]; then
+              npm publish "artifacts/npm/datool-sdk-$RELEASE_VERSION.tgz" --ignore-scripts --access public
+            fi
+            if [ "$RELEASE_PACKAGE" = cli ] || [ "$RELEASE_PACKAGE" = all ]; then
+              npm publish "artifacts/npm/datool-cli-$RELEASE_VERSION.tgz" --ignore-scripts --access public
+            fi
+          environment:
+            RELEASE_VERSION: << pipeline.parameters.release-version >>
+            RELEASE_PACKAGE: << pipeline.parameters.release-package >>
+      - run:
+          name: Verify the actual npm CLI release
+          command: |-
+            if [ "$RELEASE_PACKAGE" = cli ] || [ "$RELEASE_PACKAGE" = all ]; then
+              node scripts/test-cli-distribution.mjs "$RELEASE_VERSION"
+            fi
+          environment:
+            RELEASE_VERSION: << pipeline.parameters.release-version >>
+  disk-health:
+    executor: ssh
+    steps:
+      - configure-restricted-ssh:
+          key-variable: NETCUP_MONITOR_SSH_PRIVATE_KEY
+          hosts-variable: NETCUP_MONITOR_SSH_KNOWN_HOSTS
+          key-file: netcup_monitor
+          hosts-file: netcup_known_hosts
+      - run:
+          name: Check Netcup disk headroom
+          command: |
+            ssh -i ~/.ssh/netcup_monitor -o IdentitiesOnly=yes -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/netcup_known_hosts \
+              -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+              "datool-monitor@$DOKKU_SSH_HOST" disk:status datool
+      - run:
+          name: Remove monitoring key
+          command: rm -f ~/.ssh/netcup_monitor ~/.ssh/netcup_known_hosts
+          when: always
+  python-verify:
+    executor: linux
+    environment:
+      CI_TRIGGER_SOURCE: << pipeline.trigger_source >>
+    steps:
+      - checkout
+      - install-dependencies
+      - install-uv
+      - run:
+          name: Verify Python SDK wheel, runtimes, and real ingestion
+          command: bash scripts/ci-python-sdk.sh
+      - store_artifacts:
+          path: packages/python-sdk/dist
+          destination: python-sdk
+workflows:
+  ci:
+    when:
+      equal:
+        - verify
+        - << pipeline.parameters.operation >>
+    jobs:
+      - verify
+      - python-verify
+      - hermes-verify
+      - production-image:
+          filters: pipeline.git.branch == "main" or pipeline.parameters.verify-image
+      - deploy:
+          requires:
+            - verify
+            - production-image
+            - python-verify
+            - hermes-verify
+          context: datool-production
+          serial-group: << pipeline.project.slug >>/production
+          filters:
+            branches:
+              only: main
+  publish-hermes:
+    when:
+      equal:
+        - publish-hermes
+        - << pipeline.parameters.operation >>
+    jobs:
+      - hermes-verify:
+          filters:
+            branches:
+              only: main
+      - hermes-publish:
+          requires:
+            - hermes-verify
+          context: datool-hermes
+          serial-group: << pipeline.project.slug >>/hermes
+          filters:
+            branches:
+              only: main
+  publish-packages:
+    when:
+      equal:
+        - publish
+        - << pipeline.parameters.operation >>
+    jobs:
+      - publish:
+          context: datool-npm
+          serial-group: << pipeline.project.slug >>/npm
+          filters:
+            branches:
+              only: main
+  disk-health:
+    when:
+      equal:
+        - disk-health
+        - << pipeline.parameters.operation >>
+    jobs:
+      - disk-health:
+          context: datool-monitor
+          filters:
+            branches:
+              only: main
+  scheduled-disk-health:
+    triggers:
+      - schedule:
+          cron: 17 0,6,12,18 * * *
+          filters:
+            branches:
+              only: main
+    jobs:
+      - disk-health:
+          context: datool-monitor

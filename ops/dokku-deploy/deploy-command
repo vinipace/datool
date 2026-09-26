@@ -1,0 +1,37 @@
+#!/usr/bin/python3 -I
+"""SSH entrypoint restricted to Datool CI image import and health reports."""
+import os
+import pwd
+import re
+import shlex
+import sys
+
+
+def validate(arguments):
+    if arguments in (["ps:report", "datool"], ["ps:report", "datool", "--running"], ["disk:status", "datool"]):
+        return arguments
+    if (len(arguments) == 4 and arguments[:2] == ["disk:load-image", "datool"]
+        and re.fullmatch(r"datool-release:[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*", arguments[2])
+        and re.fullmatch(r"[1-9][0-9]{0,10}", arguments[3])
+        and int(arguments[3]) <= 8 * 1024**3):
+        return arguments
+    raise ValueError("Only Datool image deployment and health status are permitted")
+
+
+def main():
+    try:
+        if os.getuid() == pwd.getpwnam("dokku").pw_uid:
+            arguments = validate(sys.argv[1:])
+            os.execv("/usr/bin/dokku", ["dokku", *arguments])
+        if len(sys.argv) != 1:
+            raise ValueError("Arguments are accepted only through the SSH forced command")
+        arguments = validate(shlex.split(os.environ.get("SSH_ORIGINAL_COMMAND", "")))
+        os.execv("/usr/bin/sudo", ["sudo", "-n", "-u", "dokku",
+                 "/usr/local/lib/datool-deploy/deploy-command", *arguments])
+    except (ValueError, KeyError):
+        print("Denied: only Datool image deployment and health status are permitted", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

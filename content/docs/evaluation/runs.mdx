@@ -1,0 +1,105 @@
+---
+title: Evaluation runs
+description: Execute dataset cases against an app and compare the resulting evidence and scores.
+icon: evals
+---
+
+## Run a dataset
+
+First, [connect an app](/docs/guides/playground), prepare a [dataset](/docs/evaluation/datasets), and save a [scorer](/docs/evaluation/scorers).
+
+Choose **Run dataset** from Evals, a dataset detail page, or a playground node. Select the app, cases, and scorers. Datool invokes the app for each selected case and records an invocation trace. An app does not need the tracing SDK to record its overall input, output, duration, and error.
+
+Watch the run detail page as cases finish. Inspect failures individually; an app error on one case does not mean every other case failed. Internal model or tool details require instrumentation inside the app.
+
+## Re-score or run again
+
+**Re-score saved traces** evaluates frozen evidence with the selected scorer versions without invoking the app. Use it when changing a rubric or checking a deterministic rule.
+
+**Run app again** uses `parentRunId` to invoke the app on the parent run's frozen cases, inputs and reference answers, including its original subset. Later dataset edits do not change those cases. It resolves current published prompts and active scorer versions by default. Set `useRecordedVersions: true` to retain the recorded prompt and scorer versions, then override only the setting under test. Application code is not restored by a version pin. This action can make external model calls again.
+
+Use `sourceRunId` to re-score saved outputs with selected judges without calling the app. Use a new dataset selection and snapshot explicitly when the experiment should use revised references.
+
+## Compare results
+
+Compare runs at both the aggregate and case level. Check which cases and scorer versions were used, whether the app succeeded, and whether the expected evidence was available. A better average over a different set of cases does not by itself demonstrate an improvement.
+
+Saved results preserve case and scorer snapshots so you can inspect the evidence behind a judgment after later edits.
+
+## Run from the CLI
+
+```sh
+npx datool agent tools start_eval_run
+npx datool evals run --input @evaluation.json --wait
+npx datool evals wait run-id --timeout 300
+npx datool evals export run-id --out results.ndjson
+npx datool evals target run-id --target-id target-id
+npx datool evals gate run-id --min-score 0.8 --min-pass-rate 1
+```
+
+Use the current `start_eval_run` input schema to construct `evaluation.json`. Provide a stable `requestKey`; retrying identical inputs with that key retrieves the original run. A failed gate exits with code 2; a wait timeout exits with code 3.
+
+Prefer native `evals wait` and `evals export`: waiting is lightweight, and export follows all result pages with saved reasonings and errors. Reads retry temporary Datool throttling and transport failures with bounded backoff, honoring server cooldowns. A wait timeout stops waiting, not execution; continue with the same run ID. POST mutations are not automatically retried by the CLI.
+
+Connected execution runs in the persistent Datool server process. After an interruption, inspect run and target stages. On supported servers and CLI 0.4.0 or later, `datool evals recover run-id` preserves successful outputs and judgments, retries missing/error judgments, and dispatches only provably queued calls. It rejects a live worker and never redispatches an ambiguous app invocation. `datool evals cancel run-id` fences further judgments and scheduling; an already dispatched app can still finish. Cancelled runs need an explicit new run. Older clients can use `agent call recover_eval_run` or `cancel_eval_run` after checking live discovery.
+
+## Override managed prompts for an experiment
+
+For applications using `datool.prompts.get(slug)`, use the Run dataset dialog's
+prompt, version and model controls, or add top-level `promptOverrides` to the
+connected run body:
+
+```json
+{
+  "mode": "connected",
+  "appId": "extract",
+  "datasetId": "dataset-id",
+  "evaluatorIds": ["scorer-id"],
+  "requestKey": "brand-v2-mini",
+  "promptOverrides": {
+    "brand-extraction": { "version": 2, "model": "openai/gpt-4.1-mini" }
+  }
+}
+```
+
+Use `datool evals run --input @evaluation.json --wait` or MCP `start_eval_run`.
+The SDK client needs `prompts:read`, `evals:read` and `traces:write`; HTTP apps
+must wrap their authenticated handler with `withDatoolRequest` to receive the
+run scope. See [managed prompt setup](/docs/guides/prompts#connected-dataset-prompt-overrides).
+
+Datool freezes every published prompt's default version before the run starts,
+including prompts first used after a later publication. Dataset inputs and
+expected answers stay unchanged. Inspect `metadata.promptConfig` for the frozen
+baseline and `Prompt: <slug>` trace spans for actual resolutions. Changed
+overrides need a new `requestKey`. Re-scoring retains frozen evidence and prompt
+configuration, rejects new overrides, and makes no app calls or prompt reads.
+
+## Override app inputs for an experiment
+
+For a connected dataset run, include an `inputOverrides` object in the
+`start_eval_run` payload or the Run dataset dialog's JSON field:
+
+```json
+{
+  "model": "provider/model",
+  "promptSlug": "brand-extraction",
+  "promptVersion": 2,
+  "discoveryPromptSlug": "brand-discovery",
+  "discoveryPromptVersion": 3
+}
+```
+
+These are app-defined fields for applications that accept these settings as
+input. Native managed-prompt SDK applications use `promptOverrides` above.
+Override keys replace each case's input values
+with a shallow merge; nested objects and arrays replace whole values, and null
+is literal. All selected inputs must be objects and every effective input must
+match the app schema before execution starts. Expected outputs and case metadata
+are never added to app input. Dataset contents stay unchanged.
+
+The run freezes effective inputs and stores the overrides in
+`metadata.inputOverrides`. A changed override requires a new `requestKey`.
+Overrides are only accepted with `mode: "connected"` and `datasetId`, optionally
+with a frozen `datasetVersionId`. Re-scoring with `sourceRunId` retains original
+evidence and cannot supply overrides. Comparisons retain frozen case identity
+(`datasetCaseId`) even after live dataset cases are deleted.

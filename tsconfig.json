@@ -1,0 +1,56 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@payload-config": [
+        "./payload.config.ts"
+      ]
+    },
+    "target": "esnext",
+    "baseUrl": "./",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
+    "vitest.config.mts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    ".next-landing-preview/types/**/*.ts",
+    ".next-landing-preview/dev/types/**/*.ts",
+    ".next-billing/types/**/*.ts",
+    ".next-billing/dev/types/**/*.ts",
+    ".next-hermes-node/types/**/*.ts",
+    ".next-hermes-node/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests/fixtures/packages"
+  ]
+}

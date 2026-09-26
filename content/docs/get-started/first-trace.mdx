@@ -1,0 +1,260 @@
+---
+title: Send your first trace
+description: Trace an AI SDK call, a TypeScript or Python function, or a LangGraph application.
+icon: quickstart
+---
+
+import { Tab, Tabs } from "fumadocs-ui/components/tabs"
+
+Record your first trace using the library you already work with. Start with an AI SDK model call, or choose TypeScript, Python, or LangGraph below.
+
+You need a running Datool instance and access to a project. If you are running Datool yourself, complete [self-hosting setup](/docs/self-hosting) first, including the ingestion worker.
+
+## 1. Get your project credentials
+
+Open Datool and sign in. Select an organization and project, or create them if your role permits it.
+
+In **Project settings**, copy the **project ID**. Use the ID rather than the project slug from the browser address. Open **Project settings → API keys** and create an organization API key with `traces:write`. An organization owner or admin can create a key for you. Copy it when it is shown.
+
+## 2. Configure your environment
+
+Create a `.env` file with your instance URL, project ID, and API key. Replace the example values and keep the file out of version control.
+
+```dotenv
+DATOOL_BASE_URL=https://your-datool-host
+DATOOL_PROJECT_ID=your-project-id
+DATOOL_API_KEY=your-api-key
+```
+
+Use `http://localhost:3000` for a local Datool installation. The base URL is the application origin; do not append `/api`.
+
+## 3. Send a trace
+
+Each tab includes installation, a complete script, and a run command. The Node examples require Node.js 22.18 or later. The Python examples require Python 3.10 or later and access to the preview SDK wheel.
+
+<Tabs items={["AI SDK", "TypeScript", "Python", "LangGraph"]}>
+<Tab value="AI SDK">
+
+**AI SDK 7 — trace a model call**
+
+Install the SDK and telemetry integration:
+
+```sh
+npm install @datool/sdk@0.3.1 ai@7 @ai-sdk/otel @opentelemetry/api@1 @opentelemetry/sdk-trace-node@2
+```
+
+Add your Vercel AI Gateway key to `.env`:
+
+```dotenv
+AI_GATEWAY_API_KEY=your-ai-gateway-key
+```
+
+This example makes a real model call and incurs provider usage. Save `first-trace.mjs`. After the one-time telemetry setup, use `generateText` normally:
+
+```js
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node"
+import { generateText, registerTelemetry } from "ai"
+import { LegacyOpenTelemetry } from "@ai-sdk/otel"
+import { DatoolSpanProcessor } from "@datool/sdk/otel"
+
+const processor = new DatoolSpanProcessor()
+const provider = new NodeTracerProvider({ spanProcessors: [processor] })
+provider.register()
+registerTelemetry(new LegacyOpenTelemetry())
+
+try {
+  const result = await generateText({
+    model: "openai/gpt-4.1-mini",
+    prompt: "Explain AI observability in one sentence.",
+    telemetry: { functionId: "docs-greeting" },
+  })
+  console.log(result.text)
+} finally {
+  try {
+    await processor.forceFlush()
+  } finally {
+    await provider.shutdown()
+  }
+}
+```
+
+```sh
+node --env-file=.env first-trace.mjs
+```
+
+Expect a generated sentence. In Datool, find the latest **docs-greeting** call and inspect its nested model span for the prompt, response, model, and provider-reported token usage. See the [AI SDK guide](/docs/tracing/ai-sdk) for streaming, existing OpenTelemetry setups, and AI SDK 6.
+
+</Tab>
+<Tab value="TypeScript">
+
+**TypeScript — trace an OpenAI call**
+
+Install the OpenAI client and Datool's OpenTelemetry integration:
+
+```sh
+npm install @datool/sdk@0.3.1 openai @opentelemetry/api@1 @opentelemetry/sdk-trace-node@2
+```
+
+Add your OpenAI key to `.env`:
+
+```dotenv
+OPENAI_API_KEY=your-openai-key
+```
+
+This example makes a real model call and incurs provider usage. Save `first-trace.ts`. The fetch wrapper records the request while you use the OpenAI client normally:
+
+```ts
+import OpenAI from "openai"
+import { trace } from "@opentelemetry/api"
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node"
+import { DatoolSpanProcessor } from "@datool/sdk/otel"
+import { traceOpenAIChatFetch } from "@datool/sdk/openai"
+
+const processor = new DatoolSpanProcessor()
+const provider = new NodeTracerProvider({ spanProcessors: [processor] })
+provider.register()
+const openai = new OpenAI({
+  fetch: traceOpenAIChatFetch(trace.getTracer("docs-openai")),
+})
+
+try {
+  const result = await openai.chat.completions.create({
+    model: "gpt-4.1-mini",
+    messages: [{ role: "user", content: "Say hello in one sentence." }],
+  })
+  console.log(result.choices[0]?.message.content)
+} finally {
+  try {
+    await processor.forceFlush()
+  } finally {
+    await provider.shutdown()
+  }
+}
+```
+
+```sh
+node --env-file=.env first-trace.ts
+```
+
+Expect a generated sentence and a completed OpenAI trace with the request, response, model, and token usage. This wrapper supports **non-streaming Chat Completions**; Responses API and streaming calls are not captured. See the [OpenAI guide](/docs/tracing/openai).
+
+</Tab>
+<Tab value="Python">
+
+**Python — trace a function with a decorator**
+
+The Python SDK is a preview; ask your Datool administrator for the `datool-0.1.0-py3-none-any.whl` file. It is not published to PyPI. With the wheel in the current directory:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install ./datool-0.1.0-py3-none-any.whl python-dotenv
+```
+
+Save `first_trace.py`. The decorator records function arguments, return values, timing, and errors automatically:
+
+```python
+from dotenv import load_dotenv
+from datool import get_client, observe
+
+load_dotenv()
+
+@observe(name="First Python trace")
+def greet(name: str):
+    return f"Hello, {name}!"
+
+try:
+    print(greet("Ada"))
+    get_client().flush()
+finally:
+    get_client().shutdown()
+```
+
+```sh
+python first_trace.py
+```
+
+Expect `Hello, Ada!`. Find **First Python trace** in Datool and inspect the captured input and output. This example makes no model call and needs no provider key. See the [Python SDK guide](/docs/reference/python-sdk) for async functions, model metadata, and redaction.
+
+</Tab>
+<Tab value="LangGraph">
+
+**LangGraph — attach a callback to your graph**
+
+The callback integration uses the preview Python SDK. Obtain the wheel from your Datool administrator, then install it in a virtual environment:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install './datool-0.1.0-py3-none-any.whl[langchain]' 'langgraph>=1,<2' python-dotenv
+```
+
+Save `first_graph.py`. Pass `CallbackHandler` to `graph.invoke`; your nodes remain ordinary functions:
+
+```python
+from dotenv import load_dotenv
+from typing import TypedDict
+from langgraph.graph import END, START, StateGraph
+from datool import get_client
+from datool.langchain import CallbackHandler
+
+load_dotenv()
+
+class State(TypedDict):
+    text: str
+
+def trim(state: State):
+    return {"text": state["text"].strip()}
+
+def uppercase(state: State):
+    return {"text": state["text"].upper()}
+
+builder = StateGraph(State)
+builder.add_node("trim", trim)
+builder.add_node("uppercase", uppercase)
+builder.add_edge(START, "trim")
+builder.add_edge("trim", "uppercase")
+builder.add_edge("uppercase", END)
+graph = builder.compile()
+
+datool = get_client()
+handler = CallbackHandler(client=datool)
+try:
+    result = graph.invoke(
+        {"text": " hello "},
+        config={"callbacks": [handler], "run_name": "Docs uppercase graph"},
+    )
+    print(result)
+    datool.flush()
+    print(handler.last_trace_id)
+finally:
+    datool.shutdown()
+```
+
+```sh
+python first_graph.py
+```
+
+Expect `{'text': 'HELLO'}` and a trace ID. Find **Docs uppercase graph** in Datool, then inspect the nested `trim` and `uppercase` steps. This graph makes no model calls. The same callback captures nested LangChain model calls when you add them. See the [LangGraph and LangChain guide](/docs/tracing/langgraph).
+
+</Tab>
+</Tabs>
+
+## 4. Inspect the result
+
+Open **Traces** in the same project, select the new trace, and inspect its inputs, outputs, duration, and status. For model calls, select the nested LLM span to inspect model details and token usage. The Python function and deterministic graph examples have no token usage.
+
+The scripts flush before exiting so delivery failures are visible. In a long-running application, configure tracing once at startup and flush during graceful shutdown.
+
+## If the trace does not appear
+
+| Symptom | What to check |
+| --- | --- |
+| HTTP 401 | The key is valid, has not expired, and belongs to this instance. |
+| HTTP 403 | The key grants `traces:write` and its organization owns the project. |
+| Model-provider authentication error | The AI Gateway or OpenAI key is configured separately from the Datool key. |
+| Connection error | The base URL is reachable from the process running the script. |
+| Pending or timed-out delivery | Redis and the ingestion worker are running; inspect worker logs. |
+| Script succeeds but the list looks empty | Select the same project and clear restrictive date or collection filters. |
+
+Next, [run your first evaluation](/docs/get-started/first-evaluation) or [use a managed prompt](/docs/get-started/first-prompt). For custom spans and application-level grouping, see [manual instrumentation](/docs/tracing/instrumentation).

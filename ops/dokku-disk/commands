@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  disk:load-image|disk:cleanup|disk:status)
+    exec python3 /usr/local/lib/datool-disk/maintenance.py "$@"
+    ;;
+  help|disk:help)
+    echo '    disk:load-image datool IMAGE BYTES  Import with disk preflight and image retention'
+    echo '    disk:cleanup datool                Remove obsolete Datool release images'
+    echo '    disk:status datool                 Show disk headroom and retained releases'
+    ;;
+  *) exit "${DOKKU_NOT_IMPLEMENTED_EXIT:-10}" ;;
+esac

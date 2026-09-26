@@ -1,0 +1,34 @@
+{
+  "status": "qualification targets, not measured capacity",
+  "registeredIdentities": 1000,
+  "representativeActiveClients": 100,
+  "stressActiveClients": 1000,
+  "steadyStateSeconds": 1800,
+  "retained": {
+    "traces": 1000000,
+    "spans": 5000000,
+    "evalRuns": 50000,
+    "evalResults": 500000
+  },
+  "p95Ms": {
+    "collection": 500,
+    "dashboard": 2000,
+    "mixed20WidgetDashboard": 5000
+  },
+  "admittedErrorRateMax": 0.01,
+  "summaryBytesTarget": 1048576,
+  "interactiveBytesMax": 8388608,
+  "acceptedIngestionLoss": 0,
+  "admission": {
+    "global": 6,
+    "perProject": 2,
+    "queued": 32,
+    "queuedPerProject": 8,
+    "queueWaitMs": 2000
+  },
+  "connections": {
+    "analytics": 6,
+    "ordinary": 10,
+    "worker": "deployment-owned; include in total connection budget"
+  }
+}

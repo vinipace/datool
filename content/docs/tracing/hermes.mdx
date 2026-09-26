@@ -1,0 +1,38 @@
+---
+title: Hermes Agent
+description: Automatically collect Hermes turns, model calls and tool results in Datool using a native plugin.
+icon: traces
+---
+
+The native Datool plugin records Hermes conversations automatically. Each session contains a trace per user turn, with model requests/responses, token usage, tools, failures and the final answer.
+
+## Connect Hermes
+
+Use Hermes **0.21.3 or later**. Obtain the Datool Hermes plugin bundle from your Datool administrator, extract it on the machine running Hermes, and run:
+
+```sh
+python3 install.py
+```
+
+The installer prompts for your Datool URL, project ID and an API key with `traces:write`. It saves credentials privately and enables the plugin. Restart Hermes or its gateway, then use it normally. New runs appear in **Traces** for your chosen project.
+
+Open a model span to see the request messages and assistant response in the **LLM** conversation view, including tool calls. Switch to **JSON** or the span's **Raw** tab to inspect the complete captured envelopes and usage.
+
+From a Datool source checkout, the same installer is at `integrations/hermes/install.py`. It can target another profile with `--home /path/to/profile` and another Hermes executable with `--hermes /path/to/hermes`. No Datool server changes or additional Python packages are required by the plugin.
+
+## Verify delivery
+
+```sh
+hermes datool status
+hermes datool flush --timeout 60
+```
+
+Saved counts refer to PostgreSQL persistence receipts. Events awaiting delivery stay in a private local outbox and retry while Hermes is running or on its next start. Self-hosted Datool needs its Redis ingestion worker running. Failed delivery does not interrupt the agent.
+
+## Content and coverage
+
+Prompts and tool inputs/outputs are captured by default. Configure `DATOOL_HERMES_CAPTURE_CONTENT=false` to retain metadata and usage without content. Protect the Datool project and local outbox as conversation history. Known credential fields are redacted; arbitrary sensitive text is not automatically removed.
+
+Hermes can truncate its model-hook payloads. The trace preserves the truncation markers. Usage is recorded when supplied; missing usage or pricing stays unavailable. Historical sessions are not backfilled, and internal work without session/turn hooks is not captured. After a force kill, an unfinished trace can remain running.
+
+Configuration and delivery state live in `$HERMES_HOME/datool`. To stop collection, run `hermes plugins disable datool` and restart Hermes. For more tracing options, see [Instrumentation](/docs/tracing/instrumentation).

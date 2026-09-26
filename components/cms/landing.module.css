@@ -1,0 +1,525 @@
+.hero {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: 2rem;
+  padding-block: 5.5rem 4.5rem;
+}
+.heroCopy {
+  position: relative;
+  z-index: 1;
+}
+.headline {
+  max-width: 650px;
+  font-size: clamp(2.8rem, 5.25vw, 4.2rem);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+.headline em {
+  display: block;
+  color: var(--marketing-signal);
+  font-style: normal;
+}
+.description {
+  max-width: 450px;
+  margin-top: 1.7rem;
+  color: var(--foreground-muted);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+.heroNote {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 2rem;
+  color: var(--foreground-muted);
+  font-size: 0.7rem;
+}
+.heroNote svg {
+  color: var(--marketing-signal);
+}
+.story {
+  --story-signal: var(--marketing-signal);
+  min-width: 0;
+  position: relative;
+  margin: 0;
+}
+.story[data-stage="evaluate"] {
+  --story-signal: var(--marketing-evaluate);
+}
+.story[data-stage="improve"] {
+  --story-signal: var(--marketing-improve);
+}
+.stageNumber {
+  color: var(--story-signal);
+}
+.signalGraphic {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+/* WebKit mispaints positioned HTML inside a scaled SVG foreignObject. */
+.signalGraphic foreignObject > * {
+  position: static;
+}
+.centralNode > rect {
+  fill: var(--background);
+  stroke: var(--story-signal);
+  stroke-opacity: 0.7;
+}
+.graphNode {
+  fill: var(--muted);
+  stroke: var(--border-strong);
+}
+.diagramLabel {
+  fill: var(--foreground);
+  font:
+    13px var(--font-geist-mono, ui-monospace),
+    monospace;
+}
+.diagramDetail {
+  fill: var(--foreground-muted);
+  font:
+    11px var(--font-geist-mono, ui-monospace),
+    monospace;
+}
+.drawPaths {
+  stroke-dasharray: 900;
+  stroke-dashoffset: 0;
+  animation: trace-arrives 2.8s ease-out both;
+}
+.incomingPath {
+  stroke-linecap: round;
+  stroke-dasharray: 7 9;
+  animation: signal-flows 1.2s linear infinite;
+}
+.story[data-playing="false"] .incomingPath {
+  animation-play-state: paused;
+}
+.storyControls {
+  --progress-color: var(--story-signal);
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.storyCaption {
+  min-height: 5.2rem;
+  margin: 1.2rem auto 0;
+  max-width: 400px;
+  text-align: center;
+}
+.storyCaption p:first-child {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.storyCaption p + p {
+  margin: 0.35rem auto 0;
+  max-width: 340px;
+  color: var(--foreground-muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.section {
+  padding-block: 3.75rem;
+  border-top: 1px solid var(--border);
+}
+.sectionEyebrow {
+  margin-bottom: 1rem;
+  color: var(--marketing-signal);
+  font:
+    0.65rem var(--font-geist-mono, ui-monospace),
+    monospace;
+  letter-spacing: 0.12em;
+}
+.sectionHeading {
+  max-width: 600px;
+  margin-bottom: 2.75rem;
+  font-size: clamp(1.8rem, 3.2vw, 2.5rem);
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.features {
+  display: grid;
+  gap: 2.5rem;
+}
+.feature {
+  min-width: 0;
+}
+.featureNumber {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font:
+    0.6rem var(--font-geist-mono, ui-monospace),
+    monospace;
+  color: var(--marketing-signal);
+}
+.featureNumber::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    var(--marketing-primary),
+    var(--border) 75%
+  );
+}
+.featureVisual {
+  display: flex;
+  align-items: center;
+  height: 175px;
+  margin-block: 1rem 1.25rem;
+  padding-inline: 0.3rem;
+}
+.feature h3 {
+  margin-bottom: 0.7rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.feature > p:last-child {
+  max-width: 330px;
+  font-size: 0.86rem;
+  line-height: 1.8;
+  color: var(--foreground-muted);
+}
+.traceRows {
+  width: 100%;
+  font:
+    0.65rem var(--font-geist-mono, ui-monospace),
+    monospace;
+}
+/* All spans share one time origin; indentation only describes parentage. */
+.traceAxis,
+.traceRow {
+  display: grid;
+  grid-template-columns: 106px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: center;
+}
+.traceAxis {
+  margin-bottom: 6px;
+  color: var(--foreground-muted);
+  font-size: 0.5rem;
+}
+.traceAxis > div {
+  display: flex;
+  justify-content: space-between;
+}
+.traceRow {
+  height: 26px;
+}
+.traceName {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.traceName > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.traceRow[data-child="true"] .traceName {
+  padding-left: 9px;
+  border-left: 1px solid var(--border-strong);
+  color: var(--foreground-muted);
+}
+.traceTrack {
+  position: relative;
+  height: 100%;
+  border-inline: 1px solid var(--border);
+  background: linear-gradient(
+    to right,
+    transparent calc(50% - 0.5px),
+    var(--border) calc(50% - 0.5px),
+    var(--border) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
+.traceTrack > i {
+  position: absolute;
+  top: 9px;
+  height: 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--marketing-signal) 55%, transparent);
+}
+.traceRow[data-child="false"] .traceTrack > i {
+  background: var(--marketing-signal);
+}
+.traceTrack > i[data-warning="true"] {
+  background: var(--warning);
+}
+.traceFlag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 29px;
+  margin-top: 10px;
+  padding-inline: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--foreground-muted);
+  font-size: 0.55rem;
+}
+.traceFlag > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+.traceFlag > svg {
+  margin-left: auto;
+}
+.caseGraphic {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  font:
+    0.65rem var(--font-geist-mono, ui-monospace),
+    monospace;
+}
+.savedCase {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  padding: 15px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--muted);
+  line-height: 1.8;
+}
+.savedCase svg {
+  color: var(--marketing-signal);
+}
+.savedCase strong {
+  font-weight: 400;
+  color: var(--foreground-muted);
+}
+.caseGraphic > svg {
+  min-width: 20px;
+  height: 112px;
+  flex: 1;
+}
+.caseChecks {
+  display: flex;
+  flex-direction: column;
+  gap: 23px;
+}
+.caseChecks > span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.caseChecks svg {
+  color: var(--marketing-signal);
+}
+.compareGraphic {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+}
+.compareGraphic > div:first-child {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  color: var(--foreground-muted);
+  font:
+    0.6rem var(--font-geist-mono, ui-monospace),
+    monospace;
+}
+.caseMatrix {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+.caseMatrix i {
+  aspect-ratio: 1;
+  max-height: 15px;
+  border-radius: 2px;
+  border: 1px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+.caseMatrix i[data-pass="true"] {
+  border-color: color-mix(in srgb, var(--marketing-signal) 35%, transparent);
+  background: color-mix(in srgb, var(--marketing-signal) 25%, transparent);
+}
+.compareGraphic > p {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  grid-column: 1 / -1;
+  color: var(--foreground-muted);
+  font:
+    0.55rem var(--font-geist-mono, ui-monospace),
+    monospace;
+}
+.evidence {
+  position: relative;
+  max-width: none;
+  padding: 3rem 0 4.5rem;
+}
+.evidence > div {
+  max-width: 740px;
+  border-left: 2px solid var(--marketing-signal);
+  padding-left: 1.5rem;
+  font-size: clamp(1.1rem, 2.5vw, 1.45rem);
+  line-height: 1.7;
+  letter-spacing: -0.025em;
+}
+.faq {
+  border-top: 1px solid var(--border);
+  padding-block: 3.5rem;
+}
+.cta {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin-block: 2.5rem 4rem;
+  padding: 3.5rem 2.5rem;
+  border-block: 1px solid
+    color-mix(in srgb, var(--marketing-primary) 45%, var(--border));
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--marketing-primary) 16%, var(--background)),
+    var(--background)
+  );
+}
+.cta h2 {
+  position: relative;
+  max-width: 570px;
+  font-size: clamp(2rem, 3.8vw, 3.1rem);
+  font-weight: 400;
+  line-height: 1.13;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.cta p {
+  position: relative;
+  margin-top: 1rem;
+  color: var(--foreground-muted);
+  font-size: 0.95rem;
+}
+.ctaActions {
+  position: relative;
+  margin-top: 1.75rem;
+}
+.loop {
+  position: absolute;
+  width: 620px;
+  height: 100%;
+  right: -170px;
+  top: 0;
+  z-index: -1;
+  opacity: 0.9;
+}
+@keyframes trace-arrives {
+  from {
+    stroke-dashoffset: 900;
+    opacity: 0.2;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+@keyframes signal-flows {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: 1.05fr 1fr;
+    gap: 2rem;
+    padding-block: 5rem;
+  }
+  .heroCopy {
+    padding-bottom: 2rem;
+  }
+  .features {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2.5rem;
+  }
+}
+@media (min-width: 600px) and (max-width: 899px) {
+  .story {
+    width: 560px;
+    max-width: 100%;
+    justify-self: center;
+  }
+  .features {
+    gap: 2rem;
+  }
+  .feature {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 2rem;
+  }
+  .featureNumber {
+    grid-column: 1 / -1;
+  }
+  .featureVisual {
+    grid-row: 2 / 4;
+  }
+  .feature h3 {
+    align-self: end;
+  }
+}
+@media (max-width: 599px) {
+  .hero {
+    padding-block: 3.5rem 3rem;
+    gap: 3.5rem;
+  }
+  .headline {
+    font-size: clamp(2.5rem, 10vw, 3.7rem);
+  }
+  .heroNote {
+    margin-top: 1.4rem;
+  }
+  .storyControls {
+    gap: 0.2rem;
+  }
+  .diagramLabel {
+    font-size: 15px;
+  }
+  .diagramDetail {
+    font-size: 14px;
+  }
+  .section {
+    padding-block: 2.75rem;
+  }
+  .featureVisual {
+    max-width: 360px;
+  }
+  .evidence {
+    padding-bottom: 3rem;
+  }
+  .cta {
+    padding: 2.5rem 1.25rem;
+  }
+  .loop {
+    right: -300px;
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawPaths,
+  .incomingPath {
+    animation: none;
+  }
+}

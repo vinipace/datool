@@ -1,0 +1,119 @@
+[
+  {
+    "component": "components/workspace/alert-create-dialog.tsx",
+    "kind": "composite",
+    "story": "components/workspace/alerts-page.stories.tsx",
+    "reason": "Alert collection stories exercise template selection, cancellation and navigation."
+  },
+  {
+    "component": "components/workspace/alerts-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/alerts-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/alert-editor-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/alert-editor-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/account-menu.tsx",
+    "kind": "composite",
+    "story": "components/tracer/app-shell.stories.tsx",
+    "reason": "App shell stories cover account identity, keyboard navigation, pending sign-out and failure retry."
+  },
+  {
+    "component": "components/auth/auth-shell.tsx",
+    "kind": "direct",
+    "story": "components/auth/auth-shell.stories.tsx"
+  },
+  {
+    "component": "components/auth/google-sign-in.tsx",
+    "kind": "direct",
+    "story": "components/auth/google-sign-in.stories.tsx"
+  },
+  {
+    "component": "components/auth/mcp-authorization.tsx",
+    "kind": "direct",
+    "story": "components/auth/mcp-authorization.stories.tsx"
+  },
+  {
+    "component": "components/auth/mcp-connections.tsx",
+    "kind": "direct",
+    "story": "components/auth/mcp-connections.stories.tsx"
+  },
+  {
+    "component": "components/auth/sign-in-form.tsx",
+    "kind": "direct",
+    "story": "components/auth/sign-in-form.stories.tsx"
+  },
+  {
+    "component": "components/workspace/api-keys-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/api-keys-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/create-workspace-dialog.tsx",
+    "kind": "direct",
+    "story": "components/workspace/create-workspace-dialog.stories.tsx"
+  },
+  {
+    "component": "components/workspace/organizations-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/organizations-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/project-setup-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/project-setup-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/projects-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/projects-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/settings-shell.tsx",
+    "kind": "direct",
+    "story": "components/workspace/settings-shell.stories.tsx"
+  },
+  {
+    "component": "components/workspace/organization-settings-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/organization-settings-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/members-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/members-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/invitation-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/invitation-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/workspace-selectors.tsx",
+    "kind": "direct",
+    "story": "components/workspace/workspace-selectors.stories.tsx"
+  },
+  {
+    "component": "components/workspace/model-provider-settings.tsx",
+    "kind": "direct",
+    "story": "components/workspace/model-provider-settings.stories.tsx"
+  },
+  {
+    "component": "components/workspace/sandbox-provider-settings.tsx",
+    "kind": "direct",
+    "story": "components/workspace/sandbox-provider-settings.stories.tsx"
+  },
+  {
+    "component": "components/workspace/project-settings-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/project-settings-page.stories.tsx"
+  },
+  {
+    "component": "components/workspace/billing-page.tsx",
+    "kind": "direct",
+    "story": "components/workspace/billing-page.stories.tsx"
+  }
+]

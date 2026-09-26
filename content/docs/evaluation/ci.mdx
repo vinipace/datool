@@ -1,0 +1,88 @@
+---
+title: CI evaluation gates
+description: Run a saved evaluation, wait for execution, and fail a build on explicit quality thresholds.
+icon: evals
+---
+
+First complete [your first evaluation](/docs/get-started/first-evaluation). A CI job needs an app available to the Datool server, a dataset, a scorer, and non-interactive credentials. For a local bridge, start `datool connect` as a supervised process before starting the run and keep it alive until execution finishes.
+
+## Freeze the experiment
+
+Create a [dataset snapshot](/docs/evaluation/datasets) and record its ID. Pin the scorer version you calibrated, including its pass threshold. A numeric score without an explicit pass/fail classification cannot satisfy a pass-rate gate. Set a stable `requestKey` for each logical run; reuse it after uncertain delivery, and choose a new key for a changed experiment.
+
+Save `evaluation.json`, replacing the example IDs with your project's IDs:
+
+```json
+{
+  "name": "Release uppercase check",
+  "requestKey": "uppercase-release-42",
+  "mode": "connected",
+  "appId": "docs-uppercase",
+  "datasetId": "YOUR_DATASET_ID",
+  "datasetVersionId": "YOUR_SNAPSHOT_ID",
+  "evaluatorIds": ["YOUR_SCORER_ID"],
+  "evaluatorVersionIds": { "YOUR_SCORER_ID": "YOUR_SCORER_VERSION_ID" }
+}
+```
+
+An app ID identifies a registered app, not an immutable deployment. Record the application commit/deployment alongside the run. If prompts affect the result, pin their versions through [prompt overrides](/docs/guides/prompts#connected-dataset-prompt-overrides).
+
+## Start, wait, and gate
+
+Set `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY` through your CI secret store. Grant the run's [required scopes](/docs/reference/api), and use the CLI version in your lockfile.
+
+```sh
+npx datool evals run --input @evaluation.json --wait
+```
+
+The command prints the saved run URL before waiting. For a fully scripted job, use the stable REST envelope to capture the ID. Save `start-evaluation.mjs`:
+
+```js
+import { readFile, writeFile } from "node:fs/promises"
+
+const base = process.env.DATOOL_BASE_URL
+const key = process.env.DATOOL_API_KEY
+const project = process.env.DATOOL_PROJECT_ID
+if (!base || !key || !project) throw new Error("Set all three DATOOL_* variables")
+const response = await fetch(new URL("/api/agent/start_eval_run", base), {
+  method: "POST",
+  headers: {
+    authorization: `Bearer ${key}`,
+    "x-project-id": project,
+    "content-type": "application/json",
+  },
+  body: await readFile("evaluation.json", "utf8"),
+  redirect: "error",
+})
+const result = await response.json()
+if (!response.ok) throw new Error(`Start failed: HTTP ${response.status}`)
+if (typeof result.data?.id !== "string") throw new Error("Missing saved run ID")
+await writeFile("eval-run-id.txt", result.data.id, { mode: 0o600 })
+console.log(result.data.url)
+```
+
+Then use the recorded ID in a shell job:
+
+```sh
+set -eu
+node start-evaluation.mjs
+run_id=$(cat eval-run-id.txt)
+npx datool evals wait "$run_id" --timeout 300
+npx datool evals export "$run_id" --out results.ndjson
+npx datool evals gate "$run_id" --min-score 1 --min-pass-rate 1
+```
+
+This exports evidence before the gate can fail the job. Preserve `eval-run-id.txt`, `results.ndjson`, the experiment configuration, and the run URL as CI artifacts. Treat exported inputs and outputs as project data.
+
+## Interpret exits and retries
+
+| Result | Meaning | Next step |
+| --- | --- | --- |
+| Gate exit 0 | All requested thresholds passed | Retain the saved evidence. |
+| Gate exit 2 | Quality gate failed | Read the reasons and failing cases. Do not suppress the exit code. |
+| Wait exit 3 | Waiting timed out | The run may still be executing. Resume waiting on the same run ID. |
+| Other nonzero exit | Configuration, authentication, transport, or command error | Fix that failure before interpreting quality. |
+
+Gates inspect all results and fail closed on nonterminal, empty, missing, or unscored results. A successful app execution and a successful scorer execution do not imply that the output meets your quality threshold.
+
+Use `gate_eval_run` discovery to inspect baseline-regression options. Baseline comparisons require compatible cases and scorer versions; a changed judge cannot pass a baseline gate as if it measured only an application improvement. Read [recovery and cancellation](/docs/evaluation/runs#run-from-the-cli) before restarting an interrupted run.

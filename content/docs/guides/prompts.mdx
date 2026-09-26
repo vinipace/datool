@@ -1,0 +1,144 @@
+---
+title: Managed prompts
+description: Publish message templates and fetch the latest published configuration from your application.
+icon: prompts
+---
+
+Open **Prompts** to create a prompt with a name, unique slug, model, and ordered messages. You can include system, user, and assistant text messages, optional model parameters, output settings, and metadata.
+
+## Variables and preview
+
+Mustache mode inserts named variables such as `{{customer}}`. A name such as `{{account.name}}` is a literal variable name, not a traversal of a nested object. Values are inserted as plain text. Helpers, sections, and recursive evaluation are not supported. Plain text mode leaves braces unchanged.
+
+Choose a model and enter preview variables to test the prompt in the editor. Preview requires a project AI provider key configured in **Project settings → AI providers**. Preview values and conversations are not stored in the managed prompt.
+
+## Publish versions
+
+Changes autosave to the editable draft. **Publish** creates an immutable numbered
+version; runtime reads never receive unpublished edits. Published slugs cannot
+be renamed. Restore an older version to the draft, then publish to create a new
+version. Revision conflicts require reloading before saving again.
+
+## Native SDK
+
+For a complete setup, follow [your first managed prompt](/docs/get-started/first-prompt). The runtime client can fetch and render a published prompt without calling a model:
+
+```ts
+import { createDatool } from "@datool/sdk"
+
+const datool = createDatool()
+const prompt = await datool.prompts.get("docs-greeting")
+const messages = prompt.render({ customer: "Ada", company: "Example Co" })
+console.log({ version: prompt.version, model: prompt.model, messages })
+```
+
+`get(slug)` loads the latest published version by default. Unpublished draft edits
+are never returned. `new DatoolClient(options)` exposes the same `prompts` API. Normal fetching needs
+no `connect`, template engine or application cache. Provider resolution and the
+output schema stay in the application. `get(slug, { version: 2 })` pins a published
+version. The returned `RuntimePrompt` has typed text messages, `id`, `slug`,
+`version`, `model`, `provider`, `metadata`, and `settings` (`temperature`,
+`maxTokens`, `output`). Translate generation settings to your provider's parameter
+names, for example `maxOutputTokens: prompt.settings.maxTokens` for AI SDK.
+`render(variables)` accepts string values, throws with all missing variable names,
+and returns a new message array. Dotted names are literal keys; substituted text
+is never interpolated again or HTML-escaped.
+
+```ts
+await datool.prompts.withScope({}, async () => {
+  datool.prompts.override("brand-extraction", { version: 2, model: "openai/gpt-4.1-mini" });
+  const candidate = await datool.prompts.get("brand-extraction");
+  datool.prompts.reset("brand-extraction");
+});
+// Equivalent: withScope({ "brand-extraction": { version: 2 } }, callback)
+```
+
+Each client has its own overrides. `override` replaces that slug's override
+rather than merging it. It affects subsequent `get` calls; it cannot change
+already returned prompts, in-flight lookups, or cached published definitions.
+`override` and `reset` throw outside `connect`, `withDatoolRequest`, or
+`prompts.withScope`. `get` works normally outside a scope. Nested callback scopes
+inherit a copy of the parent's overrides; child reset removes the inherited
+entry in that child only. Completion or failure clears the child and restores
+the parent. Concurrent branches that need distinct mutations should each enter
+`withScope`. `connect` always starts a fresh scope for each call and cleans it
+up on success or failure. Await work inside the callback; detached background
+work is not part of the invocation.
+
+Caches are private to the client, including its server, project and credentials.
+Pinned published definitions remain cached until LRU eviction. Latest-published
+lookups refresh after 30 seconds by default (no stale-on-error fallback). Configure
+`promptCache: { latestTtlMs: 0, maxEntries: 256 }` to disable latest reuse. TTL
+must be 0–300,000 ms; capacity defaults to 256 and supports 1–10,000 entries.
+Concurrent identical reads deduplicate, failed requests are never cached, and
+each result is copied so caller mutations cannot corrupt cache entries. Revoking
+a key or deleting a prompt does not invalidate a definition already cached by a
+running process; create a new client to drop its cache immediately.
+
+Published HTTP lookups also use the server's Redis cache, with a hard 60-second
+maximum age and invalidation on save, publish and delete. Each HTTP request still
+authorizes the key/project; Redis failures fall back to PostgreSQL. During a
+missed invalidation, a latest lookup can retain an old response for the remaining
+server lifetime plus the configured SDK TTL (at most 90 seconds with defaults).
+HTTP responses use `no-store`; the SDK cache is explicit application behavior.
+Run manifests bypass both latest caches and read one database snapshot. Pinned
+version contents remain immutable regardless of either cache.
+
+## Connected dataset prompt overrides
+
+```json
+{
+  "mode": "connected",
+  "appId": "extract",
+  "datasetId": "dataset-id",
+  "evaluatorIds": ["scorer-id"],
+  "requestKey": "brand-v2-mini",
+  "promptOverrides": {
+    "brand-extraction": { "version": 2, "model": "openai/gpt-4.1-mini" }
+  }
+}
+```
+
+Use this body with `datool evals run --input @run.json --wait` or MCP
+`start_eval_run` (REST `/api/evals` uses the same body without `requestKey`).
+The Run dataset dialog offers published prompt, version and model controls.
+These settings remain separate from `inputOverrides`, dataset inputs, and
+expected answers. Applications continue to call only `datool.prompts.get(slug)`.
+
+Before the first invocation, one database snapshot resolves **every published
+prompt in the project**, plus explicit historical overrides. The run stores
+`metadata.promptConfig` with IDs, selected versions, publication ceilings,
+effective models and requested overrides. Lazy first use therefore reads the
+version frozen at run creation, even after another publication. A slug absent
+from the snapshot fails; a deleted/recreated identity or a version newer than
+the snapshot also fails rather than falling back to latest. A programmatic
+version override may select an older immutable version up to that ceiling.
+Explicit `get` versions and scoped overrides take precedence over the frozen
+default version; scoped model overrides take precedence over the run model.
+`reset` restores the frozen run baseline. Actual resolutions are retained in
+prompt provenance spans, including programmatic deviations from the baseline.
+
+The catalog snapshot is bounded to 10,000 prompts and 512 KiB and each request to 100 prompt
+overrides. Historical definitions are fetched from published runtime endpoints;
+deleting a required prompt before its first fetch can fail the run. Publishing
+new versions cannot change an existing run. Retries with the same `requestKey`
+reuse the same run and frozen configuration; changing requested overrides with
+that key is a conflict. Re-scoring copies frozen evidence and configuration,
+never invokes the app or fetches prompts, and rejects new prompt overrides.
+Case comparisons still pair by dataset case identity.
+
+The bridge transports only the project/run reference. SDK clients authenticate
+the frozen-config read independently through `/api/evals/<id>/prompts` and must
+match the connected project's ID (and bridge server URL). Clients from another
+project fail closed. Standalone fetching requires `prompts:read`; connected
+fetching also requires `evals:read` and `traces:write` for automatic provenance.
+For HTTP apps wrap the handler in `withDatoolRequest(request, callback)` to
+install the invocation and prompt scope from Datool's headers. Protect that
+endpoint with your normal webhook authentication.
+
+Each successful connected lookup awaits a direct `Prompt: <slug>` span write
+with resolved ID, version and effective model, even without an app telemetry
+setup. A provenance write failure fails the lookup. Existing active OpenTelemetry
+spans also receive `datool.prompt.resolve` events for standalone instrumented
+applications. Prompt variables, API keys and prompt contents are not added to
+these records. A plain standalone fetch without an active span creates no trace.

@@ -1,0 +1,43 @@
+# Only the manual PyPI release calls this workflow. Automatic CI is on CircleCI.
+name: Python SDK release verification
+on:
+  workflow_call:
+    inputs:
+      release-version:
+        description: Exact stable version for the requested publication
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: python-sdk-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  package:
+    name: Verify Python release
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI_OPERATION: publish-python
+      CI_TRIGGER_SOURCE: api
+      RELEASE_VERSION: ${{ inputs.release-version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.12.6
+          python-version: "3.12"
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Verify the exact release wheel and supported Python runtimes
+        run: bash scripts/ci-python-sdk.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-sdk-3.12
+          path: packages/python-sdk/dist/*

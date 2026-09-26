@@ -1,0 +1,16 @@
+{
+  "title": "Reference",
+  "pages": [
+    "sdk",
+    "python-sdk",
+    "cli",
+    "api",
+    "operations",
+    "mcp",
+    "authentication",
+    "compatibility",
+    "troubleshooting",
+    "filters"
+  ],
+  "icon": "reference"
+}

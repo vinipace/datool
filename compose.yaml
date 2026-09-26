@@ -1,0 +1,103 @@
+# Production self-hosting. See docs/self-hosting.md before starting.
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: ${DATOOL_IMAGE:-datool:self-hosted}
+  init: true
+  environment: &environment
+    DATABASE_URL: postgresql://datool:${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD in .env}@postgres:5432/datool
+    DATOOL_ALERT_DATABASE_URL: postgresql://datool_alert_reader:${DATOOL_ALERT_READER_PASSWORD:?Generate DATOOL_ALERT_READER_PASSWORD in .env}@postgres:5432/datool
+    REDIS_URL: redis://redis:6379
+    BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set the public HTTPS origin in .env}
+    BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Generate BETTER_AUTH_SECRET in .env}
+    DATOOL_PROVIDER_ENCRYPTION_KEY: ${DATOOL_PROVIDER_ENCRYPTION_KEY:-}
+    AUTH_ALLOWED_DOMAINS: ${AUTH_ALLOWED_DOMAINS:-}
+    AUTH_ALLOW_PUBLIC_SIGNUP: ${AUTH_ALLOW_PUBLIC_SIGNUP:-false}
+    GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    RESEND_API_KEY: ${RESEND_API_KEY:-}
+    RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+    DATOOL_CMS_ENABLED: ${DATOOL_CMS_ENABLED:-false}
+    PAYLOAD_SECRET: ${PAYLOAD_SECRET:-}
+    PAYLOAD_DATABASE_URL: ${PAYLOAD_DATABASE_URL:-}
+    CMS_ADMIN_USER_IDS: ${CMS_ADMIN_USER_IDS:-}
+    SYSTEM_ADMIN_USER_IDS: ${SYSTEM_ADMIN_USER_IDS:-}
+    DATOOL_MCP_ALLOWED_ORIGINS: ${DATOOL_MCP_ALLOWED_ORIGINS:-}
+    DATOOL_BILLING_ENABLED: "false"
+    DATOOL_MANAGED_EXECUTION_ENABLED: "false"
+    NEXT_TELEMETRY_DISABLED: "1"
+    DATOOL_DATA_DIR: /app/.data
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: datool
+      POSTGRES_USER: datool
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD in .env}
+    volumes:
+      - datool-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datool -d datool"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - datool-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *app
+    command: ["sh", "-c", "node scripts/check-self-hosting.mjs && sh scripts/release.sh && bun run db:alerts-reader"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DATOOL_HTTP_PORT:-3030}:3000"
+    volumes:
+      - datool-files:/app/.data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/sign-in').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      start_period: 60s
+      interval: 10s
+      timeout: 10s
+      retries: 6
+
+  worker:
+    <<: *app
+    command: ["bun", "run", "worker:ingestion"]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    volumes:
+      - datool-files:/app/.data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  datool-postgres:
+  datool-redis:
+  datool-files:

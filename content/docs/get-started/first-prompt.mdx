@@ -1,0 +1,104 @@
+---
+title: Use your first managed prompt
+description: Publish a prompt and use its latest published version from your application.
+icon: prompts
+---
+
+Publish a greeting template, fetch it from your application, and update it without changing your code. No model-provider account is needed to fetch or render a prompt.
+
+## 1. Publish a template
+
+Open **Prompts** in your project and create a prompt with:
+
+| Setting | Value |
+| --- | --- |
+| Name | Docs greeting |
+| Slug | `docs-greeting` |
+| Model | A model supported by your application, such as `openai/gpt-4.1-mini` |
+| Template mode | Mustache |
+| System message | `Write a short, friendly greeting. Do not invent personal details.` |
+| User message | `Greet {{customer}} from {{company}}.` |
+
+Choose **Publish**. The first published version is version 1. Autosaved draft edits are not visible to runtime reads. The model selection is stored configuration; fetching or rendering it does not make a model call.
+
+## 2. Configure your application
+
+Use Node.js 22.18 or later. In a new directory:
+
+```sh
+npm init -y
+npm install @datool/sdk@0.3.1
+```
+
+Create `.env` with your instance's origin, project ID, and an organization API key with `prompts:read`:
+
+```dotenv
+DATOOL_BASE_URL=https://your-datool-host
+DATOOL_PROJECT_ID=your-project-id
+DATOOL_API_KEY=your-organization-api-key
+```
+
+Keep `.env` out of version control. CLI OAuth login does not supply credentials to the SDK.
+
+Save `prompt.mjs`. `get(slug)` loads the **latest published version** by default; you do not need to supply a version number.
+
+```js
+import { createDatool } from "@datool/sdk"
+
+const datool = createDatool()
+const prompt = await datool.prompts.get("docs-greeting")
+const messages = prompt.render({ customer: "Ada", company: "Example Co" })
+
+console.log(JSON.stringify({
+  slug: prompt.slug,
+  version: prompt.version,
+  model: prompt.model,
+  messages,
+}, null, 2))
+```
+
+Run it:
+
+```sh
+node --env-file=.env prompt.mjs
+```
+
+Expect version 1, the configured model, the system message, and the user message `Greet Ada from Example Co.`. If the prompt is missing, verify the project, slug, and publication status. Rendering throws if a required variable is missing and lists the missing names.
+
+## 3. Publish a change
+
+Change the user message to `Greet {{customer}} from {{company}} in one sentence.` and publish again. Run the same `prompt.mjs` again: it now returns version 2 and `Greet Ada from Example Co in one sentence.` No code change is needed. Saving a draft alone does not change the published prompt.
+
+In a long-running application, the Node client caches latest lookups for 30 seconds by default. Server caching can also affect freshness; see [cache behavior](/docs/guides/prompts#native-sdk).
+
+### Optional: compare fixed versions
+
+Pin a version only when you need a reproducible comparison or a specific historical prompt. To compare both published messages, save `compare-prompts.mjs`:
+
+
+```js
+import { createDatool } from "@datool/sdk"
+
+const datool = createDatool()
+const variables = { customer: "Ada", company: "Example Co" }
+for (const version of [1, 2]) {
+  const prompt = await datool.prompts.get("docs-greeting", { version })
+  console.log(version, prompt.render(variables))
+}
+```
+
+```sh
+node --env-file=.env compare-prompts.mjs
+```
+
+## 4. Call a model when you are ready
+
+The returned messages are text messages with `role` and `content`. Pass them to your application's model client. The [AI SDK recipe](/docs/tracing/ai-sdk) provides a complete model call and tracing setup. With that setup, fetch your prompt and replace its `prompt` argument with `messages: prompt.render(variables)`; resolve the stored model through your chosen provider and translate settings such as `maxTokens` into that provider's parameters.
+
+The project provider key used by the editor's preview is server-side. It is not exported to your application. Model calls made by the application need its own provider configuration and can incur usage.
+
+## 5. Evaluate a prompt change
+
+Connect the application following [your first evaluation](/docs/get-started/first-evaluation). Keep the handler's normal `datool.prompts.get("docs-greeting")` call and select published prompt versions in **Run dataset**. Datool freezes prompt versions at run creation, including prompts first fetched later in the run.
+
+Connected prompt reads require `prompts:read`, `evals:read`, and `traces:write`. For HTTP apps, install the invocation scope with `withDatoolRequest` after authenticating the request. Inspect `Prompt: docs-greeting` spans for the version and model actually resolved. The [managed prompts guide](/docs/guides/prompts#connected-dataset-prompt-overrides) covers overrides, concurrent scopes, and re-scoring.

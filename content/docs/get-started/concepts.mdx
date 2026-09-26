@@ -1,0 +1,33 @@
+---
+title: Core concepts
+description: How project data, recorded behavior, and evaluations fit together.
+icon: concepts
+---
+
+![A trace and its spans become a curated dataset case; the case and a versioned scorer feed an evaluation whose saved evidence can be compared across app changes.](/docs-assets/evaluation-loop.svg)
+
+## Organizations and projects
+
+An **organization** owns projects and controls membership. A **project** contains traces, datasets, scorers, prompts, dashboards, and evaluation runs. Choose the project before investigating or changing data. A project slug identifies its browser route; API requests use the project ID.
+
+## Traces and spans
+
+A **trace** records an execution with its input, output, timing, and status. **Spans** describe operations inside that execution, such as a model call, tool call, or function. Parent relationships preserve the execution tree.
+
+An operation's kind describes what happened. Its optional **group** associates it with a named agent or workflow. Group membership is explicit and does not change its kind or automatically apply to its children.
+
+## Sessions, agents, and workflows
+
+A **session** connects related traces, such as multiple turns of a conversation. **Agents** and **Workflows** collect operations with an explicit group name and optional version. Their operation counts are not necessarily counts of complete end-to-end workflow executions.
+
+## Datasets and scorers
+
+A **dataset** holds cases with inputs, expected outputs, and metadata. A **scorer** evaluates trace evidence, optionally against a dataset case. It can use code or a language model.
+
+A numeric score and a pass decision are separate values. Execution errors and missing evidence must be read alongside the score; they are not automatically equivalent to a score of zero.
+
+## Evaluation runs
+
+An **evaluation run** applies scorers to cases and recorded evidence. Connected runs invoke an app for each case. Re-scoring evaluates saved evidence again. Saved snapshots and scorer versions help explain what produced a result even after a dataset or scorer changes.
+
+[Send your first trace](/docs/get-started/first-trace), then follow the [evaluation guide](/docs/evaluation/runs).

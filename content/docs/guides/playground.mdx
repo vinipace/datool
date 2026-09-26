@@ -1,0 +1,83 @@
+---
+title: Playground
+description: Connect an application, try inputs, and inspect its outputs and traces.
+icon: playground
+---
+
+The Playground lets you run registered apps from Datool. A workflow receives an input object; an agent receives a messages array. The app's schema describes the input the interface should collect.
+
+## Connect a local workflow
+
+Install and [authenticate the CLI](/docs/reference/cli), then save this as `datool.config.ts` in your application's root:
+
+```ts
+import { defineApps } from "@datool/cli"
+
+export default defineApps({
+  apps: [{
+    id: "uppercase",
+    name: "Uppercase",
+    type: "workflow",
+    inputSchema: {
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
+    handler: async (input: { text: string }) => ({
+      text: input.text.toUpperCase(),
+    }),
+  }],
+})
+```
+
+Start the connection:
+
+```sh
+npx datool connect
+```
+
+Registration needs `apps:write`. Keep the process running while using the app. CLI 0.3.0 uses an outbound bridge: it receives jobs from hosted Datool and sends results back. No inbound laptop port or tunnel is required. Upgrade the CLI and server together for this protocol.
+
+## Try an input
+
+Open **Playground**, select **Uppercase**, and run it with `{ "text": "hello" }`. Inspect the output `{ "text": "HELLO" }` and its recorded invocation. Connect internal tracing if you need model or tool spans in addition to the invocation's overall result.
+
+Reconnect after changing the manifest or handler. Unchanged definitions keep their revision, and omitting a handler does not delete its existing registration.
+
+## Evaluate more inputs
+
+After a single invocation works, use **Run dataset** with a [dataset](/docs/evaluation/datasets) and [scorer](/docs/evaluation/scorers). This exercises the same app over multiple cases.
+
+## Register an HTTP app
+
+Choose **New app → HTTP webhook**. The app editor opens at `/p/<projectSlug>/apps/new`. Configure its URL, HTTP method, JSON input/output schemas, request body format and headers. Use **Connection settings** to edit an existing app on its own page. Header values are encrypted and hidden after saving; leave the field blank to preserve them or enter `{}` to remove them.
+
+HTTP apps remain available without `connect`. This means the app can be invoked, not that its endpoint has been health checked. Non-success responses and timeouts are recorded as failed runs. Both HTTP apps and local bridges create the same invocation traces and can run against datasets.
+
+For agents and scripts, use `datool apps list`, `datool apps get <id>`, `datool apps register --input @app.json`, or `datool apps run <id> --input @run.json`. The run input contains `input`, a stable `requestKey`, and optional `scorerIds`; an empty scorer list records an unscored experiment.
+
+## Reload local code while developing
+
+```sh
+npx datool connect --watch
+npx datool connect ./handler.ts --watch
+```
+
+Watch mode is opt-in; `--no-watch` keeps the default one-time import. Source and
+config files, including imported files under the current/target project roots,
+trigger a fresh handler process after a 250 ms debounce. Changes to manifest
+schemas are synced automatically. Syntax/import/manifest errors leave the
+previous listener available until a valid save. Active calls and telemetry
+flushes finish and their results are acknowledged before replacement. Uncertain
+exchanges are retried without replaying handlers. Ctrl+C also drains.
+
+Watch covers ts/tsx/mts/cts/js/jsx/mjs/cjs/json/yaml/yml. Installed dependencies,
+Git, build/cache/coverage outputs and `.datool` are excluded. External imports,
+environment files and non-source assets require reconnecting. HTTP URL
+registration cannot use `--watch`. Keep the code fixed and watching off for final
+reproducible evaluations. Check `datool connect --help` for installed support.

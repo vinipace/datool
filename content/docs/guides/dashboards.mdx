@@ -1,0 +1,80 @@
+---
+title: Dashboards
+description: Build a weekly health dashboard, choose the right data source, and interpret changes without mixing populations.
+icon: dashboards
+---
+
+Dashboards save metric queries and their visualizations. Start with a question and a template; then inspect the traces or results behind a change.
+
+## Create a weekly health dashboard
+
+1. Open **Dashboards → New dashboard**.
+2. Select **Weekly health**, name it **Application health**, and choose **Create dashboard**.
+3. Keep the initial rolling seven-day window. Confirm that your project has traces within it.
+4. Read **Total traces**, **Failed traces**, and **Trace failure rate** together. Open the failure rankings to identify the request names or error types that need investigation.
+5. Use the header's **… → Edit dashboard** to change widgets. Check the save status before leaving, then choose **Done editing**.
+
+The template also includes failed spans, daily failures, affected users, and recurring errors. User IDs come from application instrumentation (`user.id`, `enduser.id`, or `userId`), not Datool workspace membership. Missing values appear as **Not recorded**.
+
+A failed request and a failed nested step are different facts. A request can recover from a failed tool attempt and still complete successfully. Do not add failed traces and failed spans together.
+
+## Choose a template
+
+| Template | Use it to answer |
+| --- | --- |
+| Weekly health | Which requests fail, and who is affected? |
+| LLM overview | How do traffic, model usage, errors, and timing compare? |
+| Cost and usage | Which models and application calls account for recorded spend? |
+| Latency and responsiveness | Which requests are slow, including P95 latency and time to first token? |
+| Evaluations | Which runs, cases, and scorer versions need attention? |
+
+Each creates an independent, editable configuration. Later template changes do not overwrite your dashboard. Blank dashboards are also available; dashboards support up to 20 widgets.
+
+## Add a widget
+
+In edit mode, choose **Add widget**, select a **Data source**, and choose a metric and visualization. For example, use **Spans**, **Total LLM cost**, a bar chart, and **Group by → LLM call name** to rank model spend by the application function that made the call. Set the ranking order descending.
+
+LLM call names use recorded application identity, including AI SDK `telemetry.functionId`. Without that context, calls can remain unattributed. Use **LLM model** to compare models instead. A line or stacked chart uses one time grouping and at most one **Series by** dimension.
+
+| Source | One record | Time used | Useful questions |
+| --- | --- | --- | --- |
+| Traces | One application request | Trace start | Request volume, request failure rate, whole-request latency. |
+| Spans | One recorded step | Span start | Model usage/cost, tool failures, step latency, first-token timing. |
+| Evaluation Runs | One saved evaluation batch | Run creation | Run activity, completion, and case coverage. |
+| Evaluation Results | One scorer execution against a case | Result completion | Pass rate, scoring errors, scorer-version comparisons. |
+| Scores | One current saved rating | Rating event time | Numeric values on compatible scales and categorical distributions. |
+
+Use Evaluation Results to compare quality within the same scorer version. Technical errors have their own count and are excluded from explicit pass/fail denominators. For Scores, choose a score definition or group by definition before averaging numeric values; unrelated scales cannot be combined.
+
+## Apply filters and periods
+
+The shared filter bar controls the dashboard view. For a seven-day production view:
+
+```text
+startedAt >= -7d attributes.env = prod
+```
+
+Use the [filter reference](/docs/reference/filters) for trace fields and date syntax. Filters persist in the page URL; sharing the link preserves them for authorized project members. Saved widget configuration remains separate from the current URL filters.
+
+Date filters apply to the selected source's clock. A span or evaluation result can fall inside the period even when its parent request or run began earlier. Trace-specific filters are not supported by every evaluation source; correct the visible validation error before interpreting the chart.
+
+Supported periods are bounded to 90 days. Windows include the start and exclude the end. Daily, weekly, and monthly buckets use the query's timezone; weeks start on Monday.
+
+## Read a metric comparison
+
+Metric tiles compare the selected interval with the immediately preceding interval of equal duration. Hover or focus the delta to inspect exact dates and the previous value.
+
+- Counts, cost, and durations show relative change. If the previous value is zero, the tile shows an absolute change.
+- Rates show percentage-point change: 20% to 12% is minus 8 percentage points.
+- Missing values remain missing. They do not become zero.
+- **Improvement direction** lets you set whether higher or lower is better, or keep the delta neutral.
+
+A daily history is not used to average the total; the whole-period metric is queried separately. Group counts can overlap when a case involves multiple agents or workflows, so summing those groups can exceed the global count.
+
+## Interpret cost and missing data
+
+Recorded token usage and available pricing determine cost coverage. Missing usage or an unknown price is not free usage. Inspect the available cost-coverage metrics before comparing spend across partially instrumented workloads. Dashed chart guides across missing observations are visual guides; they do not add data to totals.
+
+If a chart is empty, verify the project, date range, filters, and source. If a grouped chart reports partial data, narrow the period or groups. Drill into the underlying [traces](/docs/tracing/investigation) or [evaluation results](/docs/evaluation/runs) before diagnosing a regression.
+
+For automation, discover metric members with `get_metrics_metadata`, query with `query_metrics` or `batch_metrics`, and read stored dashboards with `preview_dashboard`. See the [operation reference](/docs/reference/operations). A batch shares a database snapshot; a preview needing several batches does not promise one snapshot across the whole dashboard.

@@ -1,0 +1,94 @@
+# Standalone disposable fixture: never merge into the self-hosting stack.
+# Use --env-file /dev/null and a dedicated datool-load[-suffix] project.
+x-load: &load
+  image: ${DATOOL_LOAD_IMAGE:-datool:load-test}
+  build:
+    context: .
+    dockerfile: Dockerfile
+  labels:
+    io.datool.fixture: ingestion-load
+  init: true
+  environment:
+    DATABASE_URL: postgresql://datool:load-fixture@postgres:5432/datool
+    DATOOL_ALERT_DATABASE_URL: postgresql://datool_alert_reader:load-reader-fixture@postgres:5432/datool
+    REDIS_URL: redis://redis:6379
+    BETTER_AUTH_URL: https://localhost:${DATOOL_LOAD_HTTP_PORT:-3040}
+    BETTER_AUTH_SECRET: disposable-load-test-secret-at-least-32-characters
+    AUTH_ALLOWED_DOMAINS: example.test
+    DATOOL_CMS_ENABLED: "false"
+    DATOOL_BILLING_ENABLED: "false"
+    DATOOL_MANAGED_EXECUTION_ENABLED: "false"
+    DATOOL_DATA_DIR: /app/.data
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    labels:
+      io.datool.fixture: ingestion-load
+    environment:
+      POSTGRES_DB: datool
+      POSTGRES_USER: datool
+      POSTGRES_PASSWORD: load-fixture
+    ports:
+      - "127.0.0.1:${DATOOL_LOAD_POSTGRES_PORT:-55441}:5432"
+    volumes:
+      - load-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datool -d datool"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    labels:
+      io.datool.fixture: ingestion-load
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${DATOOL_LOAD_REDIS_PORT:-56381}:6379"
+    volumes:
+      - load-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  migrate:
+    <<: *load
+    command: ["sh", "-c", "sh scripts/release.sh && bun run db:alerts-reader"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  app:
+    <<: *load
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DATOOL_LOAD_HTTP_PORT:-3040}:3000"
+    volumes:
+      - load-files:/app/.data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/sign-in').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+  worker:
+    <<: *load
+    restart: unless-stopped
+    command: ["bun", "run", "worker:ingestion"]
+    stop_grace_period: 30s
+    volumes:
+      - load-files:/app/.data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  load-postgres:
+  load-redis:
+  load-files:

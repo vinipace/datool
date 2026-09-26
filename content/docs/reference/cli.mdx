@@ -1,0 +1,155 @@
+---
+title: CLI reference
+description: Authenticate, inspect traces, connect applications, and run evaluations from a terminal.
+icon: cli
+---
+
+## Install and sign in
+
+The CLI requires Node.js 22.18 or newer.
+
+```sh
+npm install --save-dev @datool/cli
+npx datool auth login --datool https://your-datool-host
+npx datool doctor
+npx datool traces list --limit 1
+```
+
+Login opens the browser for project selection and consent. Tokens are stored in the operating system's credential store. Linux requires an available, unlocked Secret Service. Use `--no-browser` to print the URL and open it on the same computer.
+
+`doctor` checks configuration, compatibility, authentication, and a minimal trace read. It exits with code 1 when a check fails.
+
+## API keys and configuration
+
+For CI and non-interactive use, set `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY`. The key takes precedence over OAuth. `--datool` and `--project` override configuration for key-authenticated requests; OAuth credentials stay bound to their selected host and project.
+
+The CLI finds the nearest parent containing `package.json` or `.git`, loads `.env` then `.env.local`, and lets existing shell variables take precedence. Use repeated `--env-file` arguments to select files explicitly, or `--no-env` to disable file loading.
+
+## Common commands
+
+```sh
+npx datool traces list --filter 'status = "errored"' --limit 25
+npx datool datasets push cases.json --dry-run
+npx datool datasets pull dataset-key --out cases.json
+npx datool scorers versions scorer-id
+npx datool datasets snapshot dataset-id --label release-1
+npx datool traces export --out traces.ndjson --max-rows 10000
+```
+
+Exports are bounded and preserve existing files unless replacement is explicitly requested. Check continuation metadata before assuming an export includes every record.
+
+## Discover operations
+
+```sh
+npx datool agent tools
+npx datool agent tools start_eval_run
+npx datool agent call list_traces --input '{"limit":1}'
+```
+
+Operation discovery returns the current server's input schemas and required scopes. Every MCP operation is also available through `agent call`; use the discovered schema when constructing its input.
+
+See [Playground](/docs/guides/playground) for `connect`, and [evaluation runs](/docs/evaluation/runs) for run and gate commands.
+
+## Sign out
+
+```sh
+npx datool auth logout
+```
+
+Logout removes local credentials and requests server revocation. Previously issued access tokens can remain valid until their short expiry.
+
+## AI-labelled reviews
+
+Review aliases require an updated CLI and server with migration `0029_review_provenance.sql`. Older CLI versions can use `agent call` with the deployed operation schema.
+
+```sh
+datool agent tools record_review
+datool reviews list
+datool reviews get <session-id-or-number>
+datool reviews item <session-id> --item-id <item-id>
+datool reviews record <session-id> --item-id <item-id> --input @finding.json
+datool reviews export <session-id> --out review.ndjson
+```
+
+A notes-only `finding.json` uses the item's current revision:
+
+```json
+{
+  "expectedRevision": 0,
+  "notes": "The extracted brand is absent from the captured evidence.",
+  "agent": { "name": "Codex", "model": "actual-model-name" }
+}
+```
+
+Use `reviews create --input @session.json` with `name`, `traceIds` and optional `collectionId` for a separate test session. Inspect criteria through `human-scores list|get` or `agent tools`. Add `scores: [{humanScoreId, humanScoreRevision, value, comment}]` using the returned definitions. Providing scores replaces the complete set; omit it for notes-only updates that preserve scores and completion. Annotations are also supported; inspect `record_review` for their immutable evidence-reference schema. On revision conflict, reread and reconcile before retrying.
+
+Organization API keys need `reviews:write` to submit, `reviews:read` to read, and `traces:read` to inspect evidence/create sessions. API-key and OAuth submissions are always **AI-labelled**; identity is server-derived. Optional agent/model metadata does not change attribution. Readback and NDJSON exports include provenance, `humanVerified` and `completionKind`; sessions distinguish `humanReviewedCount`, `aiReviewedCount` and `aiLabelledCount`. AI ratings never become dataset ground truth automatically.
+
+## Span cases and runtime readiness
+
+```sh
+datool datasets promote dataset-id --input @promotion.json
+datool scorers check --input @runtime-selection.json
+datool scorers probe --input @runtime-probe.json
+datool doctor --scorer-ids scorer-id --json
+datool doctor --scorer-ids scorer-id --probe --trace-id trace-id --span-id span-id --json
+```
+
+Promotion previews by default; save explicitly with `preview: false` and the returned `expectedEvidenceHash`. Configuration checks make no provider requests. Runtime probes are explicit and potentially billable. Scorer tests are previews without a saved evaluation; recorded-trace execution spans remain inspectable. `evals run --wait` prints the saved run URL before waiting. Inspect all results and gate quality separately from execution completion.
+
+## Generated command reference
+
+Generated from the CLI shipped with this server source. Use `npx datool --help` to inspect the commands installed in your project; see [compatibility](/docs/reference/compatibility) for the published baseline. Scalar flags map to operation input fields. Use `agent tools OPERATION` for the complete deployed schema.
+
+```text
+Datool CLI
+
+  datool connect [config.ts|handler.ts|http-url] [--mode workflow|agent] [--name name] [--watch|--no-watch]
+  datool apps sync <config.ts>
+  datool datasets|scorers push <file.json> [--dry-run]
+  datool datasets|scorers pull <key> --out <file.json> [--replace]
+  datool auth login [--no-browser] | logout
+  datool doctor [--json] [--scorer-ids id,id] [--probe --trace-id id --span-id id]
+
+Options: --datool <url> --project <id> --env-file <path> --no-env
+Environment: DATOOL_BASE_URL (or DATOOL_URL), DATOOL_PROJECT_ID, DATOOL_API_KEY
+connect defaults to the project-root datool.config.ts manifest, syncs it, and starts a listener.
+--watch reloads local project source/config in fresh processes after active calls and result delivery finish.
+Watching is opt-in; node_modules, build outputs and Git files are excluded. HTTP webhooks cannot use --watch.
+Loads project-root .env then .env.local; shell values win. DATOOL_NO_ENV=1 opts out.
+Explicit --env-file replaces automatic files and may be repeated (last file wins).
+For direct Bun execution, use bun --no-env-file <datool.js> to disable Bun preloading.
+Local TypeScript handlers require Node 22.18+ and erasable TypeScript syntax.
+
+Agent workflows (all commands return JSON):
+  datool apps list|get|register|run [id]
+  datool traces list|get|spans|scores|path|resolve [id] [--filter <expression>]
+  datool sessions list|get|resolve [id]
+  datool reviews list|get|create|update|options|item|record [sessionId]
+  datool reviews export [sessionId] --out <file.ndjson>
+  datool human-scores list|get|create|update [id]
+  datool review-collections list|get|create|update [id]
+  datool scorers libraries|use-library|list|get|create|update|delete|versions|version|test|check|probe|resolve [id]
+  datool datasets list|get|create|update|delete|items|add|edit|remove|bulk|promote [id]
+  datool datasets snapshot|snapshots|version|resolve [id]
+  datool evals list|groups|get|target|run|rescore|compare|wait|gate|resolve [id]
+  datool evals cancel|recover [id]
+  datool evals run --parent-run-id <id> [--use-recorded-versions]
+  datool evals target <run-id> --target-id <row-id>
+  datool metrics metadata|query|batch
+  datool dashboards list|get|create|update|delete|preview|resolve [id]
+  datool views list|get|data|resolve [id]
+  datool traces|sessions|datasets|evals export [id] --out <file.ndjson>
+  datool agent tools [operation]
+  datool agent call <operation> --input <json|@file|->
+
+Input: --input <json|@file|->; scalar --kebab-case flags map to camelCase.
+Pagination: --limit 1..100 --cursor <cursor> --include-total
+Eval reads: lightweight by default; --include-evidence embeds full case evidence.
+Follow nextCursor/nextOffset; batches may shrink to fit the response size limit.
+Evaluation: --request-key <stable-key> --wait --timeout 300 --poll-interval 2
+CI gate: --min-score 0.8 --min-pass-rate 1 --baseline-id <id> --max-regression 0
+Exit codes: 0 success, 1 request/usage error, 2 failed CI gate, 3 wait timeout.
+Exports: --max-rows 10000 --replace; continuation metadata goes to stderr.
+Use agent tools <operation> to inspect the exact input schema and permissions.
+```

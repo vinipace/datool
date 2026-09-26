@@ -1,0 +1,38 @@
+---
+title: Versions and compatibility
+description: Choose installable packages and distinguish public releases from preview integrations.
+icon: reference
+---
+
+The examples in these docs use the following package baseline. Your Datool server may ship independently; use live operation discovery to check its supported inputs.
+
+| Component | Documentation baseline | Installation or access |
+| --- | --- | --- |
+| Node.js | 22.18 or later | Required by the SDK and CLI; the CLI executes erasable TypeScript. |
+| `@datool/sdk` | 0.3.1 | Public npm package; `npm install @datool/sdk@0.3.1`. |
+| `@datool/cli` | 0.4.0 | Public npm package; `npm install --save-dev @datool/cli@0.4.0`. |
+| Python SDK | 0.1.0 preview; Python 3.10+ | Administrator-provided wheel or an authorized source checkout. No PyPI installation is documented yet. |
+| Hermes plugin | Hermes 0.21.3+ | Administrator-provided plugin bundle. |
+| AI SDK recipe | AI SDK 7 | Uses `registerTelemetry` with `LegacyOpenTelemetry`; earlier major versions use a different telemetry API. |
+
+These are reproducible example versions, not a promise that they are the newest release. Keep your lockfile when reproducing an evaluation. Updating a package does not update a remote Datool server.
+
+## Check the server before automating
+
+```sh
+npx datool doctor --json
+npx datool agent tools start_eval_run
+npx datool agent tools record_review
+```
+
+`doctor` requires CLI protocol 1 and checks a minimal trace read. A permission failure is different from an incompatible server. Live discovery returns the deployed input schema and required scopes. An older CLI can call a supported operation with `agent call` even if it lacks a convenience alias.
+
+The CLI 0.4.1 source adds bridge session protocol changes. A source version is not evidence of an npm release. Use the published baseline above unless your administrator supplies and verifies a newer CLI and compatible server together. `connect --watch` exists in 0.4.0; stop and reconnect if your server rejects the bridge protocol.
+
+## Python preview access
+
+The application source repository is private. Public documentation links do not grant source access. Ask your Datool administrator for a Python wheel and its checksum, or source access, before following the [Python setup](/docs/reference/python-sdk). Do not install an unrelated package simply because it has a similar name.
+
+## Upgrade checks
+
+After an upgrade, run `doctor`, send a [first trace](/docs/get-started/first-trace), and execute the [deterministic evaluation](/docs/get-started/first-evaluation). Verify the saved trace and case results, including an intentionally failing quality gate. Self-hosted operators must apply the release's migrations and restart the web and worker processes.

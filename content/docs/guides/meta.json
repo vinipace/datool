@@ -1,0 +1,12 @@
+{
+  "title": "Product guides",
+  "pages": [
+    "playground",
+    "prompts",
+    "dashboards",
+    "reviews",
+    "alerts",
+    "providers"
+  ],
+  "icon": "documentation"
+}

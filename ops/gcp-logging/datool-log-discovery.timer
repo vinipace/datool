@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Datool log sources after container replacement
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15s
+AccuracySec=1s
+Unit=datool-log-discovery.service
+
+[Install]
+WantedBy=timers.target

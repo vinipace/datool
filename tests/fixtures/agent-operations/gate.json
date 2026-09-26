@@ -1,0 +1,9 @@
+{
+  "id": "candidate-run-id",
+  "minScore": 0.9,
+  "minPassRate": 1,
+  "maxErrors": 0,
+  "allowUnscored": false,
+  "baselineId": "baseline-run-id",
+  "maxRegression": 0.02
+}

@@ -1,0 +1,254 @@
+[
+  {
+    "component": "components/tracer/workspace-loading.tsx",
+    "kind": "direct",
+    "story": "components/tracer/workspace-loading.stories.tsx"
+  },
+  {
+    "component": "components/tracer/workspace-page-layout.tsx",
+    "kind": "composite",
+    "story": "components/tracer/workspace-loading.stories.tsx",
+    "reason": "Loading stage stories verify the same route header before the shell, inside the shell and during page data loading."
+  },
+  {
+    "component": "components/tracer/trace-selection-actions.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-selection-actions.stories.tsx"
+  },
+  {
+    "component": "components/tracer/collection-panel.tsx",
+    "kind": "composite",
+    "story": "components/tracer/trace-list-navigation.stories.tsx",
+    "reason": "Trace navigation stories render the collection panel while switching rows, closing the inspector and restoring row focus."
+  },
+  {
+    "component": "components/tracer/app-shell.tsx",
+    "kind": "direct",
+    "story": "components/tracer/app-shell.stories.tsx"
+  },
+  {
+    "component": "components/tracer/collection-filter.tsx",
+    "kind": "direct",
+    "story": "components/tracer/collection-filter.stories.tsx"
+  },
+  {
+    "component": "components/tracer/collection-header.tsx",
+    "kind": "direct",
+    "story": "components/tracer/collection-header.stories.tsx"
+  },
+  {
+    "component": "components/tracer/collection-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/collection-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/collection-pagination.tsx",
+    "kind": "direct",
+    "story": "components/tracer/collection-pagination.stories.tsx"
+  },
+  {
+    "component": "components/tracer/collection-scroll-boundary.tsx",
+    "kind": "direct",
+    "story": "components/tracer/collection-scroll-boundary.stories.tsx"
+  },
+  {
+    "component": "components/tracer/column-code-editor.tsx",
+    "kind": "direct",
+    "story": "components/tracer/column-code-editor.stories.tsx"
+  },
+  {
+    "component": "components/tracer/custom-view-controls.tsx",
+    "kind": "direct",
+    "story": "components/tracer/custom-view-controls.stories.tsx"
+  },
+  {
+    "component": "components/tracer/docked-inspector.tsx",
+    "kind": "direct",
+    "story": "components/tracer/docked-inspector.stories.tsx"
+  },
+  {
+    "component": "components/tracer/inspector-group-membership.tsx",
+    "kind": "direct",
+    "story": "components/tracer/inspector-group-membership.stories.tsx"
+  },
+  {
+    "component": "components/tracer/inspector-panels.tsx",
+    "kind": "direct",
+    "story": "components/tracer/inspector-panels.stories.tsx"
+  },
+  {
+    "component": "components/tracer/json-code.tsx",
+    "kind": "direct",
+    "story": "components/tracer/json-code.stories.tsx"
+  },
+  {
+    "component": "components/tracer/log-table.tsx",
+    "kind": "direct",
+    "story": "components/tracer/log-table.stories.tsx"
+  },
+  {
+    "component": "components/tracer/log-timestamp.tsx",
+    "kind": "direct",
+    "story": "components/tracer/log-timestamp.stories.tsx"
+  },
+  {
+    "component": "components/tracer/page-layout.tsx",
+    "kind": "direct",
+    "story": "components/tracer/page-layout.stories.tsx"
+  },
+  {
+    "component": "components/tracer/percentage-cell.tsx",
+    "kind": "direct",
+    "story": "components/tracer/percentage-cell.stories.tsx"
+  },
+  {
+    "component": "components/tracer/primitives.tsx",
+    "kind": "direct",
+    "story": "components/tracer/primitives.stories.tsx"
+  },
+  {
+    "component": "components/tracer/project-scope.tsx",
+    "kind": "direct",
+    "story": "components/tracer/project-scope.stories.tsx"
+  },
+  {
+    "component": "components/tracer/react-trace-views.tsx",
+    "kind": "direct",
+    "story": "components/tracer/react-trace-views.stories.tsx"
+  },
+  {
+    "component": "components/tracer/result-icon.tsx",
+    "kind": "direct",
+    "story": "components/tracer/result-icon.stories.tsx"
+  },
+  {
+    "component": "components/tracer/reviews-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/reviews-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/sessions-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/sessions-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/span-kind-icon.tsx",
+    "kind": "direct",
+    "story": "components/tracer/span-kind-icon.stories.tsx"
+  },
+  {
+    "component": "components/tracer/table-view-controls.tsx",
+    "kind": "direct",
+    "story": "components/tracer/table-view-controls.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-inspector.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-inspector.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-list-histogram.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-list-histogram.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-list-overlay.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-list-overlay.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-list-table.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-list-table.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-list-toolbar.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-list-toolbar.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-list.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-list.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-onboarding.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-onboarding.stories.tsx"
+  },
+  {
+    "component": "components/tracer/trace-timeline.tsx",
+    "kind": "direct",
+    "story": "components/tracer/trace-timeline.stories.tsx"
+  },
+  {
+    "component": "components/tracer/traces-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/traces-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/human-scores-page.tsx",
+    "kind": "direct",
+    "story": "components/tracer/human-scores-page.stories.tsx"
+  },
+  {
+    "component": "components/tracer/human-score-icon.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review player stories render the configured Human Score type icons."
+  },
+  {
+    "component": "components/tracer/human-score-input.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review player stories exercise numeric, categorical, multiple-choice and text ratings."
+  },
+  {
+    "component": "components/tracer/review-panels.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review player stories render trace details and rating panels through the shared resizable layout."
+  },
+  {
+    "component": "components/tracer/review-session-table.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review session stories exercise shared trace rows and review metadata."
+  },
+  {
+    "component": "components/tracer/review-session-controls.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Review session stories exercise inline renaming and confirmed selection mutations."
+  },
+  {
+    "component": "components/tracer/infinite-scroll.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-detail.stories.tsx",
+    "reason": "InfiniteScrollRetry exercises automatic pagination and recovery after a page request fails."
+  },
+  {
+    "component": "components/tracer/review-annotations.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "Input and output annotation stories select evidence, save comments, and restore highlights."
+  },
+  {
+    "component": "components/tracer/review-custom-fields.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "CustomFieldAnnotations renders a computed field and saves an annotation on its displayed value."
+  },
+  {
+    "component": "components/tracer/review-session-route.tsx",
+    "kind": "composite",
+    "story": "components/tracer/reviews-page.stories.tsx",
+    "reason": "RouteDeepLink renders the production route wrapper with a trace URL parameter."
+  },
+  {
+    "component": "components/tracer/collection-selection-actions.tsx",
+    "kind": "composite",
+    "story": "components/tracer/eval-run-detail.stories.tsx",
+    "reason": "Selection header stories check selected counts, export and clearing across table and card layouts."
+  }
+]

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Datool disk headroom and image retention hourly
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,115 @@
+---
+title: SDK reference
+description: Entry points, configuration, and delivery behavior of the Node.js SDK.
+icon: sdk
+---
+
+Install `@datool/sdk` in a Node.js 22.18+ application. Follow [Send your first trace](/docs/get-started/first-trace) for a complete runnable example.
+
+## Package entry points
+
+| Import                  | Purpose                                                   |
+| ----------------------- | --------------------------------------------------------- |
+| `@datool/sdk`           | `createTracer`, manual tracing, and the API client        |
+| `@datool/sdk/otel`      | `DatoolSpanProcessor` for OpenTelemetry export            |
+| `@datool/sdk/context`   | HTTP and call-correlation helpers                         |
+| `@datool/sdk/openai`    | `traceOpenAIChatFetch` for non-streaming Chat Completions |
+| `@datool/sdk/contracts` | API types                                                 |
+
+Correlation helpers do not authenticate callers. Authenticate an incoming request before using its correlation context.
+
+## Configuration
+
+```ts
+import { createTracer } from "@datool/sdk"
+
+const tracer = createTracer({
+  baseUrl: process.env.DATOOL_BASE_URL,
+  projectId: process.env.DATOOL_PROJECT_ID,
+  apiKey: process.env.DATOOL_API_KEY,
+})
+```
+
+`createTracer()` reads those environment variables automatically. Keep the API key in server-side code. The project ID is required for project-scoped authorization.
+
+## Choose a transport
+
+The default manual transport records lifecycle requests directly through Datool's client protocol. Await each operation and its enclosing workflow.
+
+With `createTracer({ transport: "otel" })`, the tracer uses your registered OpenTelemetry provider and span processor. Its operation callbacks receive native OpenTelemetry spans. This mode provides `workflow`, `agent`, `span`, and `agentStream`.
+
+## Flush and delivery
+
+Queued delivery is the default production path and requires an ingestion worker. Manual tracing waits for persistence. OpenTelemetry users must await `processor.forceFlush()` before terminating work. Delivery errors should be surfaced to your application's operational logging.
+
+Use `delivery: "direct"` only when deliberately choosing synchronous delivery, such as a local test. That path does not use the queue's lifecycle receipts and retry behavior.
+
+## API client
+
+`DatoolClient.request` returns the API envelope's `data` field. Collection responses are paginated; the client does not automatically fetch every page. Request only the scope and amount of evidence your operation needs.
+
+See [instrumentation](/docs/tracing/instrumentation) for OpenTelemetry setup and filtering/redaction hooks.
+
+## Options and defaults
+
+Both `createTracer()` and `createDatool()` accept the connection options below. `DatoolSpanProcessor` uses the API client's connection options.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `baseUrl` | `DATOOL_BASE_URL`, then `DATOOL_TRACE_BASE_URL`, then `http://127.0.0.1:3000` | Datool origin. |
+| `apiKey` | `DATOOL_API_KEY` | Server-side organization key. |
+| `projectId` | `DATOOL_PROJECT_ID` | Project ID used in authorization. |
+| `delivery` | `"queued"` | Queued ingestion or explicit synchronous `"direct"` delivery. |
+| `requestTimeoutMs` | 5,000 for manual tracer; 10,000 for API client/processor | Timeout for one HTTP request, not the entire workflow. |
+| `retries` | 8 | Bounded retries for eligible reads/queued requests; arbitrary mutations are not automatically replayed. |
+| `fetch` | Global `fetch` | Custom transport, useful for controlled tests. |
+
+The manual tracer additionally accepts `headers` and a `clock` function. The API client accepts `promptCache: { latestTtlMs, maxEntries }`; defaults are 30,000 ms and 256 entries. See [managed prompt cache semantics](/docs/guides/prompts#native-sdk), including revocation and pinned definitions.
+
+## Manual tracer methods
+
+| Method | Return | Lifecycle |
+| --- | --- | --- |
+| `workflow(options, callback)` / `trace(options, callback)` | `Promise<T>` containing the callback's JSON value | Ends the trace on success; records error status on failure. |
+| `agent(options, callback)` | `Promise<T>` | Requires an active trace; records a nested agent. |
+| `createSession(input)` | `Promise<Session>` | Creates a session; retain its returned ID. |
+| `withSession(id, callback)` | Callback result | Associates new traces with the session within the async scope. |
+| `startTrace(options)` | `Promise<LiveTrace>` | Manual lifetime; call `end()` or `run(callback)`. |
+| `startSpan(traceId, options)` | `Promise<LiveSpan>` | Manual lifetime; call `end()` or `run(callback)`. |
+| `finishTrace(id, options)` / `finishSpan(id, options)` | Saved trace/span | Defaults terminal status to `completed`. |
+| `updateTraceAttributes(id, attributes)` / `updateSpanAttributes(id, attributes)` | Saved trace/span | Updates recorded metadata. |
+
+A `LiveTrace` exposes `span`, `agent`, and `workflow` callbacks. `LiveTrace` and `LiveSpan` expose their IDs, `end`, `run`, and `recordCost(usd)`. Cost must be finite, nonnegative USD. Callback outputs must be JSON-serializable; avoid credentials and sensitive payloads in captured values.
+
+Common options include `name`, `input`, `attributes`, and an explicit group `{ type, name, version? }`. Span options include `kind` and an optional parent ID. The exported `@datool/sdk/contracts` types describe complete trace/span fields; API operation result fields are browsable in the [operation reference](/docs/reference/operations).
+
+## OpenTelemetry processor options
+
+| Option | Use |
+| --- | --- |
+| `attributes` | A JSON object or function called at span start to add safe metadata. |
+| `sessionId` | Associate exported traces with a known session. |
+| `shouldExport(span)` | Decide which spans are eligible for export. |
+| `transform(payload)` | Redact lifecycle payloads before they enter the transport queue. |
+| `onTraceEnd()` | Schedule a framework-specific flush after the trace's spans end. |
+| `pricing` | Configure price catalog refresh, fallback catalog, timeout, and transport. |
+
+`forceFlush()` waits for durable delivery. `shutdown()` belongs in the application's shutdown lifecycle. Model pricing uses a cached catalog; `pricing: { autoRefresh: false }` disables network refreshes. Missing usage or pricing remains unavailable.
+
+OTel operation options accept `recordInputs` and `recordOutputs`; the OTel tracer accepts `maxInputOutputCharacters` (default 20,000). It preserves arbitrary callback return values while encoding recorded payloads. It exposes `agentStream` for async iteration; consume or close the stream before flushing.
+
+## API client and managed prompts
+
+| Method | Behavior |
+| --- | --- |
+| `createDatool(options)` / `new DatoolClient(options)` | Creates an authenticated client; a missing API key throws. |
+| `request<T>(path, method?, body?)` | Returns `Promise<T>` from the response's `data`; paths must start with `/api/`. Methods are GET, POST, and PATCH. |
+| `forceFlush()` | Waits for queued client writes and their persistence receipt. |
+| `prompts.get(slug, { version? })` | Fetches a published runtime prompt. |
+| `prompt.render(variables)` | Returns fresh text messages; string variables are required for referenced placeholders. |
+| `prompts.withScope(overrides, callback)` | Isolates prompt overrides for one async scope. |
+| `prompts.override(slug, override)` / `prompts.reset(slug)` | Changes the active scope; throws outside a supported scope. |
+
+A generic type parameter on `request<T>` helps TypeScript callers; it does not validate arbitrary response bodies at runtime. Use [OpenAPI](/openapi.json) if you need runtime schema validation or a generated client.
+
+Delivery, HTTP, prompt-rendering, and missing-scope failures reject/throw. Catch them at the application boundary and retain a sanitized error and operation ID. Do not log authorization headers or infer that HTTP 202 means the trace is already persisted.

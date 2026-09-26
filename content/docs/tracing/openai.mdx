@@ -1,0 +1,59 @@
+---
+title: OpenAI Chat Completions
+description: Trace a non-streaming Chat Completions request through the OpenAI client's fetch hook.
+icon: traces
+---
+
+Datool supplies a fetch wrapper for **non-streaming Chat Completions**. It records each HTTP attempt, model input/output, status, and reported usage. Responses API calls and streaming requests pass through without this wrapper's model spans. Use [manual tracing](/docs/tracing/instrumentation) for those paths.
+
+## Install
+
+Use Node.js 22.18 or newer:
+
+```sh
+npm init -y
+npm install @datool/sdk@0.3.1 openai @opentelemetry/api@1 @opentelemetry/sdk-trace-node@2
+```
+
+Configure the three `DATOOL_*` variables from [your first trace](/docs/get-started/first-trace) and an `OPENAI_API_KEY` in `.env`. The Datool key needs `traces:write`; the OpenAI key needs access to the selected model. The call uses your OpenAI account's quota.
+
+## Make one traced request
+
+Save `openai.mjs`:
+
+```js
+import OpenAI from "openai"
+import { trace } from "@opentelemetry/api"
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node"
+import { DatoolSpanProcessor } from "@datool/sdk/otel"
+import { traceOpenAIChatFetch } from "@datool/sdk/openai"
+
+const processor = new DatoolSpanProcessor()
+const provider = new NodeTracerProvider({ spanProcessors: [processor] })
+provider.register()
+const openai = new OpenAI({
+  fetch: traceOpenAIChatFetch(trace.getTracer("docs-openai")),
+})
+
+try {
+  const result = await openai.chat.completions.create({
+    model: "gpt-4.1-mini",
+    messages: [{ role: "user", content: "Say hello in one sentence." }],
+  })
+  console.log(result.choices[0]?.message.content)
+} finally {
+  try {
+    await processor.forceFlush()
+  } finally {
+    await provider.shutdown()
+  }
+}
+```
+
+```sh
+node --env-file=.env openai.mjs
+```
+
+Open the resulting trace and inspect `openai.chat.completions`. Check the request model, returned model, input messages, assistant response, and usage. Missing provider usage or price coverage remains unavailable. OpenAI client retries can produce multiple attempt spans.
+
+Do not apply this wrapper to an [AI SDK](/docs/tracing/ai-sdk) client already emitting model spans. Configure Datool's processor only once per provider. Review [capture and redaction](/docs/tracing/instrumentation#delivery-and-sensitive-content) before recording production messages.

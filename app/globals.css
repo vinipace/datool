@@ -1,0 +1,849 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/preset.css";
+@import "fumadocs-ui/css/shadcn.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+  @media (width >= --theme(--breakpoint-sm)) {
+    max-width: none;
+  }
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
+
+@theme {
+  --color-marketing-primary: var(--marketing-primary);
+  --color-marketing-primary-foreground: var(--marketing-primary-foreground);
+  --color-marketing-primary-hover: var(--marketing-primary-hover);
+  --color-marketing-signal: var(--marketing-signal);
+  --color-marketing-run: #ffffff;
+  --color-marketing-run-foreground: #000000;
+  --color-scorer-javascript: #f7df1e;
+  --color-scorer-javascript-foreground: #000000;
+  --color-scorer-llm: #ffffff;
+  --color-scorer-llm-foreground: #000000;
+  --color-scorer-python: #3776ab;
+  --color-scorer-python-foreground: #ffffff;
+  --color-invocation-agent: oklch(74.6% 0.16 232.661);
+  --color-invocation-agent-foreground: oklch(29.3% 0.066 243.157);
+  --color-invocation-workflow: oklch(79.2% 0.209 151.711);
+  --color-invocation-workflow-foreground: oklch(26.6% 0.065 152.934);
+  --color-invocation-chat: #b480ef;
+  --color-invocation-chat-foreground: #492b6b;
+  --color-invocation-code: oklch(78.9% 0.154 211.53);
+  --color-invocation-code-foreground: oklch(30.2% 0.056 229.695);
+  --color-invocation-eval: oklch(27.4% 0.006 286.033);
+  --color-invocation-eval-foreground: oklch(92% 0.004 286.32);
+  --color-invocation-function: oklch(79.5% 0.184 86.047);
+  --color-invocation-function-foreground: oklch(28.6% 0.066 53.813);
+  --color-invocation-llm: #ffffff;
+  --color-invocation-llm-foreground: #000000;
+  --color-invocation-score: #a4e636;
+  --color-invocation-score-foreground: oklch(26.2% 0.051 172.552);
+  --color-invocation-task: oklch(71.4% 0.203 305.504);
+  --color-invocation-task-foreground: oklch(29.1% 0.149 302.717);
+  --color-invocation-task-fill: oklch(94.6% 0.033 307.174);
+  --color-invocation-tool: #ff983c;
+  --color-invocation-tool-foreground: #000000;
+  --color-invocation-highlight: #ffffff;
+  --color-invocation-session: #facc15;
+  --color-invocation-session-foreground: #000000;
+  --color-message-user: #ffffff;
+  --color-message-user-foreground: #18181b;
+  --color-resource-folder: oklch(55.3% 0.195 38.402);
+  --color-resource-folder-foreground: oklch(83.7% 0.128 66.29);
+  --color-resource-dataset: oklch(54.1% 0.281 293.009);
+  --color-resource-dataset-foreground: oklch(71.4% 0.203 305.504);
+  --color-empty-foreground: var(--empty-foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-score-track: var(--score-track);
+  --color-score-fill: var(--score-fill);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-background: var(--info-background);
+  --color-info-border: var(--info-border);
+  --color-warning: var(--warning);
+  --color-warning-contrast: #1c1917;
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-background: var(--warning-background);
+  --color-warning-border: var(--warning-border);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-background: var(--success-background);
+  --color-success-border: var(--success-border);
+  --color-status-info: var(--status-info);
+  --color-status-info-background: var(--status-info-background);
+  --color-status-info-border: var(--status-info-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-foreground: var(--status-warning-foreground);
+  --color-status-success: var(--status-success);
+  --color-status-success-foreground: var(--status-success-foreground);
+  --color-status-error: var(--status-error);
+  --color-status-error-foreground: var(--status-error-foreground);
+  --color-selection: var(--selection);
+  --color-selection-foreground: var(--selection-foreground);
+  --color-selection-control: var(--selection-control);
+  --color-overlay: var(--overlay);
+  --color-surface-emphasis: var(--surface-emphasis);
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-row: var(--surface-row);
+  --color-surface-row-hover: var(--surface-row-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-b: var(--border-b);
+  --color-data-series-primary: var(--data-series-primary);
+  /* Categorical run identities, shared by comparison legends and result rows. */
+  /* Export the same palette to isolated chart surfaces such as Payload. */
+  --color-data-palette-1: #8423dd;
+  --color-data-palette-2: #8793ff;
+  --color-data-palette-3: #c44e0b;
+  --color-data-palette-4: #22b8a3;
+  --color-comparison-1: var(--data-series-1);
+  --color-comparison-2: var(--data-series-2);
+  --color-comparison-3: var(--data-series-3);
+  --color-comparison-4: var(--data-series-4);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-filter-fulltext: var(--filter-fulltext);
+  --color-filter-date: var(--filter-date);
+  --color-filter-enum: var(--filter-enum);
+  --color-filter-json: var(--filter-json);
+  --color-filter-number: var(--filter-number);
+  --color-filter-text: var(--filter-text);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-background: var(--destructive-background);
+  --color-destructive-border: var(--destructive-border);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@layer base {
+  :root {
+    /* Datool logo green; brighter signal tint keeps small marks legible on black. */
+    /* Solid editorial surfaces for explanatory product diagrams. */
+    --marketing-paper: #f0efe8;
+    --marketing-ink: #17281f;
+    --marketing-ink-muted: #506156;
+    --marketing-rule: #c4ccc0;
+    --marketing-code-key: #075985;
+    --marketing-code-number: #9a3412;
+    --marketing-chart-problem: #a23e1c;
+    --marketing-leaf: #c0dc8e;
+    --marketing-lilac: #d3c7eb;
+    --marketing-peach: #f0c5ac;
+    --marketing-forest: #254f3b;
+    --marketing-primary: #3d7e4e;
+    --marketing-primary-foreground: #ffffff;
+    --marketing-primary-hover: #346c43;
+    --marketing-signal: var(--marketing-primary);
+    --marketing-evaluate: #7646b8;
+    --marketing-improve: #2869ad;
+    --empty-foreground: #a1a1aa;
+    --foreground-secondary: #52525b;
+    --foreground-muted: #71717a;
+    --foreground-subtle: #a1a1aa;
+    --score-track: #e4e4e7;
+    --score-fill: #6366f1;
+    --info: #0284c7;
+    --info-foreground: #0c4a6e;
+    --info-background: #e0f2fe;
+    --info-border: #7dd3fc;
+    --warning: #d97706;
+    --warning-foreground: #78350f;
+    --warning-background: #fef3c7;
+    --warning-border: #fcd34d;
+    --success: #15803d;
+    --success-foreground: #14532d;
+    --success-background: #dcfce7;
+    --success-border: #86efac;
+    --status-info: var(--info);
+    --status-info-background: var(--info-background);
+    --status-info-border: var(--info-border);
+    --status-warning: var(--warning);
+    --status-warning-foreground: var(--warning-foreground);
+    --status-success: var(--success);
+    --status-success-foreground: #ffffff;
+    --status-error: #b91c1c;
+    --status-error-foreground: #ffffff;
+    --overlay: rgb(0 0 0 / 0.45);
+    --selection: #e0e7ff;
+    --selection-foreground: #1e1b4b;
+    --selection-control: #818cf8;
+    --surface-emphasis: #ededf0;
+    --surface-canvas: #ffffff;
+    --input-background: #f2f2f3;
+    --surface-row: #f7f7f8;
+    --surface-row-hover: #ededf0;
+    --border-strong: #d4d4d8;
+    --data-series-primary: #6366f1;
+    --filter-fulltext: #a15b00;
+    --filter-date: #345fc5;
+    --filter-enum: #8051b4;
+    --filter-json: #087f8c;
+    --filter-number: #237646;
+    --filter-text: #435dc1;
+    --data-series-1: --theme(--color-data-palette-1);
+    --data-series-2: --theme(--color-data-palette-2);
+    --data-series-3: --theme(--color-data-palette-3);
+    --data-series-4: --theme(--color-data-palette-4);
+    --data-series-emphasis: #ec660b;
+    --data-series-total: #62626b;
+    --data-bar-lift: 0%;
+    --data-bar-opacity: 0.18;
+    --radius: 0.625rem;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.147 0.004 49.25);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.147 0.004 49.25);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.147 0.004 49.25);
+    --primary: oklch(0.216 0.006 56.043);
+    --primary-foreground: oklch(0.985 0.001 106.423);
+    --secondary: oklch(64.6% 0.222 41.116);
+    --secondary-foreground: oklch(90.1% 0.076 70.697);
+    --muted: oklch(0.985 0.001 106.423);
+    --muted-foreground: var(--foreground-muted);
+    --accent: oklch(0.97 0.001 106.424);
+    --accent-foreground: oklch(0.216 0.006 56.043);
+    --destructive: #b91c1c;
+    --destructive-foreground: #ffffff;
+    --destructive-background: #fee2e2;
+    --destructive-border: #fecaca;
+    --border: oklch(0.923 0.003 48.717);
+    --border-b: oklch(86.9% 0.005 56.366);
+    --input: oklch(0.923 0.003 48.717);
+    --ring: oklch(44.4% 0.011 73.639);
+    --chart-1: oklch(0.646 0.222 41.116);
+    --chart-2: oklch(0.6 0.118 184.704);
+    --chart-3: oklch(0.398 0.07 227.392);
+    --chart-4: oklch(0.828 0.189 84.429);
+    --chart-5: oklch(0.769 0.188 70.08);
+    --sidebar: oklch(97% 0.001 106.424);
+    --sidebar-foreground: oklch(0.147 0.004 49.25);
+    --sidebar-primary: oklch(0.216 0.006 56.043);
+    --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
+    --sidebar-accent: oklch(98.5% 0.001 106.423);
+    --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
+    --sidebar-border: oklch(0.923 0.003 48.717);
+    --sidebar-ring: oklch(0.709 0.01 56.259);
+  }
+
+  .dark {
+    --marketing-signal: #6e9e7a;
+    --marketing-evaluate: #c4a1ff;
+    --marketing-improve: #84bfff;
+    --empty-foreground: #52525b;
+    --foreground-secondary: #d4d4d8;
+    --foreground-muted: #a1a1aa;
+    --foreground-subtle: #71717a;
+    --score-track: #27272a;
+    --score-fill: #818cf8;
+    --info: #22d3ee;
+    --info-foreground: #cffafe;
+    --info-background: rgb(34 211 238 / 0.09);
+    --info-border: rgb(34 211 238 / 0.45);
+    --warning: #fbbf24;
+    --warning-foreground: #fef3c7;
+    --warning-background: rgb(69 26 3 / 0.3);
+    --warning-border: rgb(120 53 15 / 0.6);
+    --success: #86efac;
+    --success-foreground: #bbf7d0;
+    --success-background: rgb(20 83 45 / 0.3);
+    --success-border: rgb(74 222 128 / 0.35);
+    --status-info: var(--info);
+    --status-info-background: var(--info-background);
+    --status-info-border: var(--info);
+    --status-warning: var(--warning);
+    --status-warning-foreground: var(--warning-foreground);
+    --status-success: var(--success);
+    --status-success-foreground: #052e16;
+    --status-error: #fca5a5;
+    --status-error-foreground: #450a0a;
+    --overlay: rgb(0 0 0 / 0.7);
+    --selection: #151239;
+    --selection-foreground: #eef2ff;
+    --selection-control: #818cf8;
+    --surface-emphasis: #18181b;
+    --surface-canvas: var(--background);
+    --input-background: #0e0e0f;
+    --surface-row: var(--muted);
+    --surface-row-hover: #202023;
+    --background: #000000;
+    --foreground: #f4f4f5;
+    --card: var(--muted);
+    --card-foreground: var(--foreground);
+    --popover: var(--muted);
+    --popover-foreground: var(--foreground);
+    --primary: #e4e4e7;
+    --primary-foreground: #18181b;
+    --secondary: var(--muted);
+    --secondary-foreground: var(--foreground);
+    --muted: #0e0e0f;
+    --muted-foreground: var(--foreground-muted);
+    --accent: var(--surface-row-hover);
+    --accent-foreground: var(--foreground);
+    --destructive: #f87171;
+    --destructive-foreground: #450a0a;
+    --destructive-background: rgb(127 29 29 / 0.3);
+    --destructive-border: rgb(248 113 113 / 0.3);
+    --border: oklch(1 0 0 / 10%);
+    --border-strong: #27272a;
+    --data-series-primary: #818cf8;
+    --data-bar-lift: 25%;
+    --data-bar-opacity: 0.35;
+    --filter-fulltext: #ffad19;
+    --filter-date: #9cb8ff;
+    --filter-enum: #c8a6f5;
+    --filter-json: #79d4dc;
+    --filter-number: #83d9a2;
+    --filter-text: #adbbef;
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.553 0.013 58.071);
+    --chart-1: oklch(0.488 0.243 264.376);
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.769 0.188 70.08);
+    --chart-4: oklch(0.627 0.265 303.9);
+    --chart-5: oklch(0.645 0.246 16.439);
+    --sidebar: #0e0e0f;
+    --sidebar-foreground: oklch(0.985 0.001 106.423);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
+    --sidebar-accent: oklch(0.268 0.007 34.298);
+    --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.553 0.013 58.071);
+  }
+}
+
+@layer base {
+  html {
+    background: var(--background);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  .border-dashed-large {
+    background-image: linear-gradient(
+      to right,
+      var(--color-border) 50%,
+      rgba(255, 255, 255, 0) 0%
+    );
+    background-position: bottom;
+    background-size: 1.5rem 1px;
+    background-repeat: repeat-x;
+  }
+}
+
+@media print {
+  .report-print-hidden {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Prevent page breaks inside report sections */
+  section[id^="report-"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* Indeterminate progress bar animation */
+@keyframes progress-indeterminate {
+  0% {
+    left: -33%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+/*
+  ---break---
+*/
+:root {
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, Liberation Mono, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --border-color: var(--border);
+  --accents-2: rgba(24, 24, 27, 0.06);
+  --accents-5: rgba(24, 24, 27, 0.14);
+  --accents-7: rgba(24, 24, 27, 0.36);
+  --ds-shadow-small:
+    0 10px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 23, 42, 0.05);
+  --ds-background-100: #ffffff;
+  --ds-background-200: #f8fafc;
+  --ds-gray-100: #fafafa;
+  --ds-gray-200: #f4f4f5;
+  --ds-gray-300: #e4e4e7;
+  --ds-gray-400: #d4d4d8;
+  --ds-gray-500: #a1a1aa;
+  --ds-gray-600: #71717a;
+  --ds-gray-700: #52525b;
+  --ds-gray-800: #3f3f46;
+  --ds-gray-900: #27272a;
+  --ds-gray-1000: #09090b;
+  --ds-gray-alpha-100: rgba(9, 9, 11, 0.04);
+  --ds-gray-alpha-200: rgba(9, 9, 11, 0.08);
+  --ds-gray-alpha-400: rgba(9, 9, 11, 0.16);
+  --ds-gray-alpha-500: rgba(9, 9, 11, 0.24);
+  --ds-gray-alpha-700: rgba(9, 9, 11, 0.44);
+  --ds-teal-200: #ccfbf1;
+  --ds-teal-400: #2dd4bf;
+  --ds-teal-500: #14b8a6;
+  --ds-teal-900: #134e4a;
+  --ds-blue-100: #dbeafe;
+  --ds-blue-200: #bfdbfe;
+  --ds-blue-400: #60a5fa;
+  --ds-blue-500: #3b82f6;
+  --ds-blue-600: #2563eb;
+  --ds-blue-700: #1d4ed8;
+  --ds-blue-900: #1e3a8a;
+  --ds-green-200: #bbf7d0;
+  --ds-green-400: #4ade80;
+  --ds-green-500: #22c55e;
+  --ds-green-900: #14532d;
+  --ds-purple-100: #f3e8ff;
+  --ds-purple-200: #e9d5ff;
+  --ds-purple-400: #c084fc;
+  --ds-purple-500: #a855f7;
+  --ds-purple-600: #9333ea;
+  --ds-purple-700: #7e22ce;
+  --ds-purple-900: #581c87;
+  --ds-pink-200: #fbcfe8;
+  --ds-pink-400: #f472b6;
+  --ds-pink-500: #ec4899;
+  --ds-pink-900: #831843;
+  --ds-amber-100: #fef3c7;
+  --ds-amber-200: #fde68a;
+  --ds-amber-400: #fbbf24;
+  --ds-amber-500: #f59e0b;
+  --ds-amber-600: #d97706;
+  --ds-amber-700: #b45309;
+  --ds-amber-900: #78350f;
+  --ds-red-100: #fee2e2;
+  --ds-red-200: #fecaca;
+  --ds-red-400: #f87171;
+  --ds-red-500: #ef4444;
+  --ds-red-600: #dc2626;
+  --ds-red-700: #b91c1c;
+  --ds-red-900: #7f1d1d;
+}
+/*
+  ---break---
+*/
+.dark {
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, Liberation Mono, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --border-color: var(--border);
+  --accents-2: rgba(244, 244, 245, 0.08);
+  --accents-5: rgba(244, 244, 245, 0.16);
+  --accents-7: rgba(244, 244, 245, 0.38);
+  --ds-shadow-small:
+    0 14px 40px rgba(0, 0, 0, 0.38), 0 2px 10px rgba(0, 0, 0, 0.3);
+  --ds-background-100: #09090b;
+  --ds-background-200: #111827;
+  --ds-gray-100: #18181b;
+  --ds-gray-200: #27272a;
+  --ds-gray-300: #3f3f46;
+  --ds-gray-400: #52525b;
+  --ds-gray-500: #71717a;
+  --ds-gray-600: #a1a1aa;
+  --ds-gray-700: #d4d4d8;
+  --ds-gray-800: #e4e4e7;
+  --ds-gray-900: #f4f4f5;
+  --ds-gray-1000: #fafafa;
+  --ds-gray-alpha-100: rgba(250, 250, 250, 0.04);
+  --ds-gray-alpha-200: rgba(250, 250, 250, 0.08);
+  --ds-gray-alpha-400: rgba(250, 250, 250, 0.16);
+  --ds-gray-alpha-500: rgba(250, 250, 250, 0.24);
+  --ds-gray-alpha-700: rgba(250, 250, 250, 0.44);
+  --ds-teal-200: #083344;
+  --ds-teal-400: #0f766e;
+  --ds-teal-500: #14b8a6;
+  --ds-teal-900: #99f6e4;
+  --ds-blue-100: #172554;
+  --ds-blue-200: #1e3a8a;
+  --ds-blue-400: #2563eb;
+  --ds-blue-500: #3b82f6;
+  --ds-blue-600: #60a5fa;
+  --ds-blue-700: #93c5fd;
+  --ds-blue-900: #dbeafe;
+  --ds-green-200: #14532d;
+  --ds-green-400: #15803d;
+  --ds-green-500: #22c55e;
+  --ds-green-900: #bbf7d0;
+  --ds-purple-100: #3b0764;
+  --ds-purple-200: #581c87;
+  --ds-purple-400: #7e22ce;
+  --ds-purple-500: #a855f7;
+  --ds-purple-600: #c084fc;
+  --ds-purple-700: #d8b4fe;
+  --ds-purple-900: #f3e8ff;
+  --ds-pink-200: #831843;
+  --ds-pink-400: #be185d;
+  --ds-pink-500: #ec4899;
+  --ds-pink-900: #fbcfe8;
+  --ds-amber-100: #451a03;
+  --ds-amber-200: #78350f;
+  --ds-amber-400: #d97706;
+  --ds-amber-500: #f59e0b;
+  --ds-amber-600: #fbbf24;
+  --ds-amber-700: #fcd34d;
+  --ds-amber-900: #fef3c7;
+  --ds-red-100: #450a0a;
+  --ds-red-200: #7f1d1d;
+  --ds-red-400: #dc2626;
+  --ds-red-500: #ef4444;
+  --ds-red-600: #f87171;
+  --ds-red-700: #fca5a5;
+  --ds-red-900: #fee2e2;
+}
+/*
+  ---break---
+*/
+.data-table-search-input-editor {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-table-search-input-editor p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: inherit;
+}
+
+[data-search-focused] .data-table-search-input-editor {
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+[data-search-focused] .data-table-search-input-editor p {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.data-table-search-input-selector-token {
+  background-color: color-mix(in srgb, var(--filter-text) 12%, transparent);
+  color: var(--filter-text);
+  border-radius: 4px;
+  padding: 2px 1px;
+  margin: -2px -1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-weight: 500;
+}
+
+.data-table-search-input-selector-token[data-search-field-kind="fulltext"] {
+  color: var(--filter-fulltext);
+  background-color: color-mix(in srgb, var(--filter-fulltext) 12%, transparent);
+}
+.data-table-search-input-selector-token[data-search-field-kind="date"] {
+  color: var(--filter-date);
+}
+.data-table-search-input-selector-token[data-search-field-kind="enum"] {
+  color: var(--filter-enum);
+}
+.data-table-search-input-selector-token[data-search-field-kind="json"] {
+  color: var(--filter-json);
+}
+.data-table-search-input-selector-token[data-search-field-kind="number"] {
+  color: var(--filter-number);
+}
+
+@theme inline {
+  --font-mono: var(--font-mono);
+  --font-sans: var(--font-sans);
+  --border-color: var(--border-color);
+  --color-accents-2: var(--accents-2);
+  --color-accents-5: var(--accents-5);
+  --color-accents-7: var(--accents-7);
+  --ds-shadow-small: var(--ds-shadow-small);
+  --color-ds-background-100: var(--ds-background-100);
+  --color-ds-background-200: var(--ds-background-200);
+  --color-ds-gray-100: var(--ds-gray-100);
+  --color-ds-gray-200: var(--ds-gray-200);
+  --color-ds-gray-300: var(--ds-gray-300);
+  --color-ds-gray-400: var(--ds-gray-400);
+  --color-ds-gray-500: var(--ds-gray-500);
+  --color-ds-gray-600: var(--ds-gray-600);
+  --color-ds-gray-700: var(--ds-gray-700);
+  --color-ds-gray-800: var(--ds-gray-800);
+  --color-ds-gray-900: var(--ds-gray-900);
+  --color-ds-gray-1000: var(--ds-gray-1000);
+  --color-ds-gray-alpha-100: var(--ds-gray-alpha-100);
+  --color-ds-gray-alpha-200: var(--ds-gray-alpha-200);
+  --color-ds-gray-alpha-400: var(--ds-gray-alpha-400);
+  --color-ds-gray-alpha-500: var(--ds-gray-alpha-500);
+  --color-ds-gray-alpha-700: var(--ds-gray-alpha-700);
+  --color-ds-teal-200: var(--ds-teal-200);
+  --color-ds-teal-400: var(--ds-teal-400);
+  --color-ds-teal-500: var(--ds-teal-500);
+  --color-ds-teal-900: var(--ds-teal-900);
+  --color-ds-blue-100: var(--ds-blue-100);
+  --color-ds-blue-200: var(--ds-blue-200);
+  --color-ds-blue-400: var(--ds-blue-400);
+  --color-ds-blue-500: var(--ds-blue-500);
+  --color-ds-blue-600: var(--ds-blue-600);
+  --color-ds-blue-700: var(--ds-blue-700);
+  --color-ds-blue-900: var(--ds-blue-900);
+  --color-ds-green-200: var(--ds-green-200);
+  --color-ds-green-400: var(--ds-green-400);
+  --color-ds-green-500: var(--ds-green-500);
+  --color-ds-green-900: var(--ds-green-900);
+  --color-ds-purple-100: var(--ds-purple-100);
+  --color-ds-purple-200: var(--ds-purple-200);
+  --color-ds-purple-400: var(--ds-purple-400);
+  --color-ds-purple-500: var(--ds-purple-500);
+  --color-ds-purple-600: var(--ds-purple-600);
+  --color-ds-purple-700: var(--ds-purple-700);
+  --color-ds-purple-900: var(--ds-purple-900);
+  --color-ds-pink-200: var(--ds-pink-200);
+  --color-ds-pink-400: var(--ds-pink-400);
+  --color-ds-pink-500: var(--ds-pink-500);
+  --color-ds-pink-900: var(--ds-pink-900);
+  --color-ds-amber-100: var(--ds-amber-100);
+  --color-ds-amber-200: var(--ds-amber-200);
+  --color-ds-amber-400: var(--ds-amber-400);
+  --color-ds-amber-500: var(--ds-amber-500);
+  --color-ds-amber-600: var(--ds-amber-600);
+  --color-ds-amber-700: var(--ds-amber-700);
+  --color-ds-amber-900: var(--ds-amber-900);
+  --color-ds-red-100: var(--ds-red-100);
+  --color-ds-red-200: var(--ds-red-200);
+  --color-ds-red-400: var(--ds-red-400);
+  --color-ds-red-500: var(--ds-red-500);
+  --color-ds-red-600: var(--ds-red-600);
+  --color-ds-red-700: var(--ds-red-700);
+  --color-ds-red-900: var(--ds-red-900);
+}
+
+/* Scrollable regions retain native scrolling and keyboard access without gutters. */
+.scrollbar-hidden,
+.log-table-scroll {
+  scrollbar-width: none;
+}
+.scrollbar-hidden::-webkit-scrollbar,
+.log-table-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Shared checked/open state, including cell text that has its own default tone. */
+.log-table-row[data-selected="true"],
+.log-table-row[data-selected="true"]:hover {
+  background-color: var(--selection);
+  color: var(--selection-foreground);
+}
+.log-table-row[data-selected="true"] td,
+.log-table-row[data-selected="true"] td a,
+.log-table-row[data-selected="true"] td span:not(:has(svg)):not(.token),
+.log-table-row[data-selected="true"] dd,
+.log-table-row[data-selected="true"] dd a,
+.log-table-row[data-selected="true"] dd span:not(:has(svg)):not(.token) {
+  color: inherit;
+}
+
+.log-table-row td [data-empty="true"],
+.log-table-row[data-selected="true"] td [data-empty="true"],
+.log-table-row dd [data-empty="true"],
+.log-table-row[data-selected="true"] dd [data-empty="true"] {
+  color: var(--empty-foreground);
+}
+
+:root {
+  --json-key: #075985;
+  --json-string: #166534;
+  --json-number: #9a3412;
+  --json-literal: #7e22ce;
+  --json-punctuation: #71717a;
+  --filter-operator: #be185d;
+}
+.dark {
+  --json-key: #93c5fd;
+  --json-string: #86efac;
+  --json-number: #fdba74;
+  --json-literal: #c4b5fd;
+  --json-punctuation: #a1a1aa;
+  --filter-operator: #fb7185;
+}
+.syntax-code .token.property,
+.syntax-code .token.key,
+.syntax-code .token.function {
+  color: var(--json-key);
+}
+.syntax-code .token.string {
+  color: var(--json-string);
+}
+.syntax-code .token.number {
+  color: var(--json-number);
+}
+.syntax-code .token.boolean,
+.syntax-code .token.null,
+.syntax-code .token.tag,
+.syntax-code .token.important,
+.syntax-code .token.keyword {
+  color: var(--json-literal);
+}
+.syntax-code .token.punctuation,
+.syntax-code .token.operator {
+  color: var(--json-punctuation);
+}
+.syntax-code .token.comment {
+  color: var(--foreground-muted);
+}
+
+.syntax-code[data-language="filter"] .token.string {
+  color: var(--json-key);
+}
+.syntax-code[data-language="filter"] .token.operator {
+  color: var(--filter-operator);
+}
+
+/* Documentation uses the product palette. Shiki's code-token colors are the
+   syntax-highlighting exception; surfaces and controls remain semantic. */
+:root,
+.dark {
+  --color-fd-background: var(--background);
+  --color-fd-foreground: var(--foreground);
+  --color-fd-muted: var(--muted);
+  --color-fd-muted-foreground: var(--foreground-muted);
+  --color-fd-card: var(--surface-row);
+  --color-fd-card-foreground: var(--foreground);
+  --color-fd-popover: var(--popover);
+  --color-fd-popover-foreground: var(--popover-foreground);
+  --color-fd-border: var(--border);
+  --color-fd-primary: var(--primary);
+  --color-fd-primary-foreground: var(--primary-foreground);
+  --color-fd-secondary: var(--secondary);
+  --color-fd-secondary-foreground: var(--secondary-foreground);
+  --color-fd-accent: var(--selection);
+  --color-fd-accent-foreground: var(--selection-foreground);
+  --color-fd-ring: var(--ring);
+  --color-fd-overlay: var(--overlay);
+  --color-fd-info: var(--info);
+  --color-fd-warning: var(--warning);
+  --color-fd-error: var(--destructive);
+  --color-fd-success: var(--success);
+  --color-fd-idea: var(--info);
+  --color-fd-diff-remove: var(--destructive-background);
+  --color-fd-diff-remove-symbol: var(--destructive);
+  --color-fd-diff-add: var(--success-background);
+  --color-fd-diff-add-symbol: var(--success);
+}
+
+.datool-docs {
+  --fd-layout-width: 88rem;
+}
+
+/* Match the mobile drawer edge and animation to the left-hand header toggle. */
+.datool-docs #nd-sidebar-mobile {
+  --fd-sidebar-drawer-offset: -100%;
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  border-inline-start-width: 0;
+  border-inline-end-width: 1px;
+}
+
+.datool-docs .prose {
+  font-size: 0.9375rem;
+  line-height: 1.8;
+}
+
+.datool-docs .prose pre {
+  font-size: 0.8125rem;
+}

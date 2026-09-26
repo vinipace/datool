@@ -1,0 +1,3 @@
+Defaults:datool-deploy env_reset
+Defaults:datool-deploy secure_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+datool-deploy ALL=(dokku) NOPASSWD: /usr/local/lib/datool-deploy/deploy-command *

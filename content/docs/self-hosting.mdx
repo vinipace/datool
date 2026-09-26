@@ -1,0 +1,140 @@
+---
+title: Self-hosting
+description: Run Datool with PostgreSQL, Redis, and a persistent ingestion worker.
+icon: hosting
+---
+
+## Services
+
+Datool's web application handles the UI and API. PostgreSQL stores accounts and project data. Redis queues trace lifecycle events, and a separate ingestion worker persists those events to PostgreSQL.
+
+Queued SDK delivery requires all four services. Starting only the web server does not start the ingestion worker.
+
+## Local development
+
+Self-hosting requires an authorized source checkout supplied by your Datool administrator. The application repository is private; a public documentation page does not grant source access. From that checkout, install dependencies and create a local environment file:
+
+```sh
+bun install
+cp .env.example .env.local
+```
+
+Configure these values before starting the application:
+
+| Variable                                      | Purpose                                                   |
+| --------------------------------------------- | --------------------------------------------------------- |
+| `DATABASE_URL`                                | PostgreSQL connection                                     |
+| `REDIS_URL`                                   | Redis connection shared by the web process and worker     |
+| `BETTER_AUTH_URL`                             | Exact application origin, such as `http://localhost:3000` |
+| `BETTER_AUTH_SECRET`                          | A stable, randomly generated application secret           |
+| `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` | Optional Google OAuth web client credentials              |
+| `RESEND_API_KEY` and `RESEND_FROM_EMAIL`      | Optional magic-link sign-in and invitation emails          |
+| `DATOOL_CMS_ENABLED`                         | Opt-in editorial CMS and marketing site; defaults to false |
+| `AUTH_ALLOWED_DOMAINS`                        | Comma-separated exact email domains allowed to sign in    |
+
+Configure at least one login method: Google or magic links. Resend requires a verified sender. Password signup is disabled. An empty allowed-domain list denies new sign-ins unless `AUTH_ALLOW_PUBLIC_SIGNUP=true` deliberately permits anyone with a verified email.
+
+Generate a secret with `openssl rand -base64 32`. Register the exact Google redirect URI `<BETTER_AUTH_URL>/api/auth/callback/google`. Restart the application after changing auth configuration.
+
+Start the bundled database services and apply migrations:
+
+```sh
+docker compose -f compose.dev.yaml up -d postgres redis
+bun run db:migrate
+```
+
+In one terminal:
+
+```sh
+bun run dev
+```
+
+In another terminal, from the same checkout:
+
+```sh
+bun run worker:ingestion
+```
+
+Open the configured origin, sign in, create an organization and project, and follow [Send your first trace](/docs/get-started/first-trace).
+
+## Production Docker Compose
+
+Copy `.env.self-hosting.example` to `.env`. Generate independent secrets with
+`openssl rand -hex 32` for `POSTGRES_PASSWORD`, `DATOOL_ALERT_READER_PASSWORD`, and
+`BETTER_AUTH_SECRET`. Set the public HTTPS `BETTER_AUTH_URL`, an allowed-domain
+policy, and Google or Resend credentials. Start the production stack:
+
+```sh
+docker compose up --build -d
+docker compose logs -f migrate app worker
+```
+
+Put a TLS reverse proxy in front of `127.0.0.1:3030`, preserve the public Host,
+and set `X-Forwarded-Proto: https`. PostgreSQL and Redis have no public ports.
+Migrations and login-configuration checks run before the app and worker start.
+The CMS and Cloud billing are off by default. No default account is created.
+
+Sign in, create an organization and project, then follow
+[Send your first trace](/docs/get-started/first-trace). Check that the recorded
+trace appears in Observe. A sign-in page responding does not prove usability.
+
+Persist and back up PostgreSQL, Redis, and the app data directory. Redis needs
+AOF persistence and `maxmemory-policy noeviction`; an evicting cache is unsuitable
+for ingestion. App and worker share the files volume. `docker compose down`
+preserves volumes; `docker compose down -v` deletes them. Back up the database
+before upgrading and applying migrations. Use one web process while local
+app/playground storage requires a single writer.
+
+Keep `BETTER_AUTH_SECRET` and any separate `DATOOL_PROVIDER_ENCRYPTION_KEY` stable
+across processes and restarts so saved provider credentials remain readable.
+Changing an environment password does not rotate an existing Postgres login.
+
+## Code scorer sandbox
+
+Configure Modal or Vercel Sandbox in **Project settings → Sandbox providers**,
+test the connection, and select it as default. Each project supplies its own
+credentials. Without a working sandbox, code scoring fails with a saved error
+and no score; Datool does not execute scorer code directly on the app host.
+
+The optional `compose.sandbox.yaml` connects to a local Docker daemon. This
+grants the application control of that Docker host; use it only on a dedicated
+host with trusted administrators. Follow the socket-group and image setup in
+the repository's `docs/self-hosting.md` before enabling the override. A separate
+sandbox provider is preferable for a public multi-user installation. The default
+Compose stack mounts no Docker socket. LLM scorers separately require a model
+provider key in project settings.
+
+## Optional CMS
+
+Set `DATOOL_CMS_ENABLED=true`, generate an independent `PAYLOAD_SECRET`, and run
+`docker compose run --rm migrate` before restarting with `docker compose up -d`.
+CMS tables live in a separate `payload` schema. Preview the initial content with
+`docker compose exec app bun run cms:seed --database datool`; add `--apply` to
+apply the seed. Set `CMS_ADMIN_USER_IDS` to the Better Auth user IDs allowed to
+edit content. Empty means no editors.
+
+With the flag off, anonymous visitors go straight to sign-in, CMS/marketing
+routes are disabled, and CMS migrations and secrets are unnecessary. `/docs`
+remains available. Existing marketing installations must explicitly enable
+this flag before upgrading. Turning it off preserves existing CMS data.
+
+## Verify a fresh install
+
+Run `bun run test:self-hosting` from the repository with Docker, Node, Bun, and
+Playwright Chromium installed. The test creates a disposable stack, redeems a
+magic link through a local mail fixture, creates the first organization/project,
+ingests a real SDK trace, runs isolated code scorers, and verifies persistence
+after container recreation. It checks CMS-off and CMS-on configurations using
+the same production image. Real Resend delivery and Google account login still
+need verification with your installation's credentials.
+
+## Inspect ingestion
+
+```sh
+bun run ingestion:jobs status
+bun run ingestion:jobs retry JOB_ID
+```
+
+Investigate the cause before retrying failed jobs. Replay failed predecessor events before dependent events. Monitor failed jobs, queue age, worker uptime, and storage availability.
+
+HTTP 202 means queue acceptance. A completed SDK flush confirms persistence. Verify a real trace reaches the UI after deployment; a responding sign-in page alone does not establish ingestion health.

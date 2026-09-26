@@ -1,0 +1,80 @@
+---
+title: Authentication and project access
+description: Choose browser sessions, organization API keys, or user OAuth for the task.
+icon: apiKeys
+---
+
+## Browser access
+
+Interactive sign-in uses Google or email magic links, depending on the instance configuration. Password signup is disabled. The administrator configures allowed email domains; an empty allowlist denies new sign-ins unless public signup is explicitly enabled. After signing in, your organization membership determines the projects you can access.
+
+Organization owners and admins manage projects and API keys. Members can work with authorized project content. Selecting an organization in the browser does not grant membership in another one.
+
+## Organization API keys
+
+Create a key in **Project settings → API keys**. A key belongs to its organization and may access projects within that organization according to its granted scopes. The key is displayed once; listings show a masked preview.
+
+For a project-scoped HTTP request, provide both headers:
+
+```sh
+curl "$DATOOL_BASE_URL/api/traces?limit=1" \
+  -H "Authorization: Bearer $DATOOL_API_KEY" \
+  -H "x-project-id: $DATOOL_PROJECT_ID"
+```
+
+This read requires `traces:read`; ingestion requires `traces:write`. Other resource operations require their matching scopes. Use the project ID, not its URL slug.
+
+API keys do not create browser sessions and cannot act as a human reviewer. Revoke or replace a key in settings when it is no longer needed.
+
+## Scope selection
+
+| Work | Typical scopes |
+| --- | --- |
+| Record application traces | `traces:write` |
+| Read trace evidence | `traces:read` |
+| Fetch published prompts | `prompts:read` |
+| Query charts | `metrics:read` |
+| Manage datasets | `datasets:read`, `datasets:write` |
+| Manage scorers | `scorers:read`, `scorers:write` |
+| Execute connected evaluations | `apps:read`, `evals:read`, `evals:write`, `datasets:read`, `scorers:read`, `traces:read` |
+| Register or invoke a playground app | `apps:read`, `apps:write` and the operation's evaluation/scorer scopes |
+| Read/write reviews | `reviews:read`, `reviews:write`; add `traces:read` for evidence and session creation |
+
+These are task-oriented starting points. The [operation reference](/docs/reference/operations) lists the exact scope set enforced for each operation. Resource file imports currently require both `datasets:write` and `scorers:write`. Connected managed-prompt reads additionally require `prompts:read`, `evals:read`, and `traces:write`.
+
+## User OAuth
+
+The [CLI](/docs/reference/cli) and [MCP clients](/docs/reference/mcp) can request a user authorization bound to an organization, project, and scope set. This preserves a user identity for operations such as reviews.
+
+Google access tokens are not Datool API credentials. Use a Datool-issued API key or OAuth token for Datool requests.
+
+Discover the authorization server at `/.well-known/oauth-authorization-server`.
+The issuer includes `/api/auth`, so its RFC 8414 discovery URL is
+`/.well-known/oauth-authorization-server/api/auth`; the root URL is a discovery alias.
+Use the returned endpoint URLs and authorization code flow with PKCE `S256`.
+REST and CLI tokens require the resource identifier `<origin>/api/cli`; MCP tokens
+use `<origin>/api/mcp`. These audiences are not interchangeable.
+
+## Agent discovery
+
+The [OpenAPI 3.1 specification](/openapi.json) describes every operation available
+through `POST /api/agent/{operation}`. It is generated from the same input schemas
+and scopes used by MCP and the CLI. Supply an organization API key or a Datool
+OAuth token and the `x-project-id` header. The specification covers agent
+operations; browser-internal APIs and the MCP JSON-RPC transport have separate contracts.
+
+Request `Accept: text/markdown` on docs, the homepage, and public CMS pages to read
+their Markdown representations. HTML remains available with `Accept: text/html`.
+Negotiated responses include `Vary: Accept`; missing public Markdown pages retain
+HTTP 404 with links to documentation. You can also append `.md` to any docs URL,
+such as `/docs/reference/authentication.md`. [llms.txt](/llms.txt) indexes the docs and
+machine-readable discovery endpoints.
+
+## Common failures
+
+An HTTP 401 usually indicates missing or invalid authentication. An HTTP 403 indicates the request lacks required access, such as a scope or organization/project membership. Recheck the selected host and project before changing permissions.
+
+Agent API errors return JSON with `error.code`, `error.message`, `error.hint`, and
+optional `error.details`. Unknown API paths also return JSON with HTTP 404. Honor
+`Retry-After` when present; inspect an operation's state before retrying a mutation.
+OAuth endpoints retain their standard `error` and `error_description` responses.

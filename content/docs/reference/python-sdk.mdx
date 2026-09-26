@@ -1,0 +1,115 @@
+---
+title: Python SDK
+description: Trace Python functions, async applications, and streams with Datool's native Python SDK.
+---
+
+The `datool` Python package provides decorators, observation context managers,
+OpenTelemetry export, managed prompts, and authenticated API requests. Python
+3.10 or later is required.
+
+## Install
+
+Python support is a **preview**. Version 0.1.0 is not published to PyPI, and the application source repository is private. Ask your Datool administrator for the wheel and its checksum, or an authorized source checkout. This access step is required before you can run the examples.
+
+With the administrator-provided wheel in the current directory:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install ./datool-0.1.0-py3-none-any.whl
+```
+
+From an authorized application checkout, the alternative is `python -m pip install ./packages/python-sdk`. See [compatibility](/docs/reference/compatibility) for the public Node packages and preview boundaries.
+
+Set `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY`. The organization
+API key needs `traces:write` for tracing and `prompts:read` for managed prompts.
+See [authentication](/docs/reference/authentication).
+
+## Record a trace
+
+```python
+from datool import get_client, observe
+
+datool = get_client()
+
+@observe(as_type="tool")
+def weather(city: str):
+    return {"city": city, "temperature": 22}
+
+with datool.start_as_current_observation(
+    name="weather-assistant",
+    as_type="agent",
+    group={"type": "agent", "name": "weather-assistant", "version": "v1"},
+    input={"city": "São Paulo"},
+) as agent:
+    agent.update(output=weather("São Paulo"))
+
+datool.shutdown()
+```
+
+`@observe` captures inputs, outputs, timings, and exception types for functions,
+coroutines, generators, and async generators. Disable capture with
+`capture_input=False` or `capture_output=False`. Close partially consumed streams
+with `close()` or `aclose()` to record cancellation.
+
+`start_as_current_observation` ends automatically and makes nested observations
+children. `start_observation` provides manual lifetime control and requires
+`.end()`. Groups are explicit and are not inherited by children.
+
+## Model calls and async applications
+
+```python
+with datool.start_as_current_observation(
+    name="answer", as_type="generation", model="my-model"
+) as generation:
+    generation.update(
+        output="The answer",
+        usage_details={"input": 20, "output": 8},
+        cost_details={"total": 0.0001},
+    )
+```
+
+Provide actual token usage and USD costs from your model response. The Python
+SDK does not estimate prices. Missing values remain missing.
+
+Use ordinary `with` blocks inside async functions. `await datool.aflush()` and
+`await datool.ashutdown()` wait off the event loop. Export runs on a background
+thread; `flush()` waits for persisted PostgreSQL receipts, not HTTP 202 queue
+acceptance. It raises on failed delivery, timeout, or queue overflow. Failed
+sends remain in memory for a later flush retry. End observations before shutdown.
+
+## Managed prompts
+
+```python
+prompt = datool.prompts.get("answer")
+messages = prompt.render({"question": "What is Datool?"})
+# Resolve prompt.provider / prompt.model using your application's model client.
+```
+
+The default is the latest published definition. Pass `version=2` only to pin a
+specific published version. `prompts.aget` provides async
+fetching. Rendering follows Datool's named placeholder syntax, reports missing
+variables, and does not interpolate inserted values again.
+
+## OpenTelemetry and API access
+
+Pass `tracer_provider=provider` to `Datool` to use your existing OTel provider, or
+attach `DatoolSpanProcessor` directly. Datool does not replace the global provider.
+Do not attach two Datool processors to the same provider.
+
+`datool.request("/api/traces?limit=10")` returns the API's `data` field. Use
+`arequest` for async access; collection pagination remains explicit. OpenAI
+client wrappers and connected evaluation runners are not included in this first
+Python release.
+
+## Configuration, sessions, and redaction
+
+`Datool()` and `get_client()` read the three environment variables above. Explicit `base_url`, `project_id`, and `api_key` options take precedence. Additional options include `timeout` (10 seconds), `retries` (3), `max_queue_size` (10,000), `max_io_characters` (20,000), and an application-defined `mask` callback for input/output redaction.
+
+Use `propagate_attributes(session_id=..., user_id=..., metadata=...)` around related observations. Create a session first with `datool.request("/api/sessions", "POST", {"name": "Support chat"})`, then reuse its returned ID. Metadata must already be safe to record; native capture masking does not sanitize arbitrary metadata or third-party spans.
+
+The queue is in memory. Failed sends can be retried with a later flush, but pending events do not survive process termination. Create a fresh client after forking a worker. A failed shutdown keeps the client open for recovery.
+
+## Framework integrations
+
+Follow the complete [LangGraph and LangChain recipe](/docs/tracing/langgraph) for optional installation, a runnable graph, expected trace structure, and callback lifecycle behavior. The same callback handler supports instrumented ReAct and Deep Agents invocations; remote agent services need their own instrumentation.
