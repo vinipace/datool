@@ -22,7 +22,7 @@ jobs:
       CI_TRIGGER_SOURCE: api
       RELEASE_VERSION: ${{ inputs.release-version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
         with:
           version: 0.12.6
