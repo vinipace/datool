@@ -127,7 +127,7 @@ afterAll(async () => {
   if (db) await closeTracerFixture(db)
 })
 
-test("MCP discovers the five sources, capabilities and legacy meanings and executes the skill examples", async () => {
+test("MCP discovers the current sources, capabilities and legacy meanings and executes the skill examples", async () => {
   const catalog = await call<SemanticCatalogMetadata>("get_metrics_metadata")
   expect(catalog).toEqual(semanticCatalog.metadata())
   expect(
@@ -141,6 +141,8 @@ test("MCP discovers the five sources, capabilities and legacy meanings and execu
     ["evalRuns", "Evaluation Runs"],
     ["evalResults", "Evaluation Results"],
     ["scoreValues", "Scores"],
+    ["evalClassification", "Classification"],
+    ["evalComparison", "Paired evaluations"],
   ])
   expect(catalog.models.find((m) => m.name === "scores")?.source).toMatchObject(
     { visibility: "legacy", replacement: "evalResults" }
