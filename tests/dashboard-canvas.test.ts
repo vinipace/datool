@@ -93,7 +93,7 @@ describe("dashboard canvas persistence", () => {
       [0, 5, 6, 7],
       [0, 0, 12, 5],
     ])
-    expect(moved[0].query).toEqual(widget.query)
+    expect(dashboardWidgetSchema.parse(moved[0]).query).toEqual(widget.query)
     const appended = appendDashboardWidget(moved, { ...widget, id: "new" })
     expect(appended.every((w) => w.layout)).toBe(true)
     expect(appended[2].layout).toEqual({ x: 6, y: 5, w: 4, h: 3 })

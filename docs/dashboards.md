@@ -131,3 +131,9 @@ Migration `0040_score_analytics_instants.sql` adds indexed rating event instants
 Saved user/session/provider attribution, measured scorer cost/duration/model and review edit history are not fabricated where evidence is absent. Their availability is explicit in source metadata. Existing imported ratings without a stable producer definition require separate groups; a shared display name cannot establish a compatible scale.
 
 See [dashboard performance](dashboard-performance.md) for the repeatable benchmark, measured latency at 20,000/200,000 spans, concurrent refresh rejections, and a transaction-local JIT comparison. Correct query results do not imply that concurrent dashboard latency is acceptable.
+
+## Matrix and text widgets
+
+Matrices pivot one measure over two or more dimensions. The final dimension supplies columns; preceding dimensions identify rows. Cells retain the server aggregate (including average, P50 or P95); the browser never averages already aggregated rows. Missing observations remain missing and zero stays zero. Matrices fetch up to 5,000 cells and page rows/columns locally; an explicit notice identifies a truncated live matrix.
+
+Text widgets are edited directly on the canvas with TipTap while editing the dashboard or customizing a report. The inline toolbar provides headings, bold, italic, lists and quotes; content is stored as Markdown, capped at 20,000 characters. Text height follows its content and width, reflowing following widgets without saving mobile-only heights. Text does not open a configuration panel or issue metric queries. Reports reuse the same canvas, widgets and formatting with captured data; see [Reports](reports.md).

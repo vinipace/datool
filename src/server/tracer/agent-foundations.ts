@@ -1,3 +1,4 @@
+import { isDashboardDataWidget } from "@/src/lib/tracer/dashboards"
 import {
   datasetCase,
   datasetHeader,
@@ -510,7 +511,7 @@ export function createAgentFoundations(
       tracerEffect(async () => {
         const dashboard = await runTracerEffect(service().dashboards.get(id))
         const plan = dashboardQueryPlan(
-          dashboard.widgets.flatMap((widget) => [
+          dashboard.widgets.filter(isDashboardDataWidget).flatMap((widget) => [
             {
               ...widget,
               id: `aggregate:${widget.id}`,
@@ -560,6 +561,7 @@ export function createAgentFoundations(
         | "scorer"
         | "eval"
         | "dashboard"
+        | "report"
         | "view",
       key: string
     ) =>
@@ -571,18 +573,21 @@ export function createAgentFoundations(
           scorer: "scorers",
           eval: "eval_runs",
           dashboard: "dashboards",
+          report: "reports",
           view: "saved_views",
         } as const
         const table = sql.identifier(catalogs[kind])
         const match =
-          kind === "scorer"
-            ? sql`id=${key} or slug=${key}`
-            : ["trace", "session", "dataset", "eval", "view"].includes(kind)
-              ? sql`id=${key} or name=${key}`
-              : sql`id=${key}`
+          kind === "report"
+            ? sql`id=${key} or number::text=${key}`
+            : kind === "scorer"
+              ? sql`id=${key} or slug=${key}`
+              : ["trace", "session", "dataset", "eval", "view"].includes(kind)
+                ? sql`id=${key} or name=${key}`
+                : sql`id=${key}`
         return read(async (db) => {
           const found = await db.execute(
-            sql`select id from ${table} where project_id=${project} and (${match}) order by (id=${key}) desc,id limit 2`
+            sql`select id, ${kind === "report" ? sql`number` : sql`null`} as number from ${table} where project_id=${project} and (${match}) order by (id=${key}) desc,id limit 2`
           )
           if (!found.rows.length) throw notFound(kind, key)
           if (found.rows.length > 1 && found.rows[0].id !== key)
@@ -604,6 +609,7 @@ export function createAgentFoundations(
             scorer: "/scorers",
             eval: `/evals/${encodeURIComponent(id)}`,
             dashboard: "/dashboards",
+            report: `/reports/${found.rows[0].number}`,
             view: "/traces",
           }[kind]
           return {

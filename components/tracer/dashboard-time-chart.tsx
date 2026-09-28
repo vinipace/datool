@@ -1,7 +1,15 @@
 "use client"
+import {
+  matchesReportHighlight,
+  type ReportHighlight,
+  type ReportReference,
+} from "@/src/lib/tracer/report-highlights"
+import type { DisplayAnnotation } from "@/src/lib/tracer/dashboard-presentation"
 import { useId } from "react"
 import {
   Area,
+  ReferenceDot,
+  ReferenceLine,
   ComposedChart,
   Bar,
   BarChart,
@@ -33,9 +41,13 @@ export function DashboardTimeChart({
   widget: sourceWidget,
   result: sourceResult,
   summary: sourceSummary,
+  highlights = [],
+  references = [],
   stackGroups,
   missingLabel = "No data",
 }: {
+  highlights?: ReportHighlight[]
+  references?: ReportReference[]
   widget: DashboardWidget
   result: SemanticResult
   summary: SemanticResult | null
@@ -121,12 +133,60 @@ export function DashboardTimeChart({
     member = series[0],
     presentation: "full" | "compact" = "full"
   ) => {
-    if (annotations[member]?.unit === "ms" && typeof value === "number")
+    if (
+      !(annotations[member] as DisplayAnnotation)?.display &&
+      annotations[member]?.unit === "ms" &&
+      typeof value === "number"
+    )
       return `${Number((value / 1000).toFixed(2))}s`
     return formatDashboardValue(value, annotations[member], presentation)
   }
   const axes = (
     <>
+      {references.map((reference, index) => (
+        <ReferenceLine
+          key={"reference-" + index}
+          y={reference.value}
+          stroke="var(--foreground-muted)"
+          strokeDasharray="4 4"
+          ifOverflow="extendDomain"
+          label={{
+            value: reference.label,
+            position: "insideTopRight",
+            fill: "var(--foreground-muted)",
+            fontSize: 11,
+          }}
+        />
+      ))}
+      {highlights.flatMap((highlight, index) =>
+        sourceResult.data
+          .filter(
+            (row) =>
+              matchesReportHighlight(highlight, row) &&
+              typeof row[
+                highlight.measure ?? sourceResult.query.measures[0]
+              ] === "number"
+          )
+          .map((row, rowIndex) => (
+            <ReferenceDot
+              key={index + ":" + rowIndex}
+              x={String(row[time.dimension])}
+              y={Number(
+                row[highlight.measure ?? sourceResult.query.measures[0]]
+              )}
+              r={5}
+              fill="var(--foreground)"
+              stroke="var(--background)"
+              label={{
+                value: highlight.label,
+                position:
+                  row[time.dimension] === rows[0]?.bucket ? "right" : "left",
+                fill: "var(--foreground)",
+                fontSize: 11,
+              }}
+            />
+          ))
+      )}
       <CartesianGrid
         vertical={false}
         strokeOpacity={dashboardChartStyle.gridOpacity}
@@ -313,11 +373,12 @@ export function DashboardTimeChart({
                   />
                   {annotations[member]?.title ?? member}
                 </span>
-                {summary && (
-                  <span className="font-medium tabular-nums">
-                    {format(summary.data[0]?.[member], member)}
-                  </span>
-                )}
+                {summary &&
+                  sourceWidget.presentation?.showSummary !== false && (
+                    <span className="font-medium tabular-nums">
+                      {format(summary.data[0]?.[member], member)}
+                    </span>
+                  )}
               </div>
             )
           })}

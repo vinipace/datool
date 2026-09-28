@@ -72,7 +72,7 @@ attribution. No historical updates run during migration.
 ## Production backfill
 
 The entry point is `scripts/backfill-eval-attribution.ts`. Deploy the attribution
-code and apply migrations **0034 and 0035** first. The script checks that their
+code and apply migrations **0034, 0035 and 0045** first. The script checks that their
 columns/tables exist; it never migrates the database itself. Use the production
 runtime's `DATABASE_URL` and the **exact project ID**, not a project slug. The
 Docker image includes the script and its dependencies.
@@ -170,3 +170,7 @@ The semantic members `evalQuality.workflow` and `evalQuality.agent` filter saved
 case memberships before aggregation. Selecting a workflow retains the agent rows
 for those cases, excludes other workflow names and never includes unrelated cases
 just because they share an eval run. `groupName` filters the chart's own group rows.
+
+## Recorded prompt versions
+
+Migration 0045 adds `prompt_versions_json` to saved case attribution. New evaluations capture valid `datool.prompt.id`, `datool.prompt.slug`, and integer `datool.prompt.version` from workload traces and spans, excluding scorer executions and their descendants. Re-scoring preserves this evidence. A case with several recorded prompt versions forms one explicit multiple-version bucket; it is not counted once per prompt. Historical records without prompt provenance remain unknown. The migration does not infer or backfill prompts from current trace data.

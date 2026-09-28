@@ -1,3 +1,5 @@
+import type { SemanticDataRow, SemanticResult } from "@/src/lib/semantic/result"
+
 // Shared visual defaults for every dashboard chart.
 export const dashboardChartStyle = {
   // Reserve 20% on each side; bars fill the remaining category band.
@@ -25,6 +27,29 @@ export function dashboardSeriesColor(index: number) {
 
 export function dashboardBarColor(index: number) {
   return `color-mix(in oklab, ${dashboardSeriesColor(index)}, var(--foreground) var(--data-bar-lift))`
+}
+
+export function dashboardCategoryKey(
+  row: SemanticDataRow,
+  dimensions: string[]
+) {
+  return JSON.stringify(dimensions.map((dimension) => row[dimension] ?? null))
+}
+
+/** Use raw identities, not display aliases or row order, across report charts. */
+export function dashboardCategoryColors(
+  results: Pick<SemanticResult, "query" | "data">[]
+) {
+  const keys = new Set(
+    results.flatMap(({ query, data }) =>
+      data.map((row) => dashboardCategoryKey(row, query.dimensions))
+    )
+  )
+  return new Map(
+    [...keys]
+      .sort((a, b) => a.localeCompare(b, "en", { numeric: true }))
+      .map((key, index) => [key, index])
+  )
 }
 
 export function lineSeriesColor(index: number) {

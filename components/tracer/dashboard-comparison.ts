@@ -1,6 +1,7 @@
 import type { DashboardWidget } from "@/src/lib/tracer/dashboards"
 import type { SemanticDataRow, SemanticResult } from "@/src/lib/semantic/result"
 import { groupedTimeChart } from "@/src/lib/tracer/dashboard-time-series"
+import type { DashboardBarBaseline } from "@/src/lib/tracer/dashboard-bar-comparison"
 
 export type DashboardCohortResult = {
   label?: string
@@ -9,6 +10,7 @@ export type DashboardCohortResult = {
   previous?: SemanticResult | null
   history?: SemanticResult | null
   offsetKey: string
+  baseline?: DashboardBarBaseline
 }
 
 /** A view-only pivot: each cohort keeps its own aggregate, including percentiles. */

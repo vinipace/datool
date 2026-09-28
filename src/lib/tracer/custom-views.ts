@@ -41,7 +41,7 @@ export const evalViewSettingsSchema = z
 
 export const customViewInputSchema = z
   .object({
-    resource: z.enum(["eval-runs", "playground-traces", "agents", "workflows", "scorers", "prompts"]),
+    resource: z.enum(["eval-runs", "playground-traces", "agents", "workflows", "scorers", "prompts", "reports"]),
     name: z.string().trim().min(1).max(120),
     settings: evalViewSettingsSchema,
   })

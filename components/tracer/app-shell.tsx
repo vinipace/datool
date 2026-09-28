@@ -50,6 +50,7 @@ import { useOrganizationSessionSync } from "@/lib/workspace-selection"
 const routes = [
   { href: "/traces", icon: productIcons.traces, label: pageTitles.traces },
   { href: "/playground", icon: productIcons.playground, label: pageTitles.playground },
+  { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
   { href: "/dashboards", icon: productIcons.dashboards, label: pageTitles.dashboards },
   { href: "/agents", icon: productIcons.agents, label: pageTitles.agents },
   { href: "/workflows", icon: productIcons.workflows, label: pageTitles.workflows },

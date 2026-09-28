@@ -108,6 +108,9 @@
   --color-comparison-2: var(--data-series-2);
   --color-comparison-3: var(--data-series-3);
   --color-comparison-4: var(--data-series-4);
+  /* Additional categorical identities for matrix dimension legends. */
+  --color-comparison-5: #d773ac;
+  --color-comparison-6: #bcaa42;
   --color-input: var(--input);
   --color-input-background: var(--input-background);
   --color-filter-fulltext: var(--filter-fulltext);
@@ -222,6 +225,10 @@
     --foreground-subtle: #a1a1aa;
     --score-track: #e4e4e7;
     --score-fill: #6366f1;
+    /* Saturated endpoints for the fixed 0–1 matrix score scale. */
+    --score-heat-low: #dc2626;
+    --score-heat-mid: #d97706;
+    --score-heat-high: #059669;
     --info: #0284c7;
     --info-foreground: #0c4a6e;
     --info-background: #e0f2fe;
@@ -316,6 +323,9 @@
     --foreground-subtle: #71717a;
     --score-track: #27272a;
     --score-fill: #818cf8;
+    --score-heat-low: #ff455c;
+    --score-heat-mid: #ffb000;
+    --score-heat-high: #00e676;
     --info: #22d3ee;
     --info-foreground: #cffafe;
     --info-background: rgb(34 211 238 / 0.09);

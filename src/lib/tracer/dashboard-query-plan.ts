@@ -1,19 +1,26 @@
-import type { DashboardWidget } from "./dashboards"
+import {
+  isDashboardDataWidget,
+  type DashboardWidget,
+  type DashboardContentWidget,
+} from "./dashboards"
 import { previousPeriodQuery } from "./dashboard-metric-comparison"
 import { dashboardCohorts } from "./dashboard-filters"
 
 export function dashboardQueryPlan(
-  items: DashboardWidget[],
+  items: DashboardContentWidget[],
   offsets: Record<string, number>
 ) {
   const queries: DashboardWidget["query"][] = []
   const batches: DashboardWidget["query"][][] = [[]]
-  const positions = items.map((item) => {
+  const positions = items.filter(isDashboardDataWidget).map((item) => {
     const cohorts = dashboardCohorts(item)
     const timeChart = item.type === "line" || item.type === "stacked"
     // A whole-window aggregate cannot summarize only the groups that passed
     // a measure threshold (averages and percentiles are not additive).
-    const includeSummary = timeChart && !item.query.having?.length
+    const matrixSummary =
+      item.type === "matrix" && item.presentation?.showSummary === true
+    const includeSummary =
+      (timeChart || matrixSummary) && !item.query.having?.length
     const includePrevious = item.type === "metric"
     // Never split a widget's curves and totals across database snapshots.
     if (
@@ -29,7 +36,11 @@ export function dashboardQueryPlan(
         const offsetKey = `${item.id}:${index}`
         const query = {
           ...cohort.query,
-          offset: offsets[offsetKey] ?? item.query.offset,
+          offset:
+            item.type === "matrix"
+              ? 0
+              : (offsets[offsetKey] ?? item.query.offset),
+          ...(item.type === "matrix" ? { limit: 5000 } : {}),
           total: true,
         }
         const result = queries.push(query) - 1
@@ -62,7 +73,9 @@ export function dashboardQueryPlan(
         if (includeSummary) {
           const summaryQuery = {
             ...query,
-            dimensions: query.dimensions,
+            dimensions: matrixSummary
+              ? query.dimensions.slice(0, -1)
+              : query.dimensions,
             timeDimensions: query.timeDimensions.map(
               ({ dimension, dateRange }) => ({ dimension, dateRange })
             ),

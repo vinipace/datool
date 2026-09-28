@@ -1,3 +1,5 @@
+import { evalClassificationSemanticModel } from "./eval-classification"
+import { evalComparisonSemanticModel } from "./eval-comparison"
 import { spansSemanticModel } from "./spans"
 import { evalResultsSemanticModel } from "./eval-results"
 import { scoreValuesSemanticModel } from "./score-values"
@@ -20,6 +22,22 @@ import { tracesSemanticModel } from "@/src/server/metrics/traces"
  * executable or dynamically inferred metrics.
  */
 const sourcePresentation: Record<string, SemanticSourcePresentation> = {
+  evalClassification: {
+    title: "Classification",
+    description:
+      "Confusion counts, precision, recall, F1 and workload cost from saved labels.",
+    grain: "One saved evaluation case",
+    visibility: "primary",
+    order: 5,
+  },
+  evalComparison: {
+    title: "Paired evaluations",
+    description:
+      "Matched dataset cases across two run sets and a pinned scorer version.",
+    grain: "One paired dataset case",
+    visibility: "primary",
+    order: 6,
+  },
   traces: {
     title: "Traces",
     description:
@@ -129,6 +147,8 @@ const sourcePresentation: Record<string, SemanticSourcePresentation> = {
 
 export const metricModels = Object.freeze(
   [
+    evalClassificationSemanticModel,
+    evalComparisonSemanticModel,
     spansSemanticModel,
     evalResultsSemanticModel,
     scoreValuesSemanticModel,

@@ -3,13 +3,13 @@ import {
   type NormalizedSemanticQuery,
 } from "@/src/lib/semantic/query"
 import { healthDashboard, logsDashboardWidgets } from "./dashboard-presets"
-import type { DashboardInput, DashboardWidget } from "./dashboards"
+import type { DashboardDataInput, DashboardWidget } from "./dashboards"
 
 type DashboardTemplate = {
   id: string
   name: string
   description: string
-  create: (now?: Date) => DashboardInput
+  create: (now?: Date) => DashboardDataInput
 }
 
 type QueryOptions = Pick<
@@ -490,7 +490,7 @@ export const dashboardTemplates: readonly DashboardTemplate[] = [
   ),
 ]
 
-export function blankDashboard(): DashboardInput {
+export function blankDashboard(): DashboardDataInput {
   return {
     schemaVersion: 1,
     name: "Untitled dashboard",

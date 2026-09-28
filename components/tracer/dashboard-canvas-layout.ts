@@ -3,16 +3,16 @@ import {
   findWidgetSpace,
 } from "@/components/ui/canvas/layout"
 import type { CanvasLayoutChange, CanvasWidget } from "@/components/ui/canvas"
-import type { DashboardWidget } from "@/src/lib/tracer/dashboards"
+import type { DashboardContentWidget } from "@/src/lib/tracer/dashboards"
 
-export type DashboardWidgetProps = { widget: DashboardWidget }
+export type DashboardWidgetProps = { widget: DashboardContentWidget }
 export type DashboardWidgetMap = {
-  [K in DashboardWidget["type"]]: DashboardWidgetProps
+  [K in DashboardContentWidget["type"]]: DashboardWidgetProps
 }
 
 /** Old width-only JSON is projected without requiring a database migration. */
 export function dashboardCanvasWidgets(
-  widgets: DashboardWidget[]
+  widgets: DashboardContentWidget[]
 ): CanvasWidget<DashboardWidgetMap>[] {
   const placed: CanvasWidget<DashboardWidgetMap>[] = widgets
     .filter((widget) => widget.layout)
@@ -47,9 +47,9 @@ export function dashboardCanvasWidgets(
 }
 
 export function applyDashboardLayout(
-  widgets: DashboardWidget[],
+  widgets: DashboardContentWidget[],
   changes: CanvasLayoutChange[]
-): DashboardWidget[] {
+): DashboardContentWidget[] {
   const layouts = new Map(changes.map(({ id, layout }) => [id, layout]))
   return widgets.map((widget) => {
     const layout = layouts.get(widget.id)
@@ -64,9 +64,9 @@ export function applyDashboardLayout(
 }
 
 export function appendDashboardWidget(
-  widgets: DashboardWidget[],
-  widget: DashboardWidget
-): DashboardWidget[] {
+  widgets: DashboardContentWidget[],
+  widget: DashboardContentWidget
+): DashboardContentWidget[] {
   const current = dashboardCanvasWidgets(widgets)
   const layout = findWidgetSpace(current, {
     w: 4,

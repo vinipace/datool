@@ -138,6 +138,14 @@ Agent workflows (all commands return JSON):
   datool evals target <run-id> --target-id <row-id>
   datool metrics metadata|query|batch
   datool dashboards list|get|create|update|delete|preview|resolve [id]
+  datool reports templates|template [template-id]
+  datool reports list|get|resolve [number]
+  datool reports guide|recipe|components
+  datool reports validate --file report.mdx [--data-file report.data.json]
+  datool reports create --file report.mdx [--data-file report.data.json] --creation-key <uuid>
+  datool reports update <number> --file report.mdx [--data-file report.data.json] --revision <n> [--refresh]
+  datool reports create --input @report.json
+  datool reports update|publish|share|clone <number> --input @changes.json
   datool views list|get|data|resolve [id]
   datool traces|sessions|datasets|evals export [id] --out <file.ndjson>
   datool agent tools [operation]
@@ -148,6 +156,7 @@ Pagination: --limit 1..100 --cursor <cursor> --include-total
 Eval reads: lightweight by default; --include-evidence embeds full case evidence.
 Follow nextCursor/nextOffset; batches may shrink to fit the response size limit.
 Evaluation: --request-key <stable-key> --wait --timeout 300 --poll-interval 2
+Reports: save a UUID creationKey in the input; reuse that exact input after uncertain delivery.
 CI gate: --min-score 0.8 --min-pass-rate 1 --baseline-id <id> --max-regression 0
 Exit codes: 0 success, 1 request/usage error, 2 failed CI gate, 3 wait timeout.
 Exports: --max-rows 10000 --replace; continuation metadata goes to stderr.

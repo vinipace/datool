@@ -20,6 +20,7 @@ const resourceLabels: Record<CustomView["resource"], string> = {
   agents: "Agents tables",
   workflows: "Workflows tables",
   scorers: "Scorers tables",
+  reports: "Reports tables",
   prompts: "Prompts tables",
 }
 

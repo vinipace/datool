@@ -1,7 +1,9 @@
+import { validateDashboardPresentation } from "@/src/lib/tracer/dashboard-presentation"
 import { readCatalog, CATALOG_LIMIT } from "./catalog-read"
 import { and, desc, eq, sql } from "drizzle-orm"
 import {
   dashboardInputSchema,
+  isDashboardDataWidget,
   dashboardUpdateSchema,
   type Dashboard,
 } from "@/src/lib/tracer/dashboards"
@@ -27,9 +29,15 @@ function config(value: unknown) {
   if (!parsed.success)
     throw validation(parsed.error.issues[0]?.message ?? "Invalid dashboard.")
   try {
-    for (const widget of parsed.data.widgets)
+    for (const widget of parsed.data.widgets.filter(isDashboardDataWidget)) {
       for (const cohort of dashboardCohorts(widget))
         validateSemanticQuery(cohort.query, semanticCatalog)
+      validateDashboardPresentation(
+        widget.presentation,
+        widget.query,
+        semanticCatalog.getMember
+      )
+    }
   } catch (error) {
     throw validation(
       error instanceof Error ? error.message : "Invalid widget query."
