@@ -7,7 +7,7 @@ import { defaultTableSettings, evalViewSettingsSchema, type CustomView, type Eva
 import { createColumnOrderStore } from "@/src/lib/tracer/log-column-order"
 import { createTableSettingsStore } from "@/src/lib/tracer/table-settings-store"
 import { createPageViewSelectionStore } from "@/src/lib/tracer/page-view-drafts"
-import { pageResourceForPath, pageViewQueryParams, applyPageViewQueryParams } from "@/src/lib/tracer/view-resources"
+import { pageResourceForPath, pageViewPathname, pageViewQueryParams, applyPageViewQueryParams } from "@/src/lib/tracer/view-resources"
 import { useProjectScope } from "./project-scope-context"
 import { callViewOperation } from "./view-library-client"
 import { useComputedColumns } from "./use-computed-columns"
@@ -26,7 +26,7 @@ export function useTableView({
   details?: { open: boolean; onOpenChange: (open: boolean) => void }
 }) {
   const projectId = useProjectScope()?.projectId ?? ""
-  const pathname = usePathname() ?? "/"
+  const pathname = pageViewPathname(usePathname() ?? "/")
   const search = useSearchParams()
   const resource = explicitResource ?? pageResourceForPath(pathname, settingsStorageKey)
   const automaticComputed = useComputedColumns(`page:${pathname}:${resource ?? "table"}`, [])

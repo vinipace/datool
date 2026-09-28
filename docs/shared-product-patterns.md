@@ -404,6 +404,26 @@ views load the root payload without hydrating child spans or scores. See
 [React trace views](./react-trace-views.md) for the sandbox and component contract.
 Snapshot inspectors continue to use their frozen evidence without network reads.
 
+## Dataset item links
+
+Dataset inspectors use `/p/[projectSlug]/datasets/[datasetId]/[itemId]`, with
+`itemTab` (`form`, `runs`, or `views`) and `objectView` query parameters.
+Opening a row, changing its tab or Object View,
+and moving between rows add browser history entries; closing returns to the
+dataset path and clears only these inspector parameters. Direct links and reloads
+render the same dataset table and item inspector. Page View drafts and selection
+remain scoped to the dataset path. Links resolve compact item previews within the
+current dataset even
+when the row is outside the loaded table page. A linked Object View takes
+precedence over personal preferences; unavailable links show an explicit error.
+These inspector parameters are transient and are excluded from saved Page Views.
+
+The Views picker remains available for rows with omitted payloads. After choosing
+a view, **Load and render** fetches the omitted fields together and renders only
+when the complete row is available. Failures keep the selection and offer the same
+button for retry; changing rows or closing cancels the request. Hydration preserves
+existing drafts and the row version checks used by Form.
+
 ## Route navigation
 
 `app/(app)/loading.tsx` covers workspace and project-layout loading, so its

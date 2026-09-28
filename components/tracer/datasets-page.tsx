@@ -35,6 +35,7 @@ import { ConnectedEvalButton } from "./connected-eval-button"
 import { DatasetDetailsInspector } from "./dataset-details-inspector"
 import { DatasetImportDialog } from "./dataset-import-dialog"
 import { DatasetItemInspector } from "./dataset-item-inspector"
+import { useDatasetItemLocation } from "./use-dataset-item-location"
 import { DatasetItemsTable } from "./dataset-items-table"
 import { DatasetSchemaDialog } from "./dataset-schema-dialog"
 import { DockedInspector } from "./docked-inspector"
@@ -88,7 +89,13 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const [deleted, setDeleted] = React.useState<Set<string>>(() => new Set())
   const [newIds, setNewIds] = React.useState<Set<string>>(() => new Set())
   const [drafts, setDrafts] = React.useState<Record<string, ItemDraft>>({})
-  const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const itemLocation = useDatasetItemLocation(datasetId)
+  const { itemId: selectedId, update: updateItemLocation } = itemLocation
+  const [itemLoadError, setItemLoadError] = React.useState<Error | null>(null)
+  const [itemLoadAttempt, setItemLoadAttempt] = React.useState(0)
+  const onViewChange = React.useCallback((viewId: string | null, replace = false) => {
+    updateItemLocation({ viewId }, replace)
+  }, [updateItemLocation])
   const [checked, setChecked] = React.useState<Set<string>>(() => new Set())
   const [autosaves, setAutosaves] = React.useState<Record<string, AutosaveState>>({})
   const [version, setVersion] = React.useState<{ id: string; revision: number } | null>(null)
@@ -165,6 +172,36 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const tableItems = React.useMemo(() => items.map(item => datasetItemPreview(item)), [items])
   const selected = allItems.find((item) => item.id === selectedId)
   const selectedIndex = items.findIndex((item) => item.id === selectedId)
+  React.useEffect(() => {
+    setLoadingField(null)
+    setFieldErrors({})
+    setItemLoadError(null)
+    return () => {
+      selectionRequest.current?.abort()
+      selectionRequest.current = null
+      if (selectedId) void autosave.flush(selectedId)
+    }
+  }, [selectedId, autosave])
+  // A shared item may be outside the loaded page or excluded by the table filter.
+  React.useEffect(() => {
+    if (!selectedId || selected) return
+    const controller = new AbortController()
+    setItemLoadError(null)
+    void tracerApi.datasets.items(datasetId, {
+      filter: `id = ${JSON.stringify(selectedId)}`,
+      preview: true,
+      limit: 1,
+      signal: controller.signal,
+    }).then(result => {
+      if (controller.signal.aborted) return
+      const item = result.items.find(row => row.id === selectedId && row.datasetId === datasetId)
+      if (!item) throw new Error("This dataset item is unavailable or has been deleted.")
+      setOverrides(current => ({ ...current, [item.id]: current[item.id] ?? item }))
+    }).catch(error => {
+      if (!controller.signal.aborted) setItemLoadError(error instanceof Error ? error : new Error("Could not load this dataset item."))
+    })
+    return () => controller.abort()
+  }, [selectedId, selected, datasetId, itemLoadAttempt])
   const select = (row: DatasetItemPreview, target?: HTMLElement) => {
     if (target) returnFocus.current = target
     selectionRequest.current?.abort()
@@ -172,7 +209,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     setLoadingField(null)
     setFieldErrors({})
     if (selectedId && selectedId !== row.id) void autosave.flush(selectedId)
-    setSelectedId(row.id)
+    updateItemLocation({ itemId: row.id })
     const item = overrides[row.id] ?? row
     setDrafts((current) =>
       current[item.id] ? current : { ...current, [item.id]: itemDraft(item) }
@@ -182,22 +219,27 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
       [item.id]: current[item.id] ?? item,
     }))
   }
-  const loadField = async (field: DatasetItemField) => {
-    if (!selected || selectionRequest.current || !selected.omittedFields?.[field]) return
+  const loadFields = async (requested: readonly DatasetItemField[]) => {
+    if (!selected || selectionRequest.current) return
+    const fields = requested.filter(field => selected.omittedFields?.[field])
+    if (!fields.length) return
     const controller = new AbortController()
     selectionRequest.current = controller
-    setLoadingField(field)
-    setFieldErrors(current => ({ ...current, [field]: undefined }))
+    setLoadingField(fields[0])
+    setFieldErrors(current => ({ ...current, ...Object.fromEntries(fields.map(field => [field, undefined])) }))
     try {
       await autosave.flush(selected.id)
       if (controller.signal.aborted) return
-      const loaded = await tracerApi.datasets.getItem(selected.id, { fields: [field], signal: controller.signal })
+      const loaded = await tracerApi.datasets.getItem(selected.id, { fields, signal: controller.signal })
       if (controller.signal.aborted) return
-      const hydrated = autosave.hydrateField(selected, loaded, field)
+      const hydrated = fields.reduce((item, field) => autosave.hydrateField(item, loaded, field), selected)
       setOverrides(current => ({ ...current, [selected.id]: hydrated }))
-      if (field !== "sourceSpanEvidence") setDrafts(current => ({ ...current, [selected.id]: { ...current[selected.id], [field]: jsonDocument(loaded[field]) } }))
+      setDrafts(current => ({ ...current, [selected.id]: {
+        ...(current[selected.id] ?? itemDraft(selected)),
+        ...Object.fromEntries(fields.filter(field => field !== "sourceSpanEvidence").map(field => [field, jsonDocument(loaded[field])])),
+      } }))
     } catch (error) {
-      if (!controller.signal.aborted) setFieldErrors(current => ({ ...current, [field]: (error as Error).message }))
+      if (!controller.signal.aborted) setFieldErrors(current => ({ ...current, ...Object.fromEntries(fields.map(field => [field, (error as Error).message])) }))
     } finally {
       if (selectionRequest.current === controller) {
         selectionRequest.current = null
@@ -208,7 +250,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const close = () => {
     selectionRequest.current?.abort()
     if (selectedId) void autosave.flush(selectedId)
-    setSelectedId(null)
+    updateItemLocation({ itemId: null })
     setMobileDetails(false)
     returnFocus.current?.focus()
   }
@@ -251,7 +293,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     selectionRequest.current?.abort()
     setPageError("")
     setDeleted((current) => new Set(current).add(item.id))
-    setSelectedId(null)
+    updateItemLocation({ itemId: null })
     try {
       const pending = await autosave.remove(item.id)
       if (!(pending?.isNew ?? newIds.has(item.id))) await tracerApi.datasets.deleteItem(item.id)
@@ -293,7 +335,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     )
   return (
     <>
-      <HeaderSlot name="filter">
+      <HeaderSlot name="title">
         <div className="flex min-w-0 items-center gap-2 text-sm">
           <ChevronRight className="size-3.5 shrink-0 text-foreground-muted" />
           <span aria-hidden="true" className="shrink-0 [&>svg]:size-4">
@@ -350,7 +392,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
             className="md:hidden"
             aria-label="Dataset details"
             onClick={() => {
-              setSelectedId(null)
+              updateItemLocation({ itemId: null })
               setMobileDetails(true)
             }}
           >
@@ -423,23 +465,36 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
         </CollectionPage>
       </CollectionPanel>
       <DockedInspector
-        title={selected ? "Dataset row" : "Dataset details"}
-        mobileOpen={!!selected || mobileDetails}
+        title={selectedId ? "Dataset row" : "Dataset details"}
+        mobileOpen={!!selectedId || mobileDetails}
         onMobileClose={close}
       >
         <div className="h-full min-h-0">
-          <div className={selected ? "hidden" : "h-full"}>
+          <div className={selectedId ? "hidden" : "h-full"}>
             <DatasetDetailsInspector
               dataset={dataset}
               onSave={saveDataset}
               onClose={close}
             />
           </div>
-          {selected && drafts[selected.id] ? (
+          {selectedId && !selected && (
+            <div className="flex h-full flex-col">
+              <Button variant="ghost" size="sm" className="self-end" onClick={close}>Close row</Button>
+              {itemLoadError
+                ? <ErrorState error={itemLoadError} onRetry={() => setItemLoadAttempt(value => value + 1)} />
+                : <LoadingState label="Loading dataset item" />}
+            </div>
+          )}
+          {selected ? (
             <DatasetItemInspector
               key={selected.id}
               item={selected}
-              onLoadField={field => void loadField(field)}
+              activeTab={itemLocation.tab}
+              onTabChange={tab => updateItemLocation({ tab })}
+              selectedViewId={itemLocation.viewId}
+              onViewChange={onViewChange}
+              onLoadField={field => void loadFields([field])}
+              onLoadView={() => void loadFields(datasetItemFields)}
               loadingField={loadingField}
               fieldErrors={fieldErrors}
               customColumnDetails={
@@ -473,7 +528,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
                   />
                 </>
               }
-              draft={drafts[selected.id]}
+              draft={drafts[selected.id] ?? itemDraft(selected)}
               onDraftChange={(draft) => {
                 if (selectionRequest.current) return
                 setDrafts((current) => ({ ...current, [selected.id]: draft }))
