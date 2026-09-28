@@ -130,4 +130,4 @@ Creation requires dashboards:write plus metrics:read. Validation and saved-repor
 
 `publish_report({number, revision})` locks the reviewed version while keeping it private. `set_report_sharing({number, revision, enabled:true})` returns a public URL. Anyone with the URL can read all captured evidence. Revocation disables future reads, and re-enabling rotates the token. `clone_report({number, creationKey})` creates a private editable copy. Ordinary draft creation does not authorize publication or public sharing.
 
-Apply migration `0050_report_mdx.sql` before running this authoring contract. The supported creation/update format is MDX; the former config/presentation authoring payload is not accepted.
+Apply migration `0045_reports.sql` before running this authoring contract. It creates the complete report schema, including MDX, authorship, draft publication and sharing. The supported creation/update format is MDX; the former config/presentation authoring payload is not accepted.
