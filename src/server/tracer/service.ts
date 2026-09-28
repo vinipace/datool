@@ -28,7 +28,8 @@ import {
 } from "../semantic/read-budget"
 import { fitEvalPage } from "./eval-read-page"
 import { datasetItemProjection } from "./dataset-preview"
-import { DATASET_ITEM_READ_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
+import { DATASET_ITEM_READ_MAX_BYTES, datasetItemPreview } from "@/src/lib/tracer/dataset-payload"
+import type { DatasetItemField } from "@/src/lib/tracer/contracts"
 import type { DatasetItemPreview } from "@/src/lib/tracer/contracts"
 import { evalPairIds } from "./eval-pairs-sql"
 import type { EvalPair } from "@/src/lib/tracer/eval-comparison"
@@ -883,13 +884,13 @@ export class TracerService {
     )
   }
 
-  getDatasetItem(id: string): TracerEffect<DatasetItem> {
+  getDatasetItem(id: string, options: { fields?: DatasetItemField[] } = {}): TracerEffect<DatasetItemPreview> {
     return tracerEffect(() => this.read(async (service) => {
-      const relation = sql`select ${datasetItemProjection(false)} from dataset_items where project_id=${service.projectId} and id=${id}`
+      const relation = sql`select ${datasetItemProjection(options.fields !== undefined, options.fields)} from dataset_items where project_id=${service.projectId} and id=${id}`
       await assertRelationBytes(service.database, relation, DATASET_ITEM_READ_MAX_BYTES)
-      const row = (await service.database.execute(relation)).rows[0] as DatasetItemRow | undefined
+      const row = (await service.database.execute(relation)).rows[0] as (DatasetItemRow & Pick<DatasetItemPreview, "omittedFields">) | undefined
       if (!row) throw notFound("Dataset item", id)
-      return toDatasetItem(row)
+      return { ...toDatasetItem(row), ...(row.omittedFields && Object.keys(row.omittedFields).length ? { omittedFields: row.omittedFields } : {}) }
     }, DATASET_ITEM_READ_MAX_BYTES))
   }
 
@@ -966,9 +967,13 @@ export class TracerService {
 
   patchDatasetItem(
     id: string,
-    input: PatchDatasetItemInput
-  ): TracerEffect<DatasetItem> {
-    return tracerEffect(() => this.patchDatasetItemUnsafe(id, input))
+    input: PatchDatasetItemInput,
+    options: { fields?: DatasetItemField[] } = {}
+  ): TracerEffect<DatasetItemPreview> {
+    return tracerEffect(async () => {
+      const saved = await this.patchDatasetItemUnsafe(id, input)
+      return options.fields === undefined ? saved : datasetItemPreview(saved, options.fields)
+    })
   }
 
   deleteDatasetItem(id: string): TracerEffect<{ id: string }> {

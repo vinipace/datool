@@ -68,7 +68,7 @@ export function DatasetItemsTable({
     const omitted = item.omittedFields?.[field]
     return omitted ? (
       <div className={`font-mono text-xs text-foreground-muted ${contentClass}`}>
-        <span title="Open this row to load the complete value">{omitted.preview}… (preview)</span>
+        <span title="Open this row, then choose Load field to see the complete value">{omitted.preview}… (preview)</span>
       </div>
     ) : renderValue(item[field], field)
   }

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Braces, Check, ChevronRight, Info, Loader2, Plus, Save, Upload, X } from "lucide-react"
+import { Braces, Check, ChevronRight, Info, Loader2, Plus, Save, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Notice } from "@/components/ui/notice"
@@ -10,6 +10,7 @@ import type {
   DatasetDetail,
   DatasetItem,
   DatasetItemPreview,
+  DatasetItemField,
   PatchDatasetInput,
 } from "@/src/lib/tracer/contracts"
 import { compileCollectionFilter } from "@/src/lib/tracer/collection-filters"
@@ -17,10 +18,11 @@ import { useTableView } from "./use-table-view"
 import type { ValueView } from "@/src/lib/tracer/value-views"
 import {
   itemDraft,
+  jsonDocument,
   type ItemDraft,
 } from "@/src/lib/tracer/dataset-editor"
 import { DatasetAutosave, type AutosaveState } from "@/src/lib/tracer/dataset-autosave"
-import { datasetItemPatch, datasetItemPreview, DATASET_ITEM_READ_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
+import { datasetItemFields, datasetItemPatch, datasetItemPreview, DATASET_ITEM_READ_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
 import { downloadTraceExport } from "./trace-list-utils"
 import { DatasetVersionHistory } from "./dataset-version-history"
 import { tracerApi } from "./api"
@@ -80,7 +82,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
         itemCount: datasetState.data?.itemCount ?? datasetOverride.itemCount,
       }
     : datasetState.data
-  const [overrides, setOverrides] = React.useState<Record<string, DatasetItem>>(
+  const [overrides, setOverrides] = React.useState<Record<string, DatasetItemPreview>>(
     {}
   )
   const [deleted, setDeleted] = React.useState<Set<string>>(() => new Set())
@@ -97,7 +99,8 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const [mobileDetails, setMobileDetails] = React.useState(false)
   const returnFocus = React.useRef<HTMLElement | null>(null)
   const selectionRequest = React.useRef<AbortController | null>(null)
-  const [rowError, setRowError] = React.useState("")
+  const [loadingField, setLoadingField] = React.useState<DatasetItemField | null>(null)
+  const [fieldErrors, setFieldErrors] = React.useState<Partial<Record<DatasetItemField, string>>>({})
   React.useEffect(() => () => selectionRequest.current?.abort(), [])
   const refreshDataset = datasetState.refresh
   const refreshItems = page.refresh
@@ -105,7 +108,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     schemas: () => ({}),
     save: (item, values, isNew) => isNew
       ? tracerApi.datasets.createItem(datasetId, { id: item.id, ...values, sourceTraceId: values.sourceTraceId ?? undefined })
-      : tracerApi.datasets.updateItem(item.id, datasetItemPatch(item, values)),
+      : tracerApi.datasets.updateItem(item.id, datasetItemPatch(item, values), datasetItemFields.filter(field => !item.omittedFields?.[field])),
     changed: (id, state) => {
       setAutosaves(current => ({ ...current, [id]: state }))
       setOverrides(current => ({ ...current, [id]: state.preview }))
@@ -159,29 +162,47 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   )
   // Preview rows were filtered in PostgreSQL against complete values.
   const items = React.useMemo(() => allItems.filter((item) => newIds.has(item.id) || item.omittedFields || matches(item)), [allItems, newIds, matches])
-  const tableItems = React.useMemo(() => items.map(datasetItemPreview), [items])
+  const tableItems = React.useMemo(() => items.map(item => datasetItemPreview(item)), [items])
   const selected = allItems.find((item) => item.id === selectedId)
   const selectedIndex = items.findIndex((item) => item.id === selectedId)
-  const select = async (row: DatasetItemPreview, target?: HTMLElement) => {
+  const select = (row: DatasetItemPreview, target?: HTMLElement) => {
     if (target) returnFocus.current = target
     selectionRequest.current?.abort()
-    const controller = new AbortController()
-    selectionRequest.current = controller
-    setRowError("")
+    selectionRequest.current = null
+    setLoadingField(null)
+    setFieldErrors({})
     if (selectedId && selectedId !== row.id) void autosave.flush(selectedId)
     setSelectedId(row.id)
+    const item = overrides[row.id] ?? row
+    setDrafts((current) =>
+      current[item.id] ? current : { ...current, [item.id]: itemDraft(item) }
+    )
+    setOverrides((current) => ({
+      ...current,
+      [item.id]: current[item.id] ?? item,
+    }))
+  }
+  const loadField = async (field: DatasetItemField) => {
+    if (!selected || selectionRequest.current || !selected.omittedFields?.[field]) return
+    const controller = new AbortController()
+    selectionRequest.current = controller
+    setLoadingField(field)
+    setFieldErrors(current => ({ ...current, [field]: undefined }))
     try {
-      const item = overrides[row.id] ?? (row.omittedFields ? await tracerApi.datasets.getItem(row.id, controller.signal) : row)
+      await autosave.flush(selected.id)
       if (controller.signal.aborted) return
-      setDrafts((current) =>
-        current[item.id] ? current : { ...current, [item.id]: itemDraft(item) }
-      )
-      setOverrides((current) => ({
-        ...current,
-        [item.id]: current[item.id] ?? item,
-      }))
+      const loaded = await tracerApi.datasets.getItem(selected.id, { fields: [field], signal: controller.signal })
+      if (controller.signal.aborted) return
+      const hydrated = autosave.hydrateField(selected, loaded, field)
+      setOverrides(current => ({ ...current, [selected.id]: hydrated }))
+      if (field !== "sourceSpanEvidence") setDrafts(current => ({ ...current, [selected.id]: { ...current[selected.id], [field]: jsonDocument(loaded[field]) } }))
     } catch (error) {
-      if (!controller.signal.aborted) setRowError((error as Error).message)
+      if (!controller.signal.aborted) setFieldErrors(current => ({ ...current, [field]: (error as Error).message }))
+    } finally {
+      if (selectionRequest.current === controller) {
+        selectionRequest.current = null
+        setLoadingField(null)
+      }
     }
   }
   const close = () => {
@@ -414,18 +435,13 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
               onClose={close}
             />
           </div>
-          {selected && !drafts[selected.id] ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
-                <span className="text-sm">Dataset row</span>
-                <Button variant="ghost" size="icon-sm" aria-label="Close dataset row" onClick={close}><X className="size-4" /></Button>
-              </div>
-              {rowError ? <ErrorState error={new Error(rowError)} onRetry={() => void select(selected)} /> : <LoadingState label="Loading complete dataset row" />}
-            </div>
-          ) : null}
           {selected && drafts[selected.id] ? (
             <DatasetItemInspector
+              key={selected.id}
               item={selected}
+              onLoadField={field => void loadField(field)}
+              loadingField={loadingField}
+              fieldErrors={fieldErrors}
               customColumnDetails={
                 <>
                   {computed.storageError && (
@@ -448,7 +464,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
                         resource="dataset"
                         addLabel="Add custom field"
                         addedFields={computed.columns}
-                        rows={[selected, ...allItems.filter((item) => item.id !== selected.id && !item.omittedFields)]}
+                        rows={[selected, ...allItems.filter(item => item.id !== selected.id)].filter(item => !item.omittedFields)}
                         onSave={(column) =>
                           computed.update([...computed.columns, column])
                         }
@@ -459,6 +475,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
               }
               draft={drafts[selected.id]}
               onDraftChange={(draft) => {
+                if (selectionRequest.current) return
                 setDrafts((current) => ({ ...current, [selected.id]: draft }))
                 autosave.edit(selected, draft, newIds.has(selected.id))
               }}
@@ -489,7 +506,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
       {schemaOpen && (
         <DatasetSchemaDialog
           schemas={dataset.fieldSchemas ?? {}}
-          sample={selected ?? items[0]}
+          sample={selected && !selected.omittedFields ? selected : items.find(item => !item.omittedFields)}
           onClose={() => setSchemaOpen(false)}
           onSave={(fieldSchemas) => saveDataset({ fieldSchemas })}
         />

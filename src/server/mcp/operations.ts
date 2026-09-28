@@ -452,10 +452,10 @@ tool(
 )
 tool(
   "get_dataset_item",
-  "Read one complete dataset item, including values omitted from preview pages. Capped at 32 MiB.",
+  "Read one dataset item. Optionally set fields to load only those fields in full, keeping other large fields as previews. Omit fields for the complete item. Capped at 32 MiB.",
   "datasets:read",
-  z.object({ id }),
-  (service, p) => service.getDatasetItem(p.id)
+  z.object({ id, fields: validation.datasetItemFieldsSchema.optional() }),
+  (service, p) => service.getDatasetItem(p.id, p)
 )
 tool(
   "create_dataset",

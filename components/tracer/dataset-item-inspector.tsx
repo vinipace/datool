@@ -26,10 +26,13 @@ import { ReactTraceViews } from "./react-trace-views"
 import { DatasetItemRuns } from "./dataset-item-runs"
 import { Notice } from "@/components/ui/notice"
 import { StructuredValueEditor } from "@/components/ui/structured-value-editor"
+import { DeferredValue } from "@/components/ui/deferred-value"
 import type { ValueView } from "@/src/lib/tracer/value-views"
 import type {
   DatasetFieldSchemas,
   DatasetItem,
+  DatasetItemField,
+  DatasetItemPreview,
 } from "@/src/lib/tracer/contracts"
 import {
   datasetFieldErrors,
@@ -63,8 +66,11 @@ export function DatasetItemInspector({
   isNew,
   error,
   customColumnDetails,
+  onLoadField,
+  loadingField,
+  fieldErrors,
 }: {
-  item: DatasetItem
+  item: DatasetItemPreview
   draft: ItemDraft
   onDraftChange: (draft: ItemDraft) => void
   schemas: DatasetFieldSchemas
@@ -79,9 +85,26 @@ export function DatasetItemInspector({
   isNew: boolean
   error?: string
   customColumnDetails?: React.ReactNode
+  onLoadField?: (field: DatasetItemField) => void
+  loadingField?: DatasetItemField | null
+  fieldErrors?: Partial<Record<DatasetItemField, string>>
 }) {
   const workspaceHref = useWorkspaceHref()
   const [activeTab, setActiveTab] = React.useState<ItemTab>("form")
+  const form = React.useRef<HTMLDivElement>(null)
+  const previousOmissions = React.useRef(item.omittedFields)
+  React.useEffect(() => {
+    for (const field of datasetFields) {
+      if (previousOmissions.current?.[field] && !item.omittedFields?.[field]) {
+        form.current?.querySelector<HTMLElement>(`[data-dataset-field="${field}"]`)?.focus()
+      }
+    }
+    previousOmissions.current = item.omittedFields
+  }, [item.omittedFields])
+  const deferred = (field: DatasetItemField, label: string) => {
+    const omitted = item.omittedFields?.[field]
+    return omitted && <DeferredValue label={label} {...omitted} onLoad={() => onLoadField?.(field)} loading={loadingField === field} disabled={!onLoadField || Boolean(loadingField)} error={fieldErrors?.[field]} />
+  }
   return (
     <aside
       aria-label="Dataset row inspector"
@@ -164,11 +187,16 @@ export function DatasetItemInspector({
           <DatasetItemRuns key={item.id} itemId={item.id} />
         )
       ) : activeTab === "views" ? (
-        <DatasetItemViews item={item} draft={draft} isNew={isNew} />
+        item.omittedFields ? <p className="p-4 text-sm text-foreground-muted">Load the large fields in Form to preview this row in Views.</p> : <DatasetItemViews item={item} draft={draft} isNew={isNew} />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-5">
+        <div ref={form} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-5">
           {datasetFields.map((field) => {
             const Icon = icons[field]
+            if (item.omittedFields?.[field]) return (
+              <InspectorSection key={field} label={datasetFieldLabels[field]} icon={<Icon className="size-3.5" />}>
+                {deferred(field, datasetFieldLabels[field])}
+              </InspectorSection>
+            )
             let warnings: string[] = []
             let metadataError = ""
             try {
@@ -190,18 +218,21 @@ export function DatasetItemInspector({
                 label={datasetFieldLabels[field]}
                 icon={<Icon className="size-3.5" />}
               >
-                <StructuredValueEditor
-                  autoSize={draft[field].text.length <= 16 * 1024}
-                  height="h-80"
-                  label={`Row ${datasetFieldLabels[field]}`}
-                  value={draft[field]}
-                  view={fieldViews?.[field] ?? "json"}
-                  onViewChange={(view) => onFieldViewChange(field, view)}
-                  onChange={(value) =>
-                    onDraftChange({ ...draft, [field]: value })
-                  }
-                  schema={schemas[field]?.schema}
-                />
+                <div data-dataset-field={field} tabIndex={-1} role="group" aria-label={`${datasetFieldLabels[field]} field`}>
+                  <StructuredValueEditor
+                    disabled={Boolean(loadingField)}
+                    autoSize={draft[field].text.length <= 16 * 1024}
+                    height="h-80"
+                    label={`Row ${datasetFieldLabels[field]}`}
+                    value={draft[field]}
+                    view={fieldViews?.[field] ?? "json"}
+                    onViewChange={(view) => onFieldViewChange(field, view)}
+                    onChange={(value) =>
+                      onDraftChange({ ...draft, [field]: value })
+                    }
+                    schema={schemas[field]?.schema}
+                  />
+                </div>
                 {metadataError ? (
                   <p className="mt-2 text-xs text-destructive" role="alert">
                     {metadataError}
@@ -221,7 +252,9 @@ export function DatasetItemInspector({
             )
           })}
           {customColumnDetails}
-          {item.sourceSpanEvidence && (
+          {item.omittedFields?.sourceSpanEvidence ? (
+            <InspectorSection label="Captured invocation">{deferred("sourceSpanEvidence", "Captured invocation")}</InspectorSection>
+          ) : item.sourceSpanEvidence && (
             <InspectorSection label="Captured invocation">
               <p className="mb-2 text-xs text-foreground-muted">
                 Observed output is unreviewed evidence. Editing case input maps
@@ -257,6 +290,7 @@ export function DatasetItemInspector({
                   placeholder="Optional trace ID"
                   className="h-8 font-mono text-xs"
                   value={draft.sourceTraceId}
+                  disabled={Boolean(loadingField)}
                   readOnly={Boolean(item.sourceSpanId)}
                   onChange={(event) =>
                     onDraftChange({

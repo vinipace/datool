@@ -1858,7 +1858,7 @@ Required scopes: `datasets:read`.
 
 ## get_dataset_item
 
-Read one complete dataset item, including values omitted from preview pages. Capped at 32 MiB.
+Read one dataset item. Optionally set fields to load only those fields in full, keeping other large fields as previews. Omit fields for the complete item. Capped at 32 MiB.
 
 Required scopes: `datasets:read`.
 
@@ -1867,6 +1867,7 @@ Required scopes: `datasets:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
+| `fields` | array of "input" or "expectedOutput" or "metadata" or "sourceSpanEvidence" | No |
 
 **Result**
 
@@ -1881,6 +1882,7 @@ Required scopes: `datasets:read`.
 | `input` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
 | `metadata` | object | Yes |
 | `observedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | No |
+| `omittedFields` | JSON | No |
 | `sourceSpanEvidence` | null or object | No |
 | `sourceSpanId` | null or string | No |
 | `sourceTraceId` | null or string | Yes |
@@ -2020,6 +2022,7 @@ Required scopes: `datasets:write`.
 | `input` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
 | `metadata` | object | Yes |
 | `observedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | No |
+| `omittedFields` | JSON | No |
 | `sourceSpanEvidence` | null or object | No |
 | `sourceSpanId` | null or string | No |
 | `sourceTraceId` | null or string | Yes |

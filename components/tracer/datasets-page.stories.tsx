@@ -60,13 +60,15 @@ const priorityField: ComputedColumn = {
 }
 const saveDatasetItem = fn()
 
-const largeItem = { ...datasetItems[0], versionId: "large-v1", input: { question: "Large item", content: "x".repeat(64 * 1024), lastValue: "complete" } }
+const largeItem = { ...datasetItems[0], versionId: "large-v1", input: { question: "Large item", content: "x".repeat(64 * 1024), lastValue: "complete" }, metadata: { notes: "m".repeat(64 * 1024) } }
+let savedLargeItem = largeItem
 const largeItemRead = fn()
 const largeItemSave = fn()
 
 export const LargeItemPreview: Story = {
-  beforeEach: () => { largeItemRead.mockClear(); largeItemSave.mockClear() },
+  beforeEach: () => { largeItemRead.mockClear(); largeItemSave.mockClear(); savedLargeItem = largeItem },
   parameters: { msw: { handlers: [
+    http.get("/api/page-views", () => data({ items: [], nextCursor: null })),
     http.get("/api/custom-fields", () => data([])),
     http.get("/api/datasets/:datasetId", ({ request }) => {
       expect(new URL(request.url).searchParams.get("includeItems")).toBe("false")
@@ -76,44 +78,88 @@ export const LargeItemPreview: Story = {
       expect(new URL(request.url).searchParams.get("preview")).toBe("true")
       return data(list([datasetItemPreview(largeItem), datasetItems[1]]))
     }),
-    http.get("/api/dataset-items/:itemId", async () => { largeItemRead(); await delay(350); return data(largeItem) }),
+    http.get("/api/dataset-items/:itemId", async ({ request }) => {
+      const fields = new URL(request.url).searchParams.get("fields")!.split(",") as import("@/src/lib/tracer/contracts").DatasetItemField[]
+      largeItemRead(fields)
+      await delay(350)
+      return data(datasetItemPreview(savedLargeItem, fields))
+    }),
     http.patch("/api/dataset-items/:itemId", async ({ request }) => {
       const patch = await request.json() as Record<string, unknown>
       largeItemSave(patch)
-      return data({ ...largeItem, ...patch, versionId: "large-v2" })
+      savedLargeItem = { ...savedLargeItem, ...patch, versionId: "large-v2" }
+      const fields = new URL(request.url).searchParams.get("fields")!.split(",") as import("@/src/lib/tracer/contracts").DatasetItemField[]
+      return data(datasetItemPreview(savedLargeItem, fields))
     }),
     ...datasetsEvalsHandlers,
   ] } },
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body)
     await userEvent.click(await page.findByRole("row", { name: "Open dataset row 1" }))
-    await expect(page.findByText("Loading complete dataset row")).resolves.toBeVisible()
     const inspector = within(await page.findByLabelText("Dataset row inspector"))
-    const textbox = await inspector.findByRole("textbox", { name: "Row Metadata" }, { timeout: 10000 })
+    expect(largeItemRead).not.toHaveBeenCalled()
+    expect(inspector.getByRole("button", { name: "Load Input" })).toBeVisible()
+    expect(inspector.getByRole("button", { name: "Load Metadata" })).toBeVisible()
+    expect(inspector.queryByRole("textbox", { name: "Row Input" })).not.toBeInTheDocument()
+    expect(inspector.queryByRole("textbox", { name: "Row Metadata" })).not.toBeInTheDocument()
+    const textbox = await inspector.findByRole("textbox", { name: "Row Expected" }, { timeout: 10000 })
     const { monaco } = await import("@/components/tracer/monaco-runtime")
     const editor = monaco.editor.getEditors().find(item => item.getDomNode()?.contains(textbox))!
     await userEvent.click(textbox)
     editor.trigger("storybook", "editor.action.selectAll", undefined)
-    await userEvent.paste('{"reviewed":true}')
-    await waitFor(() => expect(largeItemSave).toHaveBeenCalledWith({ metadata: { reviewed: true }, expectedVersionId: "large-v1" }))
+    await userEvent.paste('{"ok":true}')
+    await waitFor(() => expect(largeItemSave).toHaveBeenCalledWith({ expectedOutput: { ok: true }, expectedVersionId: "large-v1" }))
+    expect(largeItemRead).not.toHaveBeenCalled()
+    await userEvent.click(inspector.getByRole("button", { name: "Load Input" }))
+    expect(inspector.getByRole("button", { name: "Load Input" })).toBeDisabled()
+    await expect(inspector.findByRole("textbox", { name: "Row Input" })).resolves.toBeVisible()
     expect(largeItemRead).toHaveBeenCalledTimes(1)
+    expect(largeItemRead).toHaveBeenCalledWith(["input"])
+    expect(inspector.getByRole("button", { name: "Load Metadata" })).toBeVisible()
+    expect(inspector.queryByRole("textbox", { name: "Row Metadata" })).not.toBeInTheDocument()
+    expect(inspector.getByRole("group", { name: "Input field" })).toHaveFocus()
+    await userEvent.click(inspector.getByRole("button", { name: "Load Metadata" }))
+    await expect(inspector.findByRole("textbox", { name: "Row Metadata" })).resolves.toBeVisible()
+    expect(largeItemRead).toHaveBeenLastCalledWith(["metadata"])
+    expect(largeItemRead).toHaveBeenCalledTimes(2)
+  },
+}
+
+export const LargeFieldsCovered: Story = {
+  ...LargeItemPreview,
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    await userEvent.click(await page.findByRole("row", { name: "Open dataset row 1" }))
+    await expect(page.findByRole("button", { name: "Load Input" })).resolves.toBeVisible()
+    expect(page.getByRole("button", { name: "Load Metadata" })).toBeVisible()
+    expect(largeItemRead).not.toHaveBeenCalled()
   },
 }
 
 export const LargeItemReadFailure: Story = {
+  beforeEach: () => { largeItemRead.mockClear() },
   parameters: { msw: { handlers: [
+    http.get("/api/page-views", () => data({ items: [], nextCursor: null })),
     http.get("/api/custom-fields", () => data([])),
     http.get("/api/datasets/:datasetId", () => data({ ...datasetDetail, items: [] })),
     http.get("/api/datasets/:datasetId/items", () => data(list([datasetItemPreview(largeItem), datasetItems[1]]))),
-    http.get("/api/dataset-items/:itemId", () => failure("Complete item exceeds 32 MiB", 413)),
+    http.get("/api/dataset-items/:itemId", () => {
+      largeItemRead()
+      return largeItemRead.mock.calls.length === 1 ? failure("Could not load this field", 503) : data(datasetItemPreview(largeItem, ["input"]))
+    }),
     ...datasetsEvalsHandlers,
   ] } },
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body)
     await userEvent.click(await page.findByRole("row", { name: "Open dataset row 1" }))
-    await expect(page.findByText("Complete item exceeds 32 MiB")).resolves.toBeVisible()
-    expect(page.queryByLabelText("Dataset row inspector")).not.toBeInTheDocument()
-    await userEvent.click(page.getByRole("button", { name: "Close dataset row" }))
+    await userEvent.click(await page.findByRole("button", { name: "Load Input" }))
+    await expect(page.findByText("Could not load this field")).resolves.toBeVisible()
+    expect(page.getByLabelText("Dataset row inspector")).toBeVisible()
+    expect(page.getByRole("button", { name: "Load Metadata" })).toBeEnabled()
+    await userEvent.click(page.getByRole("button", { name: "Load Input" }))
+    await expect(page.findByRole("textbox", { name: "Row Input" })).resolves.toBeVisible()
+    expect(page.queryByText("Could not load this field")).not.toBeInTheDocument()
+    await userEvent.click(page.getByRole("button", { name: "Close row" }))
     await expect(page.getByRole("row", { name: "Open dataset row 1" })).toHaveFocus()
     await userEvent.click(page.getByRole("row", { name: "Open dataset row 2" }))
     await expect(page.findByLabelText("Dataset row inspector")).resolves.toBeVisible()
