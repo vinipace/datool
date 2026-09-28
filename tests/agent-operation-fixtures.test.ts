@@ -30,6 +30,7 @@ test("agent operation fixtures conform to the shared operation contracts", async
     ["spans-cost-by-model.json", "query_metrics", {}],
     ["scores-by-definition.json", "query_metrics", {}],
     ["five-source-counts.json", "batch_metrics", {}],
+    ["evaluation-report.json", "create_report", {}],
   ] as const
   for (const [path, name, positional] of cases) {
     const input = { ...(await fixture(path)), ...positional }
@@ -44,6 +45,11 @@ test("agent operation fixtures conform to the shared operation contracts", async
     if (name === "batch_metrics")
       for (const query of input.queries)
         validateSemanticQuery(query, semanticCatalog)
+    if (name === "create_report")
+      for (const source of Object.values(input.sources) as {
+        query: Parameters<typeof validateSemanticQuery>[0]
+      }[])
+        validateSemanticQuery(source.query, semanticCatalog)
     if (name === "start_eval_run") {
       const options = Object.fromEntries(
         Object.entries(input).filter(([key]) => key !== "requestKey")

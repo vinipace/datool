@@ -15,7 +15,13 @@ import {
   type ReactNode,
   type RefObject,
 } from "react"
-import { CircleDashed, LayoutDashboard, Pencil, X } from "lucide-react"
+import {
+  CircleDashed,
+  GripVertical,
+  LayoutDashboard,
+  Pencil,
+  X,
+} from "lucide-react"
 import GridLayout, { useContainerWidth, type Layout } from "react-grid-layout"
 import { Button } from "@/components/ui/button"
 import {
@@ -94,6 +100,32 @@ function WidgetLoading() {
         aria-hidden="true"
       />
       Loading widget
+    </div>
+  )
+}
+
+function AutoHeightContent({
+  children,
+  onHeight,
+  enabled,
+}: {
+  children: ReactNode
+  onHeight: (height: number) => void
+  enabled: boolean
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element || !enabled) return
+    const measure = () => onHeight(element.getBoundingClientRect().height)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [onHeight, enabled])
+  return (
+    <div ref={ref} className={enabled ? "flow-root" : "h-full"}>
+      {children}
     </div>
   )
 }
@@ -182,6 +214,9 @@ export function Canvas<T extends WidgetPropsMap>({
   onWidgetPropsChange,
   onWidgetRemove,
   getWidgetLabel = (widget) => widget.type,
+  getWidgetAutoHeight,
+  getWidgetInlineEditing,
+  getWidgetFrameless,
   editable = true,
   widgetVariant = "outlined",
   columns: requestedColumns = 12,
@@ -190,6 +225,7 @@ export function Canvas<T extends WidgetPropsMap>({
   stackBelow = 640,
   empty,
   className,
+  contentClassName,
 }: CanvasProps<T>) {
   const {
     width: canvasWidth,
@@ -216,7 +252,10 @@ export function Canvas<T extends WidgetPropsMap>({
   const editorPanelRef = useRef<HTMLElement>(null)
   const selected =
     editable && onWidgetPropsChange
-      ? widgets.find((widget) => widget.id === selectedId)
+      ? widgets.find(
+          (widget) =>
+            widget.id === selectedId && !getWidgetInlineEditing?.(widget)
+        )
       : undefined
   if (selectedId !== null && !selected) setSelectedId(null)
   const panelId = useId()
@@ -259,9 +298,43 @@ export function Canvas<T extends WidgetPropsMap>({
   const columns = Number.isFinite(requestedColumns)
     ? Math.max(1, Math.round(requestedColumns))
     : 12
+  const [contentHeights, setContentHeights] = useState<Record<string, number>>(
+    {}
+  )
   const layout = useMemo(
-    () => createGridLayout(widgets, columns),
-    [widgets, columns]
+    () =>
+      createGridLayout(
+        widgets.map((widget) => {
+          if (
+            !getWidgetAutoHeight?.(widget) ||
+            contentHeights[widget.id] === undefined
+          )
+            return widget
+          const headerHeight = getWidgetFrameless?.(widget) ? 0 : 40
+          // Grid heights include row gaps; frameless content has no title row.
+          const h = Math.max(
+            headerHeight ? 2 : 1,
+            Math.ceil(
+              (contentHeights[widget.id] + headerHeight + gap) /
+                (rowHeight + gap)
+            )
+          )
+          return {
+            ...widget,
+            layout: { ...widget.layout, h, minH: h, maxH: h },
+          }
+        }),
+        columns
+      ),
+    [
+      widgets,
+      columns,
+      getWidgetAutoHeight,
+      getWidgetFrameless,
+      contentHeights,
+      gap,
+      rowHeight,
+    ]
   )
   const stacked = width < stackBelow
   const visibleLayout = useMemo(
@@ -272,7 +345,28 @@ export function Canvas<T extends WidgetPropsMap>({
 
   function commit(next: Layout) {
     if (!canArrange) return
-    const changes = layoutChanges(widgets, next)
+    if (
+      getWidgetAutoHeight &&
+      next.every((item) => {
+        const visible = visibleLayout.find((current) => current.i === item.i)
+        return (
+          visible &&
+          item.x === visible.x &&
+          item.y === visible.y &&
+          item.w === visible.w &&
+          item.h === visible.h
+        )
+      })
+    )
+      return
+    // Measured heights are a view concern, including at mobile widths. Keep the
+    // user-controlled coordinates when the grid only reports content reflow.
+    const changes = layoutChanges(widgets, next).map((change) => {
+      const widget = widgets.find((item) => item.id === change.id)
+      return widget && getWidgetAutoHeight?.(widget)
+        ? { ...change, layout: { ...change.layout, h: widget.layout.h } }
+        : change
+    })
     if (hasLayoutChanges(widgets, changes)) onLayoutChange?.(changes)
   }
 
@@ -327,167 +421,208 @@ export function Canvas<T extends WidgetPropsMap>({
             )}
           >
             <div
-              ref={gridRef}
-              className={cn(
-                "min-w-0",
-                canArrange && widgets.length > 0 && "pb-[100dvh]",
-                widgets.length === 0 && "flex h-full flex-col"
-              )}
+              className={cn(widgets.length === 0 && "h-full", contentClassName)}
             >
-              {widgets.length === 0 ? (
-                (empty ?? (
-                  <div className="flex min-h-72 flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border text-foreground-muted">
-                    <LayoutDashboard className="size-6" aria-hidden="true" />
-                    <p className="text-sm">
-                      {editable
-                        ? "Add a widget to start arranging your canvas."
-                        : "No widgets to display."}
-                    </p>
-                  </div>
-                ))
-              ) : !mounted ? (
-                <WidgetLoading />
-              ) : (
-                <>
-                  <GridLayout
-                    width={width}
-                    layout={visibleLayout}
-                    className={styles.grid}
-                    gridConfig={{
-                      cols: columns,
-                      rowHeight,
-                      margin: [gap, gap],
-                      containerPadding: [0, 0],
-                    }}
-                    dragConfig={{
-                      enabled: canArrange,
-                      handle: ".canvas-drag-header",
-                      cancel: "[data-canvas-no-drag]",
-                    }}
-                    resizeConfig={{
-                      enabled: canArrange,
-                      handles: ["se", "sw", "ne", "nw"],
-                    }}
-                    onLayoutChange={commit}
-                  >
-                    {widgets.map((widget) => {
-                      const label = getWidgetLabel(widget)
-                      const Widget:
-                        | ComponentType<
-                            T[keyof T & string] &
-                              WidgetControls<T[keyof T & string]>
-                          >
-                        | undefined = Object.hasOwn(components, widget.type)
-                        ? components[widget.type]
-                        : undefined
-                      return (
-                        <div
-                          key={widget.id}
-                          data-widget-id={widget.id}
-                          className={cn(
-                            "group flex min-h-0 flex-col rounded-xl bg-muted transition-colors",
-                            widgetVariant === "outlined" &&
-                              "border border-border focus-within:border-selection-control",
-                            selectedId === widget.id &&
-                              (widgetVariant === "outlined"
-                                ? "border-selection-control"
-                                : "ring-1 ring-selection-control ring-inset")
-                          )}
-                        >
+              <div
+                ref={gridRef}
+                className={cn(
+                  "min-w-0",
+                  canArrange && widgets.length > 0 && "pb-[100dvh]",
+                  widgets.length === 0 && "flex h-full flex-col"
+                )}
+              >
+                {widgets.length === 0 ? (
+                  (empty ?? (
+                    <div className="flex min-h-72 flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border text-foreground-muted">
+                      <LayoutDashboard className="size-6" aria-hidden="true" />
+                      <p className="text-sm">
+                        {editable
+                          ? "Add a widget to start arranging your canvas."
+                          : "No widgets to display."}
+                      </p>
+                    </div>
+                  ))
+                ) : !mounted ? (
+                  <WidgetLoading />
+                ) : (
+                  <>
+                    <GridLayout
+                      width={width}
+                      layout={visibleLayout}
+                      className={styles.grid}
+                      gridConfig={{
+                        cols: columns,
+                        rowHeight,
+                        margin: [gap, gap],
+                        containerPadding: [0, 0],
+                      }}
+                      dragConfig={{
+                        enabled: canArrange,
+                        handle: ".canvas-drag-header",
+                        cancel: "[data-canvas-no-drag]",
+                      }}
+                      resizeConfig={{
+                        enabled: canArrange,
+                        handles: ["se", "sw", "ne", "nw"],
+                      }}
+                      onLayoutChange={commit}
+                    >
+                      {widgets.map((widget) => {
+                        const label = getWidgetLabel(widget)
+                        const frameless = !!getWidgetFrameless?.(widget)
+                        const Widget:
+                          | ComponentType<
+                              T[keyof T & string] &
+                                WidgetControls<T[keyof T & string]>
+                            >
+                          | undefined = Object.hasOwn(components, widget.type)
+                          ? components[widget.type]
+                          : undefined
+                        return (
                           <div
+                            key={widget.id}
+                            data-widget-id={widget.id}
                             className={cn(
-                              "flex h-10 shrink-0 items-center gap-1",
-                              canArrange &&
-                                "canvas-drag-header cursor-grab touch-none active:cursor-grabbing"
+                              "group flex min-h-0 flex-col rounded-xl transition-colors",
+                              frameless ? "bg-transparent" : "bg-muted",
+                              frameless && editable && "hover:bg-muted",
+                              !frameless &&
+                                widgetVariant === "outlined" &&
+                                "border border-border focus-within:border-selection-control",
+                              selectedId === widget.id &&
+                                (widgetVariant === "outlined"
+                                  ? "border-selection-control"
+                                  : "ring-1 ring-selection-control ring-inset")
                             )}
                           >
-                            {canArrange ? (
-                              <Button
-                                type="button"
-                                variant="ghost-muted"
-                                className="h-full min-w-0 flex-1 cursor-grab justify-start rounded-none rounded-tl-xl px-3 text-sm active:cursor-grabbing"
-                                aria-label={`Move ${label}`}
-                                aria-describedby={instructionsId}
-                                onKeyDown={(event) =>
-                                  handleKey(event, widget.id)
-                                }
+                            {(!frameless || editable) && (
+                              <div
+                                className={cn(
+                                  "flex shrink-0 items-center gap-1",
+                                  frameless
+                                    ? "absolute top-2 right-2 z-10 h-8 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+                                    : "h-10",
+                                  canArrange &&
+                                    "canvas-drag-header cursor-grab touch-none active:cursor-grabbing"
+                                )}
                               >
-                                <span className="truncate">{label}</span>
-                              </Button>
-                            ) : (
-                              <span className="min-w-0 flex-1 truncate px-3 text-sm font-medium text-foreground-muted">
-                                {label}
-                              </span>
+                                {canArrange ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost-muted"
+                                    size={frameless ? "icon-sm" : "default"}
+                                    className={cn(
+                                      "cursor-grab active:cursor-grabbing",
+                                      !frameless &&
+                                        "h-full min-w-0 flex-1 justify-start rounded-none rounded-tl-xl px-3 text-sm"
+                                    )}
+                                    aria-label={`Move ${label}`}
+                                    aria-describedby={instructionsId}
+                                    onKeyDown={(event) =>
+                                      handleKey(event, widget.id)
+                                    }
+                                  >
+                                    {frameless ? (
+                                      <GripVertical className="size-4" />
+                                    ) : (
+                                      <span className="truncate">{label}</span>
+                                    )}
+                                  </Button>
+                                ) : !frameless ? (
+                                  <span className="min-w-0 flex-1 truncate px-3 text-sm font-medium text-foreground-muted">
+                                    {label}
+                                  </span>
+                                ) : null}
+                                {editable &&
+                                  onWidgetPropsChange &&
+                                  !getWidgetInlineEditing?.(widget) && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost-muted"
+                                      size="icon-sm"
+                                      className={cn(!onWidgetRemove && "mr-2")}
+                                      data-canvas-no-drag
+                                      aria-label={`Edit ${label}`}
+                                      aria-expanded={selectedId === widget.id}
+                                      aria-controls={
+                                        selectedId === widget.id
+                                          ? panelId
+                                          : undefined
+                                      }
+                                      onClick={(event) => {
+                                        editTriggerRef.current =
+                                          event.currentTarget
+                                        setSelectedId(widget.id)
+                                      }}
+                                    >
+                                      <Pencil className="size-3.5" />
+                                    </Button>
+                                  )}
+                                {editable && onWidgetRemove && (
+                                  <RemoveWidgetButton
+                                    label={label}
+                                    onRemove={() => onWidgetRemove(widget.id)}
+                                    canvasRef={containerRef}
+                                  />
+                                )}
+                              </div>
                             )}
-                            {editable && onWidgetPropsChange && (
-                              <Button
-                                type="button"
-                                variant="ghost-muted"
-                                size="icon-sm"
-                                className={cn(!onWidgetRemove && "mr-2")}
-                                data-canvas-no-drag
-                                aria-label={`Edit ${label}`}
-                                aria-expanded={selectedId === widget.id}
-                                aria-controls={
-                                  selectedId === widget.id ? panelId : undefined
-                                }
-                                onClick={(event) => {
-                                  editTriggerRef.current = event.currentTarget
-                                  setSelectedId(widget.id)
+                            <div className="min-h-0 flex-1 overflow-auto rounded-b-xl">
+                              <AutoHeightContent
+                                enabled={!!getWidgetAutoHeight?.(widget)}
+                                onHeight={(height) => {
+                                  if (!getWidgetAutoHeight?.(widget)) return
+                                  setContentHeights((current) =>
+                                    current[widget.id] === height
+                                      ? current
+                                      : { ...current, [widget.id]: height }
+                                  )
                                 }}
                               >
-                                <Pencil className="size-3.5" />
-                              </Button>
-                            )}
-                            {editable && onWidgetRemove && (
-                              <RemoveWidgetButton
-                                label={label}
-                                onRemove={() => onWidgetRemove(widget.id)}
-                                canvasRef={containerRef}
-                              />
-                            )}
+                                <WidgetBoundary
+                                  resetKey={JSON.stringify([
+                                    widget.type,
+                                    widget.props,
+                                  ])}
+                                >
+                                  <Suspense fallback={<WidgetLoading />}>
+                                    {Widget ? (
+                                      <Widget
+                                        {...widget.props}
+                                        editable={
+                                          editable && !!onWidgetPropsChange
+                                        }
+                                        onPropsChange={(patch) => {
+                                          if (editable)
+                                            onWidgetPropsChange?.(widget.id, {
+                                              ...widget.props,
+                                              ...patch,
+                                            })
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="p-4">
+                                        <Notice
+                                          variant="warning"
+                                          role="alert"
+                                          title="Unknown widget type"
+                                        >
+                                          No component is registered for “
+                                          {widget.type}”.
+                                        </Notice>
+                                      </div>
+                                    )}
+                                  </Suspense>
+                                </WidgetBoundary>
+                              </AutoHeightContent>
+                            </div>
                           </div>
-                          <div className="min-h-0 flex-1 overflow-auto rounded-b-xl">
-                            <WidgetBoundary
-                              resetKey={JSON.stringify([
-                                widget.type,
-                                widget.props,
-                              ])}
-                            >
-                              <Suspense fallback={<WidgetLoading />}>
-                                {Widget ? (
-                                  <Widget
-                                    {...widget.props}
-                                    editable={editable && !!onWidgetPropsChange}
-                                    onPropsChange={(patch) => {
-                                      if (editable)
-                                        onWidgetPropsChange?.(widget.id, {
-                                          ...widget.props,
-                                          ...patch,
-                                        })
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="p-4">
-                                    <Notice
-                                      variant="warning"
-                                      role="alert"
-                                      title="Unknown widget type"
-                                    >
-                                      No component is registered for “
-                                      {widget.type}”.
-                                    </Notice>
-                                  </div>
-                                )}
-                              </Suspense>
-                            </WidgetBoundary>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </GridLayout>
-                </>
-              )}
+                        )
+                      })}
+                    </GridLayout>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </ResizablePanel>

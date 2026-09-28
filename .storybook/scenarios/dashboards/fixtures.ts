@@ -671,6 +671,18 @@ const newModels: SemanticCatalogMetadata["models"][number][] = [
           ]
         : name === "evalResults"
           ? [
+              metricDefinition("evalResults.meanScore", "Average score"),
+              metricDefinition("evalResults.p50Score", "P50 score"),
+              metricDefinition("evalResults.p95Score", "P95 score"),
+              ...[
+                ["groupName", "Operation"],
+                ["promptId", "Prompt ID"],
+                ["promptVersion", "Prompt version"],
+                ["evaluatorVersion", "Scorer version"],
+                ["datasetId", "Dataset ID"],
+              ].map(([key, title]) =>
+                dimensionDefinition(`evalResults.${key}`, title)
+              ),
               dimensionDefinition(
                 "evalResults.evaluatorVersionId",
                 "Scorer version ID"

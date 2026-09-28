@@ -26,7 +26,14 @@ export function CodeEditor({
   value: string
   onChange: (value: string) => void
   language:
-    "javascript" | "python" | "json" | "yaml" | "ini" | "plaintext" | "mustache"
+    | "javascript"
+    | "python"
+    | "json"
+    | "yaml"
+    | "ini"
+    | "plaintext"
+    | "mustache"
+    | "markdown"
   label: string
   className?: string
   schema?: JsonObject | null
@@ -75,13 +82,16 @@ export function CodeEditor({
   })
 
   return (
-    <div className={cn(
-      "relative flex min-w-0 flex-col",
-      tone === "success" && "bg-success-background",
-      tone === "error" && "bg-destructive-background",
-      tone !== "default" && "[&_.monaco-editor]:bg-transparent! [&_.monaco-editor-background]:bg-transparent! [&_.margin]:bg-transparent!",
-      className
-    )}>
+    <div
+      className={cn(
+        "relative flex min-w-0 flex-col",
+        tone === "success" && "bg-success-background",
+        tone === "error" && "bg-destructive-background",
+        tone !== "default" &&
+          "[&_.margin]:bg-transparent! [&_.monaco-editor]:bg-transparent! [&_.monaco-editor-background]:bg-transparent!",
+        className
+      )}
+    >
       {showPrettify &&
         !readOnly &&
         (language === "javascript" || language === "json") && (

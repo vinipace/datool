@@ -5,6 +5,9 @@ import { ArrowLeft, ArrowRight } from "lucide-react"
 import { workspacePrefix } from "@/lib/workspace-routing"
 import { dashboardTraceFilter } from "@/src/lib/tracer/dashboard-trace-links"
 
+import { presentDashboardResult } from "@/src/lib/tracer/dashboard-presentation"
+import { DashboardScatterChart } from "./dashboard-scatter-chart"
+import { DashboardMatrix } from "./dashboard-matrix"
 import { DashboardMetricTile } from "./dashboard-metric-tile"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,18 +21,28 @@ import { DashboardTimeChart } from "./dashboard-time-chart"
 import { formatDashboardValue } from "./dashboard-utils"
 import { isPercentageMetric } from "@/src/lib/tracer/dashboard-metric-comparison"
 import { PercentageCell } from "./percentage-cell"
+import type { DashboardBarBaseline } from "@/src/lib/tracer/dashboard-bar-comparison"
 import { metricTone } from "./dashboard-chart-style"
 import { DashboardDimensionLabel } from "./dashboard-dimension-label"
 import { dashboardDimensionIcon } from "./dashboard-dimension-icon"
+import type {
+  ReportReference,
+  ReportHighlight,
+} from "@/src/lib/tracer/report-highlights"
 
 export function WidgetResult({
   widget,
-  result,
+  result: rawResult,
   summary,
   previous,
   history,
   setOffset,
   colorIndex = 0,
+  categoryColors,
+  baseline,
+  frozen = false,
+  highlights,
+  references,
 }: {
   widget: DashboardWidget
   result: SemanticResult
@@ -38,8 +51,17 @@ export function WidgetResult({
   history?: SemanticResult | null
   setOffset: (offset: number) => void
   colorIndex?: number
+  categoryColors?: Map<string, number>
+  baseline?: DashboardBarBaseline
+  frozen?: boolean
+  highlights?: ReportHighlight[]
+  references?: ReportReference[]
 }) {
-  const prefix = workspacePrefix(usePathname())
+  const pathname = usePathname()
+  // Frozen report validation renders outside a routed page. There is no
+  // workspace destination until the router supplies a pathname.
+  const prefix = pathname ? workspacePrefix(pathname) : null
+  const result = presentDashboardResult(rawResult, widget.presentation)
   const offset = result.query.offset
   const timeChart = widget.type === "stacked" || widget.type === "line"
   const columns = dashboardColumns(result.query)
@@ -51,9 +73,23 @@ export function WidgetResult({
   const measure = result.query.measures[0]
   const dimensions = columns.filter((c) => !result.query.measures.includes(c))
   const total = result.meta.page.total ?? result.data.length
+  if (widget.type === "matrix")
+    return (
+      <DashboardMatrix
+        result={result}
+        summary={widget.presentation?.showSummary ? summary : null}
+        highlights={highlights}
+      />
+    )
   if (timeChart)
     return (
-      <DashboardTimeChart widget={widget} result={result} summary={summary} />
+      <DashboardTimeChart
+        widget={widget}
+        result={result}
+        summary={summary}
+        highlights={highlights}
+        references={references}
+      />
     )
   return (
     <>
@@ -68,8 +104,17 @@ export function WidgetResult({
         <p className="py-10 text-center text-sm text-foreground-muted">
           No data in this time range.
         </p>
+      ) : widget.type === "scatter" ? (
+        <DashboardScatterChart
+          widget={widget}
+          result={result}
+          highlights={highlights}
+          references={references}
+          categoryColors={categoryColors}
+        />
       ) : widget.type === "donut" && dimensions.length ? (
         <DashboardDonutChart
+          dimensionAnnotations={result.annotation.dimensions}
           title={widget.title}
           rows={result.data}
           measure={measure}
@@ -84,10 +129,15 @@ export function WidgetResult({
         />
       ) : widget.type === "bar" && dimensions.length ? (
         <DashboardBarChart
+          baseline={baseline}
+          highlights={highlights}
+          references={references}
+          dimensionAnnotations={result.annotation.dimensions}
           colorIndex={colorIndex}
+          categoryColors={categoryColors}
           hrefForRow={(row) => {
             // Name-based trace navigation cannot represent every grouped field.
-            if (!prefix || dimensions.length !== 1) return
+            if (frozen || !prefix || dimensions.length !== 1) return
             const dimension = dimensions[0]
             const filter = dashboardTraceFilter(
               result.query,
@@ -140,7 +190,8 @@ export function WidgetResult({
                               dimension={c}
                               value={row[c]}
                             />
-                          ) : isPercentageMetric(annotations[c]) &&
+                          ) : !widget.presentation?.members?.[c] &&
+                            isPercentageMetric(annotations[c]) &&
                             typeof row[c] === "number" ? (
                             <PercentageCell
                               value={row[c]}

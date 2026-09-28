@@ -25,6 +25,7 @@ export function DashboardDonutChart({
   measure,
   dimensions,
   annotation,
+  dimensionAnnotations,
   showGroupIcons = false,
   partial = false,
 }: {
@@ -32,13 +33,18 @@ export function DashboardDonutChart({
   rows: SemanticDataRow[]
   measure: string
   dimensions: string[]
+  dimensionAnnotations?: Record<string, SemanticMemberAnnotation>
   annotation?: SemanticMemberAnnotation
   showGroupIcons?: boolean
   partial?: boolean
 }) {
   // Flatten semantic member names; Recharts interprets dots as object paths.
   const data = rows.map((row, index) => ({
-    category: dashboardGroupText(dimensions, row),
+    category: dimensionAnnotations
+      ? dimensions
+          .map((d) => formatDashboardValue(row[d], dimensionAnnotations[d]))
+          .join(" · ")
+      : dashboardGroupText(dimensions, row),
     group: row,
     value:
       typeof row[measure] === "number" && Number.isFinite(row[measure])

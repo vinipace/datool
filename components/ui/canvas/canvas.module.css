@@ -50,7 +50,6 @@
 }
 
 .grid :global(.react-grid-item):hover > :global(.react-resizable-handle),
-.grid :global(.react-grid-item):focus-within > :global(.react-resizable-handle),
 .grid :global(.resizing) > :global(.react-resizable-handle) {
   opacity: 1;
 }
@@ -93,12 +92,6 @@
   top: 0;
   cursor: ne-resize;
   transform: rotate(270deg);
-}
-
-@media (hover: none) {
-  .grid :global(.react-grid-item) > :global(.react-resizable-handle) {
-    opacity: 1;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

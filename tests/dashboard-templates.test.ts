@@ -1,3 +1,4 @@
+import { isDashboardDataWidget } from "@/src/lib/tracer/dashboards"
 import { expect, test } from "bun:test"
 import { semanticQuerySchema } from "@/src/lib/semantic/query"
 import {
@@ -45,7 +46,7 @@ test("every library template is renderable with registered metrics and a fresh s
     expect(config.description).toBe(template.description)
     expect(config.widgets.length).toBeGreaterThan(0)
     expect(config.defaultWindowDays).toBe(7)
-    for (const widget of config.widgets) {
+    for (const widget of config.widgets.filter(isDashboardDataWidget)) {
       validateSemanticQuery(widget.query, semanticCatalog)
       expect(widget.query.timeDimensions[0].dateRange).toEqual([
         "2026-09-06T12:00:00.000Z",
@@ -285,7 +286,11 @@ test("evaluations dashboard separates failed checks from technical errors and us
       )
     )
     const results = await executeSemanticBatch(
-      { queries: config.widgets.map((widget) => widget.query) },
+      {
+        queries: config.widgets
+          .filter(isDashboardDataWidget)
+          .map((widget) => widget.query),
+      },
       {
         catalog: semanticCatalog,
         requestId: "eval-template",
@@ -332,7 +337,8 @@ test("evaluations dashboard separates failed checks from technical errors and us
     // across versions must still count it only once. Nested filters bind to one membership.
     const base = semanticQuerySchema.parse({
       measures: ["scores.executionCount", "scores.errorCount"],
-      timeDimensions: config.widgets[1].query.timeDimensions,
+      timeDimensions: config.widgets.filter(isDashboardDataWidget)[1].query
+        .timeDimensions,
       filters: [
         {
           and: [

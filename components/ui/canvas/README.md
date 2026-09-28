@@ -7,6 +7,8 @@ the JSON and persistence. It has no document, database, query, or form dependenc
 Give the parent a defined height or a bounded flex layout. Canvas fills the
 available space, including its configuration panel, and scrolls oversized widget
 layouts inside the grid without growing the surrounding page.
+Use `contentClassName` to constrain and center the grid (for example,
+`"mx-auto w-full max-w-6xl p-3"`) while keeping the side margins scrollable.
 
 ```tsx
 import { Canvas, findWidgetSpace, type CanvasWidget } from "@/components/ui/canvas"

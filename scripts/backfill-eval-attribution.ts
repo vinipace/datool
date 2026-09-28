@@ -160,9 +160,9 @@ export async function runEvalAttributionBackfill(
   let locked = false
   try {
     client = await pool.connect()
-    // Fail before opening the backup or modifying anything if 0034/0035 are absent.
+    // Fail before opening the backup or modifying anything if required attribution migrations are absent.
     await client.query(
-      "select r.groups_resolved_at,e.target_id,a.models_json,g.group_name from eval_runs r,eval_results e,eval_target_attributions a,eval_run_groups g limit 0"
+      "select r.groups_resolved_at,e.target_id,a.models_json,a.prompt_versions_json,g.group_name from eval_runs r,eval_results e,eval_target_attributions a,eval_run_groups g limit 0"
     )
     if (
       !(
@@ -262,7 +262,7 @@ export async function runEvalAttributionBackfill(
         const links = linkBackfillResults(targets, results)
         const saved = (
           await client.query<{ targetId: string; value: EvalAttribution }>(
-            `select target_id as "targetId",jsonb_build_object('group',case when group_type is not null then jsonb_build_object('type',group_type,'name',group_name,'version',group_version) end,'models',models_json,'sourceTraceId',source_trace_id,'sourceSpanId',source_span_id) as value from eval_target_attributions where project_id=$1 and run_id=$2`,
+            `select target_id as "targetId",jsonb_build_object('group',case when group_type is not null then jsonb_build_object('type',group_type,'name',group_name,'version',group_version) end,'models',models_json,'sourceTraceId',source_trace_id,'sourceSpanId',source_span_id) || case when jsonb_array_length(prompt_versions_json)>0 then jsonb_build_object('promptVersions',prompt_versions_json) else '{}'::jsonb end as value from eval_target_attributions where project_id=$1 and run_id=$2`,
             [options.projectId, id]
           )
         ).rows
@@ -438,7 +438,7 @@ if (import.meta.main) {
   })
   if (values.help)
     console.log(
-      "DATABASE_URL=... bun run scripts/backfill-eval-attribution.ts --project <exact-project-id> --before <ISO-date> [--after <ISO-date>] [--limit 100] [--after-run <cursor>] [--apply --backup /durable/path/new-backup.jsonl]\nDry-run by default. Install migrations 0034 and 0035 first. No scorers or application calls execute. Skipped runs need review; retry them without --after-run after resolving the cause."
+      "DATABASE_URL=... bun run scripts/backfill-eval-attribution.ts --project <exact-project-id> --before <ISO-date> [--after <ISO-date>] [--limit 100] [--after-run <cursor>] [--apply --backup /durable/path/new-backup.jsonl]\nDry-run by default. Install migrations 0034, 0035 and 0045 first. No scorers or application calls execute. Skipped runs need review; retry them without --after-run after resolving the cause."
     )
   else {
     const stop = new AbortController()

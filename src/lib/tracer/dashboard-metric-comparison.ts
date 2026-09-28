@@ -6,6 +6,8 @@ export type MetricTrendDirection = "increase" | "decrease" | "neutral"
 // Display defaults for registered measures. Volume and arbitrary scores have no
 // inherent good direction; a dashboard can explicitly choose its own goal.
 const decreasingMeasures = new Set([
+  "evalClassification.costUsd",
+  "evalClassification.meanCostUsd",
   ...["spans", "traces"].flatMap((model) =>
     [
       "erroredCount",

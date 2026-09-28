@@ -639,6 +639,37 @@ export const scorers = pgTable(
   (table) => [uniqueIndex("scorers_slug_idx").on(table.projectId, table.slug)]
 )
 
+export const reports = pgTable("reports", {
+  id: text("id").primaryKey(),
+  ...projectScope(),
+  number: integer("number").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  templateId: text("template_id").notNull(),
+  widgetCount: integer("widget_count").notNull(),
+  configJson: text("config_json").notNull(),
+  snapshotJson: text("snapshot_json").notNull(),
+  presentationJson: text("presentation_json"),
+  layout: text("layout").notNull().default("canvas"),
+  presentationRevision: integer("presentation_revision").notNull().default(0),
+  creationKey: text("creation_key").notNull(),
+  inputHash: text("input_hash").notNull(),
+  createdAt: text("created_at").notNull(),
+  frozenAt: text("frozen_at").notNull(),
+  status: text("status").$type<"draft" | "published">().notNull().default("draft"),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: text("updated_at"),
+  publishedAt: text("published_at"),
+  publicToken: text("public_token"),
+  inputJson: text("input_json"),
+  author: jsonb("author").$type<import("@/src/lib/tracer/reports").ReportAuthor>(),
+    mdxJson: text("mdx_json"),
+}, (t) => [
+  uniqueIndex("reports_project_id_number_key").on(t.projectId, t.number),
+  uniqueIndex("reports_project_id_creation_key_key").on(t.projectId, t.creationKey),
+  index("reports_project_created_idx").on(t.projectId, t.createdAt, t.id),
+])
+
 export const dashboards = pgTable("dashboards", {
   id: text("id").primaryKey(),
   ...projectScope(),

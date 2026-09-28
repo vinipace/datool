@@ -38,6 +38,15 @@ const attributionSchema = z
       models: z.array(z.string().min(1)),
       sourceTraceId: z.string().min(1),
       sourceSpanId: z.string().nullable(),
+      promptVersions: z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            slug: z.string().min(1),
+            version: z.number().int().positive(),
+          })
+        )
+        .optional(),
     })
   )
   .min(1)

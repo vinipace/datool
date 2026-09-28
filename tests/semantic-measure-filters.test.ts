@@ -1,3 +1,4 @@
+import { dashboardWidgetSchema } from "@/src/lib/tracer/dashboards"
 import { expect, test } from "bun:test"
 import {
   parseSemanticQuery,
@@ -98,28 +99,24 @@ test("aggregate thresholds filter groups before pagination and persist across da
           startedAt: "2026-09-01T12:00:00Z",
           endedAt: "2026-09-01T12:00:02Z",
         }
-        await db
-          .insert(traces)
-          .values({
-            ...common,
-            id,
-            name: operation,
-            operation,
-            groupType: "workflow",
-            groupName: operation,
-          })
-        await db
-          .insert(spans)
-          .values({
-            ...common,
-            id: `${id}-span`,
-            traceId: id,
-            name: operation,
-            kind: "llm",
-            groupType: "agent",
-            groupName: operation,
-            attributesJson: JSON.stringify({ "cost.usd": 1 }),
-          })
+        await db.insert(traces).values({
+          ...common,
+          id,
+          name: operation,
+          operation,
+          groupType: "workflow",
+          groupName: operation,
+        })
+        await db.insert(spans).values({
+          ...common,
+          id: `${id}-span`,
+          traceId: id,
+          name: operation,
+          kind: "llm",
+          groupType: "agent",
+          groupName: operation,
+          attributesJson: JSON.stringify({ "cost.usd": 1 }),
+        })
       }
     }
     const first = await query(base)
@@ -238,7 +235,9 @@ test("aggregate thresholds filter groups before pagination and persist across da
       })
     )
     const reloaded = await runTracerEffect(service.dashboards.get(saved.id))
-    expect(reloaded.widgets[0].query.having).toEqual([threshold])
+    expect(
+      dashboardWidgetSchema.parse(reloaded.widgets[0]).query.having
+    ).toEqual([threshold])
     const preview = await runTracerEffect(
       service.agent.previewDashboard(saved.id)
     )
