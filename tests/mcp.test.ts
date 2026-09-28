@@ -392,7 +392,11 @@ test("MCP client performs CRUD and write tools are unavailable to read-only toke
     const dashboardReader = await connect(["dashboards:read"])
     expect(
       (await dashboardReader.listTools()).tools.map((t) => t.name)
-    ).toEqual(["list_dashboards", "get_dashboard", "resolve_dashboard", "describe_agent_operations"])
+    ).toEqual([
+      "list_dashboards", "get_dashboard", "list_report_templates",
+      "get_report_template", "get_report_recipe", "get_report_authoring_guide",
+      "get_report_components", "resolve_dashboard", "describe_agent_operations",
+    ])
     expect(
       (
         await dashboardReader.callTool({

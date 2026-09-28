@@ -24,10 +24,11 @@ and cached. The local browser checks cover reload, switching, save conflicts,
 explicit revisions, filters/grouping, keyboard focus and narrow layout. The broader
 operation/coverage work above remains separate from this UI refinement.
 
-PR validation found a merge blocker: `bun run check:docs` fails because the new
-dynamic View operation catalog is missing generated response schemas, beginning
-with `list_page_views`. Complete the typed response generation and regenerate the
-API reference before merging. The required pre-push checks (lint, styles,
-typecheck and shared-control/hook tests) pass. Bespoke table adapters, complete
-Page View query coverage, browser helpers and the dedicated skills update remain
-outside the completed four-page UI refinement.
+The response-schema generator now reads the shared View catalog and infers each
+action's actual typed return. All 140 agent operations, including the 37 View
+operations, have generated response schemas. API and CLI reference docs are
+regenerated; `bun run check:docs` and the public agent discovery checks pass
+locally, with regression coverage for required results, pagination, revisions,
+JSON field values and resolved dependencies. The hosted CI rerun is pending.
+Bespoke table adapters, complete Page View query coverage, browser helpers and
+the dedicated skills update remain outside the completed four-page UI refinement.

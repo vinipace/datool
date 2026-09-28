@@ -188,7 +188,7 @@ export function createViewLibrary(database: TracerDatabase, inTransaction = fals
     resolve: (id: string, revision?: number) => tracerEffect(async () => {
       const view = customViewSchema.parse(await get("page-view", id, revision))
       const fields = await Promise.all((view.settings.customFields ?? view.settings.computedColumns.map(field => ({ id: field.id, revision: undefined }))).map(ref => get("custom-field", ref.id, ref.revision)))
-      const objectViews = Object.fromEntries(await Promise.all(Object.entries(view.settings.objectViews ?? {}).map(async ([kind, ref]) => [kind, ref ? await get("object-view", ref.id, ref.revision) : null])))
+      const objectViews = Object.fromEntries(await Promise.all(Object.entries(view.settings.objectViews ?? {}).map(async ([kind, ref]) => [kind, ref ? await get("object-view", ref.id, ref.revision) : null] as const)))
       const params = new URLSearchParams()
       for (const [key, values] of Object.entries(view.settings.queryParams ?? {})) for (const value of values) params.append(key, value)
       params.set("pageView", id)

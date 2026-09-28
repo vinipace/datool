@@ -21,6 +21,18 @@
     "compare_eval_runs": {
       "$ref": "#/components/schemas/Output_compare_eval_runs"
     },
+    "copy_custom_field": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "copy_object_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "copy_page_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "create_custom_field": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
     "create_dashboard": {
       "$ref": "#/components/schemas/Output_Dashboard"
     },
@@ -39,6 +51,12 @@
     "create_human_score_collection": {
       "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
     },
+    "create_object_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "create_page_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
     "create_report": {
       "$ref": "#/components/schemas/Output_Report"
     },
@@ -54,6 +72,9 @@
     "create_view": {
       "$ref": "#/components/schemas/Output_CustomView"
     },
+    "delete_custom_field": {
+      "$ref": "#/components/schemas/Output_delete_page_view"
+    },
     "delete_dashboard": {
       "$ref": "#/components/schemas/Output_delete_dashboard"
     },
@@ -62,6 +83,12 @@
     },
     "delete_dataset_item": {
       "$ref": "#/components/schemas/Output_delete_dataset_item"
+    },
+    "delete_object_view": {
+      "$ref": "#/components/schemas/Output_delete_page_view"
+    },
+    "delete_page_view": {
+      "$ref": "#/components/schemas/Output_delete_page_view"
     },
     "delete_saved_view": {
       "$ref": "#/components/schemas/Output_delete_saved_view"
@@ -78,6 +105,9 @@
         "$ref": "#/components/schemas/Output_describe_agent_operations_item"
       }
     },
+    "evaluate_custom_field": {
+      "$ref": "#/components/schemas/Output_evaluate_custom_field"
+    },
     "export_review_items": {
       "$ref": "#/components/schemas/Output_export_review_items"
     },
@@ -86,6 +116,15 @@
     },
     "get_app": {
       "$ref": "#/components/schemas/Output_list_apps_item"
+    },
+    "get_custom_field": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "get_custom_field_dependencies": {
+      "$ref": "#/components/schemas/Output_get_page_view_dependencies"
+    },
+    "get_custom_field_history": {
+      "$ref": "#/components/schemas/Output_get_page_view_history"
     },
     "get_dashboard": {
       "$ref": "#/components/schemas/Output_Dashboard"
@@ -110,6 +149,27 @@
     },
     "get_metrics_metadata": {
       "$ref": "#/components/schemas/Output_Readonly"
+    },
+    "get_object_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "get_object_view_dependencies": {
+      "$ref": "#/components/schemas/Output_get_page_view_dependencies"
+    },
+    "get_object_view_history": {
+      "$ref": "#/components/schemas/Output_get_page_view_history"
+    },
+    "get_page_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "get_page_view_data": {
+      "$ref": "#/components/schemas/Output_get_page_view_data"
+    },
+    "get_page_view_dependencies": {
+      "$ref": "#/components/schemas/Output_get_page_view_dependencies"
+    },
+    "get_page_view_history": {
+      "$ref": "#/components/schemas/Output_get_page_view_history"
     },
     "get_report": {
       "$ref": "#/components/schemas/Output_Report"
@@ -162,11 +222,20 @@
     "get_view": {
       "$ref": "#/components/schemas/Output_CustomView"
     },
+    "get_view_capabilities": {
+      "$ref": "#/components/schemas/Output_get_view_capabilities"
+    },
+    "get_view_preference": {
+      "$ref": "#/components/schemas/Output_get_view_preference"
+    },
     "list_apps": {
       "type": "array",
       "items": {
         "$ref": "#/components/schemas/Output_list_apps_item"
       }
+    },
+    "list_custom_fields": {
+      "$ref": "#/components/schemas/Output_list_custom_fields"
     },
     "list_dashboards": {
       "type": "array",
@@ -191,6 +260,12 @@
     },
     "list_human_scores": {
       "$ref": "#/components/schemas/Output_HumanScoreLibrary"
+    },
+    "list_object_views": {
+      "$ref": "#/components/schemas/Output_list_custom_fields"
+    },
+    "list_page_views": {
+      "$ref": "#/components/schemas/Output_list_custom_fields"
     },
     "list_report_templates": {
       "type": "array",
@@ -243,6 +318,9 @@
     "preview_dashboard": {
       "$ref": "#/components/schemas/Output_preview_dashboard"
     },
+    "preview_object_view": {
+      "$ref": "#/components/schemas/Output_preview_object_view"
+    },
     "probe_scorer_runtime": {
       "$ref": "#/components/schemas/Output_probe_scorer_runtime"
     },
@@ -273,6 +351,9 @@
     "resolve_eval": {
       "$ref": "#/components/schemas/Output_resolve_trace"
     },
+    "resolve_page_view": {
+      "$ref": "#/components/schemas/Output_resolve_page_view"
+    },
     "resolve_report": {
       "$ref": "#/components/schemas/Output_resolve_trace"
     },
@@ -288,8 +369,20 @@
     "resolve_view": {
       "$ref": "#/components/schemas/Output_resolve_trace"
     },
+    "restore_custom_field": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "restore_object_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "restore_page_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
     "run_app": {
       "$ref": "#/components/schemas/Output_run_app"
+    },
+    "save_view_preference": {
+      "$ref": "#/components/schemas/Output_save_view_preference"
     },
     "set_report_sharing": {
       "$ref": "#/components/schemas/Output_Report"
@@ -299,6 +392,9 @@
     },
     "test_scorer": {
       "$ref": "#/components/schemas/Output_test_scorer"
+    },
+    "update_custom_field": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
     },
     "update_dashboard": {
       "$ref": "#/components/schemas/Output_Dashboard"
@@ -314,6 +410,12 @@
     },
     "update_human_score_collection": {
       "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
+    },
+    "update_object_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "update_page_view": {
+      "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
     },
     "update_report": {
       "$ref": "#/components/schemas/Output_Report"
@@ -332,6 +434,15 @@
     },
     "use_library_scorer": {
       "$ref": "#/components/schemas/Output_Scorer"
+    },
+    "validate_custom_field": {
+      "$ref": "#/components/schemas/Output_validate_page_view"
+    },
+    "validate_object_view": {
+      "$ref": "#/components/schemas/Output_validate_page_view"
+    },
+    "validate_page_view": {
+      "$ref": "#/components/schemas/Output_validate_page_view"
     },
     "validate_report": {
       "$ref": "#/components/schemas/Output_validate_report"
@@ -774,6 +885,17 @@
         "id"
       ]
     },
+    "Output_delete_page_view": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
     "Output_delete_saved_view": {
       "type": "object",
       "properties": {
@@ -1168,6 +1290,144 @@
         "skipped",
         "total",
         "version"
+      ]
+    },
+    "Output_evaluate_custom_field": {
+      "type": "object",
+      "properties": {
+        "evaluated": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/components/schemas/Output_evaluate_custom_field_limits"
+        },
+        "query": {
+          "$ref": "#/components/schemas/Output_evaluate_custom_field_query"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_evaluate_custom_field_results_item"
+          }
+        },
+        "revision": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "evaluated",
+        "id",
+        "limits",
+        "query",
+        "results",
+        "revision"
+      ]
+    },
+    "Output_evaluate_custom_field_limits": {
+      "type": "object",
+      "properties": {
+        "resultBytes": {
+          "type": "number"
+        },
+        "rows": {
+          "type": "number"
+        },
+        "timeoutMs": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "resultBytes",
+        "rows",
+        "timeoutMs"
+      ]
+    },
+    "Output_evaluate_custom_field_query": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "type": "boolean"
+        },
+        "sort": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "filter",
+        "sort"
+      ]
+    },
+    "Output_evaluate_custom_field_results_item": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_evaluate_custom_field_results_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_evaluate_custom_field_results_item_3"
+        }
+      ]
+    },
+    "Output_evaluate_custom_field_results_item_2": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/components/schemas/Output_test_scorer_result_error_2"
+        },
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "error",
+        "value"
+      ]
+    },
+    "Output_evaluate_custom_field_results_item_3": {
+      "type": "object",
+      "properties": {
+        "missing": {
+          "type": "boolean"
+        },
+        "value": {
+          "$ref": "#/components/schemas/Output_evaluate_custom_field_results_item_value"
+        }
+      },
+      "required": [
+        "missing",
+        "value"
+      ]
+    },
+    "Output_evaluate_custom_field_results_item_value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        },
+        {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JsonValue"
+          }
+        }
       ]
     },
     "Output_EvaluatorLanguage": {
@@ -1636,6 +1896,143 @@
       "enum": [
         "primary",
         "legacy"
+      ]
+    },
+    "Output_get_page_view_data": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SavedViewColumn"
+          }
+        },
+        "limit": {
+          "type": "number"
+        },
+        "nextOffset": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "offset": {
+          "type": "number"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_SavedViewRow"
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "view": {
+          "$ref": "#/components/schemas/Output_SavedView"
+        }
+      },
+      "required": [
+        "columns",
+        "limit",
+        "nextOffset",
+        "offset",
+        "rows",
+        "total",
+        "view"
+      ]
+    },
+    "Output_get_page_view_dependencies": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_get_page_view_dependencies_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_page_view_dependencies_3"
+        }
+      ]
+    },
+    "Output_get_page_view_dependencies_2": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": false
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "Output_get_page_view_dependencies_3": {
+      "type": "object",
+      "properties": {
+        "hasMore": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_page_view_dependencies_items_item"
+          }
+        }
+      },
+      "required": [
+        "hasMore",
+        "items"
+      ]
+    },
+    "Output_get_page_view_dependencies_items_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name"
+      ]
+    },
+    "Output_get_page_view_history": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_page_view_history_items_item"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_get_page_view_history_items_item": {
+      "type": "object",
+      "properties": {
+        "definition": {
+          "description": "Application-defined JSON value."
+        },
+        "recordedAt": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "definition",
+        "recordedAt",
+        "revision"
       ]
     },
     "Output_get_report_authoring_guide": {
@@ -3811,6 +4208,834 @@
         }
       ]
     },
+    "Output_get_view_capabilities": {
+      "type": "object",
+      "properties": {
+        "customFieldQuery": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_customFieldQuery"
+        },
+        "objectTypes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "trace"
+            },
+            {
+              "type": "string",
+              "const": "dataset-item"
+            },
+            {
+              "type": "string",
+              "const": "session"
+            },
+            {
+              "type": "string",
+              "const": "eval-run"
+            },
+            {
+              "type": "string",
+              "const": "eval-result"
+            },
+            {
+              "type": "string",
+              "const": "dataset"
+            },
+            {
+              "type": "string",
+              "const": "app"
+            },
+            {
+              "type": "string",
+              "const": "agent"
+            },
+            {
+              "type": "string",
+              "const": "workflow"
+            },
+            {
+              "type": "string",
+              "const": "review-session"
+            },
+            {
+              "type": "string",
+              "const": "review-item"
+            },
+            {
+              "type": "string",
+              "const": "prompt"
+            },
+            {
+              "type": "string",
+              "const": "scorer"
+            },
+            {
+              "type": "string",
+              "const": "human-score"
+            },
+            {
+              "type": "string",
+              "const": "score-collection"
+            },
+            {
+              "type": "string",
+              "const": "dashboard"
+            },
+            {
+              "type": "string",
+              "const": "alert"
+            },
+            {
+              "type": "string",
+              "const": "notification"
+            },
+            {
+              "type": "string",
+              "const": "table-row"
+            }
+          ],
+          "minItems": 19,
+          "maxItems": 19
+        },
+        "objectViewPreview": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_objectViewPreview"
+        },
+        "preferences": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_preferences"
+        },
+        "resources": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources"
+        }
+      },
+      "required": [
+        "customFieldQuery",
+        "objectTypes",
+        "objectViewPreview",
+        "preferences",
+        "resources"
+      ]
+    },
+    "Output_get_view_capabilities_customFieldQuery": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "type": "boolean"
+        },
+        "sort": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "filter",
+        "sort"
+      ]
+    },
+    "Output_get_view_capabilities_objectViewPreview": {
+      "type": "object",
+      "properties": {
+        "headlessRender": {
+          "type": "boolean"
+        },
+        "syntax": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "headlessRender",
+        "syntax"
+      ]
+    },
+    "Output_get_view_capabilities_preferences": {
+      "type": "object",
+      "properties": {
+        "persistence": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "persistence",
+        "scope"
+      ]
+    },
+    "Output_get_view_capabilities_resources": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_agents"
+        },
+        "alerts": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_alerts"
+        },
+        "dashboard-table": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_dashboard_table"
+        },
+        "dashboards": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_dashboards"
+        },
+        "dataset-item-runs": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_dataset_item_runs"
+        },
+        "dataset-items": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_dataset_items"
+        },
+        "datasets": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_datasets"
+        },
+        "eval-comparison": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_eval_comparison"
+        },
+        "eval-results": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_eval_results"
+        },
+        "eval-runs": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_eval_runs"
+        },
+        "evaluations": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_evaluations"
+        },
+        "human-scores": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_human_scores"
+        },
+        "notifications": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_notifications"
+        },
+        "playground-apps": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_playground_apps"
+        },
+        "playground-traces": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_playground_traces"
+        },
+        "prompts": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_prompts"
+        },
+        "reports": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_reports"
+        },
+        "review-session": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_review_session"
+        },
+        "reviews": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_reviews"
+        },
+        "score-collections": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_score_collections"
+        },
+        "scorers": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_scorers"
+        },
+        "session-traces": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_session_traces"
+        },
+        "sessions": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_sessions"
+        },
+        "traces": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_traces"
+        },
+        "workflows": {
+          "$ref": "#/components/schemas/Output_get_view_capabilities_resources_workflows"
+        }
+      },
+      "required": [
+        "agents",
+        "alerts",
+        "dashboard-table",
+        "dashboards",
+        "dataset-item-runs",
+        "dataset-items",
+        "datasets",
+        "eval-comparison",
+        "eval-results",
+        "eval-runs",
+        "evaluations",
+        "human-scores",
+        "notifications",
+        "playground-apps",
+        "playground-traces",
+        "prompts",
+        "reports",
+        "review-session",
+        "reviews",
+        "score-collections",
+        "scorers",
+        "session-traces",
+        "sessions",
+        "traces",
+        "workflows"
+      ]
+    },
+    "Output_get_view_capabilities_resources_agents": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Agents"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "agent"
+        },
+        "path": {
+          "type": "string",
+          "const": "agents"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_alerts": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Alerts"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "alert"
+        },
+        "path": {
+          "type": "string",
+          "const": "alerts"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_dashboard_table": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Dashboard table"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "table-row"
+        },
+        "path": {
+          "type": "string",
+          "const": "dashboards"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_dashboards": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Dashboards"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "dashboard"
+        },
+        "path": {
+          "type": "string",
+          "const": "dashboards"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_dataset_item_runs": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Dataset item runs"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "trace"
+        },
+        "path": {
+          "type": "string",
+          "const": "datasets"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_dataset_items": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Dataset items"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "dataset-item"
+        },
+        "path": {
+          "type": "string",
+          "const": "datasets"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_datasets": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Datasets"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "dataset"
+        },
+        "path": {
+          "type": "string",
+          "const": "datasets"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_eval_comparison": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Evaluation comparison"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "eval-result"
+        },
+        "path": {
+          "type": "string",
+          "const": "evals/compare"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_eval_results": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Evaluation query"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "eval-result"
+        },
+        "path": {
+          "type": "string",
+          "const": "evals"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_eval_runs": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Evaluation results"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "eval-result"
+        },
+        "path": {
+          "type": "string",
+          "const": "evals"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_evaluations": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Evaluations"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "eval-run"
+        },
+        "path": {
+          "type": "string",
+          "const": "evals"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_human_scores": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Human Scores"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "human-score"
+        },
+        "path": {
+          "type": "string",
+          "const": "human-scores"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_notifications": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Notifications"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "notification"
+        },
+        "path": {
+          "type": "string",
+          "const": "alerts"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_playground_apps": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Playground apps"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "app"
+        },
+        "path": {
+          "type": "string",
+          "const": "playground"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_playground_traces": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Playground traces"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "trace"
+        },
+        "path": {
+          "type": "string",
+          "const": "playground"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_prompts": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Prompts"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "prompt"
+        },
+        "path": {
+          "type": "string",
+          "const": "prompts"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_reports": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Reports"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "table-row"
+        },
+        "path": {
+          "type": "string",
+          "const": "reports"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_review_session": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Review items"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "review-item"
+        },
+        "path": {
+          "type": "string",
+          "const": "reviews"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_reviews": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Reviews"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "review-session"
+        },
+        "path": {
+          "type": "string",
+          "const": "reviews"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_score_collections": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Score collections"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "score-collection"
+        },
+        "path": {
+          "type": "string",
+          "const": "human-scores"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_scorers": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Scorers"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "scorer"
+        },
+        "path": {
+          "type": "string",
+          "const": "scorers"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_session_traces": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Session traces"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "trace"
+        },
+        "path": {
+          "type": "string",
+          "const": "sessions"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_sessions": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Sessions"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "session"
+        },
+        "path": {
+          "type": "string",
+          "const": "sessions"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_traces": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Traces"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "trace"
+        },
+        "path": {
+          "type": "string",
+          "const": "traces"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_capabilities_resources_workflows": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "const": "Workflows"
+        },
+        "objectType": {
+          "type": "string",
+          "const": "workflow"
+        },
+        "path": {
+          "type": "string",
+          "const": "workflows"
+        }
+      },
+      "required": [
+        "label",
+        "objectType",
+        "path"
+      ]
+    },
+    "Output_get_view_preference": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "number"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "value": {
+          "description": "Application-defined JSON value."
+        }
+      },
+      "required": [
+        "revision",
+        "scope",
+        "value"
+      ]
+    },
     "Output_HumanScore": {
       "anyOf": [
         {
@@ -4200,6 +5425,417 @@
       "enum": [
         "input",
         "agent"
+      ]
+    },
+    "Output_list_custom_fields": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+          }
+        },
+        "nextCursor": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ]
+    },
+    "Output_list_custom_fields_items_item": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_3"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_4"
+        }
+      ]
+    },
+    "Output_list_custom_fields_items_item_2": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "resource": {
+          "$ref": "#/components/schemas/Output_list_views_item_resource"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "settings": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "id",
+        "name",
+        "resource",
+        "revision",
+        "settings",
+        "updatedAt"
+      ]
+    },
+    "Output_list_custom_fields_items_item_3": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_customField_format"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_customField_mode"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_custom_fields_items_item_objectTypes_item"
+          }
+        },
+        "resultType": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_resultType"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "createdAt",
+        "description",
+        "format",
+        "id",
+        "mode",
+        "name",
+        "objectTypes",
+        "resultType",
+        "revision",
+        "updatedAt"
+      ]
+    },
+    "Output_list_custom_fields_items_item_4": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_author"
+        },
+        "code": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "customFields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_views_item_settings_customFields_item"
+          }
+        },
+        "dataMode": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_dataMode"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputContract": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_inputContract"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_custom_fields_items_item_objectTypes_item_2"
+          }
+        },
+        "origin": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_origin"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "requirements": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_requirements"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "author",
+        "code",
+        "createdAt",
+        "customFields",
+        "dataMode",
+        "description",
+        "id",
+        "inputContract",
+        "name",
+        "objectTypes",
+        "origin",
+        "projectId",
+        "requirements",
+        "revision",
+        "updatedAt"
+      ]
+    },
+    "Output_list_custom_fields_items_item_author": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_list_reports_item_author_kind"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name"
+      ]
+    },
+    "Output_list_custom_fields_items_item_dataMode": {
+      "enum": [
+        "summary",
+        "full"
+      ]
+    },
+    "Output_list_custom_fields_items_item_inputContract": {
+      "enum": [
+        "object",
+        "legacy-trace"
+      ]
+    },
+    "Output_list_custom_fields_items_item_objectTypes_item": {
+      "enum": [
+        "agent",
+        "app",
+        "trace",
+        "session",
+        "dataset",
+        "scorer",
+        "dashboard",
+        "workflow",
+        "prompt",
+        "dataset-item",
+        "eval-run",
+        "eval-result",
+        "review-session",
+        "review-item",
+        "human-score",
+        "score-collection",
+        "alert",
+        "notification",
+        "table-row"
+      ]
+    },
+    "Output_list_custom_fields_items_item_objectTypes_item_2": {
+      "enum": [
+        "trace",
+        "dataset-item"
+      ]
+    },
+    "Output_list_custom_fields_items_item_origin": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_origin_2"
+        }
+      ]
+    },
+    "Output_list_custom_fields_items_item_origin_2": {
+      "type": "object",
+      "properties": {
+        "datasetId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "datasetName": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "group": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_origin_group"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_origin_source"
+        },
+        "traceId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "traceName": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        }
+      },
+      "required": [
+        "datasetId",
+        "datasetName",
+        "group",
+        "name",
+        "operation",
+        "source",
+        "traceId",
+        "traceName"
+      ]
+    },
+    "Output_list_custom_fields_items_item_origin_group": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_run_app_groups_item"
+        }
+      ]
+    },
+    "Output_list_custom_fields_items_item_origin_source": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_origin_source_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_origin_source_3"
+        }
+      ]
+    },
+    "Output_list_custom_fields_items_item_origin_source_2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "const": "trace"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ]
+    },
+    "Output_list_custom_fields_items_item_origin_source_3": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "const": "dataset-item"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ]
+    },
+    "Output_list_custom_fields_items_item_requirements": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_custom_fields_items_item_requirements_item"
+          }
+        }
+      ]
+    },
+    "Output_list_custom_fields_items_item_requirements_item": {
+      "type": "object",
+      "properties": {
+        "nonEmpty": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "type": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_requirements_item_type"
+        }
+      },
+      "required": [
+        "nonEmpty",
+        "path",
+        "required",
+        "type"
+      ]
+    },
+    "Output_list_custom_fields_items_item_requirements_item_type": {
+      "enum": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "null",
+        "any",
+        "array"
+      ]
+    },
+    "Output_list_custom_fields_items_item_resultType": {
+      "enum": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "any",
+        "array"
       ]
     },
     "Output_list_dashboards_item_widgets_item": {
@@ -5910,6 +7546,166 @@
         "result"
       ]
     },
+    "Output_preview_object_view": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_preview_object_view_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_preview_object_view_3"
+        }
+      ]
+    },
+    "Output_preview_object_view_2": {
+      "type": "object",
+      "properties": {
+        "compatibility": {
+          "$ref": "#/components/schemas/Output_preview_object_view_compatibility"
+        },
+        "compiled": {
+          "type": "boolean"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": false
+        },
+        "id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "rendered": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "compatibility",
+        "compiled",
+        "diagnostics",
+        "id",
+        "message",
+        "rendered",
+        "revision"
+      ]
+    },
+    "Output_preview_object_view_3": {
+      "type": "object",
+      "properties": {
+        "compatibility": {
+          "$ref": "#/components/schemas/Output_preview_object_view_compatibility"
+        },
+        "compiled": {
+          "type": "boolean"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "rendered": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "compatibility",
+        "compiled",
+        "diagnostics",
+        "id",
+        "rendered",
+        "revision"
+      ]
+    },
+    "Output_preview_object_view_compatibility": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_preview_object_view_compatibility_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_preview_object_view_compatibility_3"
+        },
+        {
+          "$ref": "#/components/schemas/Output_preview_object_view_compatibility_4"
+        }
+      ]
+    },
+    "Output_preview_object_view_compatibility_2": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "state": {
+          "type": "string",
+          "const": "unknown"
+        }
+      },
+      "required": [
+        "label",
+        "reasons",
+        "state"
+      ]
+    },
+    "Output_preview_object_view_compatibility_3": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "state": {
+          "type": "string",
+          "const": "missing"
+        }
+      },
+      "required": [
+        "label",
+        "reasons",
+        "state"
+      ]
+    },
+    "Output_preview_object_view_compatibility_4": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "items": false
+        },
+        "state": {
+          "type": "string",
+          "const": "met"
+        }
+      },
+      "required": [
+        "label",
+        "reasons",
+        "state"
+      ]
+    },
     "Output_probe_scorer_runtime": {
       "type": "object",
       "properties": {
@@ -6992,6 +8788,58 @@
         "number",
         "templateId",
         "widgetCount"
+      ]
+    },
+    "Output_resolve_page_view": {
+      "type": "object",
+      "properties": {
+        "applied": {
+          "type": "boolean"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+          }
+        },
+        "objectViews": {
+          "$ref": "#/components/schemas/Output_resolve_page_view_objectViews"
+        },
+        "path": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_2"
+        }
+      },
+      "required": [
+        "applied",
+        "fields",
+        "objectViews",
+        "path",
+        "view"
+      ]
+    },
+    "Output_resolve_page_view_objectViews": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_resolve_page_view_objectViews_value"
+      }
+    },
+    "Output_resolve_page_view_objectViews_value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_3"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_custom_fields_items_item_4"
+        }
       ]
     },
     "Output_resolve_trace": {
@@ -8213,6 +10061,25 @@
         "kind"
       ]
     },
+    "Output_save_view_preference": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "number"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/components/schemas/Output_Record_4"
+        }
+      },
+      "required": [
+        "revision",
+        "scope",
+        "value"
+      ]
+    },
     "Output_SavedView": {
       "type": "object",
       "properties": {
@@ -9390,6 +11257,25 @@
         "sessionId",
         "startedAt",
         "status"
+      ]
+    },
+    "Output_validate_page_view": {
+      "type": "object",
+      "properties": {
+        "evaluated": {
+          "type": "boolean"
+        },
+        "rendered": {
+          "type": "boolean"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evaluated",
+        "rendered",
+        "valid"
       ]
     },
     "Output_validate_report": {
