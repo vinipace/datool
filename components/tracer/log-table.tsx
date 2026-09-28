@@ -17,6 +17,12 @@ import { getCoreRowModel, useReactTable, type ColumnSizingState, type Visibility
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { logTable } from "./log-table-styles"
 import { useTableView } from "./use-table-view"
+import { useColumnValues } from "./use-computed-columns"
+import { ColumnEditor, ComputedValue } from "./eval-computed-columns"
+import { CustomViewControls } from "./custom-view-controls"
+import { fieldRow, type FieldRow } from "@/src/lib/tracer/field-row"
+import { pageViewResources } from "@/src/lib/tracer/view-resources"
+import type { ComputedCell, ComputedColumn } from "@/src/lib/tracer/computed-columns"
 import { useWorkspaceStorageScope } from "./workspace-path"
 import { Notice } from "@/components/ui/notice"
 import { cn } from "@/lib/utils"
@@ -50,6 +56,8 @@ export function LogSelectAll({ checked, partial, disabled, label, onChange }: { 
 }
 
 type LogTableContextValue = {
+  extraFields?: { columns: ComputedColumn[]; cells: Record<string, Record<string, ComputedCell>> }
+
   rowHeight?: "compact" | "tall"
   animateRows: boolean
   appearedRows: React.RefObject<Set<string>>
@@ -133,7 +141,32 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
     settingsStorageKey: controlledSettings ? undefined : storageKey,
     orderStorageKey: columnOrderStore ? undefined : orderStorageKey ?? (storageKey ? `${storageKey}:columns` : undefined),
     defaultSettings,
+    persistenceEnabled: !controlledSettings,
   })
+  const automaticFields = !computedColumnStore && !!tableView.resource
+  const fieldColumns = automaticFields ? tableView.computed.columns : []
+  const fieldKind = tableView.resource ? pageViewResources[tableView.resource].objectType : "table-row"
+  const fieldRows: FieldRow[] = []
+  function findRows(nodes: React.ReactNode) {
+    React.Children.forEach(nodes, node => {
+      if (!React.isValidElement<{ rows?: unknown[]; children?: React.ReactNode }>(node)) return
+      if (node.type === LogTableBody && node.props.rows) fieldRows.push(...node.props.rows.map(row => fieldRow(fieldKind, row)))
+      else if (node.type === React.Fragment) findRows(node.props.children)
+    })
+  }
+  if (automaticFields) findRows(children)
+  const fieldCells = useColumnValues(fieldRows, fieldColumns)
+  if (automaticFields) {
+    columnIds = [...(columnIds ?? widths.map((_, index) => `column-${index}`)), ...fieldColumns.map(field => `computed:${field.id}`), "add-auto-field"]
+    widths = [...widths, ...fieldColumns.map(() => 240), 160]
+    actionColumnIds = [...actionColumnIds, "add-auto-field"]
+    const editor = <ColumnEditor objectKind={fieldKind} addedFields={fieldColumns} rows={fieldRows} addLabel="Custom Fields" onSave={field => { void tableView.computed.store.update([...fieldColumns, field]) }} />
+    const extraHeaders = [...fieldColumns.map(field => <th key={field.id} className={logTable.head}><ColumnEditor objectKind={fieldKind} column={field} rows={fieldRows} onSave={saved => { void tableView.computed.store.update(fieldColumns.map(current => current.id === field.id ? saved : current)) }} onDelete={() => { void tableView.computed.store.update(fieldColumns.filter(current => current.id !== field.id)) }} /></th>), <th key="add-auto-field" className={logTable.head}>{editor}</th>]
+    children = React.Children.map(children, child => {
+      if (!React.isValidElement<React.PropsWithChildren>(child) || child.type !== "thead") return child
+      return React.cloneElement(child, {}, React.Children.map(child.props.children, row => React.isValidElement<React.PropsWithChildren>(row) && row.type === "tr" ? React.cloneElement(row, {}, [...React.Children.toArray(row.props.children), ...extraHeaders]) : row))
+    })
+  }
   const settings = controlledSettings ?? tableView.settings
   const onSettingsChange = controlledOnSettingsChange ?? tableView.onSettingsChange
   const rowHeight = enableRowHeight ? settings.rowHeight ?? "compact" : undefined
@@ -231,7 +264,7 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
   collectLabels(children)
   const webColumns = JSON.stringify(sourceIds.filter(id => id !== "__select" && !actionColumnIds.includes(id)).map(id => ({ id, name: labels[sourceIds.indexOf(id)] || id })))
   const webLayout = React.useMemo(() => ({ order: orderStore, getColumns: () => JSON.parse(webColumns) }), [orderStore, webColumns])
-  useColumnWebMcp(computedColumnStore, !!computedColumnStore, webLayout)
+  useColumnWebMcp(computedColumnStore ?? (automaticFields ? tableView.computed.store : undefined), !!computedColumnStore || automaticFields, webLayout)
   // Add handles to the existing semantic headers; pages keep their custom summaries.
   function decorate(node: React.ReactNode): React.ReactNode {
     return React.Children.map(node, (child) => {
@@ -291,7 +324,8 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
     <div className="flex items-center gap-3">{view === "cards" && hasSelectionControl(headers[0]) ? <label className="flex cursor-pointer items-center gap-2">{headers[0]}<span>Select all</span></label> : null}{selectionActions}</div>
     {view === "cards" ? actionIndices.map(index => <React.Fragment key={sourceIds[index]}>{headers[index]}</React.Fragment>) : null}
   </div>
-  return <LogTableContext.Provider value={{ rowHeight, animateRows, appearedRows, scrollRef, headerHeight, columnCount: visibleColumns.length, visibleIndices, view, headers, actionIndices, sourceIds, labels, reorderable, onDragEnd }}>
+  return <LogTableContext.Provider value={{ extraFields: automaticFields ? { columns: fieldColumns, cells: fieldCells } : undefined, rowHeight, animateRows, appearedRows, scrollRef, headerHeight, columnCount: visibleColumns.length, visibleIndices, view, headers, actionIndices, sourceIds, labels, reorderable, onDragEnd }}>
+    {!controlledSettings && tableView.savedView && <CustomViewControls {...tableView.savedView} />}
     {!controlledSettings && tableView.storageError ? <Notice variant="error" role="status">{tableView.storageError}</Notice> : null}
     {displayControls || enableCardView || enableRowHeight ? <HeaderDisplay settings={displaySettings} rowHeight={rowHeight} onRowHeightChange={setRowHeight} view={enableCardView ? view : undefined} onViewChange={setView} columns={displayControls ? leafColumns.slice(1).map((column) => ({ id: column.id, label: labels[sourceIds.indexOf(column.id)] || column.id, visible: column.getIsVisible(), disabled: column.id === sourceIds[1] })).filter(column => !actionColumnIds.includes(column.id)) : []} onChange={(id, visible) => table.getColumn(id)?.toggleVisibility(visible)} /> : null}
     {view === "table" && selectionActions ? selectionToolbar : null}
@@ -347,10 +381,10 @@ export function LogTableBody<T extends { id: string }>({ rows, children, empty, 
   if (context.view === "cards") return <div className="space-y-3 text-sm">
     {top > 0 ? <div aria-hidden="true" style={{ height: Math.max(0, top - 12) }} /> : null}
     {items.map(item => renderComparison ? <div key={item.key} ref={virtualizer.measureElement} data-index={item.index} className="grid grid-cols-2 items-stretch gap-3">
-      {React.cloneElement(children(rows[item.index], item.index), { animationKey: `${item.key}:primary` })}
-      {React.cloneElement(renderComparison(rows[item.index], item.index), { animationKey: `${item.key}:comparison` })}
+      {React.cloneElement(children(rows[item.index], item.index), { animationKey: `${item.key}:primary`, fieldRowId: rows[item.index].id })}
+      {React.cloneElement(renderComparison(rows[item.index], item.index), { animationKey: `${item.key}:comparison`, fieldRowId: rows[item.index].id })}
     </div> : React.cloneElement(children(rows[item.index], item.index), {
-      key: item.key, animationKey: String(item.key), ref: virtualizer.measureElement, "data-index": item.index,
+      key: item.key, fieldRowId: rows[pairedTable ? Math.floor(item.index / 2) : item.index].id, animationKey: String(item.key), ref: virtualizer.measureElement, "data-index": item.index,
     } as React.ComponentProps<typeof LogRow>))}
     {bottom > 0 ? <div aria-hidden="true" style={{ height: Math.max(0, bottom - 12) }} /> : null}
     {!rows.length ? <div className="py-10 text-center text-muted-foreground">{unwrapTableCells(empty)}</div> : null}
@@ -361,7 +395,7 @@ export function LogTableBody<T extends { id: string }>({ rows, children, empty, 
       const index = pairedTable ? Math.floor(item.index / 2) : item.index
       const render = pairedTable && item.index % 2 === 1 ? renderComparison! : children
       return React.cloneElement(render(rows[index], index), {
-        key: item.key, animationKey: String(item.key), ref: virtualizer.measureElement, "data-index": item.index,
+        key: item.key, fieldRowId: rows[pairedTable ? Math.floor(item.index / 2) : item.index].id, animationKey: String(item.key), ref: virtualizer.measureElement, "data-index": item.index,
         "aria-rowindex": item.index + 2,
       } as React.ComponentProps<typeof LogRow>)
     })}
@@ -374,10 +408,11 @@ function unwrapTableCells(node: React.ReactNode): React.ReactNode {
   return React.Children.map(node, child => React.isValidElement<React.PropsWithChildren>(child) && ["tr", "td", "tbody"].includes(String(child.type)) ? unwrapTableCells(child.props.children) : child)
 }
 
-type LogRowProps = React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLElement>; checked?: boolean; active?: boolean; rowLabel?: React.ReactNode; animationKey?: string }
+type LogRowProps = React.HTMLAttributes<HTMLElement> & { fieldRowId?: string; ref?: React.Ref<HTMLElement>; checked?: boolean; active?: boolean; rowLabel?: React.ReactNode; animationKey?: string }
 
-export function LogRow({ checked = false, active = false, className, children, ref, rowLabel, animationKey, ...props }: LogRowProps) {
+export function LogRow({ checked = false, active = false, className, children, ref, rowLabel, animationKey, fieldRowId, ...props }: LogRowProps) {
   const context = React.useContext(LogTableContext)
+  if (context?.extraFields && fieldRowId) children = [...React.Children.toArray(children), ...context.extraFields.columns.map(field => <td key={field.id} className={logTable.cell}><ComputedValue cell={context.extraFields!.cells[field.id]?.[fieldRowId]} format={field.format} /></td>), <td key="add-auto-field" />]
   const elementRef = React.useRef<HTMLElement | null>(null)
   const entryStarted = React.useRef(false)
   const fallbackKey = React.useId()

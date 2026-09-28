@@ -25,6 +25,7 @@ import { CollectionPage } from "./collection-page"
 import { CollectionFilterBar } from "./collection-filter"
 import { CollectionPanel } from "./collection-panel"
 import { HeaderSlot } from "./collection-header"
+import { PanelActionLabel } from "@/components/ui/panel-action-label"
 import { ConnectedEvalButton } from "./connected-eval-button"
 import { DatasetDetailsInspector } from "./dataset-details-inspector"
 import { DatasetImportDialog } from "./dataset-import-dialog"
@@ -49,10 +50,6 @@ export function DatasetDetailPage({ datasetId }: { datasetId: string }) {
 
 function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const storageScope = useWorkspaceStorageScope()
-  const tableView = useTableView({
-    settingsStorageKey: `datool:dataset-table:${storageScope}:${datasetId}`,
-  })
-  const { settings, storageError: settingsError } = tableView
   const changeFieldView = (field: string, view: ValueView) => {
     tableView.onSettingsChange(current => ({
       ...current,
@@ -144,6 +141,12 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     allItems,
     `datool:dataset-fields:${storageScope}:${datasetId}`
   )
+  const tableView = useTableView({
+    resource: "dataset-items",
+    computed,
+    settingsStorageKey: `datool:dataset-table:${storageScope}:${datasetId}`,
+  })
+  const { settings, storageError: settingsError } = tableView
   const matches = React.useMemo(
     () => compileCollectionFilter("datasetItems", filter.filter),
     [filter.filter]
@@ -279,11 +282,11 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
             onClick={() => setImportOpen(true)}
           >
             <Upload className="size-3.5" />
-            Import
+            <PanelActionLabel>Import</PanelActionLabel>
           </Button>
           <Button size="sm" variant="outline" onClick={addRow}>
             <Plus className="size-3.5" />
-            Row
+            <PanelActionLabel>Row</PanelActionLabel>
           </Button>
           <Button
             variant="ghost"
@@ -309,6 +312,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
           </Notice>
         )}
         <CollectionPage
+          savedView={tableView.savedView}
           state={{
             ...page,
             refresh: () => {

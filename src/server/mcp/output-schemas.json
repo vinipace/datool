@@ -1687,8 +1687,15 @@
     },
     "Output_get_review_item_annotations_item_reference_customField_format": {
       "enum": [
+        "llm",
+        "json",
         "text",
-        "markdown"
+        "image",
+        "markdown",
+        "yaml",
+        "llm-raw",
+        "pretty",
+        "tree"
       ]
     },
     "Output_get_review_item_annotations_item_reference_customField_mode": {
@@ -1710,8 +1717,8 @@
         "json",
         "text",
         "image",
-        "llm-raw",
         "yaml",
+        "llm-raw",
         "pretty",
         "tree"
       ]
@@ -1841,36 +1848,6 @@
     },
     "Output_get_trace_scores_item_external": {
       "$ref": "#/components/schemas/Output_ImportedScore"
-    },
-    "Output_get_trace_scores_item_external_author": {
-      "anyOf": [
-        {
-          "type": "null"
-        },
-        {
-          "type": "string"
-        },
-        {
-          "type": "number"
-        },
-        {
-          "type": "boolean",
-          "const": false
-        },
-        {
-          "type": "boolean",
-          "const": true
-        },
-        {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/Output_JSONType"
-          }
-        },
-        {
-          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options_schema_value"
-        }
-      ]
     },
     "Output_get_trace_scores_item_external_data": {
       "anyOf": [
@@ -2223,7 +2200,7 @@
       "type": "object",
       "properties": {
         "author": {
-          "$ref": "#/components/schemas/Output_get_trace_scores_item_external_author"
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_filters_item_value"
         },
         "comment": {
           "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
@@ -2692,7 +2669,7 @@
       ]
     },
     "Output_list_datasets_items_item_fieldSchemas": {
-      "$ref": "#/components/schemas/Output_Partial"
+      "$ref": "#/components/schemas/Output_Partial_2"
     },
     "Output_list_datasets_items_item_fieldSchemas_expectedOutput": {
       "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas_expectedOutput_2"
@@ -3031,13 +3008,6 @@
       "required": [
         "items",
         "nextCursor"
-      ]
-    },
-    "Output_list_saved_views_items_item_filters_item_operator": {
-      "enum": [
-        "equals",
-        "notEquals",
-        "exists"
       ]
     },
     "Output_list_saved_views_items_item_sort": {
@@ -3563,12 +3533,30 @@
     },
     "Output_list_views_item_resource": {
       "enum": [
+        "traces",
+        "alerts",
+        "reviews",
         "prompts",
         "scorers",
         "agents",
         "workflows",
+        "sessions",
         "eval-runs",
-        "playground-traces"
+        "review-session",
+        "session-traces",
+        "evaluations",
+        "eval-results",
+        "eval-comparison",
+        "datasets",
+        "dataset-items",
+        "dataset-item-runs",
+        "playground-apps",
+        "playground-traces",
+        "human-scores",
+        "score-collections",
+        "dashboards",
+        "dashboard-table",
+        "notifications"
       ]
     },
     "Output_list_views_item_settings": {
@@ -3592,8 +3580,26 @@
             "$ref": "#/components/schemas/Output_list_views_item_settings_computedColumns_item"
           }
         },
+        "customFields": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_customFields"
+        },
         "detailsOpen": {
           "type": "boolean"
+        },
+        "fieldViews": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_fieldViews"
+        },
+        "objectViews": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_objectViews"
+        },
+        "pageSettings": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options_schema"
+        },
+        "query": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query"
+        },
+        "queryParams": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_queryParams"
         },
         "rowHeight": {
           "$ref": "#/components/schemas/Output_list_views_item_settings_rowHeight"
@@ -3648,6 +3654,194 @@
         "markdown"
       ]
     },
+    "Output_list_views_item_settings_customFields": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_list_views_item_settings_customFields_item"
+      }
+    },
+    "Output_list_views_item_settings_customFields_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Output_list_views_item_settings_fieldViews": {
+      "$ref": "#/components/schemas/Output_Record_9"
+    },
+    "Output_list_views_item_settings_objectViews": {
+      "$ref": "#/components/schemas/Output_Partial"
+    },
+    "Output_list_views_item_settings_objectViews_dataset_item": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_customFields_item"
+        }
+      ]
+    },
+    "Output_list_views_item_settings_query": {
+      "$ref": "#/components/schemas/Output_list_views_item_settings_query_2"
+    },
+    "Output_list_views_item_settings_query_2": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_views_item_settings_query_columns_item"
+          }
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_views_item_settings_query_filters_item"
+          }
+        },
+        "resource": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_resource"
+        },
+        "sort": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_sort"
+        }
+      },
+      "required": [
+        "columns",
+        "filters",
+        "resource",
+        "sort"
+      ]
+    },
+    "Output_list_views_item_settings_query_columns_item": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_columns_item_format"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "selector": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "id",
+        "label",
+        "selector"
+      ]
+    },
+    "Output_list_views_item_settings_query_columns_item_format": {
+      "enum": [
+        "number",
+        "boolean",
+        "json",
+        "text"
+      ]
+    },
+    "Output_list_views_item_settings_query_filters_item": {
+      "type": "object",
+      "properties": {
+        "operator": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_filters_item_operator"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_filters_item_value"
+        }
+      },
+      "required": [
+        "operator",
+        "selector"
+      ]
+    },
+    "Output_list_views_item_settings_query_filters_item_operator": {
+      "enum": [
+        "equals",
+        "notEquals",
+        "exists"
+      ]
+    },
+    "Output_list_views_item_settings_query_filters_item_value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_JSONType"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_library_options_schema_value"
+        }
+      ]
+    },
+    "Output_list_views_item_settings_query_resource": {
+      "enum": [
+        "traces",
+        "eval-results"
+      ]
+    },
+    "Output_list_views_item_settings_query_sort": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_sort_2"
+        }
+      ]
+    },
+    "Output_list_views_item_settings_query_sort_2": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_defaultOrder_item_1"
+        },
+        "selector": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "direction",
+        "selector"
+      ]
+    },
+    "Output_list_views_item_settings_queryParams": {
+      "$ref": "#/components/schemas/Output_Record_10"
+    },
     "Output_list_views_item_settings_rowHeight": {
       "enum": [
         "compact",
@@ -3668,6 +3862,17 @@
       ]
     },
     "Output_Partial": {
+      "type": "object",
+      "properties": {
+        "dataset-item": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_objectViews_dataset_item"
+        },
+        "trace": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_objectViews_dataset_item"
+        }
+      }
+    },
+    "Output_Partial_2": {
       "type": "object",
       "properties": {
         "expectedOutput": {
@@ -4401,6 +4606,21 @@
         "description": "Application-defined JSON value."
       }
     },
+    "Output_Record_10": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Output_Record_11": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_JsonValue"
+      }
+    },
     "Output_Record_2": {
       "type": "object",
       "additionalProperties": {
@@ -4446,7 +4666,7 @@
     "Output_Record_9": {
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/components/schemas/Output_JsonValue"
+        "$ref": "#/components/schemas/Output_get_review_item_annotations_item_reference_view"
       }
     },
     "Output_register_app": {
@@ -5806,7 +6026,7 @@
       "type": "object",
       "properties": {
         "operator": {
-          "$ref": "#/components/schemas/Output_list_saved_views_items_item_filters_item_operator"
+          "$ref": "#/components/schemas/Output_list_views_item_settings_query_filters_item_operator"
         },
         "selector": {
           "type": "string"
@@ -5827,7 +6047,7 @@
           "type": "string"
         },
         "values": {
-          "$ref": "#/components/schemas/Output_Record_9"
+          "$ref": "#/components/schemas/Output_Record_11"
         }
       },
       "required": [

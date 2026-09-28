@@ -5,6 +5,7 @@ import { compileTraceView, traceViewCandidates } from "@/src/lib/tracer/trace-vi
 import { evaluateTraceView } from "@/src/lib/tracer/trace-view-evaluate"
 import { projectTraceViewData, type TraceViewData } from "@/src/lib/tracer/trace-view-contract"
 import { reactViewInputSchema } from "@/src/lib/tracer/react-views"
+import { traceObjectViewInput } from "@/src/lib/tracer/object-views"
 import { DataTable } from "@/components/ui/view-data-table"
 import { Card } from "@/components/ui/card"
 
@@ -23,7 +24,7 @@ describe("custom trace view compiler and sandbox contract", () => {
     for (const imports of ['', 'import * as React from "react";', 'import React from "react";']) {
       const compiled = await compileTraceView(`${imports} import { Card } from "@datool/ui"; export default function View({trace}: ViewProps) { const [count] = React.useState(2); return <Card>{trace.name}: {count}</Card> }`, theme, "test-build")
       const View = evaluateTraceView(compiled, React, { react: React, "@datool/ui": { Card } })
-      expect(renderToStaticMarkup(<View trace={trace} />)).toContain("Recorded result: 2")
+      expect(renderToStaticMarkup(<View {...traceObjectViewInput(trace)} trace={trace} />)).toContain("Recorded result: 2")
     }
   })
   test("compiles static Tailwind, conditionals, arbitrary values and template branches", async () => {

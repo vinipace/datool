@@ -1,6 +1,7 @@
 "use client"
 import * as React from "react"
 import { Notice } from "@/components/ui/notice"
+import { traceObjectViewInput, type ObjectViewInput } from "@/src/lib/tracer/object-views"
 import { prepareTraceView } from "@/src/lib/tracer/trace-view-client"
 import {
   projectTraceViewData,
@@ -12,11 +13,13 @@ import {
 export function ReactViewPreview({
   code,
   trace,
+  objectInput,
   dataMode = "full",
   dataLoading = false,
 }: {
   code: string
   trace: TraceViewData
+  objectInput?: ObjectViewInput
   dataMode?: TraceViewDataMode
   dataLoading?: boolean
 }) {
@@ -31,8 +34,8 @@ export function ReactViewPreview({
     error?: string
   } | null>(null)
   const { token } = React.useMemo(
-    () => ({ token: crypto.randomUUID(), code, trace, dataMode }),
-    [code, trace, dataMode]
+    () => ({ token: crypto.randomUUID(), code, trace, dataMode, objectInput }),
+    [code, trace, dataMode, objectInput]
   )
   const artifact = compiled?.source === code ? compiled.artifact : undefined
   const compileError = compiled?.source === code ? compiled.error : undefined
@@ -64,11 +67,12 @@ export function ReactViewPreview({
           source: code,
           token,
           trace: projectTraceViewData(trace, dataMode),
+          objectInput: objectInput?.kind === "dataset-item" ? objectInput : { ...(objectInput ?? traceObjectViewInput(trace)), object: projectTraceViewData(trace, dataMode) },
           dark: document.documentElement.classList.contains("dark"),
         },
         "*"
       )
-  }, [code, trace, dataMode, dataLoading, token])
+  }, [code, trace, dataMode, dataLoading, token, objectInput])
   React.useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return

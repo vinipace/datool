@@ -14,6 +14,7 @@ import {
 
 import { useComputedColumns } from "./use-computed-columns"
 import { useTableView } from "./use-table-view"
+import { CustomViewControls } from "./custom-view-controls"
 import { useWorkspaceStorageScope } from "./workspace-path"
 import { ComputedColumnDetails, ColumnEditor } from "./eval-computed-columns"
 import { DemoWorkflowAction } from "./app-shell"
@@ -84,7 +85,11 @@ export function TraceListWorkspace() {
     items: traces,
   } = useCollectionPages(tracerApi.traces.list, search.filter)
   const storageScope = useWorkspaceStorageScope()
+  const columnRows = React.useMemo(() => traces.map(trace => ({ id: trace.id, trace, expectedOutput: null, datasetItemId: null, results: [] })), [traces])
+  const computed = useComputedColumns("traces", columnRows)
   const tableView = useTableView({
+    resource: "traces",
+    computed,
     settingsStorageKey: `datool:traces-table-settings:${storageScope}`,
     orderStorageKey: "datool:traces-column-order",
   })
@@ -110,8 +115,6 @@ export function TraceListWorkspace() {
     changeSelection(new Set())
     requestAnimationFrame(() => workspaceRef.current?.querySelector<HTMLButtonElement>('button[aria-label="More actions"]')?.focus())
   }
-  const columnRows = React.useMemo(() => traces.map(trace => ({ id: trace.id, trace, expectedOutput: null, datasetItemId: null, results: [] })), [traces])
-  const computed = useComputedColumns("traces", columnRows)
   const selectedTraceIndex = visibleTraces.findIndex(
     (trace) => trace.id === selectedTraceId
   )
@@ -195,6 +198,7 @@ export function TraceListWorkspace() {
           query={search.value}
           filterError={search.error}
         />
+        {tableView.savedView && <CustomViewControls {...tableView.savedView} />}
         {tableView.storageError ? <Notice variant="error" role="status">{tableView.storageError}</Notice> : null}
         {error && !data ? (
           <ErrorState error={error} onRetry={refresh} />

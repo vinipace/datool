@@ -1,6 +1,7 @@
 import { z } from "zod"
 import type { TraceViewData } from "./trace-view-contract"
 import { invocationGroupSchema } from "./groups"
+import { fieldReferenceSchema } from "./view-resources"
 
 export const requirementTypes = [
   "any",
@@ -60,6 +61,9 @@ export const reactViewInputSchema = z
     code: z.string().trim().min(1).max(100000),
     // null = unknown; [] = explicitly reviewed, no data requirements.
     requirements: viewRequirementsSchema.nullable(),
+    objectTypes: z.array(z.enum(["trace", "dataset-item"])).min(1).max(2).default(["trace", "dataset-item"]),
+    inputContract: z.enum(["legacy-trace", "object"]).default("legacy-trace"),
+    customFields: z.array(fieldReferenceSchema).max(50).default([]),
   })
   .strict()
 export const createReactViewSchema = reactViewInputSchema.extend({
@@ -68,7 +72,8 @@ export const createReactViewSchema = reactViewInputSchema.extend({
 export const updateReactViewSchema = reactViewInputSchema.extend({
   expectedRevision: z.number().int().positive(),
 })
-export type ReactViewInput = z.infer<typeof reactViewInputSchema>
+type ReactViewOptions = "objectTypes" | "inputContract" | "customFields"
+export type ReactViewInput = Omit<z.infer<typeof reactViewInputSchema>, ReactViewOptions> & Partial<Pick<z.infer<typeof reactViewInputSchema>, ReactViewOptions>>
 export const reactViewSchema = reactViewInputSchema.extend({
   id: z.string(),
   projectId: z.string(),
@@ -82,7 +87,7 @@ export const reactViewSchema = reactViewInputSchema.extend({
   createdAt: z.string(),
   updatedAt: z.string(),
 })
-export type ReactView = z.infer<typeof reactViewSchema>
+export type ReactView = Omit<z.infer<typeof reactViewSchema>, ReactViewOptions> & Partial<Pick<z.infer<typeof reactViewSchema>, ReactViewOptions>>
 export type ReactViewSummary = Omit<ReactView, "code">
 export type ReactViewPage = {
   items: ReactViewSummary[]
@@ -112,7 +117,7 @@ export function valueType(value: unknown): ViewRequirement["type"] {
 }
 export function viewCompatibility(
   requirements: ViewRequirement[] | null,
-  trace: TraceViewData,
+  trace: unknown,
   unloadedFields: string[] = []
 ) {
   if (requirements === null)
@@ -158,7 +163,8 @@ export function viewCompatibility(
 }
 export function rankReactViews(
   views: ReactViewSummary[],
-  trace: TraceViewData
+  trace: TraceViewData,
+  objectInput?: { kind: "trace" | "dataset-item"; object: unknown }
 ) {
   const rank = { met: 0, unknown: 1, missing: 2 }
   const affinity = (view: ReactViewSummary) =>
@@ -175,7 +181,7 @@ export function rankReactViews(
       view,
       compatibility: viewCompatibility(
         view.requirements,
-        trace,
+        view.inputContract === "object" && objectInput ? objectInput.object : trace,
         view.dataMode === "full" && !("spans" in trace)
           ? ["spans", "scores", "spanStats"]
           : []

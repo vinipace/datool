@@ -18,7 +18,7 @@ export function traceViewTypes() {
   }
   libraries['file:///node_modules/@datool/ui/index.d.ts'] = 'export * from "../../../src/browser/trace-view-ui";'
   libraries['file:///node_modules/@datool/charts/index.d.ts'] = 'export * from "recharts"; export * from "../../../components/ui/chart";'
-  libraries['file:///view-props.d.ts'] = 'type ViewProps = { trace: import("./src/lib/tracer/contracts").TraceSummary & Partial<Pick<import("./src/lib/tracer/contracts").TraceDetail, "spans" | "scores" | "spanStats">> };'
+  libraries['file:///view-props.d.ts'] = 'type TraceViewData = import("./src/lib/tracer/contracts").TraceSummary & Partial<Pick<import("./src/lib/tracer/contracts").TraceDetail, "spans" | "scores" | "spanStats">>; type ViewProps = { trace: TraceViewData; fields: Record<string, import("./src/lib/tracer/contracts").JsonValue>; context: { unsaved: boolean; fieldErrors?: Record<string,string>; fieldRevisions?: Record<string,number> } } & ({ kind: "trace"; object: TraceViewData } | { kind: "dataset-item"; object: import("./src/lib/tracer/contracts").DatasetItem });'
   // Keep only declarations reachable from the public API. Implementation-only
   // imports (for example the complete icon catalog) should not enter Monaco.
   const files = new Map(Object.entries(libraries).map(([key, text]) => [path.join(root, key.slice('file:///'.length)), text]))

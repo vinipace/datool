@@ -58,6 +58,7 @@ import { runtimePromptCache, type PromptCache } from "./prompt-cache"
 import { createScorerService } from "./scorers"
 import { createCustomFieldService } from "./custom-fields"
 import { createCustomViewService } from "./custom-views"
+import { createViewLibrary } from "./view-library"
 import { randomUUID } from "node:crypto"
 
 import { and, count, desc, eq, getTableColumns, inArray, notExists, sql } from "drizzle-orm"
@@ -557,6 +558,7 @@ export class TracerService {
   readonly scorers: ReturnType<typeof createScorerService>
   readonly customFields: ReturnType<typeof createCustomFieldService>
   readonly customViews: ReturnType<typeof createCustomViewService>
+  readonly viewLibrary: ReturnType<typeof createViewLibrary>
   private readonly semanticQueryService: SemanticQueryService
 
   constructor(
@@ -584,6 +586,7 @@ export class TracerService {
     this.scorers = createScorerService(database)
     this.customFields = createCustomFieldService(database)
     this.customViews = createCustomViewService(database)
+    this.viewLibrary = createViewLibrary(database)
     this.projectId = getTracerProjectId(database)
     this.semanticQueryService = createSemanticQueryService({
       catalog: semanticCatalog,

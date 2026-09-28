@@ -198,7 +198,9 @@ function EvalDetail({ runId }: { runId: string }) {
   const [narrow, setNarrow] = React.useState(false)
   const [mobilePanelOpen, setMobilePanelOpen] = React.useState(false)
   const mobilePanelTrigger = React.useRef<HTMLButtonElement | null>(null)
+  const layoutContainer = React.useRef<HTMLDivElement | null>(null)
   const observeContainer = React.useCallback((element: HTMLDivElement | null) => {
+    layoutContainer.current = element
     if (!element) return
     const observer = new ResizeObserver(([entry]) => {
       const isNarrow = entry.contentRect.width < 768
@@ -490,7 +492,7 @@ function EvalDetail({ runId }: { runId: string }) {
             minSize={comparing ? "240px" : "160px"}
             maxSize={comparing ? "360px" : "50%"}
             onResize={({ inPixels }, _id, previous) => {
-              if (!comparing && previous && previous.inPixels >= 180 && inPixels > 0 && inPixels < 180)
+              if ((layoutContainer.current?.getBoundingClientRect().width ?? 0) >= 768 && !comparing && previous && previous.inPixels >= 180 && inPixels > 0 && inPixels < 180)
                 setDetailsOpen(false)
             }}
           >

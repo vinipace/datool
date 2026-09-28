@@ -43,6 +43,11 @@ import { HeaderDisplay, type DisplaySettingGroup } from "./collection-header"
 import { CollectionPagination } from "./collection-pagination"
 import { CollectionTableSkeleton } from "@/components/ui/collection-skeleton"
 import { Button } from "@/components/ui/button"
+import { useTableView } from "./use-table-view"
+import { CustomViewControls } from "./custom-view-controls"
+import { useWorkspaceStorageScope } from "./workspace-path"
+
+const EvalTableViewContext = React.createContext<ReturnType<typeof useTableView> | null>(null)
 
 function groupingSettings(groupBy: string): DisplaySettingGroup[] {
   return [
@@ -89,6 +94,7 @@ function EvalRunsTable({
 }) {
   const router = useRouter()
   const workspaceHref = useWorkspaceHref()
+  const tableView = React.useContext(EvalTableViewContext)
   const rows = runs.map((run, index) => ({ id: run.id, run, index }))
   const scoreNames = [
     ...new Set(
@@ -100,6 +106,9 @@ function EvalRunsTable({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <LogTable
+        settings={tableView?.settings}
+        onSettingsChange={tableView?.onSettingsChange}
+        columnOrderStore={tableView?.columnOrderStore}
         persistenceKey="eval-runs"
         fillHeight={!embedded}
         displayControls={!embedded}
@@ -269,13 +278,25 @@ function EvalRunsTable({
 export function EvalsPage() {
   const query = useSearchParams()
   const ids = parseCompareIds(query.get("compare"))
+  return ids.length ? <EvalDetailPage runId={ids[0]} /> : <EvalCollectionPage />
+}
+
+function EvalCollectionPage() {
+  const query = useSearchParams()
   const groupBy = query.get("groupBy")
-  return ids.length ? (
-    <EvalDetailPage runId={ids[0]} />
-  ) : groupBy === "workflow" || groupBy === "agent" ? (
-    <EvalGroupedRunsPage key={groupBy} groupBy={groupBy} />
-  ) : (
-    <EvalRunsPage />
+  const storageScope = useWorkspaceStorageScope()
+  const tableView = useTableView({
+    resource: "evaluations",
+    settingsStorageKey: `datool:table:${storageScope}:eval-runs`,
+    orderStorageKey: `datool:table:${storageScope}:eval-runs:columns`,
+  })
+  return (
+    <EvalTableViewContext.Provider value={tableView}>
+      <CollectionPanel label="Evals">
+        {tableView.savedView && <CustomViewControls {...tableView.savedView} />}
+        {groupBy === "workflow" || groupBy === "agent" ? <EvalGroupedRunsPage key={groupBy} groupBy={groupBy} /> : <EvalRunsPage />}
+      </CollectionPanel>
+    </EvalTableViewContext.Provider>
   )
 }
 
@@ -302,7 +323,6 @@ function EvalRunsPage() {
     })
   const selected = runsState.items.filter((run) => checkedIds.has(run.id))
   return (
-    <CollectionPanel label="Evals">
       <CollectionPage
         className="contents"
         state={runsState}
@@ -345,7 +365,6 @@ function EvalRunsPage() {
           setCheckedIds={setCheckedIds}
         />
       </CollectionPage>
-    </CollectionPanel>
   )
 }
 
@@ -387,7 +406,6 @@ function EvalGroupedRunsPage({ groupBy }: { groupBy: "workflow" | "agent" }) {
       }
     })
   return (
-    <CollectionPanel label="Evals">
       <CollectionPage
         className="contents"
         state={groups}
@@ -447,7 +465,6 @@ function EvalGroupedRunsPage({ groupBy }: { groupBy: "workflow" | "agent" }) {
           ))}
         </div>
       </CollectionPage>
-    </CollectionPanel>
   )
 }
 

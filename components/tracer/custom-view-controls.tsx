@@ -2,271 +2,160 @@
 
 import * as React from "react"
 import { Dialog } from "radix-ui"
-import { Combobox } from "@base-ui/react/combobox"
-import { Bookmark, Check, ChevronDown, History, Plus, Save, X } from "lucide-react"
+import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PageViewMenu } from "@/components/ui/page-view-menu"
 import { customViewsApi } from "./api"
-import { HeaderSlot, headerButtonClass } from "./collection-header"
-import {
-  sameViewSettings,
-  viewHistory,
-  type CustomView,
-  type EvalViewSettings,
-} from "@/src/lib/tracer/custom-views"
+import { HeaderSlot } from "./collection-header"
+import { CollectionHeaderContext } from "./collection-header-context"
+import { defaultTableSettings, sameViewSettings, type CustomView, type EvalViewSettings } from "@/src/lib/tracer/custom-views"
+import { createPageViewDraftStore } from "@/src/lib/tracer/page-view-drafts"
+import { pageViewResources } from "@/src/lib/tracer/view-resources"
 
-const resourceLabels: Record<CustomView["resource"], string> = {
-  "eval-runs": "eval runs",
-  "playground-traces": "playground trace tables",
-  agents: "Agents tables",
-  workflows: "Workflows tables",
-  scorers: "Scorers tables",
-  prompts: "Prompts tables",
+const resourceLabels = Object.fromEntries(Object.entries(pageViewResources).map(([id, resource]) => [id, resource.label]))
+const defaultNames: Partial<Record<CustomView["resource"], string>> = {
+  traces: "All Logs", evaluations: "All evals view", "eval-runs": "All results view", "dataset-items": "All dataset items",
 }
-
-export function CustomViewControls({
-  resource = "eval-runs",
-  settings,
-  onApply,
-  viewId,
-  onSelect,
-}: {
+type Props = {
   resource?: CustomView["resource"]
   settings: EvalViewSettings
-  onApply: (settings: EvalViewSettings) => void
+  defaultSettings?: EvalViewSettings
+  storageKey?: string
+  onApply: (settings: EvalViewSettings) => void | Promise<void>
   viewId: string | null
   onSelect: (id: string | null) => void
-}) {
-  const [pickerOpen, setPickerOpen] = React.useState(false)
+}
+
+export function CustomViewControls(props: Props) {
+  return <PageViewControls key={props.storageKey ?? props.resource} {...props} />
+}
+
+function PageViewControls({ resource = "eval-runs", settings, defaultSettings, storageKey, onApply, viewId, onSelect }: Props) {
+  const slots = React.useContext(CollectionHeaderContext)
+  const drafts = React.useMemo(() => createPageViewDraftStore(storageKey ?? `datool:page-view:${resource}`), [storageKey, resource])
+  const defaults = React.useMemo<EvalViewSettings>(() => defaultSettings ?? {
+    ...defaultTableSettings, schemaVersion: 1, computedColumns: [], customFields: [], columnOrder: [], detailsOpen: false, queryParams: {},
+  }, [defaultSettings])
+  const defaultName = defaultNames[resource] ?? `All ${resourceLabels[resource].toLowerCase()} view`
   const [views, setViews] = React.useState<CustomView[]>([])
-  const [selected, setSelected] = React.useState<CustomView | null>(null)
+  const orderedViews = React.useMemo(() => [...views].sort((a, b) =>
+    Date.parse(b.createdAt) - Date.parse(a.createdAt) || a.id.localeCompare(b.id)
+  ), [views])
+  const [session, setSession] = React.useState<{ id: string | null; base: CustomView | null; baseline: EvalViewSettings } | null>(null)
+  const selected = session?.id === viewId ? session.base : null
   const [busy, setBusy] = React.useState(false)
-  const [loading, setLoading] = React.useState(!!viewId)
+  const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const [notice, setNotice] = React.useState<string | null>(null)
-  const [dialog, setDialog] = React.useState<
-    "save" | "history" | "delete" | null
-  >(null)
+  const storageError = React.useSyncExternalStore(drafts.subscribe, drafts.getError, () => "")
+  const [dialog, setDialog] = React.useState<"save" | null>(null)
   const [name, setName] = React.useState("")
-  const [versions, setVersions] = React.useState<CustomView[]>([])
-  const [requestedView, setRequestedView] = React.useState({ viewId, resource })
-  if (viewId !== requestedView.viewId || resource !== requestedView.resource) {
-    setRequestedView({ viewId, resource })
-    const isSelected = selected?.id === viewId && selected?.resource === resource
-    if (!isSelected) setSelected(null)
-    setLoading(!!viewId && !isSelected)
+  const current = React.useRef({ settings, onApply })
+  React.useLayoutEffect(() => { current.current = { settings, onApply } }, [settings, onApply])
+  const [requestedView, setRequestedView] = React.useState(viewId)
+  if (requestedView !== viewId) {
+    setRequestedView(viewId)
+    setLoading(true)
     setError(null)
   }
-  const dirty =
-    selected !== null && !sameViewSettings(selected.settings, settings)
-  const unavailable = busy || loading || (!!viewId && selected?.id !== viewId)
+  const pendingApply = React.useRef<EvalViewSettings | null>(null)
+  const initialized = React.useRef(false)
+  const ready = !loading && session !== null && session.id === viewId
+  const dirty = ready && !sameViewSettings(session.baseline, settings)
 
   React.useEffect(() => {
     let active = true
-    void customViewsApi
-      .list(resource)
-      .then((views) => {
-        if (active) setViews(views)
-      })
-      .catch((error) => {
-        if (active) setError(error.message)
-      })
-    return () => {
-      active = false
-    }
+    void customViewsApi.list(resource).then(result => { if (active) setViews(result) })
+      .catch(reason => { if (active) setError(reason.message) })
+    return () => { active = false }
   }, [resource])
 
   React.useEffect(() => {
-    if (!viewId || selected?.id === viewId) return
     let active = true
-    void customViewsApi
-      .get(viewId)
-      .then((view) => {
-        if (!active) return
-        if (view.resource !== resource) throw new Error("This view belongs to another table type.")
-        onApply(view.settings)
-        setLoading(false)
-        setSelected(view)
-        setViews((current) => [
-          view,
-          ...current.filter((item) => item.id !== view.id),
-        ])
-        try {
-          viewHistory(localStorage, view.id).remember(view)
-        } catch {
-          setNotice(
-            "View loaded. Local version history is unavailable in this browser."
-          )
-        }
-      })
-      .catch((error) => {
-        if (active) setError(error.message)
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [viewId, selected?.id, onApply, resource])
-
-  const accept = (view: CustomView, apply = false) => {
-    if (apply) onApply(view.settings)
-    setSelected(view)
-    setViews((current) => [
-      view,
-      ...current.filter((item) => item.id !== view.id),
-    ])
-    onSelect(view.id)
-    try {
-      viewHistory(localStorage, view.id).remember(view)
-    } catch {
-      setNotice(
-        "View saved in the database, but this browser could not store its local version history."
+    void (async () => {
+      let draft = null
+      try { draft = drafts.read(viewId) }
+      catch { drafts.report("The local Page View draft could not be loaded. Existing browser data has been retained."); return }
+      let base = draft?.base ?? null
+      if (viewId && !base) base = await customViewsApi.get(viewId)
+      if (!active) return
+      if (base && base.resource !== resource) throw new Error("This view belongs to another page type.")
+      const baseline = base?.settings ?? drafts.defaultBaseline(
+        draft || initialized.current ? defaults : current.current.settings
       )
+      const target = draft?.settings ?? baseline
+      pendingApply.current = target
+      await current.current.onApply(target)
+      if (!active) return
+      initialized.current = true
+      setSession({ id: viewId, base, baseline })
+      if (base) setViews(items => [base, ...items.filter(item => item.id !== base.id)])
+    })().catch(reason => { if (active) setError(reason instanceof Error ? reason.message : String(reason)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [viewId, resource, drafts, defaults])
+
+  React.useEffect(() => {
+    if (!ready || busy) return
+    // URL updates and resolved fields must settle before capturing a new draft.
+    if (pendingApply.current) {
+      if (!sameViewSettings(pendingApply.current, settings)) return
+      pendingApply.current = null
     }
+    if (dirty) drafts.write(viewId, { base: selected, settings })
+    else drafts.clear(viewId)
+  }, [ready, busy, dirty, settings, viewId, selected, drafts])
+
+  const accept = (view: CustomView) => {
+    setSession({ id: view.id, base: view, baseline: view.settings })
+    setViews(items => [view, ...items.filter(item => item.id !== view.id)])
+    drafts.clear(viewId)
+    drafts.clear(view.id)
+    if (!sameViewSettings(view.settings, current.current.settings)) {
+      drafts.write(view.id, { base: view, settings: current.current.settings })
+    }
+    onSelect(view.id)
     setDialog(null)
   }
   const perform = async (action: () => Promise<void>) => {
     if (busy) return
     setBusy(true)
     setError(null)
-    setNotice(null)
-    try {
-      await action()
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : "Could not save the view."
-      )
-    } finally {
-      setBusy(false)
-    }
+    try { await action() }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save the view.") }
+    finally { setBusy(false) }
   }
-  const save = (asNew: boolean, restored?: CustomView) =>
-    perform(async () => {
-      if (asNew) {
-        accept(
-          await customViewsApi.create({ name, resource, settings })
-        )
-      } else if (selected) {
-        // Preserve the previous DB revision before replacing it. If storage fails,
-        // don't claim the user can roll back a save that has no local snapshot.
-        try {
-          viewHistory(localStorage, selected.id).remember(selected)
-        } catch {
-          throw new Error(
-            "Could not preserve the previous version in this browser. Free some browser storage or save as a new view."
-          )
-        }
-        accept(
-          await customViewsApi.update(selected.id, {
-            name: restored?.name ?? selected.name,
-            resource,
-            settings: restored?.settings ?? settings,
-            expectedRevision: selected.revision,
-          }),
-          !!restored
-        )
-      }
-    })
-  const switchView = (id: string) => {
-    if (dirty && !window.confirm("Discard unsaved changes and switch views?"))
-      return
-    setSelected(null)
-    setError(null)
-    setNotice(null)
-    onSelect(id || null)
-  }
-  const openHistory = () => {
-    if (!selected) return
-    try {
-      const history = viewHistory(localStorage, selected.id)
-      history.remember(selected)
-      setVersions(history.read())
-      setDialog("history")
-      setError(null)
-    } catch {
-      setError("Local version history could not be read in this browser.")
-    }
-  }
+  const save = (asNew: boolean) => perform(async () => {
+    if (asNew) accept(await customViewsApi.create({ name, resource, settings }))
+    else if (selected) accept(await customViewsApi.update(selected.id, { name: selected.name, resource, settings, expectedRevision: selected.revision }))
+  })
+  const reset = () => perform(async () => {
+    const base = viewId ? await customViewsApi.get(viewId, true) : null
+    const target = base?.settings ?? drafts.defaultBaseline(defaults)
+    pendingApply.current = target
+    await onApply(target)
+    setSession({ id: viewId, base, baseline: target })
+    drafts.clear(viewId)
+  })
 
   return (
     <>
-      <HeaderSlot name="filter">
-        <Combobox.Root items={views} value={selected} open={pickerOpen} onOpenChange={setPickerOpen}
-          itemToStringLabel={view => view.name} isItemEqualToValue={(a, b) => a.id === b.id}
-          onValueChange={view => { if (view) switchView(view.id) }}>
-          <Combobox.Trigger render={<Button variant="ghost" className={`${headerButtonClass} max-w-52 border-0`} />} disabled={busy || loading} aria-label="Custom view">
-            <Bookmark className="size-3.5 @min-[640px]/page:hidden" />
-            <span className="hidden truncate @min-[640px]/page:inline">{selected?.name ?? (viewId ? "Loading view…" : "Unsaved view")}</span>
-            {dirty && <span className="size-1.5 shrink-0 rounded-full bg-info" aria-label="Unsaved changes" />}
-            <ChevronDown className="hidden size-3.5 shrink-0 @min-[640px]/page:block" />
-          </Combobox.Trigger>
-          <Combobox.Portal>
-            <Combobox.Positioner sideOffset={4} align="end" className="z-50">
-              <Combobox.Popup aria-label="Saved views" className="w-72 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
-                <Combobox.Input aria-label="Search views" placeholder="Search views…" className="h-9 w-full border-b bg-transparent px-3 text-sm outline-none" />
-                <Combobox.Empty className="p-3 text-sm text-muted-foreground">No views found.</Combobox.Empty>
-                <Combobox.List className="max-h-60 overflow-y-auto p-1">
-                  {(view: CustomView) => <Combobox.Item key={view.id} value={view} className="flex cursor-pointer items-center justify-between rounded-sm px-2 py-1.5 text-sm data-highlighted:bg-accent data-highlighted:text-accent-foreground">
-                    {view.name}<Combobox.ItemIndicator><Check className="size-3.5" /></Combobox.ItemIndicator>
-                  </Combobox.Item>}
-                </Combobox.List>
-                <div className="space-y-1 border-t p-1">
-                  <Button variant="ghost" className="w-full justify-start text-xs" disabled={unavailable || !selected || !dirty} onClick={() => { setPickerOpen(false); void save(false) }}>
-                    <Save className="size-3.5" />Save changes to view
-                  </Button>
-                  <Button variant="ghost" className="w-full justify-start text-xs" disabled={busy || loading} onClick={() => {
-                    setPickerOpen(false)
-                    setName(selected ? `${selected.name} copy` : "")
-                    setError(null)
-                    setDialog("save")
-                  }}><Plus className="size-3.5" />Create new view with changes</Button>
-                  {selected && <Button variant="ghost" className="w-full justify-start text-xs" disabled={unavailable} onClick={() => { setPickerOpen(false); openHistory() }}><History className="size-3.5" />View history</Button>}
-                </div>
-              </Combobox.Popup>
-            </Combobox.Positioner>
-          </Combobox.Portal>
-        </Combobox.Root>
+      <HeaderSlot name={slots.pageView ? "pageView" : "filter"}>
+        <PageViewMenu options={[{ id: null, name: defaultName }, ...orderedViews]}
+          value={viewId} name={selected?.name ?? (viewId ? "Unavailable view" : defaultName)}
+          dirty={dirty} loading={loading} disabled={busy}
+          onSelect={id => { if (id !== viewId) onSelect(id) }}
+          onSave={() => {
+            if (selected) void save(false)
+            else { setName(defaultName); setDialog("save") }
+          }}
+          onReset={() => { void reset() }}
+          onDuplicate={() => { setName(`${selected?.name ?? defaultName} copy`); setDialog("save") }} />
       </HeaderSlot>
-      {loading ? (
-        <p className="mb-2 text-xs text-muted-foreground" role="status">
-          Loading saved view…
-        </p>
-      ) : null}
-      {error && !dialog ? (
-        <div
-          className="mb-2 flex items-center gap-2 text-xs text-destructive"
-          role="alert"
-        >
-          {error}
-          {viewId ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || loading}
-              onClick={() =>
-                void perform(async () => {
-                  if (
-                    dirty &&
-                    !window.confirm(
-                      "Discard unsaved changes and reload the saved view?"
-                    )
-                  )
-                    return
-                  accept(await customViewsApi.get(viewId), true)
-                })
-              }
-            >
-              Reload saved view
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-      {notice ? (
-        <p className="mb-2 text-xs text-muted-foreground" role="status">
-          {notice}
-        </p>
-      ) : null}
+      {storageError && <p className="mb-2 text-xs text-destructive" role="alert">{storageError}</p>}
+      {error && !dialog && <div className="mb-2 flex items-center gap-2 text-xs text-destructive" role="alert">
+        {error}
+        {viewId && <Button size="sm" variant="outline" disabled={busy || loading} onClick={() => { void reset() }}>Reload saved view</Button>}
+      </div>}
       <Dialog.Root
         open={dialog !== null}
         onOpenChange={(open) => {
@@ -274,21 +163,11 @@ export function CustomViewControls({
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-overlay" />
           <Dialog.Content className="fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-5 shadow-xl">
-            <Dialog.Title className="text-base font-semibold">
-              {dialog === "save"
-                ? "Save custom view"
-                : dialog === "delete"
-                  ? "Delete custom view"
-                  : `${selected?.name} · Version history`}
-            </Dialog.Title>
+            <Dialog.Title className="text-base font-semibold">Save Page View</Dialog.Title>
             <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-              {dialog === "save"
-                ? `Save columns, formulas, widths, visibility, and table/card layout. This view will be available on ${resourceLabels[resource]} in this project, across browsers.`
-                : dialog === "delete"
-                  ? "Remove this saved view from the database. Your current table layout and local history will remain."
-                  : "The latest 50 saved versions seen in this browser are kept locally. Restoring creates a new database revision. Other browsers keep their own history."}
+              {`Save filters, sorting, columns, display settings, and table/card layout. This view will be available on ${resourceLabels[resource]} in this project, across browsers.`}
             </Dialog.Description>
             <Dialog.Close
               disabled={busy}
@@ -297,7 +176,6 @@ export function CustomViewControls({
             >
               <X className="size-4" />
             </Dialog.Close>
-            {dialog === "save" ? (
               <form
                 className="mt-4 space-y-4"
                 onSubmit={(event) => {
@@ -320,95 +198,6 @@ export function CustomViewControls({
                   {busy ? "Saving…" : "Save view"}
                 </Button>
               </form>
-            ) : dialog === "delete" ? (
-              <div className="mt-4 flex gap-2">
-                <Button
-                  variant="destructive"
-                  disabled={busy}
-                  onClick={() =>
-                    void perform(async () => {
-                      if (!selected) return
-                      await customViewsApi.delete(
-                        selected.id,
-                        selected.revision
-                      )
-                      setViews((current) =>
-                        current.filter((view) => view.id !== selected.id)
-                      )
-                      setSelected(null)
-                      onSelect(null)
-                      setDialog(null)
-                    })
-                  }
-                >
-                  Delete view
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setDialog("history")}
-                >
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <>
-                <ol className="mt-4 divide-y divide-border">
-                  {versions.map((version) => (
-                    <li
-                      key={version.revision}
-                      className="flex items-center justify-between gap-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">
-                          Version {version.revision}
-                          {version.revision === selected?.revision
-                            ? " · Current"
-                            : ""}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(version.updatedAt).toLocaleString()} ·{" "}
-                          {version.settings.computedColumns.length} custom
-                          columns · {version.settings.view}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={
-                          busy || version.revision === selected?.revision
-                        }
-                        onClick={() => {
-                          if (
-                            !dirty ||
-                            window.confirm(
-                              "Discard unsaved changes and restore this version?"
-                            )
-                          )
-                            void save(false, version)
-                        }}
-                      >
-                        Restore
-                      </Button>
-                    </li>
-                  ))}
-                </ol>
-                {versions.length <= 1 ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Save changes to this view to create another version.
-                  </p>
-                ) : null}
-                <Button
-                  className="mt-4"
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() => setDialog("delete")}
-                >
-                  Delete view…
-                </Button>
-              </>
-            )}
             {error ? (
               <p className="mt-3 text-sm text-destructive" role="alert">
                 {error}

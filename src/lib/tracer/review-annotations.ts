@@ -12,7 +12,7 @@ const customFieldSchema = z
     name: z.string().min(1).max(120),
     code: z.string().max(20000),
     mode: z.enum(["expression", "template"]),
-    format: z.enum(["text", "markdown"]),
+    format: z.enum(["text", "markdown", "json", "yaml", "image", "llm", "llm-raw", "pretty", "tree"]),
     value: z.string().max(100000),
     sourceHash: hash,
   })

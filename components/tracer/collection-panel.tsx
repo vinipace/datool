@@ -27,6 +27,7 @@ export function CollectionPanel({
   const panelRef = React.useRef<HTMLElement>(null)
   const [refreshInMenu, setRefreshInMenu] = React.useState(false)
   const [filter, setFilter] = React.useState<HTMLDivElement | null>(null)
+  const [pageView, setPageView] = React.useState<HTMLDivElement | null>(null)
   const [actions, setActions] = React.useState<HTMLDivElement | null>(null)
   const [refresh, setRefresh] = React.useState<HTMLDivElement | null>(null)
   const [display, setDisplay] = React.useState<HTMLDivElement | null>(null)
@@ -51,6 +52,7 @@ export function CollectionPanel({
         title,
         tabs,
         filter,
+        pageView,
         actions,
         refresh,
         display,
@@ -71,7 +73,8 @@ export function CollectionPanel({
           aria-label={`${label} controls`}
           className={cn(
             "@container/collection relative z-20 min-h-[53px] shrink-0 items-center gap-2 border-b border-border bg-background px-3 py-2",
-            heading ? "grid grid-cols-[minmax(0,1fr)_auto]" : "flex"
+            !heading && !filter && "@max-[640px]/page:min-h-[97px]",
+            heading ? "grid grid-cols-[minmax(0,1fr)_auto]" : "flex @max-[640px]/page:flex-wrap"
           )}
         >
           {!filter && (
@@ -91,10 +94,12 @@ export function CollectionPanel({
           </div>
           {/* Retain portal targets and filter state while selection actions replace the toolbar. */}
           <div className="contents peer-[:not(:empty)]/collection-selection:hidden">
+            <div ref={setPageView} className="flex min-w-0 flex-1 items-center empty:hidden @min-[640px]/page:flex-initial" />
             <div
               ref={setFilter}
               className={cn(
                 "flex min-w-0 flex-1 items-center empty:hidden",
+                !heading && "@max-[640px]/page:order-last @max-[640px]/page:basis-full",
                 heading && "col-span-2 row-start-2"
               )}
             />

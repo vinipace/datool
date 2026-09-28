@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { InspectorSection } from "@/components/ui/inspector-section"
 import { InspectorTabs } from "@/components/ui/inspector-tabs"
-import { datasetItemViewTrace } from "@/src/lib/tracer/dataset-item-view"
+import { datasetItemViewTrace, datasetItemViewInput } from "@/src/lib/tracer/dataset-item-view"
 import { ReactTraceViews } from "./react-trace-views"
 import { DatasetItemRuns } from "./dataset-item-runs"
 import { Notice } from "@/components/ui/notice"
@@ -307,5 +307,5 @@ function DatasetItemViews({
       </Notice>
     )
   }
-  return <ReactTraceViews trace={trace} source={isNew ? null : { kind: "dataset-item", id: item.id }} />
+  return <ReactTraceViews trace={trace} objectInput={datasetItemViewInput(item, draft, isNew)} source={isNew ? null : { kind: "dataset-item", id: item.id }} />
 }

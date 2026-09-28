@@ -1,4 +1,6 @@
 import { promoteSpansSchema } from "@/src/lib/tracer/span-promotion"
+import { viewOperations } from "@/src/lib/tracer/view-operations"
+import { executeViewOperation } from "../tracer/view-operations"
 import { humanScoreInputSchema, humanScoreUpdateSchema, humanScoreCollectionInputSchema, humanScoreCollectionUpdateSchema } from "@/src/lib/tracer/human-scores"
 import type { WorkspaceScope } from "@/src/lib/auth/permissions"
 import { z } from "zod"
@@ -40,6 +42,12 @@ export type AgentOperation = {
   execute: (service: TracerService, input: unknown) => TracerEffect<unknown>
 }
 const operations: AgentOperation[] = []
+for (const operation of viewOperations) operations.push({
+  name: operation.name, description: operation.description,
+  scopes: [operation.write ? "views:write" : "views:read"],
+  schema: operation.schema, destructive: operation.action === "delete",
+  execute: (service, input) => executeViewOperation(operation, service, input),
+})
 function tool<S extends z.ZodRawShape>(
   name: string,
   description: string,

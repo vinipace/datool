@@ -1,5 +1,6 @@
 import { z } from "zod"
-import type { ValueView } from "./value-views"
+import { valueViews, type ValueView } from "./value-views"
+import { fieldReferenceSchema, pageViewResourceSchema } from "./view-resources"
 
 const columnId = z.string().min(1).max(200)
 const column = z
@@ -36,12 +37,23 @@ export const evalViewSettingsSchema = z
     view: z.enum(["table", "cards"]),
     rowHeight: z.enum(["compact", "tall"]).optional(),
     detailsOpen: z.boolean(),
+    fieldViews: z.record(columnId, z.enum(valueViews)).optional(),
+    customFields: z.array(fieldReferenceSchema).max(50).optional(),
+    queryParams: z.record(columnId, z.array(z.string().max(4000)).max(50)).optional(),
+    pageSettings: z.record(columnId, z.json()).optional(),
+    objectViews: z.partialRecord(z.enum(["trace", "dataset-item"]), fieldReferenceSchema.nullable()).optional(),
+    query: z.object({
+      resource: z.enum(["traces", "eval-results"]),
+      columns: z.array(z.object({ id: columnId, label: z.string(), selector: z.string(), format: z.enum(["boolean", "json", "number", "text"]) }).strict()).min(1).max(50),
+      filters: z.array(z.object({ selector: z.string(), operator: z.enum(["equals", "exists", "notEquals"]), value: z.json().optional() }).strict()).max(20),
+      sort: z.object({ selector: z.string(), direction: z.enum(["asc", "desc"]) }).strict().nullable(),
+    }).strict().optional(),
   })
   .strict()
 
 export const customViewInputSchema = z
   .object({
-    resource: z.enum(["eval-runs", "playground-traces", "agents", "workflows", "scorers", "prompts"]),
+    resource: pageViewResourceSchema,
     name: z.string().trim().min(1).max(120),
     settings: evalViewSettingsSchema,
   })
@@ -83,7 +95,17 @@ export function sameViewSettings(a: EvalViewSettings, b: EvalViewSettings) {
           )
         : item
     )
-  return stable({ ...a, rowHeight: a.rowHeight ?? "compact" }) === stable({ ...b, rowHeight: b.rowHeight ?? "compact" })
+  const normalize = (value: EvalViewSettings) => ({
+    ...value,
+    rowHeight: value.rowHeight ?? "compact",
+    customFields: value.customFields ?? [],
+    fieldViews: value.fieldViews ?? {},
+    queryParams: value.queryParams ?? {},
+    pageSettings: value.pageSettings ?? {},
+    objectViews: value.objectViews ?? {},
+    columnVisibility: Object.fromEntries(Object.entries(value.columnVisibility).filter(([, visible]) => !visible)),
+  })
+  return stable(normalize(a)) === stable(normalize(b))
 }
 
 export function viewHistory(

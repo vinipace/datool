@@ -51,6 +51,11 @@ export function createComputedColumnStore(
         })
       }
     },
+    select: (columns: ComputedColumn[]) => {
+      // Applying a Page View changes selection only; never call the shared writer.
+      storage().setItem(key, JSON.stringify(columns))
+      publish({ columns, loaded: true, storageError: null })
+    },
     update: (
       change:
         | ComputedColumn[]

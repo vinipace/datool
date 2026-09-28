@@ -21,6 +21,10 @@ export const agentUsage = `Agent workflows (all commands return JSON):
   datool metrics metadata|query|batch
   datool dashboards list|get|create|update|delete|preview|resolve [id]
   datool views list|get|data|resolve [id]
+  datool page-views list|get|create|update|copy|delete|history|restore|dependencies|validate|data|resolve [id]
+  datool custom-fields list|get|create|update|copy|delete|history|restore|dependencies|validate|evaluate [id]
+  datool object-views list|get|create|update|copy|delete|history|restore|dependencies|validate|preview [id]
+  datool view-preferences get|save --scope <page/context>
   datool traces|sessions|datasets|evals export [id] --out <file.ndjson>
   datool agent tools [operation]
   datool agent call <operation> --input <json|@file|->
@@ -134,6 +138,8 @@ const numeric = new Set([
   "limit",
   "offset",
   "expectedRevision",
+  "revision",
+  "before",
   "minScore",
   "minPassRate",
   "maxErrors",
@@ -314,6 +320,10 @@ export async function agentCommand(args: string[]): Promise<number | null> {
       "evals",
       "dashboards",
       "views",
+      "page-views",
+      "custom-fields",
+      "object-views",
+      "view-preferences",
     ].includes(group)
   ))
     return null
@@ -394,6 +404,13 @@ export async function agentCommand(args: string[]): Promise<number | null> {
             : 10_000,
       })
     let operation = aliases[`${group}.${action}`]
+    const viewFamily = ({ "page-views": "page_view", "custom-fields": "custom_field", "object-views": "object_view" } as Record<string, string>)[group]
+    if (viewFamily) {
+      operation = action === "list" ? `list_${viewFamily}s`
+        : action === "history" || action === "dependencies" ? `get_${viewFamily}_${action}`
+        : action === "data" ? "get_page_view_data" : `${action}_${viewFamily}`
+    }
+    if (group === "view-preferences") operation = action === "get" ? "get_view_preference" : action === "save" ? "save_view_preference" : ""
     if (group === "agent") {
       if (action === "tools") {
         operation = "describe_agent_operations"
@@ -411,7 +428,7 @@ export async function agentCommand(args: string[]): Promise<number | null> {
       const key =
         group === "reviews" && ["item", "record"].includes(action)
           ? "sessionId"
-          : action === "resolve"
+          : action === "resolve" && !viewFamily
             ? "key"
             : action === "rescore"
               ? "sourceRunId"

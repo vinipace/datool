@@ -657,6 +657,9 @@ export const customFields = pgTable(
     name: text("name").notNull(),
     nameKey: text("name_key").notNull(),
     definitionJson: text("definition_json").notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("custom_fields_project_name_idx").on(
@@ -853,6 +856,9 @@ export const reviewScores = pgTable(
 )
 
 export const reactViews = pgTable("react_views", {
+  objectTypes: jsonb("object_types").$type<("trace" | "dataset-item")[]>().notNull().default(["trace", "dataset-item"]),
+  inputContract: text("input_contract").$type<"legacy-trace" | "object">().notNull().default("legacy-trace"),
+  customFields: jsonb("custom_fields").$type<{ id: string; revision?: number }[]>().notNull().default([]),
   dataMode: text("data_mode").$type<"full" | "summary">().notNull().default("full"),
   id: text("id").primaryKey(),
   ...projectScope(),
