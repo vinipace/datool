@@ -1,6 +1,6 @@
 # Organization members and invitations
 
-Open **Members** from the account menu or a project's settings. Organization settings has a sidebar linking Members and Billing. Search the members table by name, email, or role; **Invite member** opens the invitation form, and **Pending invitations** opens the resend/cancel list. Members belong to an organization and can access its projects. Owners and admins can invite teammates as members or admins, resend or cancel pending invitations, change non-owner roles, and remove other non-owner members. Ordinary members see the member list without management controls. The UI never offers owner removal, ownership transfer, or self-demotion; Better Auth also protects the last owner on the API.
+Open **Members** from the account menu or a project's settings. Organization settings has a sidebar linking Members and Billing. Search the members table by name, email, or role; **Invite member** opens the invitation form, and **Pending invitations** opens a table in a right-side panel. Each pending invitation has a **Copy link** action and a menu to resend or cancel it. Members belong to an organization and can access its projects. Owners and admins can invite teammates as members or admins, resend or cancel pending invitations, change non-owner roles, and remove other non-owner members. Ordinary members see the member list without management controls. The UI never offers owner removal, ownership transfer, or self-demotion; Better Auth also protects the last owner on the API.
 
 ## Installation
 
@@ -27,6 +27,8 @@ An explicit invitation permits its matching verified Google recipient to sign in
 The app awaits Resend acceptance and durably records its message ID. **Email sent** means Resend accepted the message, not that a person's inbox received it. Delivery, bounces, and spam placement must be checked in Resend; delivery webhooks are not installed by this feature.
 
 Better Auth catches email-hook exceptions, so a post-operation hook checks the durable delivery record and returns an actionable failure if sending was not confirmed. A failed email leaves the pending invitation visible for retry. Retries of uncertain attempts reuse the same persisted payload and idempotency key for up to 23 hours, within Resend's 24-hour window. Concurrent sends for one invitation are serialized. Confirmed sends have a one-minute resend cooldown. An explicit resend after that cooldown starts a new attempt and refreshes the invitation expiration.
+
+For an unexpired invitation, **Copy link** copies the current installation's `/invite/<invitationId>` URL without sending another email. It works when email delivery is unconfirmed or the sender is no longer configured. If clipboard access fails, the panel exposes a selected, read-only link for manual copying. Share it with the invited recipient; the matching verified email and explicit acceptance are still required. Expired links cannot be copied: resend first, then copy the refreshed invitation.
 
 If sender configuration changes while retrying a failed attempt, cancel that invitation and create a new one so the new payload uses the updated sender. Old payloads intentionally remain unchanged for provider idempotency.
 

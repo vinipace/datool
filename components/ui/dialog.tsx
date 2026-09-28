@@ -51,7 +51,7 @@ type DialogContentProps = React.ComponentProps<
   typeof DialogPrimitive.Content
 > & {
   showCloseButton?: boolean
-  variant?: "default" | "sheet" | "sidebar"
+  variant?: "default" | "sheet" | "sidebar" | "panel"
   /** Scope an embedded, non-modal dialog to a positioned app frame. */
   container?: HTMLElement | null
 }
@@ -90,7 +90,9 @@ function DialogContent({
         }}
         className={cn(
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed z-50 gap-4 border border-border bg-muted p-5 text-foreground shadow-xl outline-none",
-          variant === "sidebar"
+          variant === "panel"
+            ? "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 flex h-dvh w-full max-w-4xl flex-col overflow-hidden border-y-0 border-r-0 bg-background pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            : variant === "sidebar"
             ? "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 flex h-dvh w-[calc(100%-2rem)] max-w-sm flex-col overflow-hidden border-y-0 border-l-0 bg-background pb-[env(safe-area-inset-bottom)]"
             : variant === "sheet"
             ? "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom bottom-0 left-0 flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-xl border-x-0 border-b-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]"

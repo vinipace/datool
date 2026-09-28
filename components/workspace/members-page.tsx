@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useRef, useState, type FormEvent } from "react"
-import { Mail, MoreHorizontal, UserPlus } from "lucide-react"
+import { Copy, Mail, MoreHorizontal, UserPlus } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import {
   workspaceRequest,
@@ -39,9 +39,19 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import type { OrganizationMember, OrganizationMembers } from "@/src/lib/members"
+import type {
+  OrganizationInvitation,
+  OrganizationMember,
+  OrganizationMembers,
+} from "@/src/lib/members"
 
 type Change = { member: OrganizationMember; role?: "admin" | "member" }
+function invitationExpired(invitation: OrganizationInvitation) {
+  return (
+    invitation.expired || new Date(invitation.expiresAt).getTime() <= Date.now()
+  )
+}
+
 export function MembersPage({
   organization,
   embedded = false,
@@ -67,6 +77,10 @@ export function MembersPage({
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
+  const [manualLink, setManualLink] = useState<{
+    id: string
+    url: string
+  } | null>(null)
   const [change, setChange] = useState<Change | null>(null)
   const inviteTrigger = useRef<HTMLButtonElement>(null)
   const pendingTrigger = useRef<HTMLButtonElement>(null)
@@ -79,9 +93,14 @@ export function MembersPage({
     )
   )
   const pendingCount = data?.invitations.length ?? 0
+  const manualInvitation = data?.invitations.find(
+    (invitation) =>
+      invitation.id === manualLink?.id && !invitationExpired(invitation)
+  )
   function openDialog(value: "invite" | "pending") {
     setError("")
     setNotice("")
+    setManualLink(null)
     setDialog(value)
   }
   function openChange(value: Change) {
@@ -100,6 +119,7 @@ export function MembersPage({
     setBusy(key)
     setError("")
     setNotice("")
+    setManualLink(null)
     try {
       const result = await action()
       if (result.error)
@@ -119,6 +139,32 @@ export function MembersPage({
       )
     } finally {
       await remote.refresh()
+      setBusy(null)
+    }
+  }
+  async function copyInvitation(invitation: OrganizationInvitation) {
+    if (busy) return
+    setError("")
+    setNotice("")
+    setManualLink(null)
+    if (invitationExpired(invitation)) {
+      setError("This invitation has expired. Resend it to create a fresh link.")
+      return
+    }
+    const url = new URL(
+      `/invite/${encodeURIComponent(invitation.id)}`,
+      window.location.origin
+    ).toString()
+    setBusy(`copy-${invitation.id}`)
+    try {
+      await navigator.clipboard.writeText(url)
+      setNotice(`Invitation link copied for ${invitation.email}.`)
+    } catch {
+      setManualLink({ id: invitation.id, url })
+      setError(
+        "Clipboard access failed. Select and copy the invitation link below."
+      )
+    } finally {
       setBusy(null)
     }
   }
@@ -425,7 +471,7 @@ export function MembersPage({
         }}
       >
         <DialogContent
-          className="max-w-2xl"
+          variant="panel"
           onCloseAutoFocus={(event) => {
             event.preventDefault()
             pendingTrigger.current?.focus()
@@ -434,8 +480,9 @@ export function MembersPage({
           <DialogHeader>
             <DialogTitle>Pending invitations ({pendingCount})</DialogTitle>
             <DialogDescription>
-              Manage invitations to {organizationName}. Resend expired
-              invitations to create a fresh link.
+              Share a link to invite teammates to {organizationName}, even if
+              their email wasn’t delivered. They must sign in with the invited
+              email. Resend expired invitations to create a fresh link.
             </DialogDescription>
           </DialogHeader>
           {modalError}
@@ -449,75 +496,158 @@ export function MembersPage({
               {notice}
             </Notice>
           ) : null}
-          {pendingCount ? (
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {data?.invitations.map((invitation) => (
-                <li
-                  key={invitation.id}
-                  className="flex flex-wrap items-center justify-between gap-3 p-4"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium wrap-anywhere">
-                      {invitation.email}
-                    </p>
-                    <p className="mt-1 text-xs text-foreground-muted">
-                      <OrganizationRoleBadge role={invitation.role} /> ·{" "}
-                      {invitation.expired
-                        ? "Expired"
-                        : `Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`}{" "}
-                      ·{" "}
-                      {invitation.emailStatus === "sent"
+          <div className="min-h-0 flex-1 overflow-auto">
+            {manualInvitation && manualLink ? (
+              <label className="mb-4 block space-y-2 text-sm">
+                Invitation link for {manualInvitation.email}
+                <Input
+                  readOnly
+                  autoFocus
+                  value={manualLink.url}
+                  onFocus={(event) => event.currentTarget.select()}
+                  onClick={(event) => event.currentTarget.select()}
+                />
+              </label>
+            ) : null}
+            {pendingCount ? (
+              <table
+                aria-label="Pending invitations"
+                className={logTable.table}
+              >
+                <thead className={logTable.head}>
+                  <tr>
+                    <th scope="col" className={logTable.heading}>
+                      Recipient
+                    </th>
+                    <th
+                      scope="col"
+                      className={`${logTable.heading} hidden sm:table-cell`}
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className={`${logTable.heading} w-36 sm:w-44`}
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data?.invitations.map((invitation) => {
+                    const expired = invitationExpired(invitation)
+                    const delivery =
+                      invitation.emailStatus === "sent"
                         ? "Email sent"
-                        : "Email not confirmed"}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      loading={busy === invitation.id}
-                      disabled={!!busy || !data.emailConfigured}
-                      onClick={() =>
-                        void mutate(
-                          invitation.id,
-                          () =>
-                            authClient.organization.inviteMember({
-                              organizationId,
-                              email: invitation.email,
-                              role: invitation.role as "member" | "admin",
-                              resend: true,
-                            }),
-                          "Invitation email resent."
-                        )
-                      }
-                    >
-                      Resend invitation
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={!!busy}
-                      onClick={() =>
-                        void mutate(
-                          `cancel-${invitation.id}`,
-                          () =>
-                            authClient.organization.cancelInvitation({
-                              invitationId: invitation.id,
-                            }),
-                          "Invitation canceled."
-                        )
-                      }
-                    >
-                      Cancel invitation
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Notice>No pending invitations.</Notice>
-          )}
-          <DialogFooter>
+                        : "Email not confirmed"
+                    const expiry = expired
+                      ? "Expired"
+                      : `Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`
+                    return (
+                      <tr key={invitation.id} className="bg-surface-row">
+                        <td className={`${logTable.cell} py-3`}>
+                          <p className="mb-1 wrap-anywhere">
+                            {invitation.email}
+                          </p>
+                          <OrganizationRoleBadge role={invitation.role} />
+                          <div className="mt-2 space-y-1 text-xs text-foreground-muted sm:hidden">
+                            <p>{expiry}</p>
+                            <p>{delivery}</p>
+                          </div>
+                        </td>
+                        <td
+                          className={`${logTable.cell} hidden space-y-1 text-xs text-foreground-muted sm:table-cell`}
+                        >
+                          <p>{expiry}</p>
+                          <p>{delivery}</p>
+                        </td>
+                        <td className={logTable.cell}>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              aria-label={`Copy invitation link for ${invitation.email}`}
+                              title={
+                                expired
+                                  ? "Resend this expired invitation to create a fresh link"
+                                  : "Copy invitation link"
+                              }
+                              aria-busy={busy === `copy-${invitation.id}`}
+                              disabled={!!busy || expired}
+                              onClick={() => void copyInvitation(invitation)}
+                            >
+                              <Copy className="hidden sm:block" />
+                              Copy link
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  aria-label={`Invitation actions for ${invitation.email}`}
+                                  loading={
+                                    busy === invitation.id ||
+                                    busy === `cancel-${invitation.id}`
+                                  }
+                                  disabled={!!busy}
+                                >
+                                  {busy !== invitation.id &&
+                                  busy !== `cancel-${invitation.id}` ? (
+                                    <MoreHorizontal />
+                                  ) : null}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  disabled={!!busy || !data.emailConfigured}
+                                  onSelect={() =>
+                                    void mutate(
+                                      invitation.id,
+                                      () =>
+                                        authClient.organization.inviteMember({
+                                          organizationId,
+                                          email: invitation.email,
+                                          role: invitation.role as
+                                            "member" | "admin",
+                                          resend: true,
+                                        }),
+                                      "Invitation email resent."
+                                    )
+                                  }
+                                >
+                                  Resend invitation
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  disabled={!!busy}
+                                  onSelect={() =>
+                                    void mutate(
+                                      `cancel-${invitation.id}`,
+                                      () =>
+                                        authClient.organization.cancelInvitation(
+                                          { invitationId: invitation.id }
+                                        ),
+                                      "Invitation canceled."
+                                    )
+                                  }
+                                >
+                                  Cancel invitation
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <Notice>No pending invitations.</Notice>
+            )}
+          </div>
+          <DialogFooter className="shrink-0">
             <Button
               variant="outline"
               loading={remote.isRefreshing}
