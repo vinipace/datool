@@ -27,6 +27,7 @@ export const pageViewResources = {
   "human-scores": { label: "Human Scores", objectType: "human-score", path: "human-scores" },
   "score-collections": { label: "Score collections", objectType: "score-collection", path: "human-scores" },
   dashboards: { label: "Dashboards", objectType: "dashboard", path: "dashboards" },
+  reports: { label: "Reports", objectType: "table-row", path: "reports" },
   "dashboard-table": { label: "Dashboard table", objectType: "table-row", path: "dashboards" },
   alerts: { label: "Alerts", objectType: "alert", path: "alerts" },
   notifications: { label: "Notifications", objectType: "notification", path: "alerts" },

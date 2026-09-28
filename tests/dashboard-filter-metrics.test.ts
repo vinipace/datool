@@ -1,3 +1,4 @@
+import { dashboardWidgetSchema } from "@/src/lib/tracer/dashboards"
 import { expect, test } from "bun:test"
 import { Pool } from "pg"
 import {
@@ -202,9 +203,11 @@ test("dashboard filters use exact persisted memberships without multiplying metr
       service.dashboards.create(configuration)
     )
     const reloaded = await runTracerEffect(service.dashboards.get(saved.id))
-    expect(reloaded.widgets[0].groups).toEqual(configuration.widgets[0].groups)
-    expect(reloaded.widgets[0].compare).toEqual(
-      configuration.widgets[0].compare
+    expect(dashboardWidgetSchema.parse(reloaded.widgets[0]).groups).toEqual(
+      dashboardWidgetSchema.parse(configuration.widgets[0]).groups
+    )
+    expect(dashboardWidgetSchema.parse(reloaded.widgets[0]).compare).toEqual(
+      dashboardWidgetSchema.parse(configuration.widgets[0]).compare
     )
     const preview = await runTracerEffect(
       service.agent.previewDashboard(saved.id)
@@ -217,7 +220,7 @@ test("dashboard filters use exact persisted memberships without multiplying metr
     ).toEqual([2, 6])
     const customMetric = await runTracerEffect(
       service.querySemanticMetrics({
-        ...reloaded.widgets[0].query,
+        ...dashboardWidgetSchema.parse(reloaded.widgets[0]).query,
         filters: [
           {
             member: "logs.parent.metrics",

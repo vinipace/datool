@@ -140,7 +140,6 @@ Use `reviews create --input @session.json` with `name`, `traceIds` and optional 
 
 Organization API keys need `reviews:write` to submit, `reviews:read` to read, and `traces:read` to inspect evidence/create sessions. API-key and OAuth submissions are always **AI-labelled**; identity is server-derived. Optional agent/model metadata does not change attribution. Readback and NDJSON exports include provenance, `humanVerified` and `completionKind`; sessions distinguish `humanReviewedCount`, `aiReviewedCount` and `aiLabelledCount`. AI ratings never become dataset ground truth automatically.
 
-
 ### Local code watching
 
 Use `datool connect --watch` for a project manifest, or
@@ -184,3 +183,28 @@ original frozen evidence. Inspect `datool agent tools start_eval_run` to confirm
 server support; the CLI build alone does not establish hosted deployment.
 
 Connected runs accept native `promptOverrides` alongside generic `inputOverrides`. `datool evals run --input @run.json --wait` and MCP `start_eval_run` share the contract. Prompt defaults and explicit versions are frozen for the whole run; applications only call `datool.prompts.get(slug)`. See [managed prompt experiments](https://github.com/vinpac/datool/blob/main/docs/managed-prompts.md#connected-dataset-prompt-overrides).
+
+### MDX reports
+
+Author a small two-file bundle: `report.mdx` contains only the Markdown/component body, while the adjacent `report.data.json` contains `name`, `description`, `sources`, and `bindings`. Keeping narrative/layout separate from query and evidence configuration makes the report easier for agents to revise and review. The CLI loads the adjacent data file automatically; use `--data-file` when it has another name.
+
+```sh
+datool reports guide
+datool reports components
+datool reports recipe
+datool reports template evaluation-comparison
+datool reports validate --file report.mdx
+datool reports create --file report.mdx --creation-key <uuid>
+datool reports get 12
+datool reports resolve 12
+datool reports update 12 --revision 1 --file report.mdx
+datool reports update 12 --revision 2 --file report.mdx --refresh
+datool reports publish 12 --revision 3
+datool reports share 12 --revision 4 --enabled
+```
+
+The template returns `document`; the component catalog provides prop schemas and supported Tailwind classes. `validate` returns diagnostics and exits 1 when invalid. Queries use named semantic sources. Components and inline values reference those sources and evidence bindings. Arbitrary JavaScript is not supported. For a non-adjacent data file, pass `--data-file report.data.json` to `validate`, `create`, or `update`.
+
+Creation saves a private draft and captures complete results in one consistent snapshot. Preserve the exact file and UUID for idempotent creation retries. Saving prose/layout preserves evidence; changed queries require explicit `--refresh`. Updates require the current revision. Publish locks the reviewed evidence; public sharing is separate. Use `reports clone 12 --creation-key <uuid>` for a new editable copy of a published report.
+
+Legacy one-file reports with YAML frontmatter remain accepted when no sibling `report.data.json` exists. JSON inputs remain available through `--input`: create accepts `{creationKey,name,description,mdx,sources,bindings}`; update accepts `{number,revision,document,refresh?}`. Discovery needs dashboards:read; validation/reads also need metrics:read; mutations need dashboards:write and metrics:read. Check `datool agent tools create_report` for the deployed contract. Building this CLI does not publish an npm release or deploy the server.

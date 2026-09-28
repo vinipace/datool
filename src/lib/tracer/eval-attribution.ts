@@ -6,6 +6,8 @@ export type EvalAttribution = {
   models: string[]
   sourceTraceId: string
   sourceSpanId: string | null
+  /** Recorded workload prompts, never a run's catalog of available prompts. */
+  promptVersions?: { id: string; slug: string; version: number }[]
 }
 
 export const evalGroupKey = (group: InvocationGroup) =>

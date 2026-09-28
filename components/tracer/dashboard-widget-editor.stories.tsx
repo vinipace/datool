@@ -11,6 +11,7 @@ import { expect, userEvent, waitFor, within } from "storybook/test"
 import type { SemanticCatalogMetadata } from "@/src/lib/semantic/catalog"
 import {
   dashboardWidgetSchema,
+  newDashboardWidget,
   type DashboardWidget,
 } from "@/src/lib/tracer/dashboards"
 import {
@@ -58,7 +59,8 @@ function EditorScenario({
             widget={widget}
             editable
             onPropsChange={(patch) => {
-              if (patch.widget) setWidget(patch.widget)
+              if (patch.widget && patch.widget.type !== "text")
+                setWidget(patch.widget)
             }}
           />
         </DashboardCatalogContext>
@@ -132,6 +134,32 @@ export const DataSourceSelection: Story = {
     await userEvent.click(source)
     await userEvent.keyboard("{Escape}")
     await expect(source).toHaveFocus()
+  },
+}
+
+export const EvaluationMatrixDefaults: Story = {
+  args: {
+    initialWidget: newDashboardWidget(
+      dashboardCatalog.models.find((model) => model.name === "evalResults")!
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole("combobox", { name: "Visualization" })
+    )
+    await userEvent.click(
+      await within(document.body).findByRole("option", {
+        name: "Matrix",
+      })
+    )
+    const saved = JSON.parse(canvas.getByLabelText("Saved widget").textContent!)
+    await expect(saved.query.measures).toEqual(["evalResults.meanScore"])
+    await expect(saved.query.dimensions.at(-1)).toBe("evalResults.datasetId")
+    await expect(saved.query.dimensions).toContain("evalResults.promptVersion")
+    await expect(saved.query.dimensions).toContain(
+      "evalResults.evaluatorVersion"
+    )
   },
 }
 

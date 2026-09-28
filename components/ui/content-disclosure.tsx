@@ -1,7 +1,8 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, ChevronRight } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "./button"
 
 export function ContentDisclosure({
@@ -11,6 +12,8 @@ export function ContentDisclosure({
   open,
   onToggle,
   children,
+  contentPadding = "default",
+  variant = "default",
 }: {
   id: string
   href: string
@@ -18,6 +21,8 @@ export function ContentDisclosure({
   open: boolean
   onToggle: () => void
   children: ReactNode
+  contentPadding?: "default" | "none"
+  variant?: "default" | "report"
 }) {
   return (
     <div>
@@ -25,7 +30,10 @@ export function ContentDisclosure({
         <Button
           asChild
           variant="ghost"
-          className="h-auto w-full justify-between gap-6 px-3 py-5 text-left text-lg whitespace-normal"
+          className={cn(
+            "h-auto w-full justify-between gap-6 px-3 py-5 text-left text-lg whitespace-normal",
+            variant === "report" && "justify-start gap-3 px-0 has-[>svg]:px-0"
+          )}
         >
           <a
             id={`${id}-trigger`}
@@ -53,11 +61,22 @@ export function ContentDisclosure({
               }
             }}
           >
+            {variant === "report" && (
+              <ChevronRight
+                aria-hidden="true"
+                className={cn(
+                  "size-5 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
+                  open && "rotate-90"
+                )}
+              />
+            )}
             <span>{title}</span>
-            <ChevronDown
-              aria-hidden="true"
-              className={open ? "rotate-180" : undefined}
-            />
+            {variant === "default" && (
+              <ChevronDown
+                aria-hidden="true"
+                className={open ? "rotate-180" : undefined}
+              />
+            )}
           </a>
         </Button>
       </h2>
@@ -65,7 +84,7 @@ export function ContentDisclosure({
         id={`${id}-answer`}
         aria-labelledby={`${id}-trigger`}
         hidden={!open}
-        className="px-3 pt-3 pb-8"
+        className={contentPadding === "none" ? undefined : "px-3 pt-3 pb-8"}
       >
         {children}
       </div>

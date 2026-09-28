@@ -1,4 +1,8 @@
 import { z } from "zod"
+import {
+  classificationOptionsSchema,
+  comparisonOptionsSchema,
+} from "./evaluation-options"
 
 import {
   DEFAULT_SEMANTIC_TIME_ZONE,
@@ -253,6 +257,8 @@ const semanticQuerySchemaBase = z
       .min(DEFAULT_SEMANTIC_OFFSET, "offset must not be negative.")
       .max(MAX_SEMANTIC_OFFSET),
     total: z.boolean().default(false),
+    classification: classificationOptionsSchema.optional(),
+    comparison: comparisonOptionsSchema.optional(),
   })
   .strict()
 
@@ -265,6 +271,21 @@ export const semanticQuerySchema = semanticQuerySchemaBase
     ),
   })
   .superRefine((query, context) => {
+    for (const [option, model] of [
+      ["classification", "evalClassification"],
+      ["comparison", "evalComparison"],
+    ] as const) {
+      if (
+        (semanticModelName(query.measures[0] ?? "") === model) !==
+        Boolean(query[option])
+      )
+        context.addIssue({
+          code: "custom",
+          message:
+            option + " options are required exclusively for " + model + ".",
+          path: [option],
+        })
+    }
     addDuplicateIssues(query.measures, "measures", context)
     addDuplicateIssues(query.dimensions, "dimensions", context)
     addDuplicateIssues(

@@ -19,9 +19,25 @@ Traces defines the product's visual language. The theme is centrally owned in `a
 
 Use shared Button and form primitives for controls, shared notices for feedback, shared dialog framing for overlays, and the shared log-table styles for tabular collections. Auth and settings layouts may differ from trace exploration while using the same surface, typography and interaction rules. Preserve authentication, authorization, navigation and resource behavior during styling changes.
 
+### Report composition
+
+`report-document.tsx` owns the shared reading typography, metric strip, primary
+visual, sections and evidence disclosures. Agents compose read-only Brief,
+Comparison, section/evidence and Scorecard blocks before capture. Reports have no layout switcher. Drafts expose content and data editing, review and publish actions; published reports are read-only with explicit public-link sharing and revocation. `report-recipe.ts` plans every placement
+before render so opening disclosures never duplicates a widget. Disclosure
+contents have no inner padding. Keep numbers monospaced, rates at one decimal,
+status readable without color, and comparison tables locally scrollable with
+sticky labels. Highlight the best value according to the metric direction,
+including ties. Use the shared series colors for report category bars without
+mixing in foreground, so the fills and legend markers have the same hue.
+
 ### Dashboard charts
 
-`app/globals.css` owns the dashboard palette (`--data-series-1` through `--data-series-4`, emphasis, and total). `components/tracer/dashboard-chart-style.ts` is the shared color selector for bar, line, and stacked charts. Each horizontal bar chart uses one palette color for all its items; consecutive bar widgets use consecutive palette colors, independent of pagination and filtering. Standalone line charts default to foreground (white in the dark theme), with a subtle area gradient fading to transparent; additional lines use distinct series colors. Stacked time charts retain their metric mappings (LLM/average, other spans, tool/P95, and cache); totals without a plotted series use the neutral total token. Use labels as well as color to identify categories.
+`app/globals.css` owns the dashboard palette (`--data-series-1` through `--data-series-4`, emphasis, and total). `components/tracer/dashboard-chart-style.ts` is the shared color selector for bar, line, and stacked charts. Dashboard bars use one palette color per widget. Reports assign distinct colors to grouped categories, sharing the raw category identity across bar and scatter widgets, independent of displayed aliases and pagination. Standalone line charts default to foreground (white in the dark theme), with a subtle area gradient fading to transparent; additional lines use distinct series colors. Stacked time charts retain their metric mappings (LLM/average, other spans, tool/P95, and cache); totals without a plotted series use the neutral total token. Use labels as well as color to identify categories.
+
+Report tables, matrices, bars, and text fit their content; plots fill their authored card height. Confusion matrices reuse the standard matrix heat cells and typography: correct outcomes use the high-score color and errors the low-score color. Cells retain raw counts; outcome labels and evidence notes are available in accessible tooltips. Highlighted counts use a dashed underline. Bar reference markers float above the plot with a dashed line; bar fills retain the same opacity on both sides of each reference.
+
+Frozen report bars show baseline differences using the full snapshot before pagination. A single authored reference takes precedence; otherwise, measures with a known improvement direction use the first category only when explicitly ordered by an ascending dimension. The comparison names the category. Cost and latency decreases are improvements. Rows show percentage changes and tooltips show absolute differences; zero baselines show absolute changes only. Multiple references or missing baseline data do not silently select a comparator.
 
 The UI reference page exercises these primitives and their states. Before completing UI work, run the style guard, typecheck and scoped lint, then inspect the affected routes and reference page in the browser. Record which states were actually checked. Automated style checks supplement visual review; they cannot establish visual quality.
 

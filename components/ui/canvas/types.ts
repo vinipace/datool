@@ -52,6 +52,12 @@ export type CanvasProps<T extends WidgetPropsMap> = {
   onWidgetPropsChange?: (id: string, props: T[keyof T]) => void
   onWidgetRemove?: (id: string) => void
   getWidgetLabel?: (widget: CanvasWidget<T>) => string
+  /** Content-sized widgets grow and shrink without changing the saved arrangement. */
+  getWidgetAutoHeight?: (widget: CanvasWidget<T>) => boolean
+  /** Inline editors bypass the optional configuration panel. */
+  getWidgetInlineEditing?: (widget: CanvasWidget<T>) => boolean
+  /** Hide the title and frame, with compact controls revealed on hover or focus. */
+  getWidgetFrameless?: (widget: CanvasWidget<T>) => boolean
   /** False hides Edit/Remove and configuration, disables arranging, and blocks prop changes. */
   editable?: boolean
   /** Borderless cards retain their raised background and editor selection ring. */
@@ -63,4 +69,6 @@ export type CanvasProps<T extends WidgetPropsMap> = {
   stackBelow?: number
   empty?: ReactNode
   className?: string
+  /** Styles the content inside the full-width scroll viewport. */
+  contentClassName?: string
 }

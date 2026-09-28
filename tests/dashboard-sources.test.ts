@@ -349,7 +349,7 @@ afterAll(async () => {
   if (db) await closeTracerFixture(db)
 })
 
-test("catalog offers five primary sources and keeps every legacy identity", () => {
+test("catalog includes classification and paired sources and keeps every legacy identity", () => {
   const models = semanticCatalog.metadata().models
   expect(
     models
@@ -362,6 +362,8 @@ test("catalog offers five primary sources and keeps every legacy identity", () =
     "Evaluation Runs",
     "Evaluation Results",
     "Scores",
+    "Classification",
+    "Paired evaluations",
   ])
   for (const legacy of ["logs", "scores", "evalQuality", "agents", "workflows"])
     expect(semanticCatalog.getModel(legacy)).toBeDefined()

@@ -55,12 +55,16 @@ export async function routeScopes(request: Request): Promise<WorkspaceScope[]> {
     "react-views": "views",
     "custom-fields": "views",
     dashboards: "dashboards",
+    reports: "dashboards",
     evals: "evals",
     "imported-scores": "evals",
     apps: "apps",
     playgrounds: "playgrounds",
     demo: "traces",
   }
+  if (resource === "reports" && request.method === "GET") return ["dashboards:read", "metrics:read"]
+  if (resource === "reports" && url.pathname.endsWith("/validate")) return ["dashboards:read", "metrics:read"]
+  if (resource === "reports" && request.method === "POST") return ["dashboards:write", "metrics:read"]
   if (resource === "ingest") return ["traces:write"]
   if (resource === "resources") {
     if (request.method === "GET")

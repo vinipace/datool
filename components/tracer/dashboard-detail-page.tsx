@@ -26,9 +26,10 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog"
 import {
-  newDashboardWidget,
+  newDashboardContentWidget,
+  isDashboardDataWidget,
+  type DashboardContentWidget,
   type Dashboard,
-  type DashboardWidget,
 } from "@/src/lib/tracer/dashboards"
 import type { SemanticCatalogMetadata } from "@/src/lib/semantic/catalog"
 import { dashboardFilterScope } from "@/src/lib/tracer/dashboard-queries"
@@ -118,13 +119,15 @@ function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
   const opened = save.config
   const evalQuality =
     opened.widgets.length > 0 &&
-    opened.widgets.every((widget) =>
-      widget.query.measures.every(
-        (measure) =>
-          measure.startsWith("evalQuality.") ||
-          measure.startsWith("evalResults.")
+    opened.widgets
+      .filter(isDashboardDataWidget)
+      .every((widget) =>
+        widget.query.measures.every(
+          (measure) =>
+            measure.startsWith("evalQuality.") ||
+            measure.startsWith("evalResults.")
+        )
       )
-    )
   const [editing, setEditing] = React.useState(dashboard.widgets.length === 0)
   const logFilter = useCollectionFilter(
     evalQuality ? "evalQuality" : "traces",
@@ -195,22 +198,14 @@ function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
     }
   }
 
-  function addWidget(newType: DashboardWidget["type"]) {
+  function addWidget(newType: DashboardContentWidget["type"]) {
     const model =
-      catalog.data?.models.find((item) => item.name === "traces") ??
-      catalog.data?.models[0]
+      catalog.data?.models.find(
+        (item) =>
+          item.name === (newType === "matrix" ? "evalResults" : "traces")
+      ) ?? catalog.data?.models[0]
     if (!model || opened.widgets.length >= 20) return
-    const widget = newDashboardWidget(model)
-    widget.type = newType
-    if (newType === "line" || newType === "stacked")
-      widget.query.timeDimensions[0].granularity = "day"
-    if (newType === "bar" || newType === "donut") {
-      const group = model.members.find(
-        (member) => member.kind === "dimension" && member.groupable !== false
-      )
-      if (group) widget.query.dimensions = [group.name]
-      else widget.query.timeDimensions[0].granularity = "day"
-    }
+    const widget = newDashboardContentWidget(newType, model)
     save.update((current) => ({
       ...current,
       widgets: appendDashboardWidget(current.widgets, widget),
@@ -296,7 +291,7 @@ function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
               options={[...dashboardWidgetOptions]}
               value={null}
               onValueChange={(type) =>
-                addWidget(type as DashboardWidget["type"])
+                addWidget(type as DashboardContentWidget["type"])
               }
               disabled={
                 !catalog.data || !!catalog.error || opened.widgets.length >= 20

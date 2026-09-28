@@ -851,7 +851,7 @@ Required scopes: `views:read`.
 | `createdAt` | string | Yes |
 | `id` | string | Yes |
 | `name` | string | Yes |
-| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `resource` | "prompts" or "reports" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
 | `revision` | number | Yes |
 | `settings` | object | Yes |
 | `updatedAt` | string | Yes |
@@ -875,7 +875,7 @@ Required scopes: `views:read`.
 | `createdAt` | string | Yes |
 | `id` | string | Yes |
 | `name` | string | Yes |
-| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `resource` | "prompts" or "reports" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
 | `revision` | number | Yes |
 | `settings` | object | Yes |
 | `updatedAt` | string | Yes |
@@ -890,7 +890,7 @@ Required scopes: `views:write`.
 
 | Field | Type | Required |
 | --- | --- | --- |
-| `resource` | "eval-runs" or "playground-traces" or "agents" or "workflows" or "scorers" or "prompts" | Yes |
+| `resource` | "eval-runs" or "playground-traces" or "agents" or "workflows" or "scorers" or "prompts" or "reports" | Yes |
 | `name` | string | Yes |
 | `settings` | object | Yes |
 
@@ -901,7 +901,7 @@ Required scopes: `views:write`.
 | `createdAt` | string | Yes |
 | `id` | string | Yes |
 | `name` | string | Yes |
-| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `resource` | "prompts" or "reports" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
 | `revision` | number | Yes |
 | `settings` | object | Yes |
 | `updatedAt` | string | Yes |
@@ -916,7 +916,7 @@ Required scopes: `views:write`.
 
 | Field | Type | Required |
 | --- | --- | --- |
-| `resource` | "eval-runs" or "playground-traces" or "agents" or "workflows" or "scorers" or "prompts" | Yes |
+| `resource` | "eval-runs" or "playground-traces" or "agents" or "workflows" or "scorers" or "prompts" or "reports" | Yes |
 | `name` | string | Yes |
 | `settings` | object | Yes |
 | `expectedRevision` | integer | Yes |
@@ -929,7 +929,7 @@ Required scopes: `views:write`.
 | `createdAt` | string | Yes |
 | `id` | string | Yes |
 | `name` | string | Yes |
-| `resource` | "prompts" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
+| `resource` | "prompts" or "reports" or "scorers" or "agents" or "workflows" or "eval-runs" or "playground-traces" | Yes |
 | `revision` | number | Yes |
 | `settings` | object | Yes |
 | `updatedAt` | string | Yes |
@@ -2225,9 +2225,424 @@ Required scopes: `views:read`, `traces:read`, `evals:read`.
 | `total` | number | Yes |
 | `view` | object | Yes |
 
+## list_report_templates
+
+List query-backed MDX report starters. get_report_template returns an editable MDX document with named sources.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+
+## get_report_template
+
+Get an MDX starter document with concrete named queries and absolute dates. asOf sets the query window end, not a historical database snapshot. Review sources and compose MDX before creating a report.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `asOf` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `description` | string | Yes |
+| `document` | object | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+
+## list_reports
+
+List saved frozen reports in the current project, newest first. Use get_report with the project-local report number to read its config and captured data.
+
+Required scopes: `dashboards:read`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `author` | null or object | No |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `frozenAt` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `publishedAt` | null or string | No |
+| `revision` | number | No |
+| `status` | "draft" or "published" | No |
+| `templateId` | string | Yes |
+| `updatedAt` | null or string | No |
+| `widgetCount` | number | Yes |
+
+## get_report
+
+Read a saved report by its project-local number, including its text, widget config and frozen query results. This does not query live metric data.
+
+Required scopes: `dashboards:read`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `number` | integer | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `author` | null or object | No |
+| `config` | object | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `document` | JSON | No |
+| `draftInput` | JSON | No |
+| `frozenAt` | string | Yes |
+| `id` | string | Yes |
+| `layout` | "comparison" or "document" or "canvas" or "brief" or "scorecard" | No |
+| `mdx` | JSON | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `presentation` | null or object | No |
+| `presentationRevision` | number | No |
+| `publicPath` | null or string | No |
+| `publicUrl` | null or string | No |
+| `publishedAt` | null or string | No |
+| `revision` | number | No |
+| `snapshot` | object | Yes |
+| `status` | "draft" or "published" | No |
+| `templateId` | string | Yes |
+| `updatedAt` | null or string | No |
+| `widgetCount` | number | Yes |
+
+## create_report
+
+Create a private MDX report draft from name, mdx, named sources and optional evidence bindings. Start with get_report_authoring_guide for the workflow, paired-file recipe, exact component props and supported Tailwind utilities. Component source props reference named queries. No JavaScript execution, imports or arbitrary CSS. Use literal JSON props. All queries capture complete results together (40 queries, 5000 rows/query, 8 MiB); sources reused by components are deduplicated. Validate with validate_report first. Creation requires a stable UUID creationKey; identical retries return the original. update_report preserves captured data unless refresh is explicit. publish_report locks the reviewed revision; sharing remains a separate action.
+
+Required scopes: `dashboards:write`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `description` | string | No |
+| `mdx` | string | Yes |
+| `sources` | object | No |
+| `bindings` | object | No |
+| `creationKey` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `author` | null or object | No |
+| `config` | object | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `document` | JSON | No |
+| `draftInput` | JSON | No |
+| `frozenAt` | string | Yes |
+| `id` | string | Yes |
+| `layout` | "comparison" or "document" or "canvas" or "brief" or "scorecard" | No |
+| `mdx` | JSON | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `presentation` | null or object | No |
+| `presentationRevision` | number | No |
+| `publicPath` | null or string | No |
+| `publicUrl` | null or string | No |
+| `publishedAt` | null or string | No |
+| `revision` | number | No |
+| `snapshot` | object | Yes |
+| `status` | "draft" or "published" | No |
+| `templateId` | string | Yes |
+| `updatedAt` | null or string | No |
+| `widgetCount` | number | Yes |
+
+## get_report_recipe
+
+Get the MDX evaluation-story recipe: editorial guidance, report.mdx and report.data.json starter files, and the agent workflow. Use get_report_components for typed props. The recipe is optional guidance, not a fixed layout.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `description` | "A concise opening, evidence-bound metrics, progression, candidate comparison, expandable supporting evidence and a closing scorecard. Adapt the composition to the question." | Yes |
+| `files` | object | Yes |
+| `format` | "mdx" | Yes |
+| `id` | "evaluation-story" | Yes |
+| `name` | "Evaluation story" | Yes |
+| `workflow` | array of JSON | Yes |
+
+## get_report_authoring_guide
+
+Get the complete MDX report authoring contract: document shape, source and binding model, component examples, limits, validation scope and the ordered workflow from discovery through private draft review and optional publication. Use this before writing a report; it does not query data or save a report.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `cli` | array of JSON | Yes |
+| `componentCatalog` | object | Yes |
+| `componentExamples` | array of JSON | Yes |
+| `contract` | object | Yes |
+| `format` | "mdx" | Yes |
+| `id` | "mdx-report-authoring" | Yes |
+| `limits` | object | Yes |
+| `name` | "MDX report authoring" | Yes |
+| `nextSteps` | object | Yes |
+| `preview` | object | Yes |
+| `purpose` | "Compose a private, evidence-bound report draft from Markdown, registered components and named semantic queries." | Yes |
+| `recipe` | object | Yes |
+| `validationScope` | object | Yes |
+| `version` | 1 | Yes |
+| `workflow` | array of JSON | Yes |
+
+## get_report_components
+
+Discover MDX component names, exact prop schemas, child support and supported static Tailwind classes.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `classes` | array of string | Yes |
+| `components` | array of object | Yes |
+| `htmlTags` | array of string | Yes |
+| `syntax` | string | Yes |
+| `version` | number | Yes |
+
+## validate_report
+
+Validate MDX, component props, sources, evidence and data shapes without saving or consuming a report number. With number and revision, validates against that report's frozen evidence; refresh:true explicitly queries fresh data. Without number, performs a fresh capture for validation. Returns structural, data and server-render checks; browser visual and responsive review remain separate. Does not publish or share.
+
+Required scopes: `dashboards:read`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `document` | object | Yes |
+| `number` | integer | No |
+| `revision` | integer | No |
+| `refresh` | boolean | No |
+
+**Result**
+
+Type: **object**.
+
+## update_report
+
+Edit a private MDX draft using number, revision and the complete document \{name, description, mdx, sources, bindings\}. Source and layout edits reuse frozen evidence. Changing query definitions or adding a visualization requiring extra aggregates requires refresh:true; review the refreshed data before publishing. Published reports reject edits.
+
+Required scopes: `dashboards:write`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `number` | integer | Yes |
+| `revision` | integer | Yes |
+| `document` | object | Yes |
+| `refresh` | boolean | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `author` | null or object | No |
+| `config` | object | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `document` | JSON | No |
+| `draftInput` | JSON | No |
+| `frozenAt` | string | Yes |
+| `id` | string | Yes |
+| `layout` | "comparison" or "document" or "canvas" or "brief" or "scorecard" | No |
+| `mdx` | JSON | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `presentation` | null or object | No |
+| `presentationRevision` | number | No |
+| `publicPath` | null or string | No |
+| `publicUrl` | null or string | No |
+| `publishedAt` | null or string | No |
+| `revision` | number | No |
+| `snapshot` | object | Yes |
+| `status` | "draft" or "published" | No |
+| `templateId` | string | Yes |
+| `updatedAt` | null or string | No |
+| `widgetCount` | number | Yes |
+
+## publish_report
+
+Publish the reviewed draft at its current revision. Locks the composition and captured evidence without querying live data. Publication alone stays private; use set_report_sharing only when public access is intended.
+
+Required scopes: `dashboards:write`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `number` | integer | Yes |
+| `revision` | integer | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `author` | null or object | No |
+| `config` | object | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `document` | JSON | No |
+| `draftInput` | JSON | No |
+| `frozenAt` | string | Yes |
+| `id` | string | Yes |
+| `layout` | "comparison" or "document" or "canvas" or "brief" or "scorecard" | No |
+| `mdx` | JSON | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `presentation` | null or object | No |
+| `presentationRevision` | number | No |
+| `publicPath` | null or string | No |
+| `publicUrl` | null or string | No |
+| `publishedAt` | null or string | No |
+| `revision` | number | No |
+| `snapshot` | object | Yes |
+| `status` | "draft" or "published" | No |
+| `templateId` | string | Yes |
+| `updatedAt` | null or string | No |
+| `widgetCount` | number | Yes |
+
+## set_report_sharing
+
+Explicitly enable or revoke an anonymous public link for a published report. Anyone with the returned publicPath can read all captured report rows and expanded evidence without signing in. Never enable without authorization to share that report publicly. Revocation invalidates the link; re-enabling generates a new one.
+
+Required scopes: `dashboards:write`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `number` | integer | Yes |
+| `revision` | integer | Yes |
+| `enabled` | boolean | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `author` | null or object | No |
+| `config` | object | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `document` | JSON | No |
+| `draftInput` | JSON | No |
+| `frozenAt` | string | Yes |
+| `id` | string | Yes |
+| `layout` | "comparison" or "document" or "canvas" or "brief" or "scorecard" | No |
+| `mdx` | JSON | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `presentation` | null or object | No |
+| `presentationRevision` | number | No |
+| `publicPath` | null or string | No |
+| `publicUrl` | null or string | No |
+| `publishedAt` | null or string | No |
+| `revision` | number | No |
+| `snapshot` | object | Yes |
+| `status` | "draft" or "published" | No |
+| `templateId` | string | Yes |
+| `updatedAt` | null or string | No |
+| `widgetCount` | number | Yes |
+
+## clone_report
+
+Create a new private draft copy of a report, preserving the exact captured evidence without rerunning queries. Uses a UUID creationKey for idempotent retries; the original and any public link stay unchanged.
+
+Required scopes: `dashboards:write`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `number` | integer | Yes |
+| `creationKey` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `author` | null or object | No |
+| `config` | object | Yes |
+| `createdAt` | string | Yes |
+| `description` | string | Yes |
+| `document` | JSON | No |
+| `draftInput` | JSON | No |
+| `frozenAt` | string | Yes |
+| `id` | string | Yes |
+| `layout` | "comparison" or "document" or "canvas" or "brief" or "scorecard" | No |
+| `mdx` | JSON | No |
+| `name` | string | Yes |
+| `number` | number | Yes |
+| `presentation` | null or object | No |
+| `presentationRevision` | number | No |
+| `publicPath` | null or string | No |
+| `publicUrl` | null or string | No |
+| `publishedAt` | null or string | No |
+| `revision` | number | No |
+| `snapshot` | object | Yes |
+| `status` | "draft" or "published" | No |
+| `templateId` | string | Yes |
+| `updatedAt` | null or string | No |
+| `widgetCount` | number | Yes |
+
 ## resolve_trace
 
-Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
 
 Required scopes: `traces:read`.
 
@@ -2242,7 +2657,7 @@ Required scopes: `traces:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
-| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
 | `linkKind` | string | Yes |
 | `path` | string | Yes |
 | `projectId` | string | Yes |
@@ -2250,7 +2665,7 @@ Required scopes: `traces:read`.
 
 ## resolve_session
 
-Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
 
 Required scopes: `traces:read`.
 
@@ -2265,7 +2680,7 @@ Required scopes: `traces:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
-| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
 | `linkKind` | string | Yes |
 | `path` | string | Yes |
 | `projectId` | string | Yes |
@@ -2273,7 +2688,7 @@ Required scopes: `traces:read`.
 
 ## resolve_dataset
 
-Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
 
 Required scopes: `datasets:read`.
 
@@ -2288,7 +2703,7 @@ Required scopes: `datasets:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
-| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
 | `linkKind` | string | Yes |
 | `path` | string | Yes |
 | `projectId` | string | Yes |
@@ -2296,7 +2711,7 @@ Required scopes: `datasets:read`.
 
 ## resolve_scorer
 
-Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
 
 Required scopes: `scorers:read`.
 
@@ -2311,7 +2726,7 @@ Required scopes: `scorers:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
-| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
 | `linkKind` | string | Yes |
 | `path` | string | Yes |
 | `projectId` | string | Yes |
@@ -2319,7 +2734,7 @@ Required scopes: `scorers:read`.
 
 ## resolve_eval
 
-Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
 
 Required scopes: `evals:read`.
 
@@ -2334,7 +2749,7 @@ Required scopes: `evals:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
-| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
 | `linkKind` | string | Yes |
 | `path` | string | Yes |
 | `projectId` | string | Yes |
@@ -2342,7 +2757,7 @@ Required scopes: `evals:read`.
 
 ## resolve_dashboard
 
-Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
 
 Required scopes: `dashboards:read`.
 
@@ -2357,7 +2772,7 @@ Required scopes: `dashboards:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
-| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
 | `linkKind` | string | Yes |
 | `path` | string | Yes |
 | `projectId` | string | Yes |
@@ -2365,7 +2780,7 @@ Required scopes: `dashboards:read`.
 
 ## resolve_view
 
-Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
 
 Required scopes: `views:read`.
 
@@ -2380,7 +2795,30 @@ Required scopes: `views:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
-| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "view" | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
+| `linkKind` | string | Yes |
+| `path` | string | Yes |
+| `projectId` | string | Yes |
+| `url` | null or string | Yes |
+
+## resolve_report
+
+Resolve an exact ID or supported exact name/slug in the current project and return its canonical URL. Reports also resolve by project-local number. Ambiguous names fail. Some objects have collection links because the UI has no detail route.
+
+Required scopes: `dashboards:read`, `metrics:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `key` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `kind` | "trace" or "session" or "dataset" or "scorer" or "eval" or "dashboard" or "report" or "view" | Yes |
 | `linkKind` | string | Yes |
 | `path` | string | Yes |
 | `projectId` | string | Yes |

@@ -1,6 +1,13 @@
 "use client"
 
-import { createContext, useContext, useMemo, useRef, useState } from "react"
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import {
   Canvas,
   type CanvasLayoutChange,
@@ -14,7 +21,11 @@ import {
   scopedWidget,
   type DashboardScope,
 } from "@/src/lib/tracer/dashboard-queries"
-import type { DashboardWidget } from "@/src/lib/tracer/dashboards"
+import {
+  isDashboardDataWidget,
+  type DashboardContentWidget,
+  type DashboardWidget,
+} from "@/src/lib/tracer/dashboards"
 import type { SemanticResult } from "@/src/lib/semantic/result"
 import type { SemanticCatalogMetadata } from "@/src/lib/semantic/catalog"
 import { useRemote, type RemoteState } from "./hooks"
@@ -35,17 +46,34 @@ import {
   type DashboardCohortResult,
 } from "./dashboard-comparison"
 import { DashboardTimeChart } from "./dashboard-time-chart"
+import { DashboardText } from "./dashboard-text"
+import { frozenReportPage, type ReportSnapshot } from "@/src/lib/tracer/reports"
+import { dashboardCategoryColors } from "./dashboard-chart-style"
+import { dashboardBarBaseline } from "@/src/lib/tracer/dashboard-bar-comparison"
 
 type Entry = DashboardCohortResult[]
 const ResultsContext = createContext<{
   entries: Map<string, Entry>
   barColorIndexes: Map<string, number>
+  categoryColors?: Map<string, number>
   error: boolean
+  frozen?: boolean
+  references?: ReportSnapshot["references"]
+  highlights?: ReportSnapshot["highlights"]
   setOffset: (id: string, offset: number) => void
 } | null>(null)
 
+export function FrozenReportWidget({ widget }: DashboardWidgetProps) {
+  return widget.type === "text" ? (
+    <DashboardText widget={widget} editable={false} onPropsChange={() => {}} />
+  ) : (
+    <MetricWidget widget={widget} />
+  )
+}
+
 function MetricWidget({ widget }: DashboardWidgetProps) {
   const context = useContext(ResultsContext)!
+  if (widget.type === "text") return null
   const entry = context.entries.get(widget.id)
   if (!entry && !context.error)
     return <DashboardWidgetSkeleton type={widget.type} />
@@ -63,7 +91,7 @@ function MetricWidget({ widget }: DashboardWidgetProps) {
         <div
           key={cohort.offsetKey}
           className={
-            ["metric", "line", "stacked"].includes(widget.type) &&
+            ["metric", "line", "stacked", "scatter"].includes(widget.type) &&
             entry.length === 1
               ? "flex h-full min-h-0 flex-col"
               : undefined
@@ -76,7 +104,15 @@ function MetricWidget({ widget }: DashboardWidgetProps) {
           )}
           <WidgetResult
             widget={widget}
+            frozen={context.frozen}
+            references={context.references?.filter(
+              (r) => r.widgetId === widget.id
+            )}
+            highlights={context.highlights?.filter(
+              (highlight) => highlight.widgetId === widget.id
+            )}
             colorIndex={context.barColorIndexes.get(widget.id)}
+            categoryColors={context.categoryColors}
             {...cohort}
             setOffset={(offset) => context.setOffset(cohort.offsetKey, offset)}
           />
@@ -86,6 +122,9 @@ function MetricWidget({ widget }: DashboardWidgetProps) {
   )
 }
 const components = {
+  text: DashboardText,
+  scatter: MetricWidget,
+  matrix: MetricWidget,
   metric: MetricWidget,
   bar: MetricWidget,
   donut: MetricWidget,
@@ -94,6 +133,8 @@ const components = {
   line: MetricWidget,
 } satisfies WidgetComponents<DashboardWidgetMap>
 const editors = {
+  scatter: DashboardWidgetEditor,
+  matrix: DashboardWidgetEditor,
   metric: DashboardWidgetEditor,
   bar: DashboardWidgetEditor,
   donut: DashboardWidgetEditor,
@@ -102,28 +143,135 @@ const editors = {
   line: DashboardWidgetEditor,
 } satisfies WidgetEditors<DashboardWidgetMap>
 
+/** Shares the dashboard canvas and charts without mounting any live data loader. */
+export function FrozenDashboardRenderer({
+  widgets,
+  snapshot,
+  contentClassName,
+  children,
+}: {
+  widgets: DashboardContentWidget[]
+  snapshot: ReportSnapshot
+  contentClassName?: string
+  children?: ReactNode
+}) {
+  const [offsets, setOffsets] = useState<Record<string, number>>({})
+  const entries = new Map<string, Entry>()
+  for (const position of snapshot.positions) {
+    const widget = widgets.find((item) => item.id === position.id)
+    if (!widget || widget.type === "text") continue
+    const timeChart = widget.type === "line" || widget.type === "stacked"
+    entries.set(
+      position.id,
+      position.cohorts.map((cohort) => ({
+        ...cohort,
+        baseline: dashboardBarBaseline(
+          widget,
+          snapshot.results[cohort.result],
+          snapshot.references
+        ),
+        result:
+          timeChart || widget.type === "metric" || widget.type === "matrix"
+            ? snapshot.results[cohort.result]
+            : frozenReportPage(
+                snapshot.results[cohort.result],
+                widget.query.limit,
+                offsets[cohort.offsetKey] ?? 0
+              ),
+        summary:
+          cohort.summary === null ? null : snapshot.results[cohort.summary],
+        previous:
+          cohort.previous === null ? null : snapshot.results[cohort.previous],
+        history:
+          cohort.history === null ? null : snapshot.results[cohort.history],
+      }))
+    )
+  }
+  return (
+    <ResultsContext
+      value={{
+        entries,
+        frozen: true,
+        references: snapshot.references,
+        highlights: snapshot.highlights,
+        error: false,
+        categoryColors: dashboardCategoryColors(
+          snapshot.positions.flatMap((position) => {
+            const widget = widgets.find((item) => item.id === position.id)
+            return widget && ["bar", "scatter"].includes(widget.type)
+              ? position.cohorts.map(
+                  (cohort) => snapshot.results[cohort.result]
+                )
+              : []
+          })
+        ),
+        barColorIndexes: new Map(
+          widgets
+            .filter((widget) => widget.type === "bar")
+            .map((widget, index) => [widget.id, index])
+        ),
+        setOffset: (id, offset) =>
+          setOffsets((current) => ({ ...current, [id]: offset })),
+      }}
+    >
+      {children ?? (
+        <Canvas<DashboardWidgetMap>
+          // A finer display grid fits report content closely while preserving
+          // the authored chart sizes and the immutable snapshot coordinates.
+          rowHeight={12}
+          widgets={dashboardCanvasWidgets(widgets).map((widget) => ({
+            ...widget,
+            layout: {
+              ...widget.layout,
+              y: widget.layout.y * 3,
+              h: widget.layout.h * 3,
+              minH: 1,
+              maxH: 300,
+            },
+          }))}
+          components={components}
+          editable={false}
+          contentClassName={contentClassName}
+          widgetVariant="borderless"
+          getWidgetLabel={({ props }) => props.widget.title}
+          getWidgetAutoHeight={({ type }) =>
+            ["text", "table", "bar", "matrix"].includes(type)
+          }
+          getWidgetInlineEditing={({ type }) => type === "text"}
+          getWidgetFrameless={({ type }) => type === "text"}
+        />
+      )}
+    </ResultsContext>
+  )
+}
+
 export function DashboardRenderer({
   widgets,
   revision = 0,
   scope,
   editable = false,
+  fitContent = false,
   catalog,
   onLayoutChange,
   onWidgetChange,
   onWidgetRemove,
 }: {
-  widgets: DashboardWidget[]
+  widgets: DashboardContentWidget[]
   revision?: number
   scope?: DashboardScope
   editable?: boolean
+  fitContent?: boolean
   catalog?: RemoteState<SemanticCatalogMetadata>
   onLayoutChange?: (layout: CanvasLayoutChange[]) => void
-  onWidgetChange?: (widget: DashboardWidget) => void
+  onWidgetChange?: (widget: DashboardContentWidget) => void
   onWidgetRemove?: (id: string) => void
 }) {
   const projectId = useProjectScope()?.projectId
   const { filter, from, to, timezone } = scope ?? {}
-  const resolved = useMemo(() => {
+  const resolved = useMemo<{
+    widgets: DashboardContentWidget[]
+    error: string | null
+  }>(() => {
     try {
       return {
         widgets:
@@ -149,13 +297,15 @@ export function DashboardRenderer({
   }, [widgets, filter, from, to, timezone])
   // Layout, titles and series presentation never trigger a metrics request.
   const source = JSON.stringify(
-    resolved.widgets.map(({ id, type, query, groups, compare }) => ({
-      id,
-      type,
-      query,
-      groups,
-      compare,
-    }))
+    resolved.widgets
+      .filter(isDashboardDataWidget)
+      .map(({ id, type, query, groups, compare }) => ({
+        id,
+        type,
+        query,
+        groups,
+        compare,
+      }))
   )
   const [pagination, setPagination] = useState({
     source,
@@ -181,13 +331,15 @@ export function DashboardRenderer({
   // Keep its last result, but never carry it into another project, filter or widget query.
   const dataKey = JSON.stringify({
     projectId,
-    widgets: widgets.map(({ id, type, query, groups, compare }) => ({
-      id,
-      type,
-      query,
-      groups,
-      compare,
-    })),
+    widgets: widgets
+      .filter(isDashboardDataWidget)
+      .map(({ id, type, query, groups, compare }) => ({
+        id,
+        type,
+        query,
+        groups,
+        compare,
+      })),
     offsets: pagination.offsets,
     scope: scope
       ? {
@@ -287,6 +439,17 @@ export function DashboardRenderer({
           <ResultsContext
             value={{
               entries,
+              categoryColors: fitContent
+                ? dashboardCategoryColors(
+                    widgets.flatMap((widget) =>
+                      ["bar", "scatter"].includes(widget.type)
+                        ? (entries.get(widget.id) ?? []).map(
+                            (cohort) => cohort.result
+                          )
+                        : []
+                    )
+                  )
+                : undefined,
               barColorIndexes: new Map(
                 widgets
                   .filter((widget) => widget.type === "bar")
@@ -307,6 +470,12 @@ export function DashboardRenderer({
               editable={editable}
               widgetVariant="borderless"
               getWidgetLabel={({ props }) => props.widget.title}
+              getWidgetAutoHeight={({ type }) =>
+                type === "text" ||
+                (fitContent && ["table", "bar", "matrix"].includes(type))
+              }
+              getWidgetInlineEditing={({ type }) => type === "text"}
+              getWidgetFrameless={({ type }) => type === "text"}
               onLayoutChange={onLayoutChange}
               onWidgetPropsChange={
                 onWidgetChange

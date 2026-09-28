@@ -18,9 +18,10 @@ import { DashboardDefinitionFilter } from "./dashboard-definition-filter"
 import { Notice } from "@/components/ui/notice"
 import type { WidgetControls } from "@/components/ui/canvas"
 import {
-  dashboardWidgetSchema,
+  dashboardDataWidgetSchema,
   expandLegacyDashboardGrouping,
   newDashboardWidget,
+  newDashboardContentWidget,
   type DashboardWidget,
 } from "@/src/lib/tracer/dashboards"
 import type { DashboardWidgetProps } from "./dashboard-canvas-layout"
@@ -46,6 +47,7 @@ function editableConfig(widget: DashboardWidget) {
     compare,
     trendDirection,
     showGroupIcons,
+    presentation,
   } = widget
   return JSON.stringify({
     title,
@@ -56,13 +58,21 @@ function editableConfig(widget: DashboardWidget) {
     compare,
     trendDirection,
     showGroupIcons,
+    presentation,
   })
 }
 
-export function DashboardWidgetEditor({
+export function DashboardWidgetEditor(
+  props: DashboardWidgetProps & WidgetControls<DashboardWidgetProps>
+) {
+  if (props.widget.type === "text") return null
+  return <DataWidgetEditor {...props} widget={props.widget} />
+}
+
+function DataWidgetEditor({
   widget,
   onPropsChange,
-}: DashboardWidgetProps & WidgetControls<DashboardWidgetProps>) {
+}: { widget: DashboardWidget } & WidgetControls<DashboardWidgetProps>) {
   const catalog = useContext(DashboardCatalogContext)
   const source = editableConfig(widget)
   const [migrationOpen, setMigrationOpen] = useState(false)
@@ -127,7 +137,7 @@ export function DashboardWidgetEditor({
       })
       return
     }
-    const parsed = dashboardWidgetSchema.safeParse(candidate)
+    const parsed = dashboardDataWidgetSchema.safeParse(candidate)
     if (!parsed.success) {
       setDraft({
         source,
@@ -150,7 +160,7 @@ export function DashboardWidgetEditor({
     const selectedTime = members.find(
       (member) => member.kind === "timeDimension"
     )
-    const selectedMeasures = ["metric", "bar", "donut"].includes(type)
+    const selectedMeasures = type === "scatter" ? [...new Set([...value.query.measures, ...measures.map((m)=>m.name)])].slice(0,2) : ["metric", "bar", "donut", "matrix"].includes(type)
       ? value.query.measures.slice(0, 1)
       : value.query.measures
     const next = {
@@ -220,7 +230,9 @@ export function DashboardWidgetEditor({
       </Notice>
     )
 
-  const multipleMeasures = !["metric", "bar", "donut"].includes(value.type)
+  const multipleMeasures = !["metric", "bar", "donut", "matrix"].includes(
+    value.type
+  )
   const definitionSelected =
     value.query.dimensions.includes("scoreValues.definitionId") ||
     value.query.filters.some(
@@ -286,7 +298,14 @@ export function DashboardWidgetEditor({
           onValueChange={(name) => {
             const next = catalog.data?.models.find((item) => item.name === name)
             if (next) {
-              change(newDashboardWidget(next))
+              change(
+                value.type === "matrix"
+                  ? (newDashboardContentWidget(
+                      "matrix",
+                      next
+                    ) as DashboardWidget)
+                  : newDashboardWidget(next)
+              )
             }
           }}
         />
@@ -341,20 +360,59 @@ export function DashboardWidgetEditor({
       <Field label="Visualization">
         <Combobox
           label="Visualization"
-          options={[...dashboardWidgetOptions]}
+          options={dashboardWidgetOptions.filter(
+            (option) => option.value !== "text"
+          )}
           value={value.type}
           onValueChange={(selected) => {
             const type = selected as DashboardWidget["type"]
+            if (type === "matrix" && value.query.dimensions.length < 2) {
+              const defaults = newDashboardContentWidget(
+                "matrix",
+                model
+              ) as DashboardWidget
+              const usesDefaultMeasure =
+                value.query.measures[0] === model.defaultMeasures?.[0]
+              change({
+                ...value,
+                type,
+                title:
+                  usesDefaultMeasure &&
+                  value.title ===
+                    measures.find((m) => m.name === value.query.measures[0])
+                      ?.title
+                    ? defaults.title
+                    : value.title,
+                series: undefined,
+                query: {
+                  ...value.query,
+                  dimensions: defaults.query.dimensions,
+                  measures: usesDefaultMeasure
+                    ? defaults.query.measures
+                    : value.query.measures.slice(0, 1),
+                  timeDimensions: value.query.timeDimensions.map(
+                    ({ dimension, dateRange }) => ({ dimension, dateRange })
+                  ),
+                  order: defaults.query.order,
+                  offset: 0,
+                },
+              })
+              return
+            }
             const nextGroup =
               type === "metric"
                 ? []
                 : type === "line" || type === "stacked"
                   ? [time.dimension, ...value.query.dimensions.slice(0, 1)]
-                  : selectedGroups.length
-                    ? selectedGroups
-                    : type === "table"
-                      ? []
-                      : [groups[0]?.name ?? time.dimension]
+                  : type === "scatter"
+                    ? (value.query.dimensions.length ? value.query.dimensions : groups.filter((m)=>m.kind === "dimension").slice(0,1).map((m)=>m.name))
+                  : type === "matrix"
+                    ? value.query.dimensions
+                    : selectedGroups.length
+                      ? selectedGroups
+                      : type === "table"
+                        ? []
+                        : [groups[0]?.name ?? time.dimension]
             const next = grouping(nextGroup, type)
             if (
               ["bar", "donut"].includes(value.type) &&
@@ -448,15 +506,23 @@ export function DashboardWidgetEditor({
             placeholder={value.type === "metric" ? "No grouping" : "Add field…"}
             value={selectedGroups}
             disabled={value.type === "metric"}
-            minSelected={["bar", "donut"].includes(value.type) ? 1 : 0}
+            minSelected={
+              value.type === "matrix"
+                ? 2
+                : ["bar", "donut"].includes(value.type)
+                  ? 1
+                  : 0
+            }
             maxSelected={MAX_SEMANTIC_DIMENSIONS}
             onValueChange={(names) => change(grouping(names))}
             options={groups
               .filter(
                 (member) =>
-                  member.kind !== "timeDimension" ||
-                  !time.granularity ||
-                  member.name === time.dimension
+                  (value.type !== "matrix" ||
+                    member.kind !== "timeDimension") &&
+                  (member.kind !== "timeDimension" ||
+                    !time.granularity ||
+                    member.name === time.dimension)
               )
               .map((member) => ({
                 value: member.name,
@@ -466,9 +532,11 @@ export function DashboardWidgetEditor({
               }))}
           />
         )}
-        {["bar", "donut", "table"].includes(value.type) && (
+        {["bar", "donut", "table", "matrix"].includes(value.type) && (
           <p className="font-normal text-foreground-muted">
-            Each combination of selected fields forms a group.
+            {value.type === "matrix"
+              ? "The last field supplies columns. Preceding fields form rows; cells show the selected measure."
+              : "Each combination of selected fields forms a group."}
           </p>
         )}
       </Field>
@@ -496,7 +564,7 @@ export function DashboardWidgetEditor({
           />
         </Field>
       )}
-      {["bar", "donut", "table"].includes(value.type) &&
+      {["bar", "donut", "table", "matrix"].includes(value.type) &&
         selectedGroups.some((name) => dashboardDimensionIcon(name)) && (
           <label className="flex items-center justify-between gap-3 text-xs font-medium">
             Show group icons
@@ -536,7 +604,7 @@ export function DashboardWidgetEditor({
           />
         </Field>
       )}
-      {["table", "bar", "donut"].includes(value.type) && (
+      {["table", "bar", "donut", "matrix"].includes(value.type) && (
         <>
           <Field label="Sort by">
             <Combobox

@@ -1,3 +1,4 @@
+import { dashboardPresentationSchema } from "./dashboard-presentation"
 import { z } from "zod"
 import {
   semanticQuerySchema,
@@ -18,17 +19,27 @@ export const dashboardLayoutSchema = z
     message: "Widget layout must fit within the 12-column canvas.",
   })
 
-export const dashboardWidgetSchema = z
+export const dashboardDataWidgetSchema = z
   .object({
     id: z.string().min(1).max(100),
     title: z.string().trim().min(1).max(160),
-    type: z.enum(["metric", "bar", "donut", "table", "stacked", "line"]),
+    type: z.enum([
+      "metric",
+      "bar",
+      "donut",
+      "table",
+      "stacked",
+      "line",
+      "matrix",
+      "scatter",
+    ]),
     width: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     /** Older dashboards use width; canvas edits persist exact grid coordinates. */
     layout: dashboardLayoutSchema.optional(),
     /** Group icons are opt-in; omitted settings preserve existing charts. */
     showGroupIcons: z.boolean().optional(),
     trendDirection: z.enum(["increase", "decrease", "neutral"]).optional(),
+    presentation: dashboardPresentationSchema.optional(),
     query: semanticQuerySchema,
     series: z.array(z.string()).min(1).optional(),
     groups: z.array(invocationSelectionSchema).max(20).optional(),
@@ -38,6 +49,38 @@ export const dashboardWidgetSchema = z
   })
   .strict()
   .superRefine((widget, ctx) => {
+    if (
+      widget.type === "matrix" &&
+      widget.presentation?.showSummary &&
+      widget.query.having?.length
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Matrix row summaries cannot be combined with aggregate thresholds.",
+      })
+    if (
+      widget.type === "matrix" &&
+      (widget.query.measures.length !== 1 ||
+        widget.query.dimensions.length < 2 ||
+        widget.query.timeDimensions.some((time) => time.granularity))
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Matrices require one measure and at least two dimension fields. The final field supplies columns; preceding fields supply rows.",
+      })
+    if (
+      widget.type === "scatter" &&
+      (widget.query.measures.length !== 2 ||
+        widget.query.dimensions.length < 1 ||
+        widget.query.timeDimensions.some((t) => t.granularity))
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Scatter plots require two measures (X, Y), at least one dimension, and no time grouping.",
+      })
     const selections = widget.groups ?? []
     if (
       new Set(
@@ -132,12 +175,47 @@ export const dashboardWidgetSchema = z
         message: `${widget.type === "donut" ? "Donut" : "Bar"} charts require one measure and at least one grouping.`,
       })
   })
+export const dashboardTextWidgetSchema = z
+  .object({
+    id: z.string().min(1).max(100),
+    title: z.string().trim().min(1).max(160),
+    type: z.literal("text"),
+    width: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    layout: dashboardLayoutSchema.optional(),
+    content: z.string().max(20000),
+  })
+  .strict()
+export const dashboardWidgetSchema = dashboardDataWidgetSchema
+export const dashboardContentWidgetSchema = z.union([
+  dashboardDataWidgetSchema,
+  dashboardTextWidgetSchema,
+])
+/** Existing chart utilities operate on data widgets; canvas content also includes text. */
+export type DashboardWidget = z.infer<typeof dashboardDataWidgetSchema>
+export type DashboardTextWidget = z.infer<typeof dashboardTextWidgetSchema>
+export type DashboardContentWidget = z.infer<
+  typeof dashboardContentWidgetSchema
+>
+export function isDashboardDataWidget(
+  widget: DashboardContentWidget
+): widget is DashboardWidget {
+  return widget.type !== "text"
+}
+export function newDashboardTextWidget(): DashboardTextWidget {
+  return {
+    id: crypto.randomUUID(),
+    title: "Text",
+    type: "text",
+    width: 3,
+    content: "",
+  }
+}
 export const dashboardInputSchema = z
   .object({
     schemaVersion: z.literal(1),
     name: z.string().trim().min(1).max(160),
     description: z.string().trim().max(1000),
-    widgets: z.array(dashboardWidgetSchema).max(20),
+    widgets: z.array(dashboardContentWidgetSchema).max(20),
     defaultWindowDays: z.number().int().min(1).max(90).optional(),
   })
   .strict()
@@ -150,7 +228,9 @@ export const dashboardInputSchema = z
       })
   })
 export type DashboardInput = z.infer<typeof dashboardInputSchema>
-export type DashboardWidget = DashboardInput["widgets"][number]
+export type DashboardDataInput = Omit<DashboardInput, "widgets"> & {
+  widgets: DashboardWidget[]
+}
 
 /** Expand the former category shortcut when editing; saved queries stay readable. */
 export function expandLegacyDashboardGrouping(
@@ -219,6 +299,57 @@ export function newDashboardWidget(
       total: true,
     }),
   }
+}
+/** Shared defaults for the dashboard and report composers. */
+export function newDashboardContentWidget(
+  type: DashboardContentWidget["type"],
+  model: SemanticCatalogModelMetadata,
+  now = new Date()
+): DashboardContentWidget {
+  if (type === "text") return newDashboardTextWidget()
+  const widget = newDashboardWidget(model, now)
+  widget.type = type
+  const dimensions = model.members.filter(
+    (member) => member.kind === "dimension" && member.groupable !== false
+  )
+  if (type === "scatter") {
+    widget.width = 2
+    widget.query.measures = model.members
+      .filter((m) => m.kind === "measure")
+      .slice(0, 2)
+      .map((m) => m.name)
+    widget.query.dimensions = dimensions.slice(0, 1).map((m) => m.name)
+  }
+  if (type === "matrix") {
+    widget.width = 3
+    widget.query.dimensions = dimensions
+      .slice(0, 2)
+      .map((member) => member.name)
+    if (
+      model.name === "evalResults" &&
+      model.members.some((member) => member.name === "evalResults.meanScore")
+    ) {
+      widget.title = "Prompt version × dataset"
+      widget.query.measures = ["evalResults.meanScore"]
+      // Keep scorer versions and operation provenance separate when comparing.
+      widget.query.dimensions = [
+        "groupName",
+        "promptId",
+        "evaluatorName",
+        "evaluatorVersion",
+        "promptVersion",
+        "datasetId",
+      ].map((key) => `evalResults.${key}`)
+      widget.query.order = widget.query.dimensions.map((name) => [name, "asc"])
+    }
+  }
+  if (type === "line" || type === "stacked")
+    widget.query.timeDimensions[0].granularity = "day"
+  if (type === "bar" || type === "donut") {
+    if (dimensions[0]) widget.query.dimensions = [dimensions[0].name]
+    else widget.query.timeDimensions[0].granularity = "day"
+  }
+  return dashboardContentWidgetSchema.parse(widget)
 }
 export function dashboardColumns(query: NormalizedSemanticQuery) {
   return [

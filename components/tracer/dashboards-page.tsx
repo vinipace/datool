@@ -71,7 +71,9 @@ export function DashboardsPage() {
                 <LogSelectAll
                   label="Select all dashboards"
                   disabled={!rows.length}
-                  checked={!!rows.length && rows.every((r) => selected.has(r.id))}
+                  checked={
+                    !!rows.length && rows.every((r) => selected.has(r.id))
+                  }
                   partial={
                     rows.some((r) => selected.has(r.id)) &&
                     !rows.every((r) => selected.has(r.id))
@@ -144,14 +146,20 @@ export function DashboardsPage() {
                     {row.name}
                   </Link>
                 </td>
-                <td className={`${logTable.cell} truncate text-foreground-muted`}>
+                <td
+                  className={`${logTable.cell} truncate text-foreground-muted`}
+                >
                   {row.description || "—"}
                 </td>
                 <td className={logTable.cell}>{row.widgets.length}</td>
                 <td className={logTable.cell}>
                   {[
                     ...new Set(
-                      row.widgets.map((w) => w.query.measures[0].split(".")[0])
+                      row.widgets.flatMap((w) =>
+                        w.type === "text"
+                          ? []
+                          : [w.query.measures[0].split(".")[0]]
+                      )
                     ),
                   ].join(", ")}
                 </td>

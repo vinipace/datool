@@ -7,9 +7,11 @@ const fillClasses = {
 export function PercentageCell({
   value,
   tone = "neutral",
+  fractionDigits,
 }: {
   value: number | null | undefined
   tone?: keyof typeof fillClasses
+  fractionDigits?: number
 }) {
   if (value == null || !Number.isFinite(value)) {
     return (
@@ -23,7 +25,10 @@ export function PercentageCell({
   return (
     <span data-slot="percentage-cell" className="inline-flex w-20 flex-col gap-1 align-middle">
       <span className="tabular-nums">
-        {(value * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%
+        {(value * 100).toLocaleString(undefined, {
+          minimumFractionDigits: fractionDigits ?? 0,
+          maximumFractionDigits: fractionDigits ?? 1,
+        })}%
       </span>
       <span
         aria-hidden="true"

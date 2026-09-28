@@ -3,7 +3,7 @@ import {
   filterDate,
 } from "@/components/ui/datool/search-bar/filter-query"
 import { traceExpressionFilters } from "@/src/lib/semantic/trace-filters"
-import type { DashboardWidget } from "./dashboards"
+import type { DashboardContentWidget } from "./dashboards"
 import { evalQualityExpressionFilters } from "./eval-quality-filters"
 
 export type DashboardScope = {
@@ -14,10 +14,11 @@ export type DashboardScope = {
   to: string
   timezone: string
 }
-export function scopedWidget(
-  widget: DashboardWidget,
+export function scopedWidget<T extends DashboardContentWidget>(
+  widget: T,
   scope: DashboardScope
-): DashboardWidget {
+): T {
+  if (widget.type === "text") return widget
   const model = widget.query.measures[0].split(".")[0]
   if (
     scope.filter &&

@@ -45,6 +45,40 @@ const span = (id: string, change: Partial<Span>): Span => ({
   ...change,
 })
 
+test("prompt provenance deduplicates workload versions and excludes scorer subtrees", () => {
+  const prompt = {
+    "datool.prompt.id": "answer",
+    "datool.prompt.slug": "answer",
+    "datool.prompt.version": 2,
+  }
+  const values = collectEvalAttributions({
+    ...trace,
+    attributes: prompt,
+    spans: [
+      span("work", { attributes: prompt }),
+      span("other-version", {
+        attributes: { ...prompt, "datool.prompt.version": 3 },
+      }),
+      span("judge", {
+        kind: "score",
+        attributes: { ...prompt, "datool.prompt.id": "judge" },
+      }),
+      span("judge-child", {
+        parentId: "judge",
+        attributes: { ...prompt, "datool.prompt.id": "judge-child" },
+      }),
+      span("invalid", {
+        attributes: { ...prompt, "datool.prompt.version": "4" },
+      }),
+    ],
+  })
+  expect(values[0].promptVersions).toEqual([
+    { id: "answer", slug: "answer", version: 2 },
+    { id: "answer", slug: "answer", version: 3 },
+  ])
+  expect(collectEvalAttributions(trace)[0].promptVersions).toBeUndefined()
+})
+
 test("attribution respects explicit subtrees, deduplicates models and excludes judges and their descendants", () => {
   const values = collectEvalAttributions({
     ...trace,
@@ -255,22 +289,80 @@ test("saved memberships, mixed-run charts, frozen re-scoring, pagination and pro
     })
     // Selecting a workflow narrows a mixed run at case level and retains only
     // agents participating in those cases, without duplicating the top-line score.
-    const workflowFilter = { member: "evalQuality.workflow", operator: "equals", values: ["Answer"] }
+    const workflowFilter = {
+      member: "evalQuality.workflow",
+      operator: "equals",
+      values: ["Answer"],
+    }
     expect((await query([], [workflowFilter])).data[0]).toMatchObject({
-      "evalQuality.meanScore": 1, "evalQuality.scoredCount": 1,
+      "evalQuality.meanScore": 1,
+      "evalQuality.scoredCount": 1,
     })
-    expect((await query(["evalQuality.groupName"], [workflowFilter, {
-      member: "evalQuality.groupType", operator: "equals", values: ["agent"],
-    }])).data.map((row) => row["evalQuality.groupName"])).toEqual(["Answer agent"])
-    expect((await query([], [{ ...workflowFilter, operator: "notEquals" }])).data[0]).toMatchObject({
-      "evalQuality.meanScore": 0, "evalQuality.scoredCount": 1,
+    expect(
+      (
+        await query(
+          ["evalQuality.groupName"],
+          [
+            workflowFilter,
+            {
+              member: "evalQuality.groupType",
+              operator: "equals",
+              values: ["agent"],
+            },
+          ]
+        )
+      ).data.map((row) => row["evalQuality.groupName"])
+    ).toEqual(["Answer agent"])
+    expect(
+      (await query([], [{ ...workflowFilter, operator: "notEquals" }])).data[0]
+    ).toMatchObject({
+      "evalQuality.meanScore": 0,
+      "evalQuality.scoredCount": 1,
     })
-    expect((await query([], [{ ...workflowFilter, operator: "contains", values: ["NSW"] }])).data[0]["evalQuality.scoredCount"]).toBe(1)
-    expect((await query([], [{ member: "evalQuality.groupName", operator: "contains", values: ["ANSWER"] }])).data[0]["evalQuality.scoredCount"]).toBe(1)
-    expect((await query([], [{ member: "evalQuality.agent", operator: "equals", values: ["Extract agent"] }])).data[0]).toMatchObject({
-      "evalQuality.meanScore": 0, "evalQuality.scoredCount": 1,
+    expect(
+      (
+        await query(
+          [],
+          [{ ...workflowFilter, operator: "contains", values: ["NSW"] }]
+        )
+      ).data[0]["evalQuality.scoredCount"]
+    ).toBe(1)
+    expect(
+      (
+        await query(
+          [],
+          [
+            {
+              member: "evalQuality.groupName",
+              operator: "contains",
+              values: ["ANSWER"],
+            },
+          ]
+        )
+      ).data[0]["evalQuality.scoredCount"]
+    ).toBe(1)
+    expect(
+      (
+        await query(
+          [],
+          [
+            {
+              member: "evalQuality.agent",
+              operator: "equals",
+              values: ["Extract agent"],
+            },
+          ]
+        )
+      ).data[0]
+    ).toMatchObject({
+      "evalQuality.meanScore": 0,
+      "evalQuality.scoredCount": 1,
     })
-    expect((await query([], [{ ...workflowFilter, values: ["Missing"] }])).data[0]["evalQuality.scoredCount"]).toBe(0)
+    expect(
+      (await query([], [{ ...workflowFilter, values: ["Missing"] }])).data[0][
+        "evalQuality.scoredCount"
+      ]
+    ).toBe(0)
     // Mutating current telemetry must not alter saved attribution or a re-score.
     await db.execute(
       sql`update spans set attributes_json='{"gen_ai.request.model":"changed"}'::jsonb`

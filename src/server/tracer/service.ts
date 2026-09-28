@@ -49,6 +49,7 @@ import { safeJson, semanticSqlFilters } from "@/src/server/semantic/sql-filters"
 import { traceSqlFields } from "@/src/server/metrics/trace-fields"
 import { createReactViewService } from "./react-views"
 import { createDashboardService } from "./dashboards"
+import { createReportService } from "./reports"
 import { runTracerEffect } from "./effect"
 import { createHumanScoreService } from "./human-scores"
 import { humanScoreValueLabel, type HumanScore, type HumanScoreValue } from "@/src/lib/tracer/human-scores"
@@ -550,6 +551,7 @@ export class TracerService {
   readonly agent: ReturnType<typeof createAgentFoundations>
   readonly resources: ReturnType<typeof createResourceService>
   readonly reactViews: ReturnType<typeof createReactViewService>
+  readonly reports: ReturnType<typeof createReportService>
   readonly dashboards: ReturnType<typeof createDashboardService>
   readonly humanScores: ReturnType<typeof createHumanScoreService>
   readonly reviews: ReturnType<typeof createReviewService>
@@ -568,6 +570,7 @@ export class TracerService {
     this.agent = createAgentFoundations(database, (db) => new TracerService(db, this.options))
     this.resources = createResourceService(database)
     this.reactViews = createReactViewService(database)
+    this.reports = createReportService(database)
     this.dashboards = createDashboardService(database)
     this.humanScores = createHumanScoreService(database)
     this.reviews = createReviewService(database, async (tx, ids) => {

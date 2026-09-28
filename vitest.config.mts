@@ -13,7 +13,7 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        optimizeDeps: { include: ["storybook/theming", "prettier/standalone", "prettier/plugins/babel", "prettier/plugins/estree"] },
+        optimizeDeps: { include: ["@tiptap/react/menus", "storybook/theming", "prettier/standalone", "prettier/plugins/babel", "prettier/plugins/estree"] },
         plugins: [
           storybookTest({ configDir: path.join(dirname, ".storybook") }),
         ],

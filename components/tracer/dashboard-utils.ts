@@ -1,3 +1,4 @@
+import { formatDisplayValue } from "@/src/lib/tracer/dashboard-presentation"
 import { isPercentageMetric } from "@/src/lib/tracer/dashboard-metric-comparison"
 import { projectFetch } from "@/lib/workspace-routing"
 import type { SemanticMemberAnnotation } from "@/src/lib/semantic/result"
@@ -60,6 +61,8 @@ export function formatDashboardValue(
 ) {
   if (value === null || value === undefined)
     return annotation?.kind === "dimension" ? "Not recorded" : "—"
+  const display = formatDisplayValue(value, annotation)
+  if (display !== undefined) return display
   if (typeof value !== "number") return String(value)
   if (isPercentageMetric(annotation))
     return new Intl.NumberFormat("en-US", {

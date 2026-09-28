@@ -15,6 +15,9 @@
     "check_scorer_runtime": {
       "$ref": "#/components/schemas/Output_check_scorer_runtime"
     },
+    "clone_report": {
+      "$ref": "#/components/schemas/Output_Report"
+    },
     "compare_eval_runs": {
       "$ref": "#/components/schemas/Output_compare_eval_runs"
     },
@@ -35,6 +38,9 @@
     },
     "create_human_score_collection": {
       "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
+    },
+    "create_report": {
+      "$ref": "#/components/schemas/Output_Report"
     },
     "create_review_session": {
       "$ref": "#/components/schemas/Output_ReviewSessionDetail"
@@ -105,6 +111,21 @@
     "get_metrics_metadata": {
       "$ref": "#/components/schemas/Output_Readonly"
     },
+    "get_report": {
+      "$ref": "#/components/schemas/Output_Report"
+    },
+    "get_report_authoring_guide": {
+      "$ref": "#/components/schemas/Output_get_report_authoring_guide"
+    },
+    "get_report_components": {
+      "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentCatalog"
+    },
+    "get_report_recipe": {
+      "$ref": "#/components/schemas/Output_get_report_recipe"
+    },
+    "get_report_template": {
+      "$ref": "#/components/schemas/Output_get_report_template"
+    },
     "get_review_item": {
       "$ref": "#/components/schemas/Output_ReviewItemDetail"
     },
@@ -171,6 +192,18 @@
     "list_human_scores": {
       "$ref": "#/components/schemas/Output_HumanScoreLibrary"
     },
+    "list_report_templates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_list_report_templates_item"
+      }
+    },
+    "list_reports": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_ReportSummary"
+      }
+    },
     "list_review_sessions": {
       "$ref": "#/components/schemas/Output_list_review_sessions"
     },
@@ -216,6 +249,9 @@
     "promote_spans": {
       "$ref": "#/components/schemas/Output_SpanPromotionResult"
     },
+    "publish_report": {
+      "$ref": "#/components/schemas/Output_Report"
+    },
     "query_metrics": {
       "$ref": "#/components/schemas/Output_query_metrics"
     },
@@ -237,6 +273,9 @@
     "resolve_eval": {
       "$ref": "#/components/schemas/Output_resolve_trace"
     },
+    "resolve_report": {
+      "$ref": "#/components/schemas/Output_resolve_trace"
+    },
     "resolve_scorer": {
       "$ref": "#/components/schemas/Output_resolve_trace"
     },
@@ -251,6 +290,9 @@
     },
     "run_app": {
       "$ref": "#/components/schemas/Output_run_app"
+    },
+    "set_report_sharing": {
+      "$ref": "#/components/schemas/Output_Report"
     },
     "start_eval_run": {
       "$ref": "#/components/schemas/Output_run_app"
@@ -273,6 +315,9 @@
     "update_human_score_collection": {
       "$ref": "#/components/schemas/Output_HumanScoreCollectionSnapshot"
     },
+    "update_report": {
+      "$ref": "#/components/schemas/Output_Report"
+    },
     "update_review_session": {
       "$ref": "#/components/schemas/Output_ReviewSessionDetail"
     },
@@ -287,6 +332,9 @@
     },
     "use_library_scorer": {
       "$ref": "#/components/schemas/Output_Scorer"
+    },
+    "validate_report": {
+      "$ref": "#/components/schemas/Output_validate_report"
     }
   },
   "schemas": {
@@ -407,6 +455,25 @@
         "input",
         "trace",
         "dataset item"
+      ]
+    },
+    "Output_CompiledReportMdx": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_MdxNode"
+          }
+        },
+        "version": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "nodes",
+        "version"
       ]
     },
     "Output_create_dataset_snapshot": {
@@ -1571,6 +1638,1679 @@
         "legacy"
       ]
     },
+    "Output_get_report_authoring_guide": {
+      "type": "object",
+      "properties": {
+        "cli": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "datool reports guide"
+            },
+            {
+              "type": "string",
+              "const": "datool reports validate --file report.mdx"
+            },
+            {
+              "type": "string",
+              "const": "datool reports create --file report.mdx --creation-key <uuid>"
+            },
+            {
+              "type": "string",
+              "const": "datool reports resolve <number>"
+            },
+            {
+              "type": "string",
+              "const": "datool reports validate <number> --revision <revision> --file report.mdx"
+            },
+            {
+              "type": "string",
+              "const": "datool reports update <number> --revision <revision> --file report.mdx"
+            }
+          ],
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "componentCatalog": {
+          "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentCatalog"
+        },
+        "componentExamples": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentExamples_0"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentExamples_1"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentExamples_2"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentExamples_3"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentExamples_4"
+            }
+          ],
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "contract": {
+          "$ref": "#/components/schemas/Output_get_report_authoring_guide_contract"
+        },
+        "format": {
+          "type": "string",
+          "const": "mdx"
+        },
+        "id": {
+          "type": "string",
+          "const": "mdx-report-authoring"
+        },
+        "limits": {
+          "$ref": "#/components/schemas/Output_get_report_authoring_guide_limits"
+        },
+        "name": {
+          "type": "string",
+          "const": "MDX report authoring"
+        },
+        "nextSteps": {
+          "$ref": "#/components/schemas/Output_get_report_authoring_guide_nextSteps"
+        },
+        "preview": {
+          "$ref": "#/components/schemas/Output_get_report_authoring_guide_preview"
+        },
+        "purpose": {
+          "type": "string",
+          "const": "Compose a private, evidence-bound report draft from Markdown, registered components and named semantic queries."
+        },
+        "recipe": {
+          "$ref": "#/components/schemas/Output_get_report_recipe"
+        },
+        "validationScope": {
+          "$ref": "#/components/schemas/Output_get_report_authoring_guide_validationScope"
+        },
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "workflow": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_workflow_0"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_workflow_1"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_workflow_2"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_workflow_3"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_workflow_4"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_workflow_5"
+            },
+            {
+              "$ref": "#/components/schemas/Output_get_report_authoring_guide_workflow_6"
+            }
+          ],
+          "minItems": 7,
+          "maxItems": 7
+        }
+      },
+      "required": [
+        "cli",
+        "componentCatalog",
+        "componentExamples",
+        "contract",
+        "format",
+        "id",
+        "limits",
+        "name",
+        "nextSteps",
+        "preview",
+        "purpose",
+        "recipe",
+        "validationScope",
+        "version",
+        "workflow"
+      ]
+    },
+    "Output_get_report_authoring_guide_componentCatalog": {
+      "type": "object",
+      "properties": {
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_authoring_guide_componentCatalog_components_item"
+          }
+        },
+        "htmlTags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "syntax": {
+          "type": "string"
+        },
+        "version": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "classes",
+        "components",
+        "htmlTags",
+        "syntax",
+        "version"
+      ]
+    },
+    "Output_get_report_authoring_guide_componentCatalog_components_item": {
+      "type": "object",
+      "properties": {
+        "children": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "props": {
+          "$ref": "#/components/schemas/Output_Record"
+        }
+      },
+      "required": [
+        "children",
+        "name",
+        "props"
+      ]
+    },
+    "Output_get_report_authoring_guide_componentExamples_0": {
+      "type": "object",
+      "properties": {
+        "mdx": {
+          "type": "string",
+          "const": "<ReportHeader eyebrow=\"Evaluation study\" title=\"The result and its limitation\" summary=\"Lead with the decision, population and remaining risk.\" />"
+        },
+        "name": {
+          "type": "string",
+          "const": "Evidence-bound opening"
+        }
+      },
+      "required": [
+        "mdx",
+        "name"
+      ]
+    },
+    "Output_get_report_authoring_guide_componentExamples_1": {
+      "type": "object",
+      "properties": {
+        "mdx": {
+          "type": "string",
+          "const": "<Metrics columns={2}>\n  <Metric binding=\"precision\" label=\"Precision\" tone=\"positive\" />\n  <Metric binding=\"missed\" label=\"Missed escalations\" tone=\"warning\" />\n</Metrics>"
+        },
+        "name": {
+          "type": "string",
+          "const": "Bound metric"
+        }
+      },
+      "required": [
+        "mdx",
+        "name"
+      ]
+    },
+    "Output_get_report_authoring_guide_componentExamples_2": {
+      "type": "object",
+      "properties": {
+        "mdx": {
+          "type": "string",
+          "const": "<Chart source=\"quality\" type=\"line\" title=\"Quality across stages\" trendDirection=\"increase\" height=\"medium\" />"
+        },
+        "name": {
+          "type": "string",
+          "const": "Shared chart"
+        }
+      },
+      "required": [
+        "mdx",
+        "name"
+      ]
+    },
+    "Output_get_report_authoring_guide_componentExamples_3": {
+      "type": "object",
+      "properties": {
+        "mdx": {
+          "type": "string",
+          "const": "<Comparison source=\"quality\" dimension=\"evalResults.groupVersion\" baseline=\"v1\" candidate=\"v4\" candidates={[{\"value\":\"v1\",\"label\":\"Baseline\"},{\"value\":\"v4\",\"label\":\"Candidate\"}]} metrics={[{\"member\":\"evalResults.meanScore\",\"label\":\"Mean score\",\"direction\":\"higher\"}]} />\n\n<Details id=\"methodology\" title=\"Methodology\">\nExplain denominators and exclusions here.\n</Details>"
+        },
+        "name": {
+          "type": "string",
+          "const": "Comparison and detail"
+        }
+      },
+      "required": [
+        "mdx",
+        "name"
+      ]
+    },
+    "Output_get_report_authoring_guide_componentExamples_4": {
+      "type": "object",
+      "properties": {
+        "mdx": {
+          "type": "string",
+          "const": "The candidate reaches <Value binding=\"precision\" /> on the captured population."
+        },
+        "name": {
+          "type": "string",
+          "const": "Inline claim"
+        }
+      },
+      "required": [
+        "mdx",
+        "name"
+      ]
+    },
+    "Output_get_report_authoring_guide_contract": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "type": "string",
+          "const": "Named evidence selectors and calculations used by Value and Metric. Expected values catch stale or unsupported claims."
+        },
+        "document": {
+          "type": "string",
+          "const": "{ name, description, mdx, sources, bindings } plus creationKey only for create_report."
+        },
+        "files": {
+          "$ref": "#/components/schemas/Output_get_report_authoring_guide_contract_files"
+        },
+        "lifecycle": {
+          "type": "string",
+          "const": "validate_report is read-only, create_report saves a private draft, update_report edits a draft with revision checks, publish_report locks the reviewed revision, and set_report_sharing is a separate explicit action."
+        },
+        "safety": {
+          "type": "string",
+          "const": "The server parses and validates MDX; authored JavaScript, imports, event handlers, arbitrary styles and remote embeds are not evaluated."
+        },
+        "sources": {
+          "type": "string",
+          "const": "Named semantic queries. Components reference a source name; identical queries are captured once in the frozen snapshot."
+        }
+      },
+      "required": [
+        "bindings",
+        "document",
+        "files",
+        "lifecycle",
+        "safety",
+        "sources"
+      ]
+    },
+    "Output_get_report_authoring_guide_contract_files": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "const": "report.data.json contains { name, description, sources, bindings }. The CLI loads the same-stem sibling automatically, or accepts --data-file <path>."
+        },
+        "mdx": {
+          "type": "string",
+          "const": "report.mdx contains narrative, supported HTML and registered components, without frontmatter."
+        },
+        "storage": {
+          "type": "string",
+          "const": "Both files produce the same document payload; queries and evidence remain captured together. The UI edits MDX and Data in separate tabs and saves them together."
+        }
+      },
+      "required": [
+        "data",
+        "mdx",
+        "storage"
+      ]
+    },
+    "Output_get_report_authoring_guide_limits": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "type": "number",
+          "const": 100
+        },
+        "dataComponents": {
+          "type": "number",
+          "const": 100
+        },
+        "expandedQueries": {
+          "type": "number",
+          "const": 40
+        },
+        "namedSources": {
+          "type": "number",
+          "const": 20
+        },
+        "rowsPerQuery": {
+          "type": "number",
+          "const": 5000
+        },
+        "savedContentBytes": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "bindings",
+        "dataComponents",
+        "expandedQueries",
+        "namedSources",
+        "rowsPerQuery",
+        "savedContentBytes"
+      ]
+    },
+    "Output_get_report_authoring_guide_nextSteps": {
+      "type": "object",
+      "properties": {
+        "afterSaving": {
+          "type": "string",
+          "const": "get_report"
+        },
+        "beforeExternalAccess": {
+          "type": "string",
+          "const": "publish_report then set_report_sharing"
+        },
+        "beforeSaving": {
+          "type": "string",
+          "const": "validate_report"
+        },
+        "firstCall": {
+          "type": "string",
+          "const": "get_metrics_metadata"
+        },
+        "ifYouHaveAStarter": {
+          "type": "string",
+          "const": "get_report_template"
+        },
+        "whenEditing": {
+          "type": "string",
+          "const": "update_report"
+        }
+      },
+      "required": [
+        "afterSaving",
+        "beforeExternalAccess",
+        "beforeSaving",
+        "firstCall",
+        "ifYouHaveAStarter",
+        "whenEditing"
+      ]
+    },
+    "Output_get_report_authoring_guide_preview": {
+      "type": "object",
+      "properties": {
+        "desktop": {
+          "type": "string",
+          "const": "Review at a wide viewport (at least 1024px): hierarchy, chart labels, comparison columns and disclosure affordances."
+        },
+        "evidence": {
+          "type": "string",
+          "const": "Save desktop and mobile screenshots after reviewing the private draft. Expand disclosures and check the full captured evidence before publication."
+        },
+        "mobile": {
+          "type": "string",
+          "const": "Review around 390px: horizontal table/chart overflow, wrapped headings, disclosure focus and readable numeric values."
+        },
+        "notProvenByApi": {
+          "type": "string",
+          "const": "Markup generation does not prove colors, spacing, typography, accessibility interaction or responsive layout. The API marks visual and responsive checks as not-run."
+        },
+        "runtime": {
+          "type": "string",
+          "const": "validate_report invokes the shared renderer server-side and reports structural/data/render status before saving."
+        },
+        "url": {
+          "type": "string",
+          "const": "After create_report, call resolve_report({key: String(number)}) with the returned report number, open its URL, and inspect the private draft at desktop and mobile widths."
+        }
+      },
+      "required": [
+        "desktop",
+        "evidence",
+        "mobile",
+        "notProvenByApi",
+        "runtime",
+        "url"
+      ]
+    },
+    "Output_get_report_authoring_guide_validationScope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "const": "Semantic query capture, complete frozen rows, units, dimensions, selectors, calculations, highlights and expected values."
+        },
+        "render": {
+          "type": "string",
+          "const": "The shared React renderer is invoked server-side and must produce static markup without throwing. This catches runtime renderer failures before a draft is saved."
+        },
+        "responsive": {
+          "type": "string",
+          "const": "Not proven by this API: review the resolved draft at a wide desktop viewport and around 390px mobile width for wrapping, overflow, disclosure focus and readable chart/table content."
+        },
+        "structural": {
+          "type": "string",
+          "const": "MDX syntax, allowlisted elements, component props, source names, binding references, IDs and static classes."
+        },
+        "visual": {
+          "type": "string",
+          "const": "Not proven by this API: browser layout, typography, color balance, accessibility interaction, mobile overflow and chart readability still require rendered desktop/mobile review."
+        }
+      },
+      "required": [
+        "data",
+        "render",
+        "responsive",
+        "structural",
+        "visual"
+      ]
+    },
+    "Output_get_report_authoring_guide_workflow_0": {
+      "type": "object",
+      "properties": {
+        "call": {
+          "type": "string",
+          "const": "get_report_authoring_guide"
+        },
+        "name": {
+          "type": "string",
+          "const": "Discover"
+        },
+        "result": {
+          "type": "string",
+          "const": "This contract, component examples, limits, validation scope and the recommended next calls."
+        },
+        "step": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "call",
+        "name",
+        "result",
+        "step"
+      ]
+    },
+    "Output_get_report_authoring_guide_workflow_1": {
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "get_metrics_metadata"
+            },
+            {
+              "type": "string",
+              "const": "query_metrics"
+            },
+            {
+              "type": "string",
+              "const": "batch_metrics"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "name": {
+          "type": "string",
+          "const": "Inspect data"
+        },
+        "result": {
+          "type": "string",
+          "const": "A bounded population with pinned versions, units, denominators, missing values and date window understood before writing claims."
+        },
+        "step": {
+          "type": "number",
+          "const": 2
+        }
+      },
+      "required": [
+        "calls",
+        "name",
+        "result",
+        "step"
+      ]
+    },
+    "Output_get_report_authoring_guide_workflow_2": {
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "get_report_components"
+            },
+            {
+              "type": "string",
+              "const": "get_report_recipe"
+            },
+            {
+              "type": "string",
+              "const": "get_report_template"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "name": {
+          "type": "string",
+          "const": "Choose composition"
+        },
+        "result": {
+          "type": "string",
+          "const": "A starter document and the exact registered component props. Adapt the order to the reader's decision; the recipe is guidance, not a fixed layout."
+        },
+        "step": {
+          "type": "number",
+          "const": 3
+        }
+      },
+      "required": [
+        "calls",
+        "name",
+        "result",
+        "step"
+      ]
+    },
+    "Output_get_report_authoring_guide_workflow_3": {
+      "type": "object",
+      "properties": {
+        "call": {
+          "type": "string",
+          "const": "validate_report"
+        },
+        "name": {
+          "type": "string",
+          "const": "Validate"
+        },
+        "result": {
+          "type": "string",
+          "const": "Structural MDX, source and binding checks, captured data shape checks, and a server-render smoke check. This call saves nothing and consumes no report number."
+        },
+        "step": {
+          "type": "number",
+          "const": 4
+        }
+      },
+      "required": [
+        "call",
+        "name",
+        "result",
+        "step"
+      ]
+    },
+    "Output_get_report_authoring_guide_workflow_4": {
+      "type": "object",
+      "properties": {
+        "call": {
+          "type": "string",
+          "const": "create_report"
+        },
+        "name": {
+          "type": "string",
+          "const": "Save a draft"
+        },
+        "result": {
+          "type": "string",
+          "const": "A private frozen draft. Use one stable UUID creationKey and retry the same payload if delivery is uncertain."
+        },
+        "step": {
+          "type": "number",
+          "const": 5
+        }
+      },
+      "required": [
+        "call",
+        "name",
+        "result",
+        "step"
+      ]
+    },
+    "Output_get_report_authoring_guide_workflow_5": {
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "get_report"
+            },
+            {
+              "type": "string",
+              "const": "resolve_report"
+            },
+            {
+              "type": "string",
+              "const": "update_report"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "name": {
+          "type": "string",
+          "const": "Review and refine"
+        },
+        "result": {
+          "type": "string",
+          "const": "Read the current revision, resolve its project-local URL, inspect the rendered draft at desktop (at least 1024px) and mobile (around 390px), then update with the current revision. Query changes require refresh:true."
+        },
+        "step": {
+          "type": "number",
+          "const": 6
+        }
+      },
+      "required": [
+        "calls",
+        "name",
+        "result",
+        "step"
+      ]
+    },
+    "Output_get_report_authoring_guide_workflow_6": {
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "publish_report"
+            },
+            {
+              "type": "string",
+              "const": "set_report_sharing"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "name": {
+          "type": "string",
+          "const": "Publish or share"
+        },
+        "result": {
+          "type": "string",
+          "const": "Only after review: publish the exact revision, then enable a public URL separately when authorized."
+        },
+        "step": {
+          "type": "number",
+          "const": 7
+        }
+      },
+      "required": [
+        "calls",
+        "name",
+        "result",
+        "step"
+      ]
+    },
+    "Output_get_report_config": {
+      "type": "object",
+      "properties": {
+        "defaultWindowDays": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item"
+          }
+        }
+      },
+      "required": [
+        "description",
+        "name",
+        "schemaVersion",
+        "widgets"
+      ]
+    },
+    "Output_get_report_document": {
+      "$ref": "#/components/schemas/Output_get_report_template_document"
+    },
+    "Output_get_report_draftInput": {
+      "$ref": "#/components/schemas/Output_get_report_draftInput_2"
+    },
+    "Output_get_report_draftInput_2": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "$ref": "#/components/schemas/Output_Record_13"
+        },
+        "creationKey": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "mdx": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sources": {
+          "$ref": "#/components/schemas/Output_Record_14"
+        }
+      },
+      "required": [
+        "bindings",
+        "creationKey",
+        "description",
+        "mdx",
+        "name",
+        "sources"
+      ]
+    },
+    "Output_get_report_layout": {
+      "enum": [
+        "comparison",
+        "document",
+        "canvas",
+        "brief",
+        "scorecard"
+      ]
+    },
+    "Output_get_report_mdx": {
+      "$ref": "#/components/schemas/Output_CompiledReportMdx"
+    },
+    "Output_get_report_presentation": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_report_presentation_2"
+        }
+      ]
+    },
+    "Output_get_report_presentation_2": {
+      "type": "object",
+      "properties": {
+        "blocks": {
+          "$ref": "#/components/schemas/Output_get_report_presentation_blocks"
+        },
+        "comparison": {
+          "$ref": "#/components/schemas/Output_get_report_presentation_comparison"
+        },
+        "disclosure": {
+          "type": "string"
+        },
+        "eyebrow": {
+          "type": "string"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_metrics_item"
+          }
+        },
+        "recipe": {
+          "$ref": "#/components/schemas/Output_get_report_presentation_recipe"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_sections_item"
+          }
+        },
+        "summary": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "disclosure",
+        "eyebrow",
+        "metrics",
+        "schemaVersion",
+        "sections",
+        "summary",
+        "title"
+      ]
+    },
+    "Output_get_report_presentation_blocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_get_report_presentation_blocks_item"
+      }
+    },
+    "Output_get_report_presentation_blocks_item": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_get_report_presentation_blocks_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_report_presentation_blocks_item_3"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_report_presentation_blocks_item_4"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_report_presentation_blocks_item_5"
+        },
+        {
+          "$ref": "#/components/schemas/Output_get_report_presentation_blocks_item_6"
+        }
+      ]
+    },
+    "Output_get_report_presentation_blocks_item_2": {
+      "type": "object",
+      "properties": {
+        "sectionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "type": {
+          "type": "string",
+          "const": "brief"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "Output_get_report_presentation_blocks_item_3": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "title": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "type": {
+          "type": "string",
+          "const": "comparison"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "Output_get_report_presentation_blocks_item_4": {
+      "type": "object",
+      "properties": {
+        "sectionId": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "section"
+        }
+      },
+      "required": [
+        "sectionId",
+        "type"
+      ]
+    },
+    "Output_get_report_presentation_blocks_item_5": {
+      "type": "object",
+      "properties": {
+        "sectionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "evidence"
+        }
+      },
+      "required": [
+        "sectionIds",
+        "title",
+        "type"
+      ]
+    },
+    "Output_get_report_presentation_blocks_item_6": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "title": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "type": {
+          "type": "string",
+          "const": "scorecard"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "Output_get_report_presentation_comparison": {
+      "$ref": "#/components/schemas/Output_get_report_presentation_comparison_2"
+    },
+    "Output_get_report_presentation_comparison_2": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "string"
+        },
+        "candidate": {
+          "type": "string"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_comparison_candidates_item"
+          }
+        },
+        "dimension": {
+          "type": "string"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_comparison_metrics_item"
+          }
+        },
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseline",
+        "candidate",
+        "candidates",
+        "dimension",
+        "metrics",
+        "widgetId"
+      ]
+    },
+    "Output_get_report_presentation_comparison_candidates_item": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ]
+    },
+    "Output_get_report_presentation_comparison_metrics_item": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/components/schemas/Output_get_report_presentation_comparison_metrics_item_direction"
+        },
+        "label": {
+          "type": "string"
+        },
+        "member": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "direction",
+        "label",
+        "member"
+      ]
+    },
+    "Output_get_report_presentation_comparison_metrics_item_direction": {
+      "enum": [
+        "neutral",
+        "higher",
+        "lower"
+      ]
+    },
+    "Output_get_report_presentation_metrics_item": {
+      "type": "object",
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "evidenceId": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "tone": {
+          "$ref": "#/components/schemas/Output_get_report_presentation_metrics_item_tone"
+        }
+      },
+      "required": [
+        "detail",
+        "evidenceId",
+        "label",
+        "tone"
+      ]
+    },
+    "Output_get_report_presentation_metrics_item_tone": {
+      "enum": [
+        "neutral",
+        "positive",
+        "warning"
+      ]
+    },
+    "Output_get_report_presentation_recipe": {
+      "enum": [
+        "evaluation-story"
+      ]
+    },
+    "Output_get_report_presentation_sections_item": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_details_item"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "navLabel": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "progression": {
+          "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_progression"
+        },
+        "takeaway": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "title": {
+          "type": "string"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_details_item_widgets_item"
+          }
+        }
+      },
+      "required": [
+        "description",
+        "details",
+        "id",
+        "title",
+        "widgets"
+      ]
+    },
+    "Output_get_report_presentation_sections_item_details_item": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_details_item_widgets_item"
+          }
+        }
+      },
+      "required": [
+        "description",
+        "id",
+        "title",
+        "widgets"
+      ]
+    },
+    "Output_get_report_presentation_sections_item_details_item_widgets_item": {
+      "type": "object",
+      "properties": {
+        "caption": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "title": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "widgetId": {
+          "type": "string"
+        },
+        "width": {
+          "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_details_item_widgets_item_width"
+        }
+      },
+      "required": [
+        "widgetId",
+        "width"
+      ]
+    },
+    "Output_get_report_presentation_sections_item_details_item_widgets_item_width": {
+      "enum": [
+        "full",
+        "half"
+      ]
+    },
+    "Output_get_report_presentation_sections_item_progression": {
+      "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_progression_2"
+    },
+    "Output_get_report_presentation_sections_item_progression_2": {
+      "type": "object",
+      "properties": {
+        "dimension": {
+          "type": "string"
+        },
+        "measures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_progression_measures_item"
+          }
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_presentation_sections_item_progression_stages_item"
+          }
+        },
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimension",
+        "measures",
+        "stages",
+        "widgetId"
+      ]
+    },
+    "Output_get_report_presentation_sections_item_progression_measures_item": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "member": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "member"
+      ]
+    },
+    "Output_get_report_presentation_sections_item_progression_stages_item": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "label",
+        "title",
+        "value"
+      ]
+    },
+    "Output_get_report_recipe": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "const": "A concise opening, evidence-bound metrics, progression, candidate comparison, expandable supporting evidence and a closing scorecard. Adapt the composition to the question."
+        },
+        "files": {
+          "$ref": "#/components/schemas/Output_get_report_recipe_files"
+        },
+        "format": {
+          "type": "string",
+          "const": "mdx"
+        },
+        "id": {
+          "type": "string",
+          "const": "evaluation-story"
+        },
+        "name": {
+          "type": "string",
+          "const": "Evaluation story"
+        },
+        "workflow": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "Discover metrics and query the bounded population. Pin scorer and candidate versions; inspect coverage and denominators."
+            },
+            {
+              "type": "string",
+              "const": "Start with get_report_authoring_guide for component props and supported Tailwind utilities. Write narrative and layout in report.mdx, and name, description, sources and bindings in report.data.json. Component props use JSON literals only."
+            },
+            {
+              "type": "string",
+              "const": "Use ReportHeader and Metrics for the answer, Progression for change, Comparison for baseline differences, Details for supporting evidence, and Scorecard for a closing decision. These are optional components, not fixed layouts."
+            },
+            {
+              "type": "string",
+              "const": "Use Value bindings for numeric claims and expected values to catch stale claims. Declare higher/lower metric directions. Only set targets supported by user requirements. Keep synthetic data, denominators and missing observations explicit."
+            },
+            {
+              "type": "string",
+              "const": "Reuse named query sources across components. Avoid repeating the same chart or matrix in multiple sections. Use responsive grids and the shared semantic palette."
+            },
+            {
+              "type": "string",
+              "const": "Call validate_report with document, then create_report with a stable UUID creationKey. Read get_report and inspect the actual rendered draft at desktop and mobile widths. Valid props alone do not prove good visual quality."
+            },
+            {
+              "type": "string",
+              "const": "Edit MDX via update_report with number, revision and document. Captured evidence is preserved unless refresh:true. Changed queries require explicit refresh and another review."
+            },
+            {
+              "type": "string",
+              "const": "Publish only the approved revision with publish_report. Enable set_report_sharing separately when authorized. Published reports are immutable; clone_report starts a new private draft."
+            }
+          ],
+          "minItems": 8,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "description",
+        "files",
+        "format",
+        "id",
+        "name",
+        "workflow"
+      ]
+    },
+    "Output_get_report_recipe_files": {
+      "type": "object",
+      "properties": {
+        "report.data.json": {
+          "type": "string"
+        },
+        "report.mdx": {
+          "type": "string",
+          "const": "<ReportHeader eyebrow=\"Evaluation study\" title=\"The main finding\" summary=\"State the answer, scope and remaining limitation.\" />\n\n## Evidence\n\nAdd named sources, then use the component catalog to compose charts and comparisons.\n\n<Details id=\"methodology\" title=\"Scope and methodology\">\n\nDescribe denominators, versions, missing observations and limitations.\n\n</Details>\n\n## Next step\n\nState the evidence-supported action.\n"
+        }
+      },
+      "required": [
+        "report.data.json",
+        "report.mdx"
+      ]
+    },
+    "Output_get_report_snapshot_evidence": {
+      "$ref": "#/components/schemas/Output_get_report_snapshot_evidence_2"
+    },
+    "Output_get_report_snapshot_evidence_2": {
+      "type": "object",
+      "properties": {
+        "templates": {
+          "$ref": "#/components/schemas/Output_Record_2"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ResolvedReportEvidence"
+          }
+        }
+      },
+      "required": [
+        "templates",
+        "values"
+      ]
+    },
+    "Output_get_report_snapshot_evidence_values_item_binding": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "$ref": "#/components/schemas/Output_get_report_snapshot_evidence_values_item_binding_baseline"
+        },
+        "decimals": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "expected": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value_format"
+        },
+        "id": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value_operation"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_get_report_snapshot_evidence_values_item_binding_baseline_2"
+        },
+        "textWidgetId": {
+          "type": "string"
+        },
+        "tolerance": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "id",
+        "operation",
+        "source",
+        "textWidgetId"
+      ]
+    },
+    "Output_get_report_snapshot_evidence_values_item_binding_baseline": {
+      "$ref": "#/components/schemas/Output_get_report_snapshot_evidence_values_item_binding_baseline_2"
+    },
+    "Output_get_report_snapshot_evidence_values_item_binding_baseline_2": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "$ref": "#/components/schemas/Output_Record_7"
+        },
+        "measure": {
+          "type": "string"
+        },
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimensions",
+        "measure",
+        "widgetId"
+      ]
+    },
+    "Output_get_report_snapshot_highlights": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_get_report_snapshot_highlights_item"
+      }
+    },
+    "Output_get_report_snapshot_highlights_item": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "$ref": "#/components/schemas/Output_Record_7"
+        },
+        "label": {
+          "type": "string"
+        },
+        "measure": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimensions",
+        "label",
+        "widgetId"
+      ]
+    },
+    "Output_get_report_snapshot_positions_item": {
+      "type": "object",
+      "properties": {
+        "cohorts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_snapshot_positions_item_cohorts_item"
+          }
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cohorts",
+        "id"
+      ]
+    },
+    "Output_get_report_snapshot_positions_item_cohorts_item": {
+      "type": "object",
+      "properties": {
+        "history": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "label": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "offsetKey": {
+          "type": "string"
+        },
+        "previous": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "result": {
+          "type": "number"
+        },
+        "summary": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        }
+      },
+      "required": [
+        "history",
+        "offsetKey",
+        "previous",
+        "result",
+        "summary"
+      ]
+    },
+    "Output_get_report_snapshot_references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_get_report_snapshot_references_item"
+      }
+    },
+    "Output_get_report_snapshot_references_item": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "measure": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        },
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "measure",
+        "value",
+        "widgetId"
+      ]
+    },
+    "Output_get_report_template": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "document": {
+          "$ref": "#/components/schemas/Output_get_report_template_document"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "document",
+        "id",
+        "name"
+      ]
+    },
+    "Output_get_report_template_document": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "$ref": "#/components/schemas/Output_Record_13"
+        },
+        "description": {
+          "type": "string"
+        },
+        "mdx": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sources": {
+          "$ref": "#/components/schemas/Output_Record_14"
+        }
+      },
+      "required": [
+        "bindings",
+        "description",
+        "mdx",
+        "name",
+        "sources"
+      ]
+    },
+    "Output_get_report_template_document_bindings_value": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value_baseline"
+        },
+        "decimals": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "expected": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "format": {
+          "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value_format"
+        },
+        "operation": {
+          "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value_operation"
+        },
+        "source": {
+          "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value_baseline_2"
+        },
+        "tolerance": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        }
+      },
+      "required": [
+        "operation",
+        "source"
+      ]
+    },
+    "Output_get_report_template_document_bindings_value_baseline": {
+      "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value_baseline_2"
+    },
+    "Output_get_report_template_document_bindings_value_baseline_2": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "$ref": "#/components/schemas/Output_Record_7"
+        },
+        "measure": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimensions",
+        "measure",
+        "source"
+      ]
+    },
+    "Output_get_report_template_document_bindings_value_format": {
+      "enum": [
+        "number",
+        "USD",
+        "percent"
+      ]
+    },
+    "Output_get_report_template_document_bindings_value_operation": {
+      "enum": [
+        "value",
+        "ratio",
+        "difference",
+        "relativeChange",
+        "percentagePoints"
+      ]
+    },
+    "Output_get_report_template_document_sources_value": {
+      "type": "object",
+      "properties": {
+        "presentation": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation"
+        },
+        "query": {
+          "$ref": "#/components/schemas/Output_query_metrics_query"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
     "Output_get_review_item_annotations_item_author": {
       "type": "object",
       "properties": {
@@ -2463,6 +4203,16 @@
       ]
     },
     "Output_list_dashboards_item_widgets_item": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_3"
+        }
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_2": {
       "type": "object",
       "properties": {
         "compare": {
@@ -2476,6 +4226,9 @@
         },
         "layout": {
           "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_layout"
+        },
+        "presentation": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation"
         },
         "query": {
           "$ref": "#/components/schemas/Output_query_metrics_query"
@@ -2502,6 +4255,37 @@
       "required": [
         "id",
         "query",
+        "title",
+        "type",
+        "width"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_3": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_layout"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "width": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_width"
+        }
+      },
+      "required": [
+        "content",
+        "id",
         "title",
         "type",
         "width"
@@ -2581,6 +4365,50 @@
         "y"
       ]
     },
+    "Output_list_dashboards_item_widgets_item_presentation": {
+      "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_2"
+    },
+    "Output_list_dashboards_item_widgets_item_presentation_2": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "$ref": "#/components/schemas/Output_run_app_evaluatorVersionIds"
+        },
+        "members": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_members"
+        },
+        "showSummary": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        }
+      }
+    },
+    "Output_list_dashboards_item_widgets_item_presentation_members": {
+      "$ref": "#/components/schemas/Output_Record_11"
+    },
+    "Output_list_dashboards_item_widgets_item_presentation_members_value": {
+      "type": "object",
+      "properties": {
+        "decimals": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "unit": {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_members_value_unit"
+        },
+        "values": {
+          "$ref": "#/components/schemas/Output_run_app_evaluatorVersionIds"
+        }
+      }
+    },
+    "Output_list_dashboards_item_widgets_item_presentation_members_value_unit": {
+      "enum": [
+        "number",
+        "auto",
+        "seconds",
+        "milliseconds",
+        "USD",
+        "percent"
+      ]
+    },
     "Output_list_dashboards_item_widgets_item_trendDirection": {
       "enum": [
         "increase",
@@ -2595,7 +4423,9 @@
         "bar",
         "donut",
         "stacked",
-        "line"
+        "line",
+        "matrix",
+        "scatter"
       ]
     },
     "Output_list_dashboards_item_widgets_item_width": {
@@ -2942,6 +4772,48 @@
       "required": [
         "label",
         "value"
+      ]
+    },
+    "Output_list_report_templates_item": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "id",
+        "name"
+      ]
+    },
+    "Output_list_reports_item_author": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_ReportAuthor"
+        }
+      ]
+    },
+    "Output_list_reports_item_author_kind": {
+      "enum": [
+        "session",
+        "api-key",
+        "oauth"
+      ]
+    },
+    "Output_list_reports_item_status": {
+      "enum": [
+        "draft",
+        "published"
       ]
     },
     "Output_list_review_sessions": {
@@ -3537,6 +5409,7 @@
         "alerts",
         "reviews",
         "prompts",
+        "reports",
         "scorers",
         "agents",
         "workflows",
@@ -3852,6 +5725,42 @@
       "enum": [
         "table",
         "cards"
+      ]
+    },
+    "Output_MdxNode": {
+      "type": "object",
+      "properties": {
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_MdxNode"
+          }
+        },
+        "column": {
+          "type": "number"
+        },
+        "line": {
+          "type": "number"
+        },
+        "props": {
+          "$ref": "#/components/schemas/Output_Record"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "text": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "widgetId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "children",
+        "column",
+        "line",
+        "props",
+        "tag"
       ]
     },
     "Output_MetricStatus": {
@@ -4331,6 +6240,12 @@
     "Output_query_metrics_query": {
       "type": "object",
       "properties": {
+        "classification": {
+          "$ref": "#/components/schemas/Output_query_metrics_query_classification"
+        },
+        "comparison": {
+          "$ref": "#/components/schemas/Output_query_metrics_query_comparison"
+        },
         "dimensions": {
           "type": "array",
           "items": {
@@ -4404,6 +6319,83 @@
         "timeDimensions",
         "timezone",
         "total"
+      ]
+    },
+    "Output_query_metrics_query_classification": {
+      "$ref": "#/components/schemas/Output_query_metrics_query_classification_2"
+    },
+    "Output_query_metrics_query_classification_2": {
+      "type": "object",
+      "properties": {
+        "actualPath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "positiveClass": {
+          "$ref": "#/components/schemas/Output_query_metrics_query_classification_positiveClass"
+        },
+        "predictedPath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "actualPath",
+        "positiveClass",
+        "predictedPath"
+      ]
+    },
+    "Output_query_metrics_query_classification_positiveClass": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "boolean",
+          "const": true
+        }
+      ]
+    },
+    "Output_query_metrics_query_comparison": {
+      "$ref": "#/components/schemas/Output_query_metrics_query_comparison_2"
+    },
+    "Output_query_metrics_query_comparison_2": {
+      "type": "object",
+      "properties": {
+        "baselineRunIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "candidateRunIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evaluatorVersionId": {
+          "type": "string"
+        },
+        "lowerIsBetter": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        }
+      },
+      "required": [
+        "baselineRunIds",
+        "candidateRunIds",
+        "evaluatorVersionId"
       ]
     },
     "Output_query_metrics_query_filters_item": {
@@ -4618,7 +6610,25 @@
     "Output_Record_11": {
       "type": "object",
       "additionalProperties": {
+        "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_members_value"
+      }
+    },
+    "Output_Record_12": {
+      "type": "object",
+      "additionalProperties": {
         "$ref": "#/components/schemas/Output_JsonValue"
+      }
+    },
+    "Output_Record_13": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_get_report_template_document_bindings_value"
+      }
+    },
+    "Output_Record_14": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Output_get_report_template_document_sources_value"
       }
     },
     "Output_Record_2": {
@@ -4721,6 +6731,269 @@
         "revision"
       ]
     },
+    "Output_Report": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "$ref": "#/components/schemas/Output_list_reports_item_author"
+        },
+        "config": {
+          "$ref": "#/components/schemas/Output_get_report_config"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "document": {
+          "$ref": "#/components/schemas/Output_get_report_document"
+        },
+        "draftInput": {
+          "$ref": "#/components/schemas/Output_get_report_draftInput"
+        },
+        "frozenAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/components/schemas/Output_get_report_layout"
+        },
+        "mdx": {
+          "$ref": "#/components/schemas/Output_get_report_mdx"
+        },
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "number"
+        },
+        "presentation": {
+          "$ref": "#/components/schemas/Output_get_report_presentation"
+        },
+        "presentationRevision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "publicPath": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "publicUrl": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "publishedAt": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "revision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "snapshot": {
+          "$ref": "#/components/schemas/Output_ReportSnapshot"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_list_reports_item_status"
+        },
+        "templateId": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "widgetCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "config",
+        "createdAt",
+        "description",
+        "frozenAt",
+        "id",
+        "name",
+        "number",
+        "snapshot",
+        "templateId",
+        "widgetCount"
+      ]
+    },
+    "Output_ReportAuthor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_list_reports_item_author_kind"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name"
+      ]
+    },
+    "Output_ReportDiagnostic": {
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": "number"
+        },
+        "line": {
+          "type": "number"
+        },
+        "message": {
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "severity": {
+          "$ref": "#/components/schemas/Output_validate_report_diagnostics_item_severity"
+        }
+      },
+      "required": [
+        "column",
+        "line",
+        "message",
+        "severity"
+      ]
+    },
+    "Output_ReportRenderCheck": {
+      "type": "object",
+      "properties": {
+        "expandedDisclosureCheck": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
+        },
+        "markupBytes": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "message": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "nodeCount": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "renderer": {
+          "type": "string",
+          "const": "react-dom/server"
+        },
+        "responsiveReviewRequired": {
+          "type": "boolean",
+          "const": true
+        },
+        "scope": {
+          "type": "string",
+          "const": "render"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_validate_report_checks_render"
+        },
+        "visualReviewRequired": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "renderer",
+        "responsiveReviewRequired",
+        "scope",
+        "status",
+        "visualReviewRequired"
+      ]
+    },
+    "Output_ReportSnapshot": {
+      "type": "object",
+      "properties": {
+        "evidence": {
+          "$ref": "#/components/schemas/Output_get_report_snapshot_evidence"
+        },
+        "highlights": {
+          "$ref": "#/components/schemas/Output_get_report_snapshot_highlights"
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_report_snapshot_positions_item"
+          }
+        },
+        "references": {
+          "$ref": "#/components/schemas/Output_get_report_snapshot_references"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_query_metrics"
+          }
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "positions",
+        "results",
+        "schemaVersion"
+      ]
+    },
+    "Output_ReportSummary": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "$ref": "#/components/schemas/Output_list_reports_item_author"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "frozenAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "number"
+        },
+        "publishedAt": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "revision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_list_reports_item_status"
+        },
+        "templateId": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "widgetCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "createdAt",
+        "description",
+        "frozenAt",
+        "id",
+        "name",
+        "number",
+        "templateId",
+        "widgetCount"
+      ]
+    },
     "Output_resolve_trace": {
       "type": "object",
       "properties": {
@@ -4760,7 +7033,34 @@
         "scorer",
         "eval",
         "dashboard",
+        "report",
         "view"
+      ]
+    },
+    "Output_ResolvedReportEvidence": {
+      "type": "object",
+      "properties": {
+        "baselineValue": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "binding": {
+          "$ref": "#/components/schemas/Output_get_report_snapshot_evidence_values_item_binding"
+        },
+        "formatted": {
+          "type": "string"
+        },
+        "sourceValue": {
+          "type": "number"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "binding",
+        "formatted",
+        "sourceValue",
+        "value"
       ]
     },
     "Output_ReviewAnnotation": {
@@ -6047,7 +8347,7 @@
           "type": "string"
         },
         "values": {
-          "$ref": "#/components/schemas/Output_Record_11"
+          "$ref": "#/components/schemas/Output_Record_12"
         }
       },
       "required": [
@@ -7090,6 +9390,107 @@
         "sessionId",
         "startedAt",
         "status"
+      ]
+    },
+    "Output_validate_report": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_validate_report_2"
+        },
+        {
+          "$ref": "#/components/schemas/Output_validate_report_3"
+        }
+      ]
+    },
+    "Output_validate_report_2": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "$ref": "#/components/schemas/Output_validate_report_checks"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReportDiagnostic"
+          }
+        },
+        "queryCount": {
+          "type": "number"
+        },
+        "render": {
+          "$ref": "#/components/schemas/Output_ReportRenderCheck"
+        },
+        "sourceCount": {
+          "type": "number"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "checks",
+        "diagnostics",
+        "queryCount",
+        "render",
+        "sourceCount",
+        "valid"
+      ]
+    },
+    "Output_validate_report_3": {
+      "type": "object",
+      "properties": {
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_ReportDiagnostic"
+          }
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "diagnostics",
+        "valid"
+      ]
+    },
+    "Output_validate_report_checks": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "render": {
+          "$ref": "#/components/schemas/Output_validate_report_checks_render"
+        },
+        "responsive": {
+          "type": "string"
+        },
+        "structural": {
+          "type": "string"
+        },
+        "visual": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "render",
+        "responsive",
+        "structural",
+        "visual"
+      ]
+    },
+    "Output_validate_report_checks_render": {
+      "enum": [
+        "failed",
+        "passed"
+      ]
+    },
+    "Output_validate_report_diagnostics_item_severity": {
+      "enum": [
+        "error",
+        "warning"
       ]
     },
     "Output_ViewColumnFormat": {

@@ -191,15 +191,17 @@ test("multiple grouping fields persist and aggregate each tuple independently", 
       })
     )
     const saved = await run(service.get(created.id))
-    expect(saved.widgets[0].query.dimensions).toEqual([
-      "traces.traceName",
-      "traces.operation",
-    ])
-    const result = await executeSemanticQuery(saved.widgets[0].query, {
-      catalog: semanticCatalog,
-      requestId: "multi-group",
-      snapshotRunner: createSemanticSnapshotRunner(db),
-    })
+    expect(
+      dashboardWidgetSchema.parse(saved.widgets[0]).query.dimensions
+    ).toEqual(["traces.traceName", "traces.operation"])
+    const result = await executeSemanticQuery(
+      dashboardWidgetSchema.parse(saved.widgets[0]).query,
+      {
+        catalog: semanticCatalog,
+        requestId: "multi-group",
+        snapshotRunner: createSemanticSnapshotRunner(db),
+      }
+    )
     expect(
       result.data.map((row) => [
         row["traces.traceName"],
@@ -243,7 +245,10 @@ test("persists validated dashboards, executes saved queries, and prevents stale 
             {
               ...widget,
               type: "table",
-              query: { ...widget.query, dimensions: ["traces.parent.sessionId"] },
+              query: {
+                ...widget.query,
+                dimensions: ["traces.parent.sessionId"],
+              },
             },
           ],
         })
@@ -280,11 +285,14 @@ test("persists validated dashboards, executes saved queries, and prevents stale 
         attributesJson: "{}",
       })
     )
-    const result = await executeSemanticQuery(updated.widgets[0].query, {
-      catalog: semanticCatalog,
-      requestId: "dashboard-test",
-      snapshotRunner: createSemanticSnapshotRunner(db),
-    })
+    const result = await executeSemanticQuery(
+      dashboardWidgetSchema.parse(updated.widgets[0]).query,
+      {
+        catalog: semanticCatalog,
+        requestId: "dashboard-test",
+        snapshotRunner: createSemanticSnapshotRunner(db),
+      }
+    )
     expect(result.data[0][widget.query.measures[0]]).toBe(1)
     const table = {
       ...widget,
@@ -297,7 +305,7 @@ test("persists validated dashboards, executes saved queries, and prevents stale 
     }
     const savedTable = await run(service.create({ ...input, widgets: [table] }))
     const tableResult = await executeSemanticQuery(
-      savedTable.widgets[0].query,
+      dashboardWidgetSchema.parse(savedTable.widgets[0]).query,
       {
         catalog: semanticCatalog,
         requestId: "dashboard-table",

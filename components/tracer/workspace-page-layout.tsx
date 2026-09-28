@@ -12,6 +12,7 @@ const collectionTitles: Record<string, string> = {
   alerts: pageTitles.alerts,
   playground: pageTitles.playground,
   dashboards: pageTitles.dashboards,
+  reports: pageTitles.reports,
   agents: pageTitles.agents,
   workflows: pageTitles.workflows,
   sessions: pageTitles.sessions,
@@ -27,7 +28,8 @@ function routeTitle(routePath: string) {
   if (routePath === "/settings") return "General"
   if (routePath === "/settings/members") return pageTitles.members
   if (routePath === "/settings/ai-providers") return pageTitles.aiProviders
-  if (routePath === "/settings/sandbox-providers") return pageTitles.sandboxProviders
+  if (routePath === "/settings/sandbox-providers")
+    return pageTitles.sandboxProviders
   if (routePath === "/settings/api-keys") return pageTitles.apiKeys
   if (routePath === "/settings/mcp") return pageTitles.mcpConnections
   if (routePath === "/projects") return pageTitles.projects
@@ -39,6 +41,9 @@ function routeTitle(routePath: string) {
   if (routePath.startsWith("/alerts/") && routePath.endsWith("/edit"))
     return pageTitles.editAlert
   if (routePath.startsWith("/alerts/")) return pageTitles.alertDetail
+  if (routePath === "/reports/new") return pageTitles.newReport
+  if (routePath.startsWith("/reports/"))
+    return `Report #${routePath.split("/")[2]}`
   if (routePath === "/scorers/new") return pageTitles.newScorer
   if (routePath.startsWith("/scorers/")) return pageTitles.scorerDetail
   if (routePath.startsWith("/playground/")) return pageTitles.playgroundApp
@@ -63,6 +68,7 @@ export function WorkspacePageLayout({
     "reviews",
     "datasets",
     "dashboards",
+    "reports",
     "scorers",
     "prompts",
     "playground",
@@ -73,7 +79,10 @@ export function WorkspacePageLayout({
     ? [{ label: collectionTitles[parent], href: `${prefix}/${parent}` }]
     : []
   if (routePath.startsWith("/apps/")) {
-    breadcrumbs.push({ label: pageTitles.playground, href: `${prefix}/playground` })
+    breadcrumbs.push({
+      label: pageTitles.playground,
+      href: `${prefix}/playground`,
+    })
   }
   if (routePath === "/settings" || routePath.startsWith("/settings/")) {
     breadcrumbs.push({

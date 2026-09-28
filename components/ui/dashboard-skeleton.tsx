@@ -1,6 +1,7 @@
 import { Skeleton } from "./skeleton"
 
-type WidgetType = "metric" | "bar" | "donut" | "table" | "line" | "stacked"
+type WidgetType =
+  "metric" | "bar" | "donut" | "table" | "line" | "stacked" | "matrix" | "scatter"
 
 /** Fits inside the real widget, so data loading cannot move the canvas. */
 export function DashboardWidgetSkeleton({ type }: { type: WidgetType }) {
@@ -16,7 +17,7 @@ export function DashboardWidgetSkeleton({ type }: { type: WidgetType }) {
           <Skeleton className="h-3 w-24 shrink-0 bg-background" />
           <Skeleton className="mt-auto h-12 w-full bg-background" />
         </>
-      ) : type === "bar" || type === "table" ? (
+      ) : type === "bar" || type === "table" || type === "matrix" ? (
         Array.from({ length: 5 }, (_, index) => (
           <Skeleton
             key={index}

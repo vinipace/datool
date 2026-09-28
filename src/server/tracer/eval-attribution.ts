@@ -141,7 +141,36 @@ export function collectEvalAttributions(
   }
   if (!collected.size)
     add(null, traceModels.get(trace) ?? [], trace, trace.selectedSpanId ?? null)
-  return [...collected.values()]
+  const prompts = new Map<
+    string,
+    { id: string; slug: string; version: number }
+  >()
+  const recordPrompt = (attributes: JsonObject) => {
+    const id = attributes["datool.prompt.id"]
+    const slug = attributes["datool.prompt.slug"]
+    const version = attributes["datool.prompt.version"]
+    if (
+      typeof id === "string" &&
+      id &&
+      typeof slug === "string" &&
+      slug &&
+      typeof version === "number" &&
+      Number.isSafeInteger(version) &&
+      version > 0
+    )
+      prompts.set(JSON.stringify([id, version]), { id, slug, version })
+  }
+  for (const item of ordered) {
+    recordPrompt(item.attributes)
+    for (const span of item.spans)
+      if (spanModels.get(item)?.has(span.id)) recordPrompt(span.attributes)
+  }
+  const promptVersions = [...prompts.values()].sort(
+    (a, b) => a.id.localeCompare(b.id) || a.version - b.version
+  )
+  return [...collected.values()].map((item) =>
+    promptVersions.length ? { ...item, promptVersions } : item
+  )
 }
 
 const identity = (parts: unknown[]) =>
@@ -181,12 +210,12 @@ export async function saveEvalAttributions(
   await saveEvalRunGroups(db, runId, [...groups.values()])
   for (let i = 0; i < rows.length; i += chunkSize) {
     await db.execute(
-      sql`insert into eval_target_attributions(id,project_id,run_id,target_id,group_type,group_name,group_version,models_json,source_trace_id,source_span_id) values ${sql.join(
+      sql`insert into eval_target_attributions(id,project_id,run_id,target_id,group_type,group_name,group_version,models_json,source_trace_id,source_span_id,prompt_versions_json) values ${sql.join(
         rows
           .slice(i, i + chunkSize)
           .map(
             ({ targetId, item, key }) =>
-              sql`(${identity([project, runId, targetId, key])},${project},${runId},${targetId},${item.group?.type ?? null},${item.group?.name ?? null},${item.group?.version ?? null},${JSON.stringify(item.models)}::jsonb,${item.sourceTraceId},${item.sourceSpanId})`
+              sql`(${identity([project, runId, targetId, key])},${project},${runId},${targetId},${item.group?.type ?? null},${item.group?.name ?? null},${item.group?.version ?? null},${JSON.stringify(item.models)}::jsonb,${item.sourceTraceId},${item.sourceSpanId},${JSON.stringify(item.promptVersions ?? [])}::jsonb)`
           ),
         sql`, `
       )}`

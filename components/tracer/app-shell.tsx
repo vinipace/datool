@@ -61,6 +61,7 @@ const routes = [
   { href: "/prompts", icon: productIcons.prompts, label: pageTitles.prompts },
   { href: "/scorers", icon: productIcons.scorers, label: pageTitles.scorers },
   { href: "/datasets", icon: productIcons.datasets, label: pageTitles.datasets },
+  { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
   { href: "/alerts", icon: productIcons.alerts, label: pageTitles.alerts },
 ] as const
 

@@ -1,5 +1,5 @@
 import { semanticQuerySchema } from "@/src/lib/semantic/query"
-import type { DashboardInput, DashboardWidget } from "./dashboards"
+import type { DashboardDataInput, DashboardWidget } from "./dashboards"
 
 /** The reference logs layout, with Topics omitted. */
 export function logsDashboardWidgets(now = new Date()): DashboardWidget[] {
@@ -69,7 +69,7 @@ export function logsDashboardWidgets(now = new Date()): DashboardWidget[] {
 }
 
 /** Uses the same editable catalog queries as manually created widgets. */
-export function healthDashboard(now = new Date()): DashboardInput {
+export function healthDashboard(now = new Date()): DashboardDataInput {
   const dateRange = [
     new Date(now.getTime() - 7 * 86400000).toISOString(),
     now.toISOString(),

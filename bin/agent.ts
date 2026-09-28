@@ -1,3 +1,4 @@
+import { parseReportBundle } from "../src/lib/tracer/report-bundle"
 import { readFile, stat, open, rename, link, unlink } from "node:fs/promises"
 import { randomUUID } from "node:crypto"
 import { resolve } from "node:path"
@@ -20,6 +21,14 @@ export const agentUsage = `Agent workflows (all commands return JSON):
   datool evals target <run-id> --target-id <row-id>
   datool metrics metadata|query|batch
   datool dashboards list|get|create|update|delete|preview|resolve [id]
+  datool reports templates|template [template-id]
+  datool reports list|get|resolve [number]
+  datool reports guide|recipe|components
+  datool reports validate --file report.mdx [--data-file report.data.json]
+  datool reports create --file report.mdx [--data-file report.data.json] --creation-key <uuid>
+  datool reports update <number> --file report.mdx [--data-file report.data.json] --revision <n> [--refresh]
+  datool reports create --input @report.json
+  datool reports update|publish|share|clone <number> --input @changes.json
   datool views list|get|data|resolve [id]
   datool page-views list|get|create|update|copy|delete|history|restore|dependencies|validate|data|resolve [id]
   datool custom-fields list|get|create|update|copy|delete|history|restore|dependencies|validate|evaluate [id]
@@ -34,6 +43,7 @@ Pagination: --limit 1..100 --cursor <cursor> --include-total
 Eval reads: lightweight by default; --include-evidence embeds full case evidence.
 Follow nextCursor/nextOffset; batches may shrink to fit the response size limit.
 Evaluation: --request-key <stable-key> --wait --timeout 300 --poll-interval 2
+Reports: save a UUID creationKey in the input; reuse that exact input after uncertain delivery.
 CI gate: --min-score 0.8 --min-pass-rate 1 --baseline-id <id> --max-regression 0
 Exit codes: 0 success, 1 request/usage error, 2 failed CI gate, 3 wait timeout.
 Exports: --max-rows 10000 --replace; continuation metadata goes to stderr.
@@ -112,6 +122,19 @@ const aliases: Record<string, string> = {
   "dashboards.update": "update_dashboard",
   "dashboards.delete": "delete_dashboard",
   "dashboards.preview": "preview_dashboard",
+  "reports.templates": "list_report_templates",
+  "reports.template": "get_report_template",
+  "reports.list": "list_reports",
+  "reports.get": "get_report",
+  "reports.create": "create_report",
+  "reports.recipe": "get_report_recipe",
+  "reports.components": "get_report_components",
+  "reports.guide": "get_report_authoring_guide",
+  "reports.validate": "validate_report",
+  "reports.update": "update_report",
+  "reports.publish": "publish_report",
+  "reports.share": "set_report_sharing",
+  "reports.clone": "clone_report",
   "views.list": "list_saved_views",
   "views.get": "get_saved_view",
   "views.data": "get_saved_view_data",
@@ -123,6 +146,7 @@ for (const [plural, singular] of Object.entries({
   datasets: "dataset",
   evals: "eval",
   dashboards: "dashboard",
+  reports: "report",
   views: "view",
 }))
   aliases[`${plural}.resolve`] = `resolve_${singular}`
@@ -145,8 +169,11 @@ const numeric = new Set([
   "maxErrors",
   "maxRegression",
   "concurrency",
+  "number",
 ])
 const boolean = new Set([
+  "enabled",
+  "refresh",
   "includeTotal",
   "includeEvidence",
   "allowUnscored",
@@ -156,6 +183,8 @@ const localOptions = new Set([
   "datool",
   "project",
   "input",
+  "file",
+  "dataFile",
   "out",
   "replace",
   "wait",
@@ -184,6 +213,28 @@ async function readInput(raw: string) {
     return readFile(path, "utf8")
   }
   return raw
+}
+
+/**
+ * Read the preferred two-file report bundle. A sibling
+ * `report.data.json` is picked up automatically for `report.mdx`; callers can
+ * provide `--data-file` when the files use different names. If no data file
+ * exists, the legacy frontmatter-based one-file format remains supported.
+ */
+async function readReportBundle(file: string, dataFile?: string) {
+  const mdx = await readInput(`@${file}`)
+  let data: string | undefined
+  if (dataFile) data = await readInput(`@${dataFile}`)
+  else if (/\.mdx$/i.test(file)) {
+    const candidate = `${file.slice(0, -4)}.data.json`
+    try {
+      await stat(resolve(candidate))
+      data = await readInput(`@${candidate}`)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+    }
+  }
+  return parseReportBundle(mdx, data)
 }
 
 export async function waitForEval(
@@ -319,6 +370,7 @@ export async function agentCommand(args: string[]): Promise<number | null> {
       "datasets",
       "evals",
       "dashboards",
+      "reports",
       "views",
       "page-views",
       "custom-fields",
@@ -359,6 +411,23 @@ export async function agentCommand(args: string[]): Promise<number | null> {
       if (!input || Array.isArray(input) || typeof input !== "object")
         throw new Error("--input must be a JSON object.")
     }
+    if (flags.file) {
+      if (
+        group !== "reports" ||
+        !["create", "update", "validate"].includes(action) ||
+        flags.input
+      )
+        throw new Error(
+          "Use --file for reports create, update or validate, without --input."
+        )
+      const document = await readReportBundle(
+        String(flags.file),
+        flags.dataFile ? String(flags.dataFile) : undefined
+      )
+      input = action === "create" ? document : { document }
+    } else if (flags.dataFile) {
+      throw new Error("--data-file requires --file for a report command.")
+    }
     for (const [key, value] of Object.entries(flags))
       if (!localOptions.has(key)) input[key] = value
     if (flags.project) process.env.DATOOL_PROJECT_ID = String(flags.project)
@@ -385,6 +454,15 @@ export async function agentCommand(args: string[]): Promise<number | null> {
       "query_metrics",
       "batch_metrics",
       "preview_dashboard",
+      "list_report_templates",
+      "get_report_template",
+      "get_report_recipe",
+      "get_report_components",
+      "get_report_authoring_guide",
+      "validate_report",
+      "list_reports",
+      "get_report",
+      "resolve_report",
     ])
     const call: Call = (operation, value, options) =>
       appRequest(origin, `/api/agent/${encodeURIComponent(operation)}`, value, {
@@ -397,6 +475,9 @@ export async function agentCommand(args: string[]): Promise<number | null> {
           "probe_scorer_runtime",
           "test_scorer",
           "preview_dashboard",
+          "create_report",
+          "validate_report",
+          "update_report",
         ].includes(operation)
           ? 120_000
           : ["query_metrics", "batch_metrics"].includes(operation)
@@ -445,7 +526,19 @@ export async function agentCommand(args: string[]): Promise<number | null> {
                 : action === "path"
                   ? "traceId"
                   : "id"
-      input[key] = positional[0]
+      if (
+        group === "reports" &&
+        ["get", "update", "validate", "publish", "share", "clone"].includes(
+          action
+        )
+      ) {
+        if (
+          !/^[1-9]\d*$/.test(positional[0]) ||
+          !Number.isSafeInteger(Number(positional[0]))
+        )
+          throw new Error("reports command requires a positive report number.")
+        input.number = Number(positional[0])
+      } else input[key] = positional[0]
     }
     if (action === "export") {
       operation =
@@ -518,6 +611,11 @@ export async function agentCommand(args: string[]): Promise<number | null> {
         )
     }
     console.info(JSON.stringify(result, null, 2))
+    if (
+      operation === "validate_report" &&
+      (result as { valid?: boolean }).valid !== true
+    )
+      return 1
     return operation === "gate_eval_run" &&
       (result as { passed?: boolean }).passed !== true
       ? 2

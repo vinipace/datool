@@ -1,4 +1,9 @@
-import { checkCollectionSelection, checkCollectionPanel, checkCompactCollectionPanel } from "../../.storybook/collection-panel-checks"
+import { isDashboardDataWidget } from "@/src/lib/tracer/dashboards"
+import {
+  checkCollectionSelection,
+  checkCollectionPanel,
+  checkCompactCollectionPanel,
+} from "../../.storybook/collection-panel-checks"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { getRouter } from "@storybook/nextjs-vite/navigation.mock"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
@@ -51,7 +56,9 @@ export const PopulatedSelectionAndSearch: Story = {
     })
     await userEvent.click(selectAll)
     await expect(selectAll).toBeChecked()
-    await userEvent.click(canvas.getByRole("button", { name: /Clear selection/ }))
+    await userEvent.click(
+      canvas.getByRole("button", { name: /Clear selection/ })
+    )
 
     const search = canvas.getByRole("textbox", { name: "Search dashboards" })
     await userEvent.type(search, "quality")
@@ -132,7 +139,9 @@ export const TemplateLibrary: Story = {
       dialog.getByRole("radio", { name: "Blank dashboard" })
     ).toBeChecked()
     await expect(dialog.getAllByRole("radio")).toHaveLength(7)
-    await expect(dialog.getByRole("radio", { name: "Evaluation quality by model" })).toBeVisible()
+    await expect(
+      dialog.getByRole("radio", { name: "Evaluation quality by model" })
+    ).toBeVisible()
     await userEvent.click(dialog.getByRole("radio", { name: "Weekly health" }))
     await expect(
       dialog.getByRole("textbox", { name: "Dashboard name" })
@@ -201,11 +210,16 @@ export const CreateFromTemplate: Story = {
     await expect(config.defaultWindowDays).toBe(7)
     await expect(config.widgets).toHaveLength(10)
     await expect(
-      config.widgets.flatMap((widget) => widget.query.dimensions)
+      config.widgets
+        .filter(isDashboardDataWidget)
+        .flatMap((widget) => widget.query.dimensions)
     ).toEqual(expect.arrayContaining(["logs.functionName"]))
-    await expect(config.widgets[0].query.measures).toEqual(["logs.costUsd"])
     await expect(
-      config.widgets[0].query.timeDimensions[0].dateRange[1]
+      config.widgets.filter(isDashboardDataWidget)[0].query.measures
+    ).toEqual(["logs.costUsd"])
+    await expect(
+      config.widgets.filter(isDashboardDataWidget)[0].query.timeDimensions[0]
+        .dateRange[1]
     ).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   },
 }
@@ -235,9 +249,10 @@ export const CreateEvaluationsDashboard: Story = {
     await expect(created).toHaveBeenCalledTimes(1)
     const config = created.mock.calls[0][0]
     await expect(config.widgets).toHaveLength(16)
-    await expect(config.widgets[0].query.timeDimensions[0].dimension).toBe(
-      "evalRuns.createdAt"
-    )
+    await expect(
+      config.widgets.filter(isDashboardDataWidget)[0].query.timeDimensions[0]
+        .dimension
+    ).toBe("evalRuns.createdAt")
     await expect(config.widgets[2].query.measures).toEqual([
       "scores.explicitPassRate",
     ])
@@ -370,7 +385,11 @@ export const CreationFailed: Story = {
 
 export const NarrowCollection: Story = {
   parameters: PopulatedSelectionAndSearch.parameters,
-  render: () => <div className="w-[375px] max-w-full"><DashboardsScenario /></div>,
+  render: () => (
+    <div className="w-[375px] max-w-full">
+      <DashboardsScenario />
+    </div>
+  ),
   play: async ({ canvasElement }) => {
     await checkCompactCollectionPanel(canvasElement, "Dashboards")
   },
@@ -379,12 +398,18 @@ export const NarrowCollection: Story = {
 export const SelectionHeader: Story = {
   ...PopulatedSelectionAndSearch,
   play: async ({ canvasElement }) => {
-    await userEvent.type(await within(canvasElement).findByRole("textbox", { name: "Search dashboards" }), "overview")
+    await userEvent.type(
+      await within(canvasElement).findByRole("textbox", {
+        name: "Search dashboards",
+      }),
+      "overview"
+    )
     await checkCollectionSelection(canvasElement, "Dashboards")
   },
 }
 
 export const NarrowSelectionHeader: Story = {
   ...NarrowCollection,
-  play: async ({ canvasElement }) => checkCollectionSelection(canvasElement, "Dashboards"),
+  play: async ({ canvasElement }) =>
+    checkCollectionSelection(canvasElement, "Dashboards"),
 }

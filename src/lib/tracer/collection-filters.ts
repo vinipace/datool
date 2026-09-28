@@ -44,6 +44,7 @@ export const collectionFilterFields = {
     number("traceCount"), number("reviewedCount"), date("createdAt"),
   ],
   prompts: [text("id"), text("name"), text("slug"), text("description"), text("model"), number("revision"), number("publishedVersion"), date("createdAt"), date("updatedAt")],
+  reports: [text("name"), number("number"), text("description"), text("templateId"), number("widgetCount"), date("createdAt"), date("frozenAt")],
   scorers: [
     text("id"),
     text("name"),

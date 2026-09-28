@@ -1,14 +1,20 @@
 import type { SemanticCatalogModelMetadata } from "@/src/lib/semantic/catalog"
 import {
   ChartBar,
+  ChartScatter,
   ChartColumnStacked,
   ChartLine,
   ChartPie,
   Hash,
   Table2,
+  Grid2X2,
+  Type,
 } from "lucide-react"
 
 export const dashboardWidgetOptions = [
+  { value: "text", label: "Text", icon: Type },
+  { value: "scatter", label: "Scatter plot", icon: ChartScatter },
+  { value: "matrix", label: "Matrix", icon: Grid2X2 },
   { value: "metric", label: "Metric tile", icon: Hash },
   { value: "line", label: "Line chart", icon: ChartLine },
   { value: "stacked", label: "Stacked time chart", icon: ChartColumnStacked },
@@ -78,7 +84,7 @@ export function dashboardSourceOptions(
   return models
     .filter(
       (model) =>
-        model.source?.visibility === "primary" ||
+        (model.source?.visibility === "primary" && !["evalClassification", "evalComparison"].includes(model.name)) ||
         model.name === selected ||
         !model.source
     )

@@ -1,3 +1,7 @@
+import {
+  formatDisplayValue,
+  type DisplayAnnotation,
+} from "./dashboard-presentation"
 import type { SemanticDataRow, SemanticResult } from "@/src/lib/semantic/result"
 import type { DashboardWidget } from "./dashboards"
 
@@ -35,7 +39,7 @@ export function groupedTimeChart(
       annotations[key] = {
         ...original,
         name: key,
-        title: `${label ?? "Not recorded"}${widget.query.measures.length > 1 ? ` · ${original.title}` : ""}`,
+        title: `${formatDisplayValue(label, result.annotation.dimensions[dimension] as DisplayAnnotation) ?? label ?? "Not recorded"}${widget.query.measures.length > 1 ? ` · ${original.title}` : ""}`,
       }
       totals[key] = summaries.get(category)?.[member] ?? null
     })
