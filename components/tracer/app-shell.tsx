@@ -50,7 +50,6 @@ import { useOrganizationSessionSync } from "@/lib/workspace-selection"
 const routes = [
   { href: "/traces", icon: productIcons.traces, label: pageTitles.traces },
   { href: "/playground", icon: productIcons.playground, label: pageTitles.playground },
-  { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
   { href: "/dashboards", icon: productIcons.dashboards, label: pageTitles.dashboards },
   { href: "/agents", icon: productIcons.agents, label: pageTitles.agents },
   { href: "/workflows", icon: productIcons.workflows, label: pageTitles.workflows },
@@ -61,6 +60,7 @@ const routes = [
   { href: "/prompts", icon: productIcons.prompts, label: pageTitles.prompts },
   { href: "/scorers", icon: productIcons.scorers, label: pageTitles.scorers },
   { href: "/datasets", icon: productIcons.datasets, label: pageTitles.datasets },
+  { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
   { href: "/alerts", icon: productIcons.alerts, label: pageTitles.alerts },
 ] as const
 

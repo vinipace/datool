@@ -218,13 +218,6 @@ function LoadedReport({ initialReport }: { initialReport: Report }) {
           {error}
         </Notice>
       )}
-      <div className="shrink-0 border-b border-border px-4 py-2 text-xs text-foreground-muted">
-        {draft
-          ? "Draft · Private · Review and edit before publishing"
-          : "Published · Read-only"}
-        {!draft &&
-          (report.publicPath ? " · Public link enabled" : " · Private")}
-      </div>
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => {
