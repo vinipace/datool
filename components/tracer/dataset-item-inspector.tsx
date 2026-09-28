@@ -191,7 +191,8 @@ export function DatasetItemInspector({
                 icon={<Icon className="size-3.5" />}
               >
                 <StructuredValueEditor
-                  autoSize
+                  autoSize={draft[field].text.length <= 16 * 1024}
+                  height="h-80"
                   label={`Row ${datasetFieldLabels[field]}`}
                   value={draft[field]}
                   view={fieldViews?.[field] ?? "json"}

@@ -27,6 +27,9 @@ import {
   READ_BATCH_DEADLINE_MS,
 } from "../semantic/read-budget"
 import { fitEvalPage } from "./eval-read-page"
+import { datasetItemProjection } from "./dataset-preview"
+import { DATASET_ITEM_READ_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
+import type { DatasetItemPreview } from "@/src/lib/tracer/contracts"
 import { evalPairIds } from "./eval-pairs-sql"
 import type { EvalPair } from "@/src/lib/tracer/eval-comparison"
 import { savedViewSql } from "./saved-view-sql"
@@ -352,6 +355,7 @@ function toDataset(row: DatasetRow, itemCount: number): Dataset {
 }
 
 function toDatasetItem(row: DatasetItemRow): DatasetItem {
+  const sourceSpanEvidence = row.sourceSpanEvidenceJson ? JSON.parse(row.sourceSpanEvidenceJson) : null
   return {
     versionId: row.versionId,
     createdAt: row.createdAt,
@@ -362,8 +366,8 @@ function toDatasetItem(row: DatasetItemRow): DatasetItem {
     metadata: fromObjectJson(row.metadataJson),
     sourceTraceId: row.sourceTraceId,
     sourceSpanId: row.sourceSpanId,
-    sourceSpanEvidence: row.sourceSpanEvidenceJson ? JSON.parse(row.sourceSpanEvidenceJson) : null,
-    observedOutput: row.sourceSpanEvidenceJson ? JSON.parse(row.sourceSpanEvidenceJson).output : null,
+    sourceSpanEvidence,
+    observedOutput: sourceSpanEvidence?.output ?? null,
     updatedAt: row.updatedAt,
   }
 }
@@ -598,7 +602,7 @@ export class TracerService {
   }
 
   /** Interactive reads share admission, analytics connections and one snapshot. */
-  private read<T>(work: (service: TracerService) => Promise<T>): Promise<T> {
+  private read<T>(work: (service: TracerService) => Promise<T>, maxBytes = READ_MAX_BYTES): Promise<T> {
     const deadline = Date.now() + READ_BATCH_DEADLINE_MS
     return withReadBudget(this.projectId, () =>
       boundedReadTransaction(this.database, deadline, async (database) => {
@@ -608,10 +612,10 @@ export class TracerService {
             "READ_TIMEOUT",
             "The read exceeded its deadline."
           )
-        if (Buffer.byteLength(JSON.stringify(result)) > READ_MAX_BYTES)
+        if (Buffer.byteLength(JSON.stringify(result)) > maxBytes)
           throw new ReadBudgetError(
             "READ_RESULT_TOO_LARGE",
-            "This response exceeds 8 MiB. Request fewer rows or narrower columns."
+            `This response exceeds ${maxBytes / (1024 * 1024)} MiB. Request fewer rows or narrower columns.`
           )
         return result
       })
@@ -873,10 +877,20 @@ export class TracerService {
     )
   }
 
-  listDatasetItems(id: string, options: ListOptions = {}) {
+  listDatasetItems(id: string, options: ListOptions & { preview?: boolean } = {}) {
     return tracerEffect(() =>
       this.read((service) => service.listDatasetItemsUnsafe(id, options))
     )
+  }
+
+  getDatasetItem(id: string): TracerEffect<DatasetItem> {
+    return tracerEffect(() => this.read(async (service) => {
+      const relation = sql`select ${datasetItemProjection(false)} from dataset_items where project_id=${service.projectId} and id=${id}`
+      await assertRelationBytes(service.database, relation, DATASET_ITEM_READ_MAX_BYTES)
+      const row = (await service.database.execute(relation)).rows[0] as DatasetItemRow | undefined
+      if (!row) throw notFound("Dataset item", id)
+      return toDatasetItem(row)
+    }, DATASET_ITEM_READ_MAX_BYTES))
   }
 
   listDatasetVersions(id: string, options: ListOptions = {}) {
@@ -891,9 +905,9 @@ export class TracerService {
     }))
   }
 
-  getDataset(id: string): TracerEffect<DatasetDetail> {
+  getDataset(id: string, options: { includeItems?: boolean } = {}): TracerEffect<DatasetDetail> {
     return tracerEffect(() =>
-      this.read((service) => service.getDatasetUnsafe(id))
+      this.read((service) => service.getDatasetUnsafe(id, options.includeItems ?? true))
     )
   }
 
@@ -1869,7 +1883,7 @@ export class TracerService {
     )
   }
 
-  private async getDatasetUnsafe(id: string): Promise<DatasetDetail> {
+  private async getDatasetUnsafe(id: string, includeItems = true): Promise<DatasetDetail> {
     const [row] = await this.database
       .select()
       .from(datasets)
@@ -1877,6 +1891,11 @@ export class TracerService {
       .limit(1)
     if (!row) {
       throw notFound("Dataset", id)
+    }
+    if (!includeItems) {
+      const [total] = await this.database.select({ count: count() }).from(datasetItems)
+        .where(and(eq(datasetItems.projectId, this.projectId), eq(datasetItems.datasetId, id)))
+      return { ...toDataset(row, total.count), items: [] }
     }
     const page = await this.listDatasetItemsUnsafe(id, {
       limit: 50,
@@ -1913,7 +1932,7 @@ export class TracerService {
     return { ...toDataset(row, items.length), items: items.map(toDatasetItem) }
   }
 
-  private async listDatasetItemsUnsafe(id: string, options: ListOptions) {
+  private async listDatasetItemsUnsafe(id: string, options: ListOptions & { preview?: boolean }) {
     const [dataset] = await this.database
       .select({ id: datasets.id })
       .from(datasets)
@@ -1930,14 +1949,14 @@ export class TracerService {
       createdAt: { value: sql`created_at`, type: "date" },
       updatedAt: { value: sql`updated_at`, type: "date" },
     })
-    const page = await collectionSqlPage<DatasetItemRow>(
+    const page = await fitEvalPage(options.limit ?? 50, (limit) => collectionSqlPage<DatasetItemRow & Pick<DatasetItemPreview, "omittedFields">>(
       this.database,
-      sql`select id,project_id as "projectId",dataset_id as "datasetId",version_id as "versionId",input_json as "inputJson",expected_output_json as "expectedOutputJson",metadata_json as "metadataJson",source_trace_id as "sourceTraceId",source_span_id as "sourceSpanId",source_span_evidence_json as "sourceSpanEvidenceJson",created_at as "createdAt",updated_at as "updatedAt" from dataset_items where project_id=${this.projectId} and dataset_id=${id} and ${predicate}`,
-      options,
+      sql`select ${datasetItemProjection(options.preview ?? false)} from dataset_items where project_id=${this.projectId} and dataset_id=${id} and ${predicate}`,
+      { ...options, limit },
       "createdAt",
       true
-    )
-    return { ...page, items: page.items.map(toDatasetItem) }
+    ))
+    return { ...page, items: page.items.map(row => ({ ...toDatasetItem(row), ...(row.omittedFields && Object.keys(row.omittedFields).length ? { omittedFields: row.omittedFields } : {}) })) }
   }
 
   private async patchDatasetUnsafe(

@@ -14,6 +14,7 @@ export type CollectionSelection = {
   onClear: () => void
   actions?: ReactNode
   label?: string
+  onExportJson?: () => void
 }
 
 /** Count and export share the exact same selection supplied by the resource. */
@@ -23,19 +24,20 @@ export function CollectionSelectionActions({
   actions,
   label,
   exportName = "rows",
+  onExportJson,
 }: CollectionSelection & { exportName?: string }) {
   if (!rows.length) return null
   return (
     <SelectionToolbar count={rows.length} onClear={onClear} label={label}>
       {actions}
       <SelectionActionButton
-        onClick={() =>
+        onClick={onExportJson ?? (() =>
           downloadTraceExport({
             content: JSON.stringify(rows, null, 2),
             filename: `datool-selected-${exportName}.json`,
             type: "application/json",
           })
-        }
+        )}
       >
         <Download aria-hidden="true" className="size-3.5" />
         <PanelActionLabel>Export JSON</PanelActionLabel>

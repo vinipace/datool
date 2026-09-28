@@ -1,4 +1,5 @@
 import { api, readJson } from "@/src/server/tracer/http"
+import { DATASET_WRITE_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
 import { parseId, parsePatchDatasetItem } from "@/src/server/tracer/validation"
 
 export const dynamic = "force-dynamic"
@@ -6,11 +7,16 @@ export const runtime = "nodejs"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
+export async function GET(request: Request, context: RouteContext) {
+  const { id } = await context.params
+  return api(request, (service) => service.getDatasetItem(parseId(id, "dataset item id")))
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params
   return api(
     request,
-    async (service) => service.patchDatasetItem(parseId(id, "dataset item id"), parsePatchDatasetItem(await readJson(request))),
+    async (service) => service.patchDatasetItem(parseId(id, "dataset item id"), parsePatchDatasetItem(await readJson(request, DATASET_WRITE_MAX_BYTES))),
     { mutation: true },
   )
 }

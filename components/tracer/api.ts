@@ -30,6 +30,7 @@ import type {
   Dataset,
   DatasetDetail,
   DatasetItem,
+  DatasetItemPreview,
   DatasetVersion,
   EvalRun,
   EvalRunSummary,
@@ -289,10 +290,13 @@ export const tracerApi = {
       request<CreatedLibraryEntry>("/api/datasets/library", { body: input, method: "POST", projectId }),
     moveEntry: (input: MoveLibraryEntry, projectId?: string) =>
       request<{ id: string; name: string }>("/api/datasets/library", { body: input, method: "PATCH", projectId }),
-    items: (id: string, options: CollectionListOptions = {}) =>
-      collection<DatasetItem>(
+    getItem: (id: string, signal?: AbortSignal) =>
+      request<DatasetItem>(`/api/dataset-items/${encodeURIComponent(id)}`, { signal }),
+    items: (id: string, options: CollectionListOptions & { preview?: boolean } = {}) =>
+      collection<DatasetItemPreview>(
         withQuery(`/api/datasets/${encodeURIComponent(id)}/items`, {
           filter: options.filter,
+          preview: options.preview?.toString(),
           cursor: options.cursor,
           includeTotal: options.includeTotal?.toString(),
           limit: options.limit?.toString(),
@@ -309,8 +313,8 @@ export const tracerApi = {
           method: "POST",
         }
       ),
-    get: (id: string) =>
-      request<DatasetDetail>(`/api/datasets/${encodeURIComponent(id)}`),
+    get: (id: string, options: { includeItems?: boolean } = {}) =>
+      request<DatasetDetail>(withQuery(`/api/datasets/${encodeURIComponent(id)}`, { includeItems: options.includeItems?.toString() })),
     list: (options: CollectionListOptions = {}) =>
       collection<Dataset>(
         withQuery("/api/datasets", {

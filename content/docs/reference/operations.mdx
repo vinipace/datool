@@ -1804,7 +1804,7 @@ Required scopes: `datasets:read`.
 
 ## get_dataset
 
-Read a dataset summary and its first item page. Use list_dataset_items for more.
+Read a dataset summary and its first item page. Set includeItems=false for header/count only. Use list_dataset_items for more.
 
 Required scopes: `datasets:read`.
 
@@ -1813,6 +1813,7 @@ Required scopes: `datasets:read`.
 | Field | Type | Required |
 | --- | --- | --- |
 | `id` | string | Yes |
+| `includeItems` | boolean | No |
 
 **Result**
 
@@ -1833,7 +1834,7 @@ Required scopes: `datasets:read`.
 
 ## list_dataset_items
 
-Read a bounded page of dataset items.
+Read a bounded page of dataset items. Set preview=true to omit large values with explicit omittedFields markers; fetch complete values with get_dataset_item before editing or exporting.
 
 Required scopes: `datasets:read`.
 
@@ -1845,6 +1846,7 @@ Required scopes: `datasets:read`.
 | `limit` | integer | No |
 | `cursor` | string | No |
 | `id` | string | Yes |
+| `preview` | boolean | No |
 
 **Result**
 
@@ -1853,6 +1855,37 @@ Required scopes: `datasets:read`.
 | `items` | array of object | Yes |
 | `nextCursor` | null or string | Yes |
 | `total` | number | No |
+
+## get_dataset_item
+
+Read one complete dataset item, including values omitted from preview pages. Capped at 32 MiB.
+
+Required scopes: `datasets:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `createdAt` | string | Yes |
+| `datasetId` | string | Yes |
+| `datasetRevision` | number | No |
+| `datasetVersionId` | string | No |
+| `expectedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `id` | string | Yes |
+| `input` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | Yes |
+| `metadata` | object | Yes |
+| `observedOutput` | null or string or number or false or true or object or array of null or string or number or false or true or object or array of JSON | No |
+| `sourceSpanEvidence` | null or object | No |
+| `sourceSpanId` | null or string | No |
+| `sourceTraceId` | null or string | Yes |
+| `updatedAt` | string | Yes |
+| `versionId` | string | No |
 
 ## create_dataset
 

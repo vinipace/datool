@@ -61,4 +61,8 @@ If captured messages differ from the app's variable schema, enable **Map input t
 
 Agents use `promote_spans` or `datool datasets promote dataset-id --input @promotion.json`. Preview defaults to true. Save with `preview: false` and the returned `expectedEvidenceHash`. Batches contain 1–100 spans and are atomic. A selected capture is limited to 1 MiB and 1,000 spans; the batch limit is 8 MiB.
 
+For large items, `get_dataset` accepts `includeItems: false` to read only the dataset header and count. `list_dataset_items` accepts `preview: true`: fields over 16 KiB are replaced by placeholders with explicit `omittedFields` entries containing their byte size and a 128-character preview. Use `get_dataset_item` with the item ID to retrieve the complete value before editing or exporting. The dataset editor uses this flow automatically and sends only changed fields when saving.
+
+Complete single-item reads are bounded to 32 MiB. Dataset item creation, updates and bulk requests accept up to 4 MiB through REST and MCP; other request limits and the 8 MiB evaluation evidence budget remain unchanged. A reverse proxy may enforce a lower upload limit. Preview pages never replace or truncate stored evidence.
+
 Span-backed snapshots preserve captured evidence. Re-score an evaluation with `sourceRunId` after judge changes. Execute the connected app again after changing its extractor, prompt or model. Keep calibration cases separate from untouched evaluation cases.

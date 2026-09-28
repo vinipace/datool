@@ -17,6 +17,7 @@ import {
   storybookDatasetId,
 } from "../../.storybook/scenarios/datasets-evals/fixtures"
 import { DatasetDetailPage, DatasetsPage } from "./datasets-page"
+import { datasetItemPreview } from "@/src/lib/tracer/dataset-payload"
 
 const meta = {
   title: "Tracer/Datasets/DatasetPages",
@@ -58,6 +59,66 @@ const priorityField: ComputedColumn = {
   format: "text",
 }
 const saveDatasetItem = fn()
+
+const largeItem = { ...datasetItems[0], versionId: "large-v1", input: { question: "Large item", content: "x".repeat(64 * 1024), lastValue: "complete" } }
+const largeItemRead = fn()
+const largeItemSave = fn()
+
+export const LargeItemPreview: Story = {
+  beforeEach: () => { largeItemRead.mockClear(); largeItemSave.mockClear() },
+  parameters: { msw: { handlers: [
+    http.get("/api/custom-fields", () => data([])),
+    http.get("/api/datasets/:datasetId", ({ request }) => {
+      expect(new URL(request.url).searchParams.get("includeItems")).toBe("false")
+      return data({ ...datasetDetail, fieldSchemas: {}, items: [] })
+    }),
+    http.get("/api/datasets/:datasetId/items", ({ request }) => {
+      expect(new URL(request.url).searchParams.get("preview")).toBe("true")
+      return data(list([datasetItemPreview(largeItem), datasetItems[1]]))
+    }),
+    http.get("/api/dataset-items/:itemId", async () => { largeItemRead(); await delay(350); return data(largeItem) }),
+    http.patch("/api/dataset-items/:itemId", async ({ request }) => {
+      const patch = await request.json() as Record<string, unknown>
+      largeItemSave(patch)
+      return data({ ...largeItem, ...patch, versionId: "large-v2" })
+    }),
+    ...datasetsEvalsHandlers,
+  ] } },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    await userEvent.click(await page.findByRole("row", { name: "Open dataset row 1" }))
+    await expect(page.findByText("Loading complete dataset row")).resolves.toBeVisible()
+    const inspector = within(await page.findByLabelText("Dataset row inspector"))
+    const textbox = await inspector.findByRole("textbox", { name: "Row Metadata" }, { timeout: 10000 })
+    const { monaco } = await import("@/components/tracer/monaco-runtime")
+    const editor = monaco.editor.getEditors().find(item => item.getDomNode()?.contains(textbox))!
+    await userEvent.click(textbox)
+    editor.trigger("storybook", "editor.action.selectAll", undefined)
+    await userEvent.paste('{"reviewed":true}')
+    await waitFor(() => expect(largeItemSave).toHaveBeenCalledWith({ metadata: { reviewed: true }, expectedVersionId: "large-v1" }))
+    expect(largeItemRead).toHaveBeenCalledTimes(1)
+  },
+}
+
+export const LargeItemReadFailure: Story = {
+  parameters: { msw: { handlers: [
+    http.get("/api/custom-fields", () => data([])),
+    http.get("/api/datasets/:datasetId", () => data({ ...datasetDetail, items: [] })),
+    http.get("/api/datasets/:datasetId/items", () => data(list([datasetItemPreview(largeItem), datasetItems[1]]))),
+    http.get("/api/dataset-items/:itemId", () => failure("Complete item exceeds 32 MiB", 413)),
+    ...datasetsEvalsHandlers,
+  ] } },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    await userEvent.click(await page.findByRole("row", { name: "Open dataset row 1" }))
+    await expect(page.findByText("Complete item exceeds 32 MiB")).resolves.toBeVisible()
+    expect(page.queryByLabelText("Dataset row inspector")).not.toBeInTheDocument()
+    await userEvent.click(page.getByRole("button", { name: "Close dataset row" }))
+    await expect(page.getByRole("row", { name: "Open dataset row 1" })).toHaveFocus()
+    await userEvent.click(page.getByRole("row", { name: "Open dataset row 2" }))
+    await expect(page.findByLabelText("Dataset row inspector")).resolves.toBeVisible()
+  },
+}
 
 export const CustomFieldsInRowPanel: Story = {
   beforeEach: () => {

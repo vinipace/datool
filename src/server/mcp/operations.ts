@@ -438,17 +438,24 @@ tool(
 )
 tool(
   "get_dataset",
-  "Read a dataset summary and its first item page. Use list_dataset_items for more.",
+  "Read a dataset summary and its first item page. Set includeItems=false for header/count only. Use list_dataset_items for more.",
   "datasets:read",
-  z.object({ id }),
-  (service, p) => service.getDataset(p.id)
+  z.object({ id, includeItems: z.boolean().optional() }),
+  (service, p) => service.getDataset(p.id, p)
 )
 tool(
   "list_dataset_items",
-  "Read a bounded page of dataset items.",
+  "Read a bounded page of dataset items. Set preview=true to omit large values with explicit omittedFields markers; fetch complete values with get_dataset_item before editing or exporting.",
   "datasets:read",
-  paging.omit({ filter: true }).extend({ id }),
+  paging.omit({ filter: true }).extend({ id, preview: z.boolean().optional() }),
   (service, p) => service.listDatasetItems(p.id, p)
+)
+tool(
+  "get_dataset_item",
+  "Read one complete dataset item, including values omitted from preview pages. Capped at 32 MiB.",
+  "datasets:read",
+  z.object({ id }),
+  (service, p) => service.getDatasetItem(p.id)
 )
 tool(
   "create_dataset",
