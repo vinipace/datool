@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { delay, http, HttpResponse } from "msw"
-import { expect, userEvent, within } from "storybook/test"
+import { expect, spyOn, userEvent, waitFor, within } from "storybook/test"
 import { MembersPage } from "./members-page"
 import type { OrganizationMembers } from "@/src/lib/members"
 
@@ -52,6 +52,15 @@ const meta = {
 } satisfies Meta<typeof MembersPage>
 export default meta
 type Story = StoryObj<typeof meta>
+
+async function invitationActions(panel: ReturnType<typeof within>) {
+  await userEvent.click(
+    panel.getByRole("button", {
+      name: "Invitation actions for carla@example.test",
+    })
+  )
+  return within(await within(document.body).findByRole("menu"))
+}
 
 export const Members: Story = {
   play: async ({ canvasElement }) => {
@@ -157,14 +166,17 @@ export const FailedEmail: Story = {
         name: "Pending invitations (1)",
       })
     )
+    const actions = await invitationActions(dialog)
     await userEvent.click(
-      dialog.getByRole("button", { name: "Resend invitation" })
+      actions.getByRole("menuitem", { name: "Resend invitation" })
     )
     await expect(dialog.findByRole("alert")).resolves.toHaveTextContent(
       "email delivery could not be confirmed"
     )
     await expect(
-      dialog.getByRole("button", { name: "Resend invitation" })
+      dialog.getByRole("button", {
+        name: "Invitation actions for carla@example.test",
+      })
     ).toBeEnabled()
   },
 }
@@ -368,7 +380,20 @@ export const DialogFocus: Story = {
     )
     const pending = within(await within(document.body).findByRole("dialog"))
     await expect(pending.getByText("carla@example.test")).toBeVisible()
-    await userEvent.click(pending.getByRole("button", { name: "Done" }))
+    await expect(
+      pending.getByRole("button", {
+        name: "Copy invitation link for carla@example.test",
+      })
+    ).toHaveFocus()
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}")
+    await expect(pending.getByRole("button", { name: "Close" })).toHaveFocus()
+    await userEvent.keyboard("{Tab}")
+    await expect(
+      pending.getByRole("button", {
+        name: "Copy invitation link for carla@example.test",
+      })
+    ).toHaveFocus()
+    await userEvent.keyboard("{Escape}")
     await expect(
       canvas.getByRole("button", { name: "Pending invitations (1)" })
     ).toHaveFocus()
@@ -414,8 +439,9 @@ export const CancelInvitation: Story = {
       await canvas.findByRole("button", { name: "Pending invitations (1)" })
     )
     const dialog = within(await within(document.body).findByRole("dialog"))
+    const actions = await invitationActions(dialog)
     await userEvent.click(
-      dialog.getByRole("button", { name: "Cancel invitation" })
+      actions.getByRole("menuitem", { name: "Cancel invitation" })
     )
     await expect(
       dialog.findByText("No pending invitations.")
@@ -427,5 +453,226 @@ export const CancelInvitation: Story = {
     await expect(
       canvas.getByRole("button", { name: "Pending invitations (0)" })
     ).toBeVisible()
+  },
+}
+
+export const PendingInvitations: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        status({
+          ...initial,
+          invitations: [
+            initial.invitations[0],
+            {
+              ...initial.invitations[0],
+              id: "failed",
+              email: "alexandra.long-recipient@example.test",
+              role: "admin",
+              emailStatus: "failed",
+            },
+            {
+              ...initial.invitations[0],
+              id: "expired",
+              email: "expired@example.test",
+              expiresAt: "2020-09-24T00:00:00Z",
+              expired: true,
+            },
+          ],
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      await within(canvasElement).findByRole("button", {
+        name: "Pending invitations (3)",
+      })
+    )
+    const panel = within(await within(document.body).findByRole("dialog"))
+    await expect(
+      panel.getByRole("table", { name: "Pending invitations" })
+    ).toBeVisible()
+    await expect(
+      panel.getByRole("button", {
+        name: "Copy invitation link for expired@example.test",
+      })
+    ).toBeDisabled()
+  },
+}
+
+export const CopyUnconfirmedInvitation: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        status({
+          ...initial,
+          emailConfigured: false,
+          invitations: [{ ...initial.invitations[0], emailStatus: "failed" }],
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const writeClipboard = spyOn(
+      navigator.clipboard,
+      "writeText"
+    ).mockResolvedValue()
+    try {
+      await userEvent.click(
+        await within(canvasElement).findByRole("button", {
+          name: "Pending invitations (1)",
+        })
+      )
+      const panel = within(await within(document.body).findByRole("dialog"))
+      await userEvent.click(
+        panel.getByRole("button", {
+          name: "Copy invitation link for carla@example.test",
+        })
+      )
+      await expect(panel.findByRole("status")).resolves.toHaveTextContent(
+        "Invitation link copied for carla@example.test."
+      )
+      await expect(writeClipboard).toHaveBeenCalledTimes(1)
+      await expect(writeClipboard).toHaveBeenCalledWith(
+        `${window.location.origin}/invite/pending`
+      )
+      const actions = await invitationActions(panel)
+      await expect(
+        actions.getByRole("menuitem", { name: "Resend invitation" })
+      ).toHaveAttribute("aria-disabled", "true")
+      await userEvent.keyboard("{Escape}")
+    } finally {
+      writeClipboard.mockRestore()
+    }
+  },
+}
+
+export const ClipboardFailure: Story = {
+  play: async ({ canvasElement }) => {
+    const writeClipboard = spyOn(
+      navigator.clipboard,
+      "writeText"
+    ).mockRejectedValue(new Error("Clipboard denied"))
+    try {
+      await userEvent.click(
+        await within(canvasElement).findByRole("button", {
+          name: "Pending invitations (1)",
+        })
+      )
+      const panel = within(await within(document.body).findByRole("dialog"))
+      await userEvent.click(
+        panel.getByRole("button", {
+          name: "Copy invitation link for carla@example.test",
+        })
+      )
+      await expect(panel.findByRole("alert")).resolves.toHaveTextContent(
+        "Select and copy the invitation link below"
+      )
+      const link = panel.getByRole("textbox", {
+        name: "Invitation link for carla@example.test",
+      }) as HTMLInputElement
+      await expect(link).toHaveValue(`${window.location.origin}/invite/pending`)
+      await expect(link).toHaveFocus()
+      await expect(link.selectionStart).toBe(0)
+      await expect(link.selectionEnd).toBe(link.value.length)
+    } finally {
+      writeClipboard.mockRestore()
+    }
+  },
+}
+
+export const ResendExpiredInvitation: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        // A cached response can cross its expiry even with expired=false.
+        http.get(
+          endpoint,
+          () =>
+            HttpResponse.json({
+              ...initial,
+              invitations: [
+                {
+                  ...initial.invitations[0],
+                  expiresAt: "2020-09-24T00:00:00Z",
+                  expired: false,
+                },
+              ],
+            }),
+          { once: true }
+        ),
+        status({
+          ...initial,
+          invitations: [{ ...initial.invitations[0], id: "fresh-invitation" }],
+        }),
+        http.post(
+          "/api/auth/organization/invite-member",
+          async ({ request }) => {
+            const body = (await request.json()) as {
+              email: string
+              organizationId: string
+              resend: boolean
+            }
+            if (
+              body.email !== "carla@example.test" ||
+              body.organizationId !== "team" ||
+              !body.resend
+            ) {
+              return HttpResponse.json(
+                { message: "Invalid resend" },
+                { status: 400 }
+              )
+            }
+            return HttpResponse.json({ id: "fresh-invitation" })
+          }
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const writeClipboard = spyOn(
+      navigator.clipboard,
+      "writeText"
+    ).mockResolvedValue()
+    try {
+      await userEvent.click(
+        await within(canvasElement).findByRole("button", {
+          name: "Pending invitations (1)",
+        })
+      )
+      const panel = within(await within(document.body).findByRole("dialog"))
+      await expect(
+        panel.getByRole("button", {
+          name: "Copy invitation link for carla@example.test",
+        })
+      ).toBeDisabled()
+      const actions = await invitationActions(panel)
+      await userEvent.click(
+        actions.getByRole("menuitem", { name: "Resend invitation" })
+      )
+      await expect(panel.findByRole("status")).resolves.toHaveTextContent(
+        "Invitation email resent."
+      )
+      await waitFor(() =>
+        expect(
+          panel.getByRole("button", {
+            name: "Copy invitation link for carla@example.test",
+          })
+        ).toBeEnabled()
+      )
+      await userEvent.click(
+        panel.getByRole("button", {
+          name: "Copy invitation link for carla@example.test",
+        })
+      )
+      await waitFor(() =>
+        expect(writeClipboard).toHaveBeenCalledWith(
+          `${window.location.origin}/invite/fresh-invitation`
+        )
+      )
+    } finally {
+      writeClipboard.mockRestore()
+    }
   },
 }

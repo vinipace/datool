@@ -49,6 +49,8 @@ Metric tile histories span the card width with a muted line and subtle area fill
 
 Use `components/ui/button.tsx`, `input.tsx`, `textarea.tsx`, `select.tsx`, `checkbox.tsx`, `switch.tsx`, `card.tsx`, `notice.tsx`, and `dialog.tsx`. Native input/select props remain available. Standard Input and Textarea controls use `bg-input-background`; title inputs and plain textareas stay transparent. `Button loading` disables the control and announces busy state. `Notice variant` accepts info, success, warning and error. Dialog content supplies its overlay, portal and focus behavior. `components/auth/auth-shell.tsx` owns auth framing. Tables use `components/tracer/log-table-styles.ts` with the existing table behavior components.
 
+Use `DialogContent variant="panel"` for a full-height right-side panel. It fills narrow screens and is capped at `max-w-4xl` on desktop. Keep the header and footer outside a `min-h-0 flex-1 overflow-auto` body so long tables scroll within the panel while its controls stay available.
+
 ## Enforcement and review
 
 `RunningSpinner` in `components/ui/execution-status.tsx` supplies the shared radial spinner for running traces and spans. Place it immediately after the kind icon in trace rows, the span hierarchy, detail headings, and timeline labels. It announces "Running" and respects reduced-motion preferences. Trace rows use `logTable.runningRow` for a subtle warning-token tint while running.
