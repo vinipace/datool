@@ -1,0 +1,54 @@
+{
+  "queries": [
+    {
+      "measures": ["traces.count"],
+      "timeDimensions": [
+        {
+          "dimension": "traces.startedAt",
+          "dateRange": ["2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z"]
+        }
+      ],
+      "timezone": "UTC"
+    },
+    {
+      "measures": ["spans.spanCount"],
+      "timeDimensions": [
+        {
+          "dimension": "spans.startedAt",
+          "dateRange": ["2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z"]
+        }
+      ],
+      "timezone": "UTC"
+    },
+    {
+      "measures": ["evalRuns.count"],
+      "timeDimensions": [
+        {
+          "dimension": "evalRuns.createdAt",
+          "dateRange": ["2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z"]
+        }
+      ],
+      "timezone": "UTC"
+    },
+    {
+      "measures": ["evalResults.executionCount"],
+      "timeDimensions": [
+        {
+          "dimension": "evalResults.completedAt",
+          "dateRange": ["2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z"]
+        }
+      ],
+      "timezone": "UTC"
+    },
+    {
+      "measures": ["scoreValues.count"],
+      "timeDimensions": [
+        {
+          "dimension": "scoreValues.recordedAt",
+          "dateRange": ["2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z"]
+        }
+      ],
+      "timezone": "UTC"
+    }
+  ]
+}

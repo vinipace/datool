@@ -1,0 +1,15 @@
+{
+  "query": {
+    "measures": ["scoreValues.count", "scoreValues.meanValue"],
+    "timeDimensions": [
+      {
+        "dimension": "scoreValues.recordedAt",
+        "dateRange": ["2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z"]
+      }
+    ],
+    "timezone": "UTC",
+    "dimensions": ["scoreValues.definitionId"],
+    "limit": 50,
+    "total": true
+  }
+}

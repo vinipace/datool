@@ -223,6 +223,19 @@ jobs:
             bun run check:docs
             bun test tests/agent-readiness.test.ts tests/project-api-response.test.ts
       - run:
+          name: Validate public skills and installer discovery from the repository root
+          command: |
+            bun run check:skills
+            repository="$PWD"
+            # Keep npm from interpreting the Bun monorepo's dependency overrides.
+            cd "$(mktemp -d)"
+            npx --yes skills@1.5.25 add "$repository" --list
+          environment:
+            DISABLE_TELEMETRY: "1"
+      - run:
+          name: Verify the skills' minimum published CLI on Node 24 and Bun
+          command: node scripts/test-cli-distribution.mjs 0.3.0
+      - run:
           name: Prepare JavaScript scorer sandbox
           command: docker pull node:22-bookworm-slim
       - run:

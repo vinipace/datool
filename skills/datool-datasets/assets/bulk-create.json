@@ -1,0 +1,15 @@
+{
+  "create": [
+    {
+      "input": {
+        "question": "What is 2 + 2?"
+      },
+      "expectedOutput": {
+        "answer": 4
+      },
+      "metadata": {
+        "labelSource": "example"
+      }
+    }
+  ]
+}

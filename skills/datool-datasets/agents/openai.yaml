@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datool Datasets"
+  short_description: "Curate cases and freeze evaluation snapshots"
+  default_prompt: "Use $datool-datasets to prepare regression cases and freeze a reproducible dataset snapshot."

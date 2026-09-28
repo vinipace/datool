@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datool Evaluations"
+  short_description: "Run evaluations and enforce CI quality gates"
+  default_prompt: "Use $datool-evaluations to compare a candidate run against its baseline and check quality gates."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datool Scorers"
+  short_description: "Test and version JavaScript, Python and LLM scorers"
+  default_prompt: "Use $datool-scorers to test a scoring criterion on known passing and failing traces."

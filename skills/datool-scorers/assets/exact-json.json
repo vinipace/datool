@@ -1,0 +1,11 @@
+{
+  "scorer": {
+    "name": "Exact JSON",
+    "slug": "exact-json",
+    "description": "Compare JSON values, ignoring object key order and preserving array order.",
+    "type": "javascript",
+    "allowSkip": false,
+    "threshold": 1,
+    "code": "function evaluate({ trace, datasetItem }) {\n  if (!datasetItem || datasetItem.expectedOutput === undefined) {\n    throw new Error(\"Expected dataset output is required\");\n  }\n  function stable(value) {\n    if (Array.isArray(value)) return value.map(stable);\n    if (value !== null && typeof value === \"object\") {\n      return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));\n    }\n    return value;\n  }\n  const passed = JSON.stringify(stable(trace.output)) === JSON.stringify(stable(datasetItem.expectedOutput));\n  return { score: passed ? 1 : 0, passed };\n}"
+  }
+}

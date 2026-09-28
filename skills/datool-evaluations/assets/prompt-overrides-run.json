@@ -1,0 +1,6 @@
+{
+  "mode": "connected", "appId": "app-id", "datasetId": "dataset-id",
+  "datasetVersionId": "snapshot-id",
+  "evaluatorIds": ["scorer-id"], "requestKey": "support-v2-mini",
+  "promptOverrides": { "support-reply": { "version": 2, "model": "openai/gpt-4.1-mini" } }
+}

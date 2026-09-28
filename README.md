@@ -158,7 +158,7 @@ See [bounded data reads](docs/bounded-data-reads.md), [connected evaluations](do
 
 ## Agent workflows
 
-The MCP and CLI share trace investigation, scorer versions/testing, evaluation runs and CI gates, dataset snapshots, and analytics/navigation operations. See [the foundation guide](docs/agent-foundations.md). Install and maintain agent skills in the dedicated [datool-skills repository](https://github.com/vinpac/datool-skills).
+The MCP and CLI share trace investigation, scorer versions/testing, evaluation runs and CI gates, dataset snapshots, and analytics/navigation operations. See [the foundation guide](docs/agent-foundations.md). Agent skills are maintained in [`skills/`](skills/README.md); install the complete pack with `npx skills add vinipace/datool --skill '*'`.
 
 ## Contributing and security
 
