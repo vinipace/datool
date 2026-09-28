@@ -189,6 +189,13 @@ export type DatasetDetail = Dataset & {
   items: DatasetItem[]
 }
 
+export type DatasetItemField = DatasetField | "sourceSpanEvidence"
+
+/** Omitted values are placeholders only. Load a field before editing it. */
+export type DatasetItemPreview = DatasetItem & {
+  omittedFields?: Partial<Record<DatasetItemField, { bytes: number; preview: string }>>
+}
+
 export type DatasetVersion = {
   id: string
   datasetId: string

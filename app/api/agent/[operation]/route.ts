@@ -1,4 +1,5 @@
 import { api, readJson } from "@/src/server/tracer/http"
+import { agentRequestMaxBytes } from "@/src/lib/tracer/dataset-payload"
 import { findAgentOperation } from "@/src/server/mcp/operations"
 import { notFound } from "@/src/server/tracer/errors"
 
@@ -17,7 +18,7 @@ export async function POST(
     request,
     async (service) => {
       if (!op) throw notFound("Agent operation", operation)
-      return op.execute(service, await readJson(request))
+      return op.execute(service, await readJson(request, agentRequestMaxBytes(operation)))
     },
     { mutation: op?.scopes.some((scope) => scope.endsWith(":write")) ?? true }
   )

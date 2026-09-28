@@ -28,8 +28,10 @@ import type {
   CreateSpanInput,
   CreateTraceInput,
   Dataset,
+  DatasetItemField,
   DatasetDetail,
   DatasetItem,
+  DatasetItemPreview,
   DatasetVersion,
   EvalRun,
   EvalRunSummary,
@@ -148,6 +150,12 @@ function withQuery(path: string, query: Record<string, string | undefined>) {
 
   const encoded = params.toString()
   return encoded ? `${path}?${encoded}` : path
+}
+
+function datasetItemUrl(id: string, fields?: DatasetItemField[]) {
+  const path = `/api/dataset-items/${encodeURIComponent(id)}`
+  // An empty field list explicitly requests previews only.
+  return fields === undefined ? path : `${path}?${new URLSearchParams({ fields: fields.join(",") })}`
 }
 
 export type CollectionListOptions = {
@@ -271,8 +279,8 @@ export const tracerApi = {
       }), options.signal),
     update: (id: string, input: PatchDatasetInput) =>
       request<Dataset>(`/api/datasets/${encodeURIComponent(id)}`, { body: input, method: "PATCH" }),
-    updateItem: (id: string, input: PatchDatasetItemInput) =>
-      request<DatasetItem>(`/api/dataset-items/${encodeURIComponent(id)}`, { body: input, method: "PATCH" }),
+    updateItem: (id: string, input: PatchDatasetItemInput, fields?: DatasetItemField[]) =>
+      request<DatasetItemPreview>(datasetItemUrl(id, fields), { body: input, method: "PATCH" }),
     deleteItem: (id: string) =>
       request<{ id: string }>(`/api/dataset-items/${encodeURIComponent(id)}`, { method: "DELETE" }),
     importItems: (datasetId: string, items: CreateDatasetItemInput[]) =>
@@ -289,10 +297,13 @@ export const tracerApi = {
       request<CreatedLibraryEntry>("/api/datasets/library", { body: input, method: "POST", projectId }),
     moveEntry: (input: MoveLibraryEntry, projectId?: string) =>
       request<{ id: string; name: string }>("/api/datasets/library", { body: input, method: "PATCH", projectId }),
-    items: (id: string, options: CollectionListOptions = {}) =>
-      collection<DatasetItem>(
+    getItem: (id: string, options: { fields?: DatasetItemField[]; signal?: AbortSignal } = {}) =>
+      request<DatasetItemPreview>(datasetItemUrl(id, options.fields), { signal: options.signal }),
+    items: (id: string, options: CollectionListOptions & { preview?: boolean } = {}) =>
+      collection<DatasetItemPreview>(
         withQuery(`/api/datasets/${encodeURIComponent(id)}/items`, {
           filter: options.filter,
+          preview: options.preview?.toString(),
           cursor: options.cursor,
           includeTotal: options.includeTotal?.toString(),
           limit: options.limit?.toString(),
@@ -309,8 +320,8 @@ export const tracerApi = {
           method: "POST",
         }
       ),
-    get: (id: string) =>
-      request<DatasetDetail>(`/api/datasets/${encodeURIComponent(id)}`),
+    get: (id: string, options: { includeItems?: boolean } = {}) =>
+      request<DatasetDetail>(withQuery(`/api/datasets/${encodeURIComponent(id)}`, { includeItems: options.includeItems?.toString() })),
     list: (options: CollectionListOptions = {}) =>
       collection<Dataset>(
         withQuery("/api/datasets", {

@@ -8,7 +8,9 @@ type RouteContext = { params: Promise<{ id: string }> }
 
 export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params
-  return api(request, (service) => service.getDataset(parseId(id, "dataset id")))
+  return api(request, (service) => service.getDataset(parseId(id, "dataset id"), {
+    includeItems: new URL(request.url).searchParams.get("includeItems") !== "false",
+  }))
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

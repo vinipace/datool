@@ -9,6 +9,8 @@ import type {
   Dataset,
   DatasetDetail,
   DatasetItem,
+  DatasetItemPreview,
+  DatasetItemField,
   PatchDatasetInput,
 } from "@/src/lib/tracer/contracts"
 import { compileCollectionFilter } from "@/src/lib/tracer/collection-filters"
@@ -16,9 +18,12 @@ import { useTableView } from "./use-table-view"
 import type { ValueView } from "@/src/lib/tracer/value-views"
 import {
   itemDraft,
+  jsonDocument,
   type ItemDraft,
 } from "@/src/lib/tracer/dataset-editor"
 import { DatasetAutosave, type AutosaveState } from "@/src/lib/tracer/dataset-autosave"
+import { datasetItemFields, datasetItemPatch, datasetItemPreview, DATASET_ITEM_READ_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
+import { downloadTraceExport } from "./trace-list-utils"
 import { DatasetVersionHistory } from "./dataset-version-history"
 import { tracerApi } from "./api"
 import { CollectionPage } from "./collection-page"
@@ -57,14 +62,14 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     }))
   }
   const load = React.useCallback(
-    () => tracerApi.datasets.get(datasetId),
+    () => tracerApi.datasets.get(datasetId, { includeItems: false }),
     [datasetId]
   )
   const datasetState = useRemote<DatasetDetail>(load, [datasetId])
   const filter = useCollectionFilter("datasetItems")
   const list = React.useCallback(
     (options: import("./api").CollectionListOptions) =>
-      tracerApi.datasets.items(datasetId, options),
+      tracerApi.datasets.items(datasetId, { ...options, preview: true }),
     [datasetId]
   )
   const page = useCollectionPages(list, filter.filter, 0)
@@ -77,7 +82,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
         itemCount: datasetState.data?.itemCount ?? datasetOverride.itemCount,
       }
     : datasetState.data
-  const [overrides, setOverrides] = React.useState<Record<string, DatasetItem>>(
+  const [overrides, setOverrides] = React.useState<Record<string, DatasetItemPreview>>(
     {}
   )
   const [deleted, setDeleted] = React.useState<Set<string>>(() => new Set())
@@ -93,13 +98,17 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const [importOpen, setImportOpen] = React.useState(false)
   const [mobileDetails, setMobileDetails] = React.useState(false)
   const returnFocus = React.useRef<HTMLElement | null>(null)
+  const selectionRequest = React.useRef<AbortController | null>(null)
+  const [loadingField, setLoadingField] = React.useState<DatasetItemField | null>(null)
+  const [fieldErrors, setFieldErrors] = React.useState<Partial<Record<DatasetItemField, string>>>({})
+  React.useEffect(() => () => selectionRequest.current?.abort(), [])
   const refreshDataset = datasetState.refresh
   const refreshItems = page.refresh
   const [autosave] = React.useState(() => new DatasetAutosave({
     schemas: () => ({}),
     save: (item, values, isNew) => isNew
       ? tracerApi.datasets.createItem(datasetId, { id: item.id, ...values, sourceTraceId: values.sourceTraceId ?? undefined })
-      : tracerApi.datasets.updateItem(item.id, { ...values, expectedVersionId: item.versionId }),
+      : tracerApi.datasets.updateItem(item.id, datasetItemPatch(item, values), datasetItemFields.filter(field => !item.omittedFields?.[field])),
     changed: (id, state) => {
       setAutosaves(current => ({ ...current, [id]: state }))
       setOverrides(current => ({ ...current, [id]: state.preview }))
@@ -132,13 +141,13 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const currentVersion = version && version.revision >= (dataset?.revision ?? 0) ? version.id : dataset?.versionId
 
   const allItems = React.useMemo(() => {
-    const map = new Map(page.items.map((item) => [item.id, item]))
+    const map = new Map<string, DatasetItemPreview>(page.items.map((item) => [item.id, item]))
     for (const item of Object.values(overrides)) map.set(item.id, item)
     return [...map.values()].filter((item) => !deleted.has(item.id))
   }, [page.items, overrides, deleted])
   const computed = useComputedColumns(
     `dataset:${datasetId}`,
-    allItems,
+    allItems.filter(item => !item.omittedFields),
     `datool:dataset-fields:${storageScope}:${datasetId}`
   )
   const tableView = useTableView({
@@ -151,11 +160,20 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     () => compileCollectionFilter("datasetItems", filter.filter),
     [filter.filter]
   )
-  const items = allItems.filter((item) => newIds.has(item.id) || matches(item))
+  // Preview rows were filtered in PostgreSQL against complete values.
+  const items = React.useMemo(() => allItems.filter((item) => newIds.has(item.id) || item.omittedFields || matches(item)), [allItems, newIds, matches])
+  const tableItems = React.useMemo(() => items.map(item => datasetItemPreview(item)), [items])
   const selected = allItems.find((item) => item.id === selectedId)
   const selectedIndex = items.findIndex((item) => item.id === selectedId)
-  const select = (item: DatasetItem, target?: HTMLElement) => {
+  const select = (row: DatasetItemPreview, target?: HTMLElement) => {
     if (target) returnFocus.current = target
+    selectionRequest.current?.abort()
+    selectionRequest.current = null
+    setLoadingField(null)
+    setFieldErrors({})
+    if (selectedId && selectedId !== row.id) void autosave.flush(selectedId)
+    setSelectedId(row.id)
+    const item = overrides[row.id] ?? row
     setDrafts((current) =>
       current[item.id] ? current : { ...current, [item.id]: itemDraft(item) }
     )
@@ -163,14 +181,51 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
       ...current,
       [item.id]: current[item.id] ?? item,
     }))
-    if (selectedId && selectedId !== item.id) void autosave.flush(selectedId)
-    setSelectedId(item.id)
+  }
+  const loadField = async (field: DatasetItemField) => {
+    if (!selected || selectionRequest.current || !selected.omittedFields?.[field]) return
+    const controller = new AbortController()
+    selectionRequest.current = controller
+    setLoadingField(field)
+    setFieldErrors(current => ({ ...current, [field]: undefined }))
+    try {
+      await autosave.flush(selected.id)
+      if (controller.signal.aborted) return
+      const loaded = await tracerApi.datasets.getItem(selected.id, { fields: [field], signal: controller.signal })
+      if (controller.signal.aborted) return
+      const hydrated = autosave.hydrateField(selected, loaded, field)
+      setOverrides(current => ({ ...current, [selected.id]: hydrated }))
+      if (field !== "sourceSpanEvidence") setDrafts(current => ({ ...current, [selected.id]: { ...current[selected.id], [field]: jsonDocument(loaded[field]) } }))
+    } catch (error) {
+      if (!controller.signal.aborted) setFieldErrors(current => ({ ...current, [field]: (error as Error).message }))
+    } finally {
+      if (selectionRequest.current === controller) {
+        selectionRequest.current = null
+        setLoadingField(null)
+      }
+    }
   }
   const close = () => {
+    selectionRequest.current?.abort()
     if (selectedId) void autosave.flush(selectedId)
     setSelectedId(null)
     setMobileDetails(false)
     returnFocus.current?.focus()
+  }
+
+  async function exportItems(rows: DatasetItemPreview[], selected = false) {
+    setPageError("")
+    try {
+      const complete: DatasetItem[] = []
+      let bytes = 2
+      for (const row of rows) {
+        const item = row.omittedFields ? await tracerApi.datasets.getItem(row.id) : row
+        bytes += new TextEncoder().encode(JSON.stringify(item, null, 2)).byteLength + 2
+        if (bytes > DATASET_ITEM_READ_MAX_BYTES) throw new Error("Export exceeds 32 MiB. Select fewer rows.")
+        complete.push(item)
+      }
+      downloadTraceExport({ content: JSON.stringify(complete, null, 2), filename: `datool-${selected ? "selected-" : ""}${dataset?.name.split("/").at(-1) ?? "dataset-rows"}.json`, type: "application/json" })
+    } catch (error) { setPageError((error as Error).message) }
   }
 
   function addRow() {
@@ -193,6 +248,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   }
 
   async function deleteRow(item: DatasetItem) {
+    selectionRequest.current?.abort()
     setPageError("")
     setDeleted((current) => new Set(current).add(item.id))
     setSelectedId(null)
@@ -333,11 +389,12 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
           pagination={page}
           selection={{
             rows: items.filter((item) => checked.has(item.id)),
+            onExportJson: () => void exportItems(items.filter(item => checked.has(item.id)), true),
             onClear: () => setChecked(new Set()),
           }}
           className="p-2"
           header={{
-            exportRows: items,
+            onExportJson: () => void exportItems(items),
             exportName: dataset.name.split("/").at(-1) ?? "dataset-rows",
             children: (
               <CollectionFilterBar
@@ -349,7 +406,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
           }}
         >
           <DatasetItemsTable
-            items={items}
+            items={tableItems}
             computed={computed}
             checked={checked}
             onCheck={setChecked}
@@ -380,7 +437,11 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
           </div>
           {selected && drafts[selected.id] ? (
             <DatasetItemInspector
+              key={selected.id}
               item={selected}
+              onLoadField={field => void loadField(field)}
+              loadingField={loadingField}
+              fieldErrors={fieldErrors}
               customColumnDetails={
                 <>
                   {computed.storageError && (
@@ -403,7 +464,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
                         resource="dataset"
                         addLabel="Add custom field"
                         addedFields={computed.columns}
-                        rows={[selected, ...allItems.filter((item) => item.id !== selected.id)]}
+                        rows={[selected, ...allItems.filter(item => item.id !== selected.id)].filter(item => !item.omittedFields)}
                         onSave={(column) =>
                           computed.update([...computed.columns, column])
                         }
@@ -414,6 +475,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
               }
               draft={drafts[selected.id]}
               onDraftChange={(draft) => {
+                if (selectionRequest.current) return
                 setDrafts((current) => ({ ...current, [selected.id]: draft }))
                 autosave.edit(selected, draft, newIds.has(selected.id))
               }}
@@ -444,7 +506,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
       {schemaOpen && (
         <DatasetSchemaDialog
           schemas={dataset.fieldSchemas ?? {}}
-          sample={selected ?? items[0]}
+          sample={selected && !selected.omittedFields ? selected : items.find(item => !item.omittedFields)}
           onClose={() => setSchemaOpen(false)}
           onSave={(fieldSchemas) => saveDataset({ fieldSchemas })}
         />

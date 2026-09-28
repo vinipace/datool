@@ -2,6 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { getTracerService } from "../tracer/service"
 import { withWorkspace } from "@/src/server/auth/context"
 import { createMcpServer } from "./server"
+import { agentRequestMaxBytes, DATASET_WRITE_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
 import {
   authenticate,
   authFailure,
@@ -25,8 +26,8 @@ export async function handleMcp(
         status: 405,
         headers: { Allow: "POST, OPTIONS" },
       })
-    if (Number(request.headers.get("content-length")) > 1024 * 1024)
-      throw new McpAuthError("Request exceeds 1 MiB.", 413)
+    if (Number(request.headers.get("content-length")) > DATASET_WRITE_MAX_BYTES)
+      throw new McpAuthError("Request exceeds 4 MiB.", 413)
     const reader = request.body?.getReader()
     if (!reader) throw new McpAuthError("JSON body required.", 400)
     const chunks: Uint8Array[] = []
@@ -35,9 +36,9 @@ export async function handleMcp(
       const { done, value } = await reader.read()
       if (done) break
       size += value.byteLength
-      if (size > 1024 * 1024) {
+      if (size > DATASET_WRITE_MAX_BYTES) {
         await reader.cancel()
-        throw new McpAuthError("Request exceeds 1 MiB.", 413)
+        throw new McpAuthError("Request exceeds 4 MiB.", 413)
       }
       chunks.push(value)
     }
@@ -53,6 +54,9 @@ export async function handleMcp(
     } catch {
       throw new McpAuthError("Invalid JSON body.", 400)
     }
+    const message = parsedBody as { method?: unknown; params?: { name?: unknown } } | null
+    const maxBytes = agentRequestMaxBytes(message?.method === "tools/call" ? message.params?.name : undefined)
+    if (size > maxBytes) throw new McpAuthError(`Request exceeds ${maxBytes / (1024 * 1024)} MiB.`, 413)
     return await withWorkspace({ organizationId: identity.organizationId, projectId: identity.projectId, userId: identity.kind === "api-key" ? undefined : identity.subject, apiKeyId: identity.apiKeyId, apiKeyName: identity.apiKeyName, clientId: identity.clientId, scopes: identity.scopes, kind: identity.kind ?? "oauth" }, async () => {
     const server = createMcpServer(await dependencies.service(identity.projectId), identity.scopes)
     const transport = new WebStandardStreamableHTTPServerTransport({

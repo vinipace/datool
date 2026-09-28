@@ -1,6 +1,7 @@
 import { promptOverridesSchema, validatePromptOverrides } from "@/src/lib/tracer/prompt-overrides"
 import { datasetPath } from "@/src/lib/tracer/dataset-library"
 import { invocationGroupSchema } from "@/src/lib/tracer/groups"
+import { datasetItemFields } from "@/src/lib/tracer/dataset-payload"
 import { z, ZodError } from "zod"
 
 import type {
@@ -31,6 +32,12 @@ const id = z
 const name = z.string().trim().min(1).max(200)
 const description = z.string().trim().max(4_000)
 const timestamp = z.string().datetime({ offset: true })
+
+export const datasetItemFieldsSchema = z.array(z.enum(datasetItemFields)).max(datasetItemFields.length)
+
+export function parseDatasetItemFields(value: string | null) {
+  return value === null ? undefined : parse(datasetItemFieldsSchema, value ? value.split(",") : [], "dataset item fields")
+}
 
 const jsonValue: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([

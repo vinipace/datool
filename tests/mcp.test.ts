@@ -347,7 +347,7 @@ test("MCP client performs CRUD and write tools are unavailable to read-only toke
       dependencies
     )
     expect(response.status).toBe(200)
-    expect((await response.json()).result.tools.length).toBe(7)
+    expect((await response.json()).result.tools.map((tool: { name: string }) => tool.name)).toContain("get_dataset_item")
     const dashboardConfig = {
       schemaVersion: 1,
       name: "MCP dashboard",
@@ -416,7 +416,7 @@ test("MCP client performs CRUD and write tools are unavailable to read-only toke
     ).toBe(true)
     const readonly = await connect(["datasets:read"])
     expect((await readonly.listTools()).tools.map((tool) => tool.name)).toEqual(
-      ["list_datasets", "get_dataset", "list_dataset_items", "list_dataset_snapshots", "get_dataset_snapshot", "resolve_dataset", "describe_agent_operations"]
+      ["list_datasets", "get_dataset", "list_dataset_items", "get_dataset_item", "list_dataset_snapshots", "get_dataset_snapshot", "resolve_dataset", "describe_agent_operations"]
     )
     const denied = await readonly.callTool({
       name: "create_dataset",

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { ArrowDownRight, Braces, Calendar, Equal, Link2 } from "lucide-react"
-import type { DatasetItem, JsonValue } from "@/src/lib/tracer/contracts"
+import type { DatasetItemPreview, DatasetField, JsonValue } from "@/src/lib/tracer/contracts"
 import type { LogTableSettings } from "@/src/lib/tracer/custom-views"
 import { datasetFields, datasetFieldLabels } from "@/src/lib/tracer/dataset-schemas"
 import { availableValueViews, isValueView, valueViews, valueViewLabels, type ValueView } from "@/src/lib/tracer/value-views"
@@ -43,12 +43,12 @@ export function DatasetItemsTable({
   onSettingsChange,
   onFieldViewChange,
 }: {
-  items: DatasetItem[]
+  items: DatasetItemPreview[]
   computed: ReturnType<typeof useComputedColumns>
   checked: Set<string>
   onCheck: (checked: Set<string>) => void
   selectedId: string | null
-  onSelect: (item: DatasetItem, target: HTMLElement) => void
+  onSelect: (item: DatasetItemPreview, target: HTMLElement) => void
   filtered: boolean
   datasetId: string
   drafts: Set<string>
@@ -64,6 +64,14 @@ export function DatasetItemsTable({
       <StructuredValueView value={value} view={settings.fieldViews?.[field] ?? "json"} compact={!tall} />
     </div>
   )
+  const renderField = (item: DatasetItemPreview, field: DatasetField) => {
+    const omitted = item.omittedFields?.[field]
+    return omitted ? (
+      <div className={`font-mono text-xs text-foreground-muted ${contentClass}`}>
+        <span title="Open this row, then choose Load field to see the complete value">{omitted.preview}… (preview)</span>
+      </div>
+    ) : renderValue(item[field], field)
+  }
   const count = items.filter((item) => checked.has(item.id)).length
   return (
     <>
@@ -145,7 +153,7 @@ export function DatasetItemsTable({
                   resource="dataset"
                   column={column}
                   addedFields={computed.columns}
-                  rows={items}
+                  rows={items.filter(item => !item.omittedFields)}
                   onSave={(next) =>
                     computed.update(
                       computed.columns.map((current) =>
@@ -172,7 +180,7 @@ export function DatasetItemsTable({
                 borderless
                 resource="dataset"
                 addedFields={computed.columns}
-                rows={items}
+                rows={items.filter(item => !item.omittedFields)}
                 onSave={(column) =>
                   computed.update([...computed.columns, column])
                 }
@@ -237,11 +245,11 @@ export function DatasetItemsTable({
                   <LogTimestamp value={item.createdAt} />
                 )}
               </td>
-              <td className={logTable.cell}>{renderValue(item.input, "input")}</td>
+              <td className={logTable.cell}>{renderField(item, "input")}</td>
               <td className={logTable.cell}>
-                {renderValue(item.expectedOutput, "expectedOutput")}
+                {renderField(item, "expectedOutput")}
               </td>
-              <td className={logTable.cell}>{renderValue(item.metadata, "metadata")}</td>
+              <td className={logTable.cell}>{renderField(item, "metadata")}</td>
               <td className={logTable.cell}>
                 <span
                   className={`block font-mono text-xs text-foreground-muted ${contentClass}`}
@@ -252,10 +260,10 @@ export function DatasetItemsTable({
               {computed.columns.map((column) => (
                 <td key={column.id} className={logTable.cell}>
                   <div className={contentClass}>
-                    <ComputedValue
+                    {item.omittedFields && !computed.cells[column.id]?.[item.id] ? <span className="text-xs text-foreground-muted">Open row to calculate</span> : <ComputedValue
                       cell={computed.cells[column.id]?.[item.id]}
                       format={column.format}
-                    />
+                    />}
                   </div>
                 </td>
               ))}

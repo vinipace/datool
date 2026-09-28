@@ -1,13 +1,14 @@
-import type { DatasetFieldSchemas, DatasetItem } from "./contracts"
-import { parseItemDraft, type ItemDraft } from "./dataset-editor"
+import type { DatasetFieldSchemas, DatasetItemField, DatasetItemPreview } from "./contracts"
+import { jsonDocument, parseItemDraft, type ItemDraft } from "./dataset-editor"
+import { mergeDatasetItemField } from "./dataset-payload"
 import { canonicalJson } from "./resource-document"
 import { datasetFieldErrors, datasetFieldLabels, datasetFields } from "./dataset-schemas"
 
 export type AutosaveStatus = "saved" | "pending" | "saving" | "invalid" | "error"
 export type ItemValues = ReturnType<typeof parseItemDraft>
 export type AutosaveState = {
-  item: DatasetItem
-  preview: DatasetItem
+  item: DatasetItemPreview
+  preview: DatasetItemPreview
   isNew: boolean
   status: AutosaveStatus
   error?: string
@@ -20,7 +21,7 @@ type Entry = AutosaveState & {
   removed?: boolean
 }
 
-const valuesOf = (item: DatasetItem): ItemValues => ({
+const valuesOf = (item: DatasetItemPreview): ItemValues => ({
   input: item.input,
   expectedOutput: item.expectedOutput,
   metadata: item.metadata,
@@ -33,9 +34,9 @@ export class DatasetAutosave {
   private detached = false
   constructor(private options: {
     schemas: () => DatasetFieldSchemas
-    save: (item: DatasetItem, values: ItemValues, isNew: boolean) => Promise<DatasetItem>
+    save: (item: DatasetItemPreview, values: ItemValues, isNew: boolean) => Promise<DatasetItemPreview>
     changed: (id: string, state: AutosaveState) => void
-    saved: (item: DatasetItem, wasNew: boolean) => void
+    saved: (item: DatasetItemPreview, wasNew: boolean) => void
     delay?: number
   }) {}
 
@@ -50,14 +51,14 @@ export class DatasetAutosave {
     const values = parseItemDraft(entry.draft)
     const schemas = this.options.schemas()
     for (const field of datasetFields) {
-      if (!schemas[field]?.enforced) continue
+      if (entry.item.omittedFields?.[field] || !schemas[field]?.enforced) continue
       const errors = datasetFieldErrors(schemas[field]?.schema, values[field])
       if (errors.length) throw new Error(`${datasetFieldLabels[field]}: ${errors.join("; ")}`)
     }
     return values
   }
 
-  edit(item: DatasetItem, draft: ItemDraft, isNew = false) {
+  edit(item: DatasetItemPreview, draft: ItemDraft, isNew = false) {
     const entry = this.entries.get(item.id) ?? {
       item, preview: item, draft, isNew, status: "saved" as const, generation: 0,
     }
@@ -66,6 +67,19 @@ export class DatasetAutosave {
     entry.error = undefined
     this.entries.set(item.id, entry)
     this.schedule(entry)
+  }
+
+  hydrateField(item: DatasetItemPreview, loaded: DatasetItemPreview, field: DatasetItemField) {
+    const entry = this.entries.get(item.id)
+    if (entry?.inFlight || entry?.status === "pending") throw new Error("Wait for this row to finish saving, then load the field again.")
+    const baseline = mergeDatasetItemField(entry?.item ?? item, loaded, field)
+    if (!entry) return baseline
+    const preview = mergeDatasetItemField(entry.preview, loaded, field)
+    entry.item = baseline
+    entry.preview = preview
+    if (field !== "sourceSpanEvidence") entry.draft = { ...entry.draft, [field]: jsonDocument(loaded[field]) }
+    this.emit(entry)
+    return preview
   }
 
   private schedule(entry: Entry) {

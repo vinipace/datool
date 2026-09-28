@@ -132,6 +132,9 @@
     "get_dataset": {
       "$ref": "#/components/schemas/Output_DatasetDetail"
     },
+    "get_dataset_item": {
+      "$ref": "#/components/schemas/Output_DatasetItemPreview"
+    },
     "get_dataset_snapshot": {
       "$ref": "#/components/schemas/Output_get_dataset_snapshot"
     },
@@ -403,7 +406,7 @@
       "$ref": "#/components/schemas/Output_Dataset"
     },
     "update_dataset_item": {
-      "$ref": "#/components/schemas/Output_DatasetItem"
+      "$ref": "#/components/schemas/Output_DatasetItemPreview"
     },
     "update_human_score": {
       "$ref": "#/components/schemas/Output_HumanScore"
@@ -824,6 +827,66 @@
         },
         "observedOutput": {
           "$ref": "#/components/schemas/Output_run_app_metadata_value"
+        },
+        "sourceSpanEvidence": {
+          "$ref": "#/components/schemas/Output_get_dataset_items_item_sourceSpanEvidence"
+        },
+        "sourceSpanId": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "sourceTraceId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "versionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "createdAt",
+        "datasetId",
+        "expectedOutput",
+        "id",
+        "input",
+        "metadata",
+        "sourceTraceId",
+        "updatedAt"
+      ]
+    },
+    "Output_DatasetItemPreview": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "type": "string"
+        },
+        "datasetRevision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "datasetVersionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "expectedOutput": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "observedOutput": {
+          "$ref": "#/components/schemas/Output_run_app_metadata_value"
+        },
+        "omittedFields": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_omittedFields"
         },
         "sourceSpanEvidence": {
           "$ref": "#/components/schemas/Output_get_dataset_items_item_sourceSpanEvidence"
@@ -6077,7 +6140,7 @@
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/Output_DatasetItem"
+            "$ref": "#/components/schemas/Output_list_dataset_items_items_item"
           }
         },
         "nextCursor": {
@@ -6090,6 +6153,87 @@
       "required": [
         "items",
         "nextCursor"
+      ]
+    },
+    "Output_list_dataset_items_items_item": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "datasetId": {
+          "type": "string"
+        },
+        "datasetRevision": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "datasetVersionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "expectedOutput": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_JsonValue"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_JsonObject"
+        },
+        "observedOutput": {
+          "$ref": "#/components/schemas/Output_run_app_metadata_value"
+        },
+        "omittedFields": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_omittedFields"
+        },
+        "sourceSpanEvidence": {
+          "$ref": "#/components/schemas/Output_get_dataset_items_item_sourceSpanEvidence"
+        },
+        "sourceSpanId": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
+        "sourceTraceId": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "versionId": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        }
+      },
+      "required": [
+        "createdAt",
+        "datasetId",
+        "expectedOutput",
+        "id",
+        "input",
+        "metadata",
+        "sourceTraceId",
+        "updatedAt"
+      ]
+    },
+    "Output_list_dataset_items_items_item_omittedFields": {
+      "$ref": "#/components/schemas/Output_Partial_3"
+    },
+    "Output_list_dataset_items_items_item_omittedFields_expectedOutput": {
+      "$ref": "#/components/schemas/Output_list_dataset_items_items_item_omittedFields_expectedOutput_2"
+    },
+    "Output_list_dataset_items_items_item_omittedFields_expectedOutput_2": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "number"
+        },
+        "preview": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes",
+        "preview"
       ]
     },
     "Output_list_dataset_snapshots": {
@@ -7428,6 +7572,23 @@
         },
         "metadata": {
           "$ref": "#/components/schemas/Output_list_datasets_items_item_fieldSchemas_expectedOutput"
+        }
+      }
+    },
+    "Output_Partial_3": {
+      "type": "object",
+      "properties": {
+        "expectedOutput": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_omittedFields_expectedOutput"
+        },
+        "input": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_omittedFields_expectedOutput"
+        },
+        "metadata": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_omittedFields_expectedOutput"
+        },
+        "sourceSpanEvidence": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_omittedFields_expectedOutput"
         }
       }
     },

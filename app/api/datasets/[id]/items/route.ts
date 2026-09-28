@@ -1,4 +1,5 @@
 import { api, readJson } from "@/src/server/tracer/http"
+import { DATASET_WRITE_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
 import {
   parseCreateDatasetItem,
   parseListLimit,
@@ -17,7 +18,7 @@ export async function POST(request: Request, context: RouteContext) {
     async (service) =>
       service.createDatasetItem(
         parseId(id, "dataset id"),
-        parseCreateDatasetItem(await readJson(request))
+        parseCreateDatasetItem(await readJson(request, DATASET_WRITE_MAX_BYTES))
       ),
     { mutation: true }
   )
@@ -32,6 +33,7 @@ export async function GET(request: Request, context: RouteContext) {
       cursor: url.searchParams.get("cursor"),
       includeTotal: url.searchParams.get("includeTotal") === "true",
       limit: parseListLimit(url.searchParams.get("limit")),
+      preview: url.searchParams.get("preview") === "true",
     })
   )
 }

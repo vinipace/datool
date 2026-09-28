@@ -27,6 +27,7 @@ layout applies the `Page · Datool` format.
 | Trace inspector overlay | `trace-list-overlay.tsx` | Reuse the overlay and its focus behavior. |
 | Inspector panels | `inspector-panels.tsx` | Compose existing panels and context instead of another inspector. |
 | Input/output and dataset value presentation | `components/ui/structured-value-view.tsx`, `structured-value-viewer.tsx`, `value-view-select.tsx` | Share rendering and format selection; dataset tables keep their field settings in Display. |
+| Large values loaded on demand | `components/ui/deferred-value.tsx` | Show a blurred bounded preview, size, load button and inline retry error. Mount the value editor only after the field is fetched. |
 
 Paths in the table are under `components/tracer/` unless specified otherwise.
 
