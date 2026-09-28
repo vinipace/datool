@@ -7,22 +7,34 @@ import {
   type ComputedColumn,
   type ComputedRow,
 } from "@/src/lib/tracer/computed-columns"
-import { fieldRegistry } from "./custom-field-registry"
+import { useFieldRegistry } from "./custom-field-registry"
+import { useWorkspaceStorageScope } from "./workspace-path"
 import { createComputedColumnStore } from "@/src/lib/tracer/computed-column-store"
 
 const emptyRegistry: ComputedColumn[] = []
+const stores = new Map<string, ReturnType<typeof createComputedColumnStore>>()
 
 export function useComputedColumns(runId: string, rows: ComputedRow[], storageKey?: string) {
+  const fieldRegistry = useFieldRegistry()
+  const scope = useWorkspaceStorageScope()
+  const scopedKey = storageKey?.includes(scope) ? storageKey : `datool:eval-columns:${scope}:${storageKey ?? runId}`
   const store = React.useMemo(
-    () => createComputedColumnStore(runId, () => localStorage, storageKey, async (columns, previous) => {
+    () => {
+      const existing = stores.get(scopedKey)
+      if (existing) return existing
+      const store = createComputedColumnStore(runId, () => localStorage, scopedKey, async (columns, previous) => {
       const saved = []
       for (const column of columns) {
         const old = previous.find(item => item.id === column.id)
-        saved.push(await fieldRegistry.save(column, !!old && JSON.stringify(old) !== JSON.stringify(column)))
+        const registered = fieldRegistry.get().find(item => item.id === column.id)
+        saved.push(registered && registered.code === column.code && registered.name === column.name && registered.mode === column.mode && registered.format === column.format ? registered : await fieldRegistry.save(column, !!old && JSON.stringify(old) !== JSON.stringify(column)))
       }
       return [...new Map(saved.map(column => [column.id, column])).values()]
-    }),
-    [runId, storageKey]
+      })
+      stores.set(scopedKey, store)
+      return store
+    },
+    [runId, scopedKey, fieldRegistry]
   )
   const { columns: storedColumns, storageError } = React.useSyncExternalStore(
     store.subscribe,
@@ -30,15 +42,15 @@ export function useComputedColumns(runId: string, rows: ComputedRow[], storageKe
     store.getServerSnapshot
   )
   const registry = React.useSyncExternalStore(fieldRegistry.subscribe, fieldRegistry.get, () => emptyRegistry)
-  const columns = React.useMemo(() => fieldRegistry.resolve(storedColumns, registry), [storedColumns, registry])
+  const columns = React.useMemo(() => fieldRegistry.resolve(storedColumns, registry), [fieldRegistry, storedColumns, registry])
   React.useEffect(() => {
-    store.load()
-    void fieldRegistry.migrate().then(() => store.update(fieldRegistry.resolve(store.getSnapshot().columns)))
+    if (!store.getSnapshot().loaded) store.load()
+    void fieldRegistry.migrate(scopedKey).then(() => { store.load(); store.select(fieldRegistry.resolve(store.getSnapshot().columns)) })
       .catch(() => { /* Retain local fields; the editor exposes registry failures. */ })
-    const refresh = () => { void fieldRegistry.refresh().then(() => store.update(fieldRegistry.resolve(store.getSnapshot().columns))).catch(() => {}) }
+    const refresh = () => { void fieldRegistry.refresh().then(() => store.select(fieldRegistry.resolve(store.getSnapshot().columns))).catch(() => {}) }
     window.addEventListener("focus", refresh)
     return () => window.removeEventListener("focus", refresh)
-  }, [store])
+  }, [store, fieldRegistry, scopedKey])
   return {
     store,
     columns,

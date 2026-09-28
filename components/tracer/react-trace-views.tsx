@@ -43,14 +43,21 @@ import { useProjectScope } from "./project-scope-context"
 import { reactViewsApi } from "./api"
 import { ReactViewCodeEditor } from "./react-view-code-editor"
 import { ReactViewPreview } from "./react-view-preview"
+import { usePathname } from "next/navigation"
+import { pageResourceForPath } from "@/src/lib/tracer/view-resources"
+import { traceObjectViewInput, type ObjectViewInput } from "@/src/lib/tracer/object-views"
+import { useViewPreference } from "./use-view-preference"
+import { useObjectViewFields } from "./use-object-view-fields"
 const starter = `import * as React from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@datool/ui";
-export default function View({ trace }: ViewProps) {
-  return <Card className="m-4"><CardHeader><CardTitle>{trace.name}</CardTitle></CardHeader><CardContent><pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify(trace.output, null, 2)}</pre></CardContent></Card>;
+export default function View({ kind, object, context }: ViewProps) {
+  const output = kind === "trace" ? object.output : object.expectedOutput;
+  return <Card className="m-4"><CardHeader><CardTitle>{kind === "trace" ? object.name : "Dataset item"}{context.unsaved ? " · Unsaved draft" : ""}</CardTitle></CardHeader><CardContent><pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify(output, null, 2)}</pre></CardContent></Card>;
 }`
 
 export function ReactTraceViews(props: {
   trace: TraceViewData
+  objectInput?: ObjectViewInput
   source?: ReactViewSource | null
   dataLoading?: boolean
   onDataModeChange?: (mode: TraceViewDataMode) => void
@@ -59,7 +66,7 @@ export function ReactTraceViews(props: {
   // Remount on project change so neither drafts nor late requests cross projects.
   return scope ? (
     <ProjectViews
-      key={scope.projectId}
+      key={scope.projectId + ":" + (props.objectInput?.kind ?? "trace")}
       {...props}
       projectId={scope.projectId}
     />
@@ -69,20 +76,28 @@ export function ReactTraceViews(props: {
 }
 function ProjectViews({
   trace,
+  objectInput: suppliedInput,
   source,
   projectId,
   dataLoading,
   onDataModeChange,
 }: {
   trace: TraceViewData
+  objectInput?: ObjectViewInput
   source?: ReactViewSource | null
   dataLoading?: boolean
   onDataModeChange?: (mode: TraceViewDataMode) => void
   projectId: string
 }) {
+  const pathname = usePathname()
+  const objectInput = React.useMemo(() => suppliedInput ?? traceObjectViewInput(trace), [suppliedInput, trace])
+  const kind = objectInput.kind
+  const preferenceScope = "object-view:" + (pageResourceForPath(pathname) ?? "inspector") + ":" + kind
+  const { preference, error: preferenceError, save: savePreference } = useViewPreference(projectId, preferenceScope)
   const [views, setViews] = React.useState<ReactViewSummary[]>([])
   const [selected, setSelected] = React.useState<ReactView | null>(null)
   const [draft, setDraft] = React.useState<ReactViewInput | null>(null)
+  const resolvedFields = useObjectViewFields(projectId, draft?.customFields ?? selected?.customFields ?? [], objectInput)
   const [draftSource, setDraftSource] = React.useState<ReactViewSource | null>(
     null
   )
@@ -96,22 +111,19 @@ function ProjectViews({
   const requestId = React.useRef(0)
   const currentSource =
     source === undefined ? { kind: "trace" as const, id: trace.id } : source
-  const ranked = rankReactViews(views, trace)
+  const ranked = rankReactViews(views, trace, objectInput)
   const dataMode = draft?.dataMode ?? selected?.dataMode ?? "summary"
   React.useEffect(() => {
     onDataModeChange?.(dataMode)
   }, [dataMode, onDataModeChange])
   const remember = (id: string) => {
-    try {
-      localStorage.setItem(selectionKey(projectId), id)
-    } catch {
-      /* Selection is optional; view data lives in the database. */
-    }
+    savePreference({ id })
   }
   React.useEffect(() => {
     const controller = new AbortController()
     const id = ++requestId.current
     async function load() {
+      if (!preference && !preferenceError) return
       setLoading(true)
       setError("")
       try {
@@ -128,13 +140,8 @@ function ProjectViews({
         } while (cursor)
         if (controller.signal.aborted || requestId.current !== id) return
         setViews(all)
-        let saved: string | null = null
-        try {
-          saved = localStorage.getItem(selectionKey(projectId))
-        } catch {
-          /* optional preference */
-        }
-        const viewId = all.find((view) => view.id === saved)?.id
+        const saved = preference?.value.id
+        const viewId = all.find((view) => view.id === saved && (view.objectTypes ?? ["trace", "dataset-item"]).includes(kind))?.id
         if (viewId) {
           const view = await reactViewsApi.get(projectId, viewId)
           if (!controller.signal.aborted && requestId.current === id)
@@ -154,7 +161,7 @@ function ProjectViews({
     }
     void load()
     return () => controller.abort()
-  }, [projectId, refresh])
+  }, [projectId, refresh, preference, preferenceError, kind])
   React.useEffect(() => {
     const changed = (event: Event) => {
       if (event instanceof CustomEvent && event.detail?.projectId !== projectId)
@@ -200,6 +207,9 @@ function ProjectViews({
             code: view.code,
             requirements: view.requirements,
             dataMode: view.dataMode,
+            objectTypes: view.objectTypes,
+            inputContract: view.inputContract,
+            customFields: view.customFields,
           }
         : {
             name: "",
@@ -207,6 +217,9 @@ function ProjectViews({
             code: starter,
             requirements: null,
             dataMode: "summary",
+            objectTypes: [kind],
+            inputContract: "object",
+            customFields: [],
           }
     )
     setDraftSource(currentSource)
@@ -327,7 +340,7 @@ function ProjectViews({
           </>
         ) : (
           <Combobox
-            label="React view"
+            label="View"
             variant="title-sm"
             className="min-w-0 shrink"
             disabled={loading || busy}
@@ -336,10 +349,13 @@ function ProjectViews({
             options={ranked.map(({ view }) => ({
               value: view.id,
               label: view.name,
+              disabled: !(view.objectTypes ?? ["trace", "dataset-item"]).includes(kind),
+              description: (view.objectTypes ?? ["trace", "dataset-item"]).includes(kind) ? undefined : `Supports ${(view.objectTypes ?? []).join(", ")}`,
             }))}
             onValueChange={(id) =>
               void perform(async () => {
                 const loaded = await reactViewsApi.get(projectId, id)
+                if (!(loaded.objectTypes ?? ["trace", "dataset-item"]).includes(kind)) throw new Error(`This view does not support ${kind}.`)
                 setSelected(loaded)
                 remember(loaded.id)
               })
@@ -403,9 +419,9 @@ function ProjectViews({
           </DropdownMenu>
         )}
       </div>
-      {error && (
+      {(error || preferenceError) && (
         <Notice variant="error" role="alert" className="m-3">
-          {error}
+          {error || preferenceError}
           <Button
             variant="ghost"
             size="sm"
@@ -426,8 +442,9 @@ function ProjectViews({
             <ReactViewPreview
               code={draft.code}
               trace={trace}
+              objectInput={resolvedFields.input}
               dataMode={dataMode}
-              dataLoading={dataLoading}
+              dataLoading={dataLoading || resolvedFields.loading}
             />
           ) : (
             <ReactViewCodeEditor
@@ -445,8 +462,9 @@ function ProjectViews({
         <ReactViewPreview
           code={selected.code}
           trace={trace}
+          objectInput={resolvedFields.input}
           dataMode={dataMode}
-          dataLoading={dataLoading}
+          dataLoading={dataLoading || resolvedFields.loading}
         />
       ) : (
         !loading && (

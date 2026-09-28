@@ -1,17 +1,24 @@
-import type { DatasetItem, EvalRunDetail } from "./contracts"
+import type { DatasetItem, EvalRunDetail, JsonValue } from "./contracts"
+import type { CustomField } from "./custom-fields"
 import type { PerformanceTableRow } from "./performance-table"
+import { fieldRowInput, type FieldRow } from "./field-row"
+import { fieldSupportsObject } from "./custom-fields"
 
 export type EvalTableRow = NonNullable<EvalRunDetail["rows"]>[number]
-export type ComputedRow = EvalTableRow | DatasetItem | PerformanceTableRow
+export type ComputedRow = EvalTableRow | DatasetItem | PerformanceTableRow | FieldRow
 export type ComputedResource = "eval" | "dataset" | "performance"
 export type ComputedColumn = {
   id: string
   name: string
   code: string
-  format?: "text" | "markdown"
+  format?: CustomField["format"]
+  revision?: number
+  pinnedRevision?: number
+  objectTypes?: CustomField["objectTypes"]
+  resultType?: CustomField["resultType"]
   mode: "expression" | "template"
 }
-export type ComputedCell = { value: string | null; error?: string }
+export type ComputedCell = { value: JsonValue; missing?: boolean; error?: string }
 
 function evalColumnRow(row: EvalTableRow) {
   const source = row.trace.attributes.metrics
@@ -23,6 +30,9 @@ function evalColumnRow(row: EvalTableRow) {
     ...row,
     input: row.trace.input,
     output: row.trace.output,
+    kind: "trace" as const,
+    object: row.trace,
+    context: { results: row.results, expectedOutput: row.expectedOutput, datasetItemId: row.datasetItemId },
     metrics: {
       ...metrics,
       cost: typeof cost === "number" ? cost : undefined,
@@ -34,9 +44,10 @@ function evalColumnRow(row: EvalTableRow) {
 export function columnRow(row: EvalTableRow): ReturnType<typeof evalColumnRow>
 export function columnRow(row: DatasetItem): DatasetItem
 export function columnRow(row: PerformanceTableRow): PerformanceTableRow
-export function columnRow(row: ComputedRow): ReturnType<typeof evalColumnRow> | DatasetItem | PerformanceTableRow
-export function columnRow(row: ComputedRow) {
-  return "trace" in row ? evalColumnRow(row) : row
+export function columnRow(row: FieldRow): ReturnType<typeof fieldRowInput>
+export function columnRow(row: ComputedRow): ReturnType<typeof evalColumnRow> | DatasetItem | PerformanceTableRow | ReturnType<typeof fieldRowInput>
+export function columnRow(row: ComputedRow): ReturnType<typeof evalColumnRow> | DatasetItem | PerformanceTableRow | ReturnType<typeof fieldRowInput> {
+  return "object" in row && "context" in row && "kind" in row ? fieldRowInput(row) : "trace" in row ? evalColumnRow(row) : { ...row, kind: "datasetId" in row ? "dataset-item" : "agent", object: row, context: {} }
 }
 
 export function columnExpression(
@@ -121,6 +132,14 @@ export function evaluateColumn(
         done()
         return
       }
+      const row = rows[index]
+      const kind = "kind" in row && "object" in row ? row.kind : "trace" in row ? "trace" : "datasetId" in row ? "dataset-item" : "agent"
+      if (column.objectTypes && !fieldSupportsObject({ objectTypes: column.objectTypes }, kind)) {
+        cells[row.id] = { value: null, error: `This field does not support ${kind} objects.` }
+        index++
+        send()
+        return
+      }
       timer = setTimeout(() => {
         cells[rows[index++].id] = {
           value: null,
@@ -129,7 +148,7 @@ export function evaluateColumn(
         stop()
         start()
       }, 500)
-      worker!.postMessage({ expression, row: columnRow(rows[index]) })
+      worker!.postMessage({ expression, row: columnRow(rows[index]), resultType: column.resultType })
     }
     const start = () => {
       if (index >= rows.length || signal.aborted) {

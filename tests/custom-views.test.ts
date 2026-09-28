@@ -122,18 +122,19 @@ describe("custom eval views", () => {
       await run(service.delete(initial.id, 3))
       await expectRejected(run(otherBrowser.get(initial.id)), "was not found")
       expect(await run(service.list("eval-runs"))).toEqual([])
-      await expectRejected(run(service.list("traces")), "Unsupported")
+      expect(await run(service.list("traces"))).toEqual([])
+      await expectRejected(run(service.list("unsupported-resource")), "Unsupported")
     } finally {
       if (second) await closeTracerDatabase(second)
       await closeTracerFixture(db)
     }
   })
 
-  test("rejects malformed layouts and future resource contracts until implemented", () => {
+  test("rejects malformed layouts and unregistered resource contracts", () => {
     expect(customViewInputSchema.safeParse(input).success).toBe(true)
     expect(customViewInputSchema.safeParse({ ...input, resource: "scorers", settings: { ...settings, computedColumns: [] } }).success).toBe(true)
     for (const invalid of [
-      { ...input, resource: "traces" },
+      { ...input, resource: "unsupported-resource" },
       { ...input, name: "  " },
       { ...input, settings: { ...settings, schemaVersion: 2 } },
       { ...input, settings: { ...settings, columnSizing: { input: -1 } } },

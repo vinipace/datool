@@ -10,7 +10,7 @@ import {
 } from "@/src/lib/tracer/review-annotations"
 import { tracerApi } from "./api"
 import { useRemote } from "./hooks"
-import { fieldRegistry } from "./custom-field-registry"
+import { useFieldRegistry } from "./custom-field-registry"
 import {
   ColumnEditor,
   ComputedColumnDetails,
@@ -22,6 +22,7 @@ import { AnnotatableValue } from "./review-annotations"
 
 /** Reuse the trace table's field selection and browser sandbox in the player. */
 export function ReviewCustomFields({ traceId }: { traceId: string }) {
+  const fieldRegistry = useFieldRegistry()
   const context = useReviewAnnotations()!
   const load = React.useCallback(
     (signal: AbortSignal) => tracerApi.traces.payload(traceId, signal),
@@ -118,7 +119,7 @@ export function ReviewCustomFields({ traceId }: { traceId: string }) {
             !sourceHash ||
             cell?.value == null ||
             cell.error ||
-            cell.value.length > 100000
+            typeof cell.value !== "string" || cell.value.length > 100000
           )
             return content
           return (
@@ -130,7 +131,7 @@ export function ReviewCustomFields({ traceId }: { traceId: string }) {
                 spanName: trace.name,
                 field: "custom",
                 customField: {
-                  ...customFieldValue(column, cell.value),
+                  ...customFieldValue({ ...column, format: column.format === "markdown" ? "markdown" : "text" }, cell.value),
                   sourceHash,
                 },
               }}

@@ -4,6 +4,8 @@ import { evaluationStoryRecipe } from "@/src/lib/tracer/report-recipe"
 import { reportAuthoringGuide } from "@/src/lib/tracer/report-authoring-guide"
 import { reportTemplates } from "@/src/lib/tracer/report-templates"
 import { promoteSpansSchema } from "@/src/lib/tracer/span-promotion"
+import { viewOperations } from "@/src/lib/tracer/view-operations"
+import { executeViewOperation } from "../tracer/view-operations"
 import {
   humanScoreInputSchema,
   humanScoreUpdateSchema,
@@ -58,6 +60,12 @@ export type AgentOperation = {
   execute: (service: TracerService, input: unknown) => TracerEffect<unknown>
 }
 const operations: AgentOperation[] = []
+for (const operation of viewOperations) operations.push({
+  name: operation.name, description: operation.description,
+  scopes: [operation.write ? "views:write" : "views:read"],
+  schema: operation.schema, destructive: operation.action === "delete",
+  execute: (service, input) => executeViewOperation(operation, service, input),
+})
 function tool<S extends z.ZodRawShape>(
   name: string,
   description: string,

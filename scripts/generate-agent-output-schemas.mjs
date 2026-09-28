@@ -149,6 +149,21 @@ function operationNames(node) {
   throw new Error(`Cannot enumerate operation name: ${node.getText()}`)
 }
 
+function registerOutput(name, effect) {
+  if (
+    effect.aliasSymbol?.name !== "TracerEffect" ||
+    !effect.aliasTypeArguments?.[0]
+  ) {
+    throw new Error(`Expected a typed TracerEffect for ${name}`)
+  }
+  const output = effect.aliasTypeArguments[0]
+  if (output.flags & (F.Unknown | F.Any))
+    throw new Error(`Missing response contract for ${name}`)
+  if (Object.hasOwn(operations, name))
+    throw new Error(`Duplicate response contract for ${name}`)
+  operations[name] = schema(output, name)
+}
+
 function visit(node) {
   if (
     ts.isCallExpression(node) &&
@@ -161,24 +176,70 @@ function visit(node) {
       ts.SignatureKind.Call
     )[0]
     const effect = checker.getReturnTypeOfSignature(signature)
-    if (
-      effect.aliasSymbol?.name !== "TracerEffect" ||
-      !effect.aliasTypeArguments?.[0]
-    ) {
-      throw new Error(
-        `Expected a typed TracerEffect at ${node.arguments[0].getText()}`
-      )
-    }
     for (const name of operationNames(node.arguments[0])) {
-      const output = effect.aliasTypeArguments[0]
-      if (output.flags & (F.Unknown | F.Any))
-        throw new Error(`Missing response contract for ${name}`)
-      operations[name] = schema(output, name)
+      registerOutput(name, effect)
     }
   }
   ts.forEachChild(node, visit)
 }
 visit(source)
+
+// Views share a catalog across HTTP, MCP and WebMCP. Read names from that
+// catalog and infer each result from the dispatcher's actual return expression,
+// before its public TracerEffect<unknown> annotation erases the result type.
+// Like tool() callbacks above, this is static analysis: no service is executed.
+const viewDispatcher = program.getSourceFile(`${root}src/server/tracer/view-operations.ts`)
+const viewCatalog = program.getSourceFile(`${root}src/lib/tracer/view-operations.ts`)
+const viewEffects = new Map()
+function visitViewDispatch(node) {
+  if (ts.isCaseClause(node) && ts.isStringLiteral(node.expression)) {
+    const returns = []
+    function visitReturn(child) {
+      if (ts.isReturnStatement(child)) {
+        if (child.expression) returns.push(child.expression)
+        return
+      }
+      if (!ts.isFunctionLike(child)) ts.forEachChild(child, visitReturn)
+    }
+    node.statements.forEach(visitReturn)
+    if (returns.length !== 1)
+      throw new Error(`Expected one typed return for View action ${node.expression.text}`)
+    viewEffects.set(node.expression.text, checker.getTypeAtLocation(returns[0]))
+    return
+  }
+  ts.forEachChild(node, visitViewDispatch)
+}
+visitViewDispatch(viewDispatcher)
+function registerView(action, name) {
+  if (!action || !ts.isStringLiteral(action) || !viewEffects.has(action.text))
+    throw new Error(`Missing typed View action for ${name?.getText()}`)
+  for (const operation of operationNames(name))
+    registerOutput(operation, viewEffects.get(action.text))
+}
+function visitViewCatalog(node) {
+  if (ts.isCallExpression(node)) {
+    if (ts.isIdentifier(node.expression) && node.expression.text === "add")
+      registerView(node.arguments[0], node.arguments[1])
+    if (
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.expression.getText() === "viewOperations" &&
+      node.expression.name.text === "push"
+    ) {
+      for (const entry of node.arguments) {
+        if (!ts.isObjectLiteralExpression(entry))
+          throw new Error("Expected a literal View operation catalog entry")
+        const property = (name) => entry.properties.find(
+          (item) => ts.isPropertyAssignment(item) && item.name.getText() === name
+        )?.initializer
+        // The add() helper's shorthand entry is handled at its call sites.
+        if (property("name")) registerView(property("action"), property("name"))
+      }
+    }
+  }
+  ts.forEachChild(node, visitViewCatalog)
+}
+visitViewCatalog(viewCatalog)
+
 const sort = (object) =>
   Object.fromEntries(
     Object.entries(object).sort(([a], [b]) => a.localeCompare(b))

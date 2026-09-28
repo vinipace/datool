@@ -49,7 +49,7 @@ const nextConfig: NextConfig = {
   ...(process.env.DATOOL_DIST_DIR
     ? { distDir: process.env.DATOOL_DIST_DIR }
     : {}),
-  serverExternalPackages: ["autoevals"],
+  serverExternalPackages: ["autoevals", "esbuild"],
   outputFileTracingIncludes: {
     "/api/**": [
       "./src/server/sandbox/evaluator-worker.mjs",

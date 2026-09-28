@@ -1,5 +1,17 @@
 import type { DatasetItem, TraceDetail } from "./contracts"
-import { parseValueDocument, type ItemDraft } from "./dataset-editor"
+import { itemDraft, parseValueDocument, type ItemDraft } from "./dataset-editor"
+import type { ObjectViewInput } from "./object-views"
+
+export function datasetItemViewInput(item: DatasetItem, draft: ItemDraft, isNew = false): ObjectViewInput {
+  const metadata = parseValueDocument(draft.metadata)
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new Error("Metadata must be a JSON object.")
+  return {
+    kind: "dataset-item",
+    object: { ...item, input: parseValueDocument(draft.input), expectedOutput: parseValueDocument(draft.expectedOutput), metadata },
+    context: { unsaved: isNew || JSON.stringify(itemDraft(item)) !== JSON.stringify(draft) },
+    fields: {},
+  }
+}
 
 /** Adapt a case to the existing saved React views without fetching its source trace. */
 export function datasetItemViewTrace(

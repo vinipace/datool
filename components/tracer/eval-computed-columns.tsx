@@ -4,7 +4,10 @@ import * as React from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Combobox } from "@base-ui/react/combobox"
-import { fieldRegistry } from "./custom-field-registry"
+import { useFieldRegistry } from "./custom-field-registry"
+import { StructuredValueView } from "@/components/ui/structured-value-view"
+import { valueViews, valueViewLabels } from "@/src/lib/tracer/value-views"
+import { objectTypes, type ViewObjectType } from "@/src/lib/tracer/view-resources"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useOverlayContainer } from "@/components/ui/overlay-container"
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
@@ -41,10 +44,12 @@ export function ComputedValue({ cell, format }: { cell?: ComputedCell; format?: 
     )
   if (cell.value == null)
     return <span className="text-empty-foreground">—</span>
-  if (format === "markdown") return <div className="text-sm break-words whitespace-normal [&_h1]:text-xl [&_h2]:text-lg [&_h3]:font-semibold [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-auto [&_pre]:bg-surface-emphasis [&_pre]:p-2 [&_a]:underline"><ReactMarkdown remarkPlugins={[remarkGfm]}>{cell.value}</ReactMarkdown></div>
+  const value = typeof cell.value === "string" ? cell.value : JSON.stringify(cell.value, null, 2)
+  if (format && format !== "markdown" && format !== "text") return <StructuredValueView value={cell.value} view={format} />
+  if (format === "markdown") return <div className="text-sm break-words whitespace-normal [&_h1]:text-xl [&_h2]:text-lg [&_h3]:font-semibold [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-auto [&_pre]:bg-surface-emphasis [&_pre]:p-2 [&_a]:underline"><ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown></div>
   return (
     <span className="break-words whitespace-pre-wrap tabular-nums">
-      {cell.value}
+      {value}
     </span>
   )
 }
@@ -56,6 +61,7 @@ export function ColumnEditor({
   borderless = false,
   rows,
   resource = "eval",
+  objectKind,
   onSave,
   onDelete,
 
@@ -67,9 +73,11 @@ export function ColumnEditor({
   description?: string
   rows: ComputedRow[]
   resource?: ComputedResource
+  objectKind?: ViewObjectType
   onSave: (column: ComputedColumn) => void
   onDelete?: () => void
 }) {
+  const fieldRegistry = useFieldRegistry()
   const overlayContainer = useOverlayContainer()
   const addTrigger = React.useRef<HTMLButtonElement>(null)
   const [open, setOpen] = React.useState(false)
@@ -81,6 +89,8 @@ export function ColumnEditor({
   const [code, setCode] = React.useState("")
   const [format, setFormat] = React.useState<ComputedColumn["format"]>("text")
   const [mode, setMode] = React.useState<ComputedColumn["mode"]>("template")
+  const [targets, setTargets] = React.useState<ViewObjectType[]>([])
+  const [resultType, setResultType] = React.useState<ComputedColumn["resultType"]>("any")
   const [preview, setPreview] = React.useState<ComputedColumn | null>(null)
   const id = React.useId()
   const previewCells = useColumnValues(
@@ -90,11 +100,14 @@ export function ColumnEditor({
   const previewCell =
     preview && rows[0] ? previewCells[preview.id]?.[rows[0].id] : undefined
   const draft = (): ComputedColumn => ({
+    ...column,
     id: column?.id ?? crypto.randomUUID(),
     name: name.trim(),
     code,
     mode,
     format,
+    objectTypes: targets.length ? targets : [objectKind ?? (resource === "dataset" ? "dataset-item" : "trace")],
+    resultType,
   })
   const registerEditor = React.useContext(LogColumnEditorContext)
   const changeOpen = React.useCallback((value: boolean) => {
@@ -106,10 +119,12 @@ export function ColumnEditor({
       setCode(column?.code ?? (resource === "dataset" ? "{{row.input}}" : resource === "performance" ? "{{row.metrics.completedCount}}" : "R${{row.metrics.cost*5.5}}"))
       setMode(column?.mode ?? "template")
       setFormat(column?.format ?? "text")
+      setTargets(column?.objectTypes ?? [objectKind ?? (resource === "dataset" ? "dataset-item" : resource === "performance" ? "agent" : "trace")])
+      setResultType(column?.resultType ?? "any")
       setPreview(null)
     }
     setOpen(value)
-  }, [column, resource])
+  }, [column, resource, fieldRegistry, objectKind])
   React.useEffect(() => {
     if (!column || !registerEditor) return
     registerEditor(() => changeOpen(true))
@@ -191,7 +206,9 @@ export function ColumnEditor({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm">Display format<select aria-label="Display format" value={format} onChange={event => setFormat(event.target.value as ComputedColumn["format"])} className="block w-full border bg-background p-2"><option value="text">Text</option><option value="markdown">Markdown</option></select></label>
+              <label className="text-sm">Display format<select aria-label="Display format" value={format} onChange={event => setFormat(event.target.value as ComputedColumn["format"])} className="block w-full border bg-background p-2">{valueViews.map(view => <option key={view} value={view}>{valueViewLabels[view]}</option>)}<option value="markdown">Markdown</option></select></label>
+              <fieldset className="space-y-2"><legend className="text-sm font-medium">Supported objects</legend><div className="flex flex-wrap gap-3">{objectTypes.map(kind => <label key={kind} className="flex items-center gap-1 text-xs"><input type="checkbox" checked={targets.includes(kind)} onChange={event => setTargets(current => event.target.checked ? [...current, kind] : current.filter(value => value !== kind))} />{kind}</label>)}</div></fieldset>
+              <label className="block text-sm">Result type<select aria-label="Field result type" value={resultType} onChange={event => setResultType(event.target.value as ComputedColumn["resultType"])} className="block w-full border bg-background p-2">{["any", "string", "number", "boolean", "object", "array"].map(type => <option key={type} value={type}>{type}</option>)}</select></label>
               <label htmlFor={`${id}-mode`} className="text-sm font-medium">
                 Format
               </label>

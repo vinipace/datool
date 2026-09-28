@@ -3,6 +3,7 @@ import * as React from "react"
 import { createRoot } from "react-dom/client"
 import * as ui from "./trace-view-ui"
 import { evaluateTraceView } from "../lib/tracer/trace-view-evaluate"
+import { traceObjectViewInput, type ObjectViewInput, type ObjectViewProps } from "../lib/tracer/object-views"
 import type {
   CompiledTraceView,
   TraceViewData,
@@ -19,7 +20,8 @@ const root = createRoot(document.getElementById("root")!)
 const dynamicStyle = document.createElement("style")
 document.head.append(dynamicStyle)
 let installed: CompiledTraceView | undefined
-let Component: React.ComponentType<{ trace: TraceViewData }> | undefined
+let Component: React.ComponentType<ObjectViewProps> | undefined
+let objectInput: ObjectViewInput | undefined
 let trace: TraceViewData | undefined
 let generation = 0
 let token = ""
@@ -69,7 +71,7 @@ function render() {
   if (Component && trace && installed && installed.source === expectedSource)
     root.render(
       <ViewErrorBoundary key={`${installed.source}:${trace.id}`}>
-        <Component trace={trace} />
+        <Component {...(objectInput ?? traceObjectViewInput(trace))} trace={trace} />
         <RenderComplete requestToken={token} />
       </ViewErrorBoundary>
     )
@@ -91,6 +93,7 @@ window.addEventListener("message", async (event) => {
   if (event.source !== parent) return
   if (event.data?.type === "trace-view-data") {
     trace = event.data.trace
+    objectInput = event.data.objectInput
     token = event.data.token
     expectedSource = event.data.source
     document.documentElement.classList.toggle("dark", event.data.dark === true)

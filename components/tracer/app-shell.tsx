@@ -43,6 +43,7 @@ import { useMutation } from "./hooks"
 import { WorkspacePageLayout } from "./workspace-page-layout"
 
 import { useReactViewWebMcp } from "./use-react-view-webmcp"
+import { useViewLibraryWebMcp } from "./use-view-library-webmcp"
 import { productIcons } from "@/components/product-icons"
 import { InspectorPanels } from "./inspector-panels"
 import { useOrganizationSessionSync } from "@/lib/workspace-selection"
@@ -233,6 +234,7 @@ export function TracerAppShell({
   user,
 }: React.PropsWithChildren<WorkspaceShellProps>) {
   useReactViewWebMcp(project.id)
+  useViewLibraryWebMcp(project.id)
   useOrganizationSessionSync(organization.id)
   return (
     <SidebarProvider>

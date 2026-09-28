@@ -1,49 +1,85 @@
 "use client"
+import { useMemo } from "react"
 import { projectFetch } from "@/lib/workspace-routing"
-
 import { parseComputedColumns, type ComputedColumn } from "@/src/lib/tracer/computed-columns"
+import { customFieldInputSchema, customFieldSchema } from "@/src/lib/tracer/custom-fields"
+import { useProjectScope } from "./project-scope-context"
 
-let fields: ComputedColumn[] = []
-const listeners = new Set<() => void>()
-let migration: Promise<void> | undefined
-async function request(init?: RequestInit): Promise<ComputedColumn[] | ComputedColumn> {
-  const response = await projectFetch("/api/custom-fields", init)
-  const body = await response.json()
-  if (!response.ok) throw new Error(body.error?.message ?? "Custom fields could not be saved.")
-  return body.data
+const registries = new Map<string, ReturnType<typeof createRegistry>>()
+const empty: ComputedColumn[] = []
+function createRegistry(projectId: string) {
+  let fields: ComputedColumn[] = []
+  let loaded = false
+  let loading: Promise<ComputedColumn[]> | null = null
+  const listeners = new Set<() => void>()
+  const migrations = new Map<string, Promise<void>>()
+  const publish = (next: ComputedColumn[]) => { fields = next; listeners.forEach(listener => listener()) }
+  async function request(path: string, init?: RequestInit) {
+    if (!projectId) throw new Error("Select a project before using Custom Fields.")
+    const response = await projectFetch(path, init, projectId)
+    const body = await response.json()
+    if (!response.ok) throw new Error(body.error?.message ?? "Custom Fields could not be saved.")
+    return body.data
+  }
+  const registry = {
+    get: () => fields,
+    serverSnapshot: () => empty,
+    subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    async refresh(force = true) {
+      if (!projectId) return fields
+      if (loaded && !force) return fields
+      if (loading) return loading
+      loading = (async () => {
+      const items: ComputedColumn[] = []
+      let cursor: string | null = null
+      do {
+        const page = await request("/api/custom-fields?catalog=1&limit=100" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""))
+        items.push(...page.items.map((field: unknown) => customFieldSchema.parse(field)))
+        cursor = page.nextCursor
+      } while (cursor)
+      publish(items)
+      loaded = true
+      return fields
+      })()
+      try { return await loading }
+      finally { loading = null }
+    },
+    async save(field: ComputedColumn, overwrite = false) {
+      const existing = fields.find(item => item.id === field.id)
+      if (existing && !overwrite) return existing
+      const definition = customFieldInputSchema.strip().parse({ ...existing, ...field })
+      const saved = customFieldSchema.parse(await request(existing ? "/api/custom-fields/" + encodeURIComponent(existing.id) : "/api/custom-fields", {
+        method: existing ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(existing ? { ...definition, expectedRevision: field.revision ?? existing.revision } : definition),
+      }))
+      publish([...fields.filter(item => item.id !== saved.id), saved])
+      return saved
+    },
+    async migrate(storageKey?: string) {
+      await registry.refresh(false)
+      // Only the active project's explicitly owned selection is eligible.
+      if (!storageKey?.includes(":" + encodeURIComponent(projectId) + ":")) return
+      if (!migrations.has(storageKey)) migrations.set(storageKey, (async () => {
+        const previous = localStorage.getItem(storageKey)
+        const migrated = []
+        for (const field of parseComputedColumns(previous)) migrated.push(await registry.save(field))
+        if (localStorage.getItem(storageKey) === previous) localStorage.setItem(storageKey, JSON.stringify(migrated))
+      })().catch(error => { migrations.delete(storageKey); throw error }))
+      await migrations.get(storageKey)
+    },
+    resolve(columns: ComputedColumn[], source = fields) {
+      return [...new Map(columns.map(column => {
+        const saved = column.pinnedRevision ? column : source.find(field => field.id === column.id) ?? column
+        return [saved.id, saved]
+      })).values()]
+    },
+  }
+  return registry
 }
-export const fieldRegistry = {
-  get: () => fields,
-  subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
-  async refresh() {
-    fields = await request() as ComputedColumn[]
-    listeners.forEach(listener => listener())
-    return fields
-  },
-  async save(field: ComputedColumn, overwrite = false) {
-    const saved = await request({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field, overwrite }) }) as ComputedColumn
-    fields = [...fields.filter(item => item.id !== saved.id), saved]
-    listeners.forEach(listener => listener())
-    return saved
-  },
-  async migrate() {
-    migration ??= (async () => {
-      await fieldRegistry.refresh()
-      const legacy = new Map<string, ComputedColumn>()
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key?.startsWith("datool:eval-columns:")) {
-          for (const field of parseComputedColumns(localStorage.getItem(key))) legacy.set(field.id, field)
-        }
-      }
-      for (const field of legacy.values()) await fieldRegistry.save(field)
-    })().catch(error => { migration = undefined; throw error })
-    return migration
-  },
-  resolve(columns: ComputedColumn[], registry = fields) {
-    return [...new Map(columns.map(column => {
-      const saved = registry.find(field => field.id === column.id) ?? registry.find(field => field.name.toLowerCase() === column.name.toLowerCase() && field.code === column.code && field.mode === column.mode && (field.format ?? "text") === (column.format ?? "text")) ?? column
-      return [saved.id, saved]
-    })).values()]
-  },
+export function useFieldRegistry() {
+  const projectId = useProjectScope()?.projectId ?? ""
+  return useMemo(() => {
+    if (!registries.has(projectId)) registries.set(projectId, createRegistry(projectId))
+    return registries.get(projectId)!
+  }, [projectId])
 }

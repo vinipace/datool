@@ -1,9 +1,10 @@
 import type * as React from "react"
-import type { CompiledTraceView, TraceViewData } from "./trace-view-contract"
+import type { CompiledTraceView } from "./trace-view-contract"
+import type { ObjectViewProps } from "./object-views"
 
 /** Evaluate inside the sandbox only. The inner scope lets imports shadow legacy React. */
 export function evaluateTraceView(artifact: CompiledTraceView, react: typeof React, modules: Record<string, unknown>) {
-  const exports: { default?: React.ComponentType<{ trace: TraceViewData }> } = {}
+  const exports: { default?: React.ComponentType<ObjectViewProps> } = {}
   new Function("React", "exports", "require", `return (function(exports, require) {${artifact.javascript}\n})(exports, require)`)(react, exports, (name: string) => {
     if (!Object.hasOwn(modules, name) || !modules[name]) throw new Error(`Unsupported import: ${name}. Use a static import from react, @datool/ui or @datool/charts.`)
     return modules[name]

@@ -131,6 +131,9 @@ export function createReactViewService(database: TracerDatabase) {
             revision: reactViews.revision,
             createdAt: reactViews.createdAt,
             updatedAt: reactViews.updatedAt,
+            objectTypes: reactViews.objectTypes,
+            inputContract: reactViews.inputContract,
+            customFields: reactViews.customFields,
           })
           .from(reactViews)
           .where(

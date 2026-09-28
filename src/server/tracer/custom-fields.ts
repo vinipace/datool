@@ -71,7 +71,9 @@ export function createCustomFieldService(db: TracerDatabase) {
             id: field.id,
             name: field.name,
             nameKey,
-            definitionJson: JSON.stringify(field),
+            definitionJson: JSON.stringify({ ...(byId ? JSON.parse(byId.definitionJson) : {}), ...field }),
+            createdAt: byId?.createdAt ?? new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           }
           if (byId)
             await tx

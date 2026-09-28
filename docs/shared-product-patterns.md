@@ -21,7 +21,7 @@ layout applies the `Page · Datool` format.
 | Cursor pagination and polling | `use-collection-pages.ts` | Pass its result as both `state` and `pagination`. |
 | Non-paginated request state | `hooks.ts` / `useRemote` | Pass its result as `state`. |
 | Table/card rendering, display controls, column ordering | `log-table.tsx` | Reuse row cells and headers; opt into supported table capabilities. |
-| Saved view and Display grouping | `table-view-controls.tsx` | Already composed by `CollectionPage`; pass `savedView` when supported. Do not nest another wrapper. |
+| Page View menu and Display controls | `table-view-controls.tsx`, `custom-view-controls.tsx`, `components/ui/page-view-menu.tsx` | Already composed by `CollectionPage`; pass `savedView` when supported. Page Views sit before the filter bar. |
 | Table preferences and saved-view settings | `use-table-view.ts` | Persist visibility, widths, order and presentation locally. Pass `resource` for saved views; computed columns are optional. |
 | Custom-column agent tools | `log-table.tsx`, `use-column-webmcp.ts` | Supply the computed-column store; do not register duplicate page tools. |
 | Trace inspector overlay | `trace-list-overlay.tsx` | Reuse the overlay and its focus behavior. |
@@ -45,6 +45,20 @@ For tables with named saved views or externally rendered value formats, call
 `LogTable`. Its `selectedView` and `details` props preserve URL selection and
 Details-panel behavior on eval run details. Saved views include row height; older
 views without it mean Compact. Do not create page-local table settings stores.
+
+Page Views use one searchable menu on logs, evals, eval runs and dataset items.
+A yellow dot after the name marks changes to filters, grouping, columns or display
+settings. Drafts, their original saved revision, and the selected view persist in
+local storage per project and page. Switching views retains each draft. Shared
+definitions change only through **Save changes** in the menu; **Reset** restores
+the saved definition (or the default view). The menu has a compact row of
+Duplicate, Reset and Save icon buttons; Reset and Save are disabled when clean.
+Restored preferences establish the default view's local baseline once, so loading
+the page does not create a draft. This baseline stays separate from later edits.
+The first save of the default view
+asks for a name. Save conflicts retain the local draft. Catalog reads are cached
+per project/resource for the browser session and updated after explicit saves;
+opening the menu or changing display settings never refetches the catalog.
 
 Eval details and comparisons use a resizable sidebar when the content container
 is at least 768px wide. Below that width, the results keep the full content area

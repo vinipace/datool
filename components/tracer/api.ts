@@ -10,6 +10,7 @@ import { currentProjectScope, projectFetch } from "@/lib/workspace-routing"
 import type { CreateLibraryEntry, CreatedLibraryEntry, DatasetLibraryEntry, MoveLibraryEntry } from "@/src/lib/tracer/dataset-library"
 
 import type { CustomView, CustomViewInput } from "@/src/lib/tracer/custom-views"
+import { createPageViewCache } from "@/src/lib/tracer/page-view-cache"
 
 import type { SemanticQueryInput, SemanticResult } from "@/src/lib/semantic"
 
@@ -402,30 +403,58 @@ export const tracerApi = {
   },
 }
 
+const pageViewCache = createPageViewCache()
 export const customViewsApi = {
-  list: (resource: CustomViewInput["resource"] = "eval-runs") =>
-    request<CustomView[]>(`/api/custom-views?resource=${resource}`),
-  get: (id: string) =>
-    request<CustomView>(`/api/custom-views/${encodeURIComponent(id)}`),
-  create: (input: CustomViewInput) =>
-    request<CustomView>("/api/custom-views", { method: "POST", body: input }),
-  update: (id: string, input: CustomViewInput & { expectedRevision: number }) =>
-    request<CustomView>(`/api/custom-views/${encodeURIComponent(id)}`, {
-      method: "PATCH",
+  list: async (resource: CustomViewInput["resource"] = "eval-runs") => {
+    const projectId = currentProjectScope()?.projectId ?? ""
+    return pageViewCache.list(projectId, resource, async () => {
+    const views: CustomView[] = []
+    let cursor: string | null = null
+    do {
+      const page: { items: CustomView[]; nextCursor: string | null } = await request(`/api/page-views?resource=${resource}&limit=100${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`, { projectId })
+      views.push(...page.items)
+      cursor = page.nextCursor
+    } while (cursor)
+    return views
+    })
+  },
+  get: (id: string, fresh = false) => {
+    const projectId = currentProjectScope()?.projectId ?? ""
+    return pageViewCache.get(projectId, id, () => request<CustomView>(`/api/page-views/${encodeURIComponent(id)}`, { projectId }), fresh)
+  },
+  create: async (input: CustomViewInput) => {
+    const projectId = currentProjectScope()?.projectId ?? ""
+    return pageViewCache.remember(projectId, await request<CustomView>("/api/page-views", { projectId, method: "POST", body: input }))
+  },
+  update: async (id: string, input: CustomViewInput & { expectedRevision: number }) => {
+    const projectId = currentProjectScope()?.projectId ?? ""
+    return pageViewCache.remember(projectId, await request<CustomView>(`/api/page-views/${encodeURIComponent(id)}`, {
+      projectId,
+      method: "PUT",
       body: input,
-    }),
-  delete: (id: string, revision: number) =>
-    request<{ id: string }>(
-      `/api/custom-views/${encodeURIComponent(id)}?expectedRevision=${revision}`,
-      { method: "DELETE" }
-    ),
+    }))
+  },
+  delete: async (id: string, revision: number) => {
+    const projectId = currentProjectScope()?.projectId ?? ""
+    const deleted = await request<{ id: string }>(
+      `/api/page-views/${encodeURIComponent(id)}?expectedRevision=${revision}`,
+      { projectId, method: "DELETE" }
+    )
+    pageViewCache.remove(projectId, id)
+    return deleted
+  },
+  history: (id: string) => request<{ items: { definition: CustomView; revision: number }[] }>(`/api/page-views/${encodeURIComponent(id)}/history`),
+  restore: async (id: string, revision: number, expectedRevision: number) => {
+    const projectId = currentProjectScope()?.projectId ?? ""
+    return pageViewCache.remember(projectId, await request<CustomView>(`/api/page-views/${encodeURIComponent(id)}/restore`, { projectId, method: "POST", body: { revision, expectedRevision } }))
+  },
 }
 
 export const reactViewsApi = {
-  list: (projectId: string, cursor?: string, signal?: AbortSignal) => request<import("@/src/lib/tracer/react-views").ReactViewPage>(withQuery("/api/react-views", { cursor }), { projectId, signal }),
-  get: (projectId: string, id: string) => request<import("@/src/lib/tracer/react-views").ReactView>(`/api/react-views/${encodeURIComponent(id)}`, { projectId }),
-  create: (projectId: string, input: import("@/src/lib/tracer/react-views").ReactViewInput & { source: import("@/src/lib/tracer/react-views").ReactViewSource | null }) => request<import("@/src/lib/tracer/react-views").ReactView>("/api/react-views", { projectId, method: "POST", body: input }),
-  update: (projectId: string, id: string, input: import("@/src/lib/tracer/react-views").ReactViewInput & { expectedRevision: number }) => request<import("@/src/lib/tracer/react-views").ReactView>(`/api/react-views/${encodeURIComponent(id)}`, { projectId, method: "PATCH", body: input }),
-  delete: (projectId: string, id: string, revision: number) => request<{ id: string }>(`/api/react-views/${encodeURIComponent(id)}?expectedRevision=${revision}`, { projectId, method: "DELETE" }),
+  list: (projectId: string, cursor?: string, signal?: AbortSignal) => request<import("@/src/lib/tracer/react-views").ReactViewPage>(withQuery("/api/object-views", { cursor }), { projectId, signal }),
+  get: (projectId: string, id: string) => request<import("@/src/lib/tracer/react-views").ReactView>(`/api/object-views/${encodeURIComponent(id)}`, { projectId }),
+  create: (projectId: string, input: import("@/src/lib/tracer/react-views").ReactViewInput & { source: import("@/src/lib/tracer/react-views").ReactViewSource | null }) => request<import("@/src/lib/tracer/react-views").ReactView>("/api/object-views", { projectId, method: "POST", body: input }),
+  update: (projectId: string, id: string, input: import("@/src/lib/tracer/react-views").ReactViewInput & { expectedRevision: number }) => request<import("@/src/lib/tracer/react-views").ReactView>(`/api/object-views/${encodeURIComponent(id)}`, { projectId, method: "PUT", body: input }),
+  delete: (projectId: string, id: string, revision: number) => request<{ id: string }>(`/api/object-views/${encodeURIComponent(id)}?expectedRevision=${revision}`, { projectId, method: "DELETE" }),
   suggest: (projectId: string, code: string, sample: TraceDetail) => request<{ requirements: import("@/src/lib/tracer/react-views").ViewRequirement[]; notice: string }>("/api/react-views/suggest", { projectId, method: "POST", body: { code, sample } }),
 }
