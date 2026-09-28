@@ -44,6 +44,25 @@ export type ResolvedReportEvidence = {
   formatted: string
 }
 
+function calculateEvidenceValue(
+  operation: ReportBinding["operation"],
+  source: { value: number },
+  baseline?: { value: number }
+): number {
+  switch (operation) {
+    case "value":
+      return source.value
+    case "difference":
+      return source.value - baseline!.value
+    case "percentagePoints":
+      return 100 * (source.value - baseline!.value)
+    case "relativeChange":
+      return (source.value - baseline!.value) / Math.abs(baseline!.value)
+    default:
+      return source.value / baseline!.value
+  }
+}
+
 /** Resolve exclusively against this report's captured rows. Never execute arbitrary expressions. */
 export function resolveReportEvidence(
   config: DashboardInput,
@@ -109,27 +128,16 @@ export function resolveReportEvidence(
         "Evidence binding must be used in its selected text widget."
       )
     templates[text.id] = text.content
-    const source = read(binding.source),
-      baseline = binding.baseline ? read(binding.baseline) : undefined
+    const source = read(binding.source)
+    const baseline = binding.baseline ? read(binding.baseline) : undefined
     if (baseline && source.unit !== baseline.unit)
       throw new Error("Evidence calculations require matching source units.")
     if (binding.operation === "percentagePoints" && source.unit !== "ratio")
       throw new Error("Percentage-point changes require ratios.")
-    if (
-      ["relativeChange", "ratio"].includes(binding.operation) &&
-      baseline?.value === 0
-    )
+    const derivedRatio = ["relativeChange", "ratio"].includes(binding.operation)
+    if (derivedRatio && baseline?.value === 0)
       throw new Error("Evidence cannot divide by zero.")
-    const value =
-      binding.operation === "value"
-        ? source.value
-        : binding.operation === "difference"
-          ? source.value - baseline!.value
-          : binding.operation === "percentagePoints"
-            ? 100 * (source.value - baseline!.value)
-            : binding.operation === "relativeChange"
-              ? (source.value - baseline!.value) / Math.abs(baseline!.value)
-              : source.value / baseline!.value
+    const value = calculateEvidenceValue(binding.operation, source, baseline)
     if (!Number.isFinite(value))
       throw new Error("Evidence calculation is not finite.")
     if (
@@ -139,7 +147,6 @@ export function resolveReportEvidence(
       throw new Error(
         "Evidence did not match the author's expected value: " + binding.id
       )
-    const derivedRatio = ["relativeChange", "ratio"].includes(binding.operation)
     if (
       binding.format === "USD" &&
       (source.unit !== "USD" ||
@@ -156,13 +163,11 @@ export function resolveReportEvidence(
     )
       throw new Error("Percent formatting requires a ratio.")
     const digits = binding.decimals ?? 1
+    let style: Intl.NumberFormatOptions["style"] = "decimal"
+    if (binding.format === "USD") style = "currency"
+    else if (binding.format === "percent") style = "percent"
     const formatted = new Intl.NumberFormat("en-US", {
-      style:
-        binding.format === "USD"
-          ? "currency"
-          : binding.format === "percent"
-            ? "percent"
-            : "decimal",
+      style,
       ...(binding.format === "USD" ? { currency: "USD" } : {}),
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,

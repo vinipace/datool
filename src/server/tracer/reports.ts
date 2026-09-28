@@ -3,6 +3,7 @@ import {
   compileReportDocument,
   validateMdxEvidence,
   ReportMdxError,
+  type ReportDiagnostic,
   type ReportDocumentInput,
 } from "@/src/lib/tracer/report-mdx"
 import { presentDashboardResult } from "@/src/lib/tracer/dashboard-presentation"
@@ -40,9 +41,41 @@ import { readCatalog, CATALOG_LIMIT } from "./catalog-read"
 import { matchesReportHighlight } from "@/src/lib/tracer/report-highlights"
 import { reportLayoutSchema } from "@/src/lib/tracer/report-layout-contract"
 import { workspaceIdentity } from "@/src/server/auth/context"
-import {
-  renderReportForValidation,
-} from "./report-render-validation"
+import { renderReportForValidation } from "./report-render-validation"
+
+const cohortResultFields = ["result", "summary", "previous", "history"] as const
+
+function captureQuery(
+  query: DashboardWidget["query"]
+): DashboardWidget["query"] {
+  return { ...query, offset: 0, limit: 5000, total: true }
+}
+
+function remapCapturePositions(
+  positions: ReportSnapshot["positions"],
+  indexes: number[]
+): void {
+  for (const position of positions)
+    for (const cohort of position.cohorts)
+      for (const field of cohortResultFields) {
+        const index = cohort[field]
+        if (index !== null) cohort[field] = indexes[index]
+      }
+}
+
+function reportDiagnostics(error: unknown): ReportDiagnostic[] {
+  if (error instanceof ReportMdxError) return error.diagnostics
+  if (error instanceof TracerError && error.details?.diagnostics)
+    return error.details.diagnostics as ReportDiagnostic[]
+  return [
+    {
+      severity: "error",
+      message: error instanceof Error ? error.message : "Invalid report",
+      line: 1,
+      column: 1,
+    },
+  ]
+}
 
 const summaryColumns = {
   id: reports.id,
@@ -240,7 +273,7 @@ async function captureReport(
   const queries: DashboardWidget["query"][] = []
   const indexes = new Map<string, number>()
   const remap = plan.batches.flat().map((query) => {
-    const full = { ...query, offset: 0, limit: 5000, total: true }
+    const full = captureQuery(query)
     const key = JSON.stringify(full)
     if (!indexes.has(key)) {
       indexes.set(key, queries.length)
@@ -248,12 +281,7 @@ async function captureReport(
     }
     return indexes.get(key)!
   })
-  for (const position of plan.positions)
-    for (const cohort of position.cohorts) {
-      cohort.result = remap[cohort.result]
-      for (const key of ["summary", "previous", "history"] as const)
-        if (cohort[key] !== null) cohort[key] = remap[cohort[key]!]
-    }
+  remapCapturePositions(plan.positions, remap)
   if (queries.length > 40)
     throw validation(
       "This report needs more than 40 queries. Remove widgets or comparison cohorts before generating."
@@ -270,14 +298,7 @@ async function captureReport(
   try {
     snapshot.results = queries.length
       ? await executeSemanticBatch(
-          {
-            queries: queries.map((query) => ({
-              ...query,
-              offset: 0,
-              limit: 5000,
-              total: true,
-            })),
-          },
+          { queries },
           {
             catalog: semanticCatalog,
             snapshotRunner: createSemanticSnapshotRunner(database),
@@ -327,6 +348,77 @@ async function captureReport(
   return { configJson, snapshotJson, snapshot, presentation, layout }
 }
 
+function reuseReportCapture(
+  document: ReportDocumentInput,
+  built: ReturnType<typeof compileReportDocument>,
+  previous: typeof reports.$inferSelect
+) {
+  const old = authoringInput(previous)
+  const queryShape = (sources: ReportDocumentInput["sources"]) =>
+    JSON.stringify(
+      Object.entries(sources)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, s]) => [name, s.query])
+    )
+  if (queryShape(old.sources) !== queryShape(document.sources))
+    throw validation(
+      "Queries changed. Refresh the captured data before saving this revision."
+    )
+  const priorConfig = JSON.parse(
+    previous.configJson
+  ) as ReportCaptureInput["config"]
+  const priorSnapshot = JSON.parse(previous.snapshotJson) as ReportSnapshot
+  const plan = dashboardQueryPlan(built.config.widgets, {})
+  const priorPlan = dashboardQueryPlan(priorConfig.widgets, {})
+  const key = (query: DashboardWidget["query"]) =>
+    JSON.stringify(captureQuery(query))
+  const priorQueries = priorPlan.batches.flat()
+  const results = new Map<string, number>()
+  for (const position of priorPlan.positions) {
+    const stored = priorSnapshot.positions.find((p) => p.id === position.id)!
+    for (const [i, cohort] of position.cohorts.entries())
+      for (const field of cohortResultFields) {
+        const index = cohort[field]
+        const capturedIndex = stored?.cohorts[i]?.[field]
+        if (index !== null && capturedIndex != null)
+          results.set(key(priorQueries[index]), capturedIndex)
+      }
+  }
+  const remap = plan.batches.flat().map((q) => {
+    const found = results.get(key(q))
+    if (found === undefined)
+      throw validation(
+        "This component needs additional data. Refresh the capture before saving."
+      )
+    return found
+  })
+  remapCapturePositions(plan.positions, remap)
+  const snapshot: ReportSnapshot = {
+    ...priorSnapshot,
+    positions: plan.positions,
+    references: built.references,
+    highlights: built.highlights,
+  }
+  validateCaptureData(built, snapshot)
+  const resolved = resolveReportEvidence(built.config, snapshot, built.bindings)
+  snapshot.evidence = resolved.evidence
+  for (const widget of built.config.widgets)
+    if (widget.type !== "text")
+      presentDashboardResult(
+        snapshot.results[
+          snapshot.positions.find((p) => p.id === widget.id)!.cohorts[0].result
+        ],
+        widget.presentation
+      )
+  return {
+    configJson: JSON.stringify(resolved.config),
+    snapshotJson: JSON.stringify(snapshot),
+    snapshot,
+    presentation: null,
+    layout: "document",
+  }
+}
+
 async function prepareMdxUnchecked(
   document: ReportDocumentInput,
   database: TracerDatabase,
@@ -335,96 +427,13 @@ async function prepareMdxUnchecked(
 ) {
   const built = compileReportDocument(document)
   validateCaptureConfig(built)
-  let captured: Awaited<ReturnType<typeof captureReport>>
-  if (!previous || refresh) {
-    captured = await captureReport(
-      { ...built, templateId: "mdx", creationKey: crypto.randomUUID() },
-      database
-    )
-  } else {
-    const old = authoringInput(previous)
-    const queryShape = (sources: ReportDocumentInput["sources"]) =>
-      JSON.stringify(
-        Object.entries(sources)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([name, s]) => [name, s.query])
-      )
-    if (queryShape(old.sources) !== queryShape(document.sources))
-      throw validation(
-        "Queries changed. Refresh the captured data before saving this revision."
-      )
-    const priorConfig = JSON.parse(
-      previous.configJson
-    ) as ReportCaptureInput["config"]
-    const priorSnapshot = JSON.parse(previous.snapshotJson) as ReportSnapshot
-    const plan = dashboardQueryPlan(built.config.widgets, {})
-    const priorPlan = dashboardQueryPlan(priorConfig.widgets, {})
-    const key = (q: DashboardWidget["query"]) =>
-      JSON.stringify({ ...q, offset: 0, limit: 5000, total: true })
-    const priorQueries = priorPlan.batches.flat()
-    const results = new Map<string, number>()
-    for (const position of priorPlan.positions) {
-      const stored = priorSnapshot.positions.find((p) => p.id === position.id)!
-      for (const [i, cohort] of position.cohorts.entries())
-        for (const field of [
-          "result",
-          "summary",
-          "previous",
-          "history",
-        ] as const) {
-          const index = cohort[field],
-            capturedIndex = stored?.cohorts[i]?.[field]
-          if (index !== null && capturedIndex != null)
-            results.set(key(priorQueries[index]), capturedIndex)
-        }
-    }
-    const remap = plan.batches.flat().map((q) => {
-      const found = results.get(key(q))
-      if (found === undefined)
-        throw validation(
-          "This component needs additional data. Refresh the capture before saving."
+  const captured =
+    !previous || refresh
+      ? await captureReport(
+          { ...built, templateId: "mdx", creationKey: crypto.randomUUID() },
+          database
         )
-      return found
-    })
-    for (const position of plan.positions)
-      for (const cohort of position.cohorts)
-        for (const field of [
-          "result",
-          "summary",
-          "previous",
-          "history",
-        ] as const)
-          if (cohort[field] !== null) cohort[field] = remap[cohort[field]!]
-    const snapshot: ReportSnapshot = {
-      ...priorSnapshot,
-      positions: plan.positions,
-      references: built.references,
-      highlights: built.highlights,
-    }
-    validateCaptureData(built, snapshot)
-    const resolved = resolveReportEvidence(
-      built.config,
-      snapshot,
-      built.bindings
-    )
-    snapshot.evidence = resolved.evidence
-    for (const widget of built.config.widgets)
-      if (widget.type !== "text")
-        presentDashboardResult(
-          snapshot.results[
-            snapshot.positions.find((p) => p.id === widget.id)!.cohorts[0]
-              .result
-          ],
-          widget.presentation
-        )
-    captured = {
-      configJson: JSON.stringify(resolved.config),
-      snapshotJson: JSON.stringify(snapshot),
-      snapshot,
-      presentation: null,
-      layout: "document",
-    }
-  }
+      : reuseReportCapture(document, built, previous)
   validateMdxEvidence(built.compiled, {
     config: JSON.parse(captured.configJson),
     snapshot: captured.snapshot,
@@ -613,21 +622,7 @@ export function createReportService(database: TracerDatabase) {
             throw e
           return {
             valid: false,
-            diagnostics:
-              e instanceof ReportMdxError
-                ? e.diagnostics
-                : e instanceof TracerError && e.details?.diagnostics
-                  ? (e.details
-                      .diagnostics as import("@/src/lib/tracer/report-mdx").ReportDiagnostic[])
-                  : [
-                      {
-                        severity: "error" as const,
-                        message:
-                          e instanceof Error ? e.message : "Invalid report",
-                        line: 1,
-                        column: 1,
-                      },
-                    ],
+            diagnostics: reportDiagnostics(e),
           }
         }
       }),
@@ -786,14 +781,7 @@ export function createReportService(database: TracerDatabase) {
       tracerEffect(async () => {
         if (!Number.isSafeInteger(number) || number < 1)
           throw validation("A positive report number is required.")
-        const [row] = await database
-          .select()
-          .from(reports)
-          .where(
-            and(eq(reports.projectId, project), eq(reports.number, number))
-          )
-        if (!row) throw notFound("Report", String(number))
-        return decodeReport(row)
+        return decodeReport(await read(number))
       }),
     create: (value: unknown) =>
       tracerEffect(async () => {

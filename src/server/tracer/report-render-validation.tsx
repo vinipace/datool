@@ -48,56 +48,38 @@ export async function renderReportForValidation(
       clearTimeout(timeout)
       resolve(check)
     }
+    const fail = (message: string) =>
+      finish({
+        scope: "render",
+        status: "failed",
+        renderer: "react-dom/server",
+        message,
+        visualReviewRequired: true,
+        responsiveReviewRequired: true,
+      })
     const timeout = setTimeout(() => {
       child.kill("SIGTERM")
-      finish({
-        scope: "render",
-        status: "failed",
-        renderer: "react-dom/server",
-        message: "The renderer smoke check timed out after 10 seconds.",
-        visualReviewRequired: true,
-        responsiveReviewRequired: true,
-      })
+      fail("The renderer smoke check timed out after 10 seconds.")
     }, 10_000)
     child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk))
-    child.on("error", (error) =>
-      finish({
-        scope: "render",
-        status: "failed",
-        renderer: "react-dom/server",
-        message: error.message,
-        visualReviewRequired: true,
-        responsiveReviewRequired: true,
-      })
-    )
+    child.on("error", (error) => fail(error.message))
     child.stdin.on("error", (error) => {
       child.kill("SIGTERM")
-      finish({
-        scope: "render",
-        status: "failed",
-        renderer: "react-dom/server",
-        message: `Unable to send captured evidence to the renderer: ${error.message}`,
-        visualReviewRequired: true,
-        responsiveReviewRequired: true,
-      })
+      fail(`Unable to send captured evidence to the renderer: ${error.message}`)
     })
     child.on("close", (code) => {
       if (settled) return
       try {
-        const result = JSON.parse(Buffer.concat(chunks).toString("utf8")) as ReportRenderCheck
+        const result = JSON.parse(
+          Buffer.concat(chunks).toString("utf8")
+        ) as ReportRenderCheck
         finish(result)
       } catch {
-        finish({
-          scope: "render",
-          status: "failed",
-          renderer: "react-dom/server",
-          message:
-            code === null
-              ? "The renderer smoke check was interrupted."
-              : `The renderer smoke check exited with code ${code}.`,
-          visualReviewRequired: true,
-          responsiveReviewRequired: true,
-        })
+        fail(
+          code === null
+            ? "The renderer smoke check was interrupted."
+            : `The renderer smoke check exited with code ${code}.`
+        )
       }
     })
     child.stdin.end(JSON.stringify(report))

@@ -280,20 +280,13 @@ const blockHtmlTags = new Set([
   "th",
   "td",
 ])
-const inlineContainers = new Set([
-  "p",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-])
+const inlineContainers = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6"])
 const voidHtmlTags = new Set(["br", "hr"])
 const isBlockHtmlTag = (tag: string | undefined) =>
   Boolean(tag && blockHtmlTags.has(tag))
 const containsTag = (node: MdxNode, target: string): boolean =>
-  node.tag === target || node.children.some((child) => containsTag(child, target))
+  node.tag === target ||
+  node.children.some((child) => containsTag(child, target))
 function fail(message: string, node?: Pick<MdxNode, "line" | "column">): never {
   throw new ReportMdxError([
     {
@@ -351,11 +344,7 @@ export function parseReportMdx(mdx: string): CompiledReportMdx {
   const definitions = new Map<string, SyntaxNode>()
   for (const n of ast.children ?? [])
     if (n.type === "definition") definitions.set(n.identifier!, n)
-  const convert = (
-    n: SyntaxNode,
-    depth = 0,
-    parentTag?: string
-  ): MdxNode[] => {
+  const convert = (n: SyntaxNode, depth = 0): MdxNode[] => {
     const loc = {
       line: n.position?.start.line ?? 1,
       column: n.position?.start.column ?? 1,
@@ -375,7 +364,7 @@ export function parseReportMdx(mdx: string): CompiledReportMdx {
       n.children[0].type === "mdxJsxTextElement" &&
       isBlockHtmlTag(n.children[0].name)
     )
-      return convert(n.children[0], depth + 1, parentTag)
+      return convert(n.children[0], depth + 1)
     if (n.type === "text" || n.type === "inlineCode")
       return [
         {
@@ -500,14 +489,9 @@ export function parseReportMdx(mdx: string): CompiledReportMdx {
       // remark-mdx represents a raw HTML list's children as one paragraph.
       // Flatten that parser-only wrapper before converting so valid markup
       // does not become an invalid <p><li>...</li></p> tree.
-      if (
-        (tag === "ul" || tag === "ol") &&
-        c.type === "paragraph"
-      )
-        return (c.children ?? []).flatMap((child) =>
-          convert(child, depth + 1, tag)
-        )
-      return convert(c, depth + 1, tag)
+      if ((tag === "ul" || tag === "ol") && c.type === "paragraph")
+        return (c.children ?? []).flatMap((child) => convert(child, depth + 1))
+      return convert(c, depth + 1)
     })
     // Flow JSX elements that accept inline content are parsed with a
     // paragraph wrapper. Remove only that synthetic wrapper; multiple
@@ -620,28 +604,25 @@ export function parseReportMdx(mdx: string): CompiledReportMdx {
 
 /** Frontmatter and MDX are a single editable file; parsing never evaluates code. */
 export function parseReportFile(file: string): ReportDocumentInput {
-  function invalidFile(message: string): never {
-    throw new Error(message)
-  }
   if (file.length > 512000)
-    invalidFile("Report file exceeds 512,000 characters.")
+    throw new Error("Report file exceeds 512,000 characters.")
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(file)
   if (!match)
-    invalidFile(
+    throw new Error(
       "Start the report with YAML frontmatter containing name, sources and bindings."
     )
   const yaml = parseDocument(match[1], { uniqueKeys: true })
-  if (yaml.errors.length) invalidFile(yaml.errors[0].message)
+  if (yaml.errors.length) throw new Error(yaml.errors[0].message)
   let data: unknown
   try {
     data = yaml.toJS({ maxAliasCount: 0 })
   } catch {
-    invalidFile("YAML aliases are not supported.")
+    throw new Error("YAML aliases are not supported.")
   }
   if (!data || typeof data !== "object" || Array.isArray(data))
-    invalidFile("Frontmatter must be an object.")
+    throw new Error("Frontmatter must be an object.")
   if (Object.hasOwn(data, "mdx"))
-    invalidFile("Place MDX after the frontmatter.")
+    throw new Error("Place MDX after the frontmatter.")
   return reportDocumentSchema.parse({
     ...data,
     mdx: file.slice(match[0].length),
@@ -735,25 +716,26 @@ export function compileReportDocument(document: ReportDocumentInput) {
       visit(node.children)
     })
   visit(compiled.nodes)
+  const bindingSelection = (selected: z.infer<typeof selection>) => {
+    sourceWidget(selected.source)
+    used.add(selected.source)
+    return {
+      widgetId: `source-${selected.source}`,
+      measure: selected.measure,
+      dimensions: selected.dimensions,
+    }
+  }
   const bindings: ReportBinding[] = Object.entries(document.bindings).map(
-    ([key, b]) => {
-      const convert = (s: z.infer<typeof selection>) => {
-        sourceWidget(s.source)
-        used.add(s.source)
-        return {
-          widgetId: `source-${s.source}`,
-          measure: s.measure,
-          dimensions: s.dimensions,
-        }
-      }
-      return {
-        ...b,
+    ([key, binding]) =>
+      ({
+        ...binding,
         id: key,
         textWidgetId: "mdx-evidence",
-        source: convert(b.source),
-        ...(b.baseline ? { baseline: convert(b.baseline) } : {}),
-      } as ReportBinding
-    }
+        source: bindingSelection(binding.source),
+        ...(binding.baseline
+          ? { baseline: bindingSelection(binding.baseline) }
+          : {}),
+      }) as ReportBinding
   )
   if (bindings.length)
     widgets.push({
@@ -884,12 +866,9 @@ export function dashboardReportDocument(
         `<Metric binding="${name}" label={${JSON.stringify(widget.title)}} />`
       )
     } else {
-      const tag =
-        widget.type === "matrix"
-          ? "Matrix"
-          : widget.type === "table"
-            ? "Table"
-            : "Chart"
+      let tag = "Chart"
+      if (widget.type === "matrix") tag = "Matrix"
+      else if (widget.type === "table") tag = "Table"
       lines.push(
         `<${tag} source="${name}"${tag === "Chart" ? ` type="${widget.type}"` : ""} title={${JSON.stringify(widget.title)}}${widget.series ? ` series={${JSON.stringify(widget.series)}}` : ""}${widget.trendDirection ? ` trendDirection="${widget.trendDirection}"` : ""} />`
       )
