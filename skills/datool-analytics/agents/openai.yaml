@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datool Analytics"
+  short_description: "Query metrics, create frozen reports and export data"
+  default_prompt: "Use $datool-analytics to inspect project metrics, create a frozen report and export supporting data."

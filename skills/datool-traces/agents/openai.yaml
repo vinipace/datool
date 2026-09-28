@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datool Traces"
+  short_description: "Investigate trace failures and session evidence"
+  default_prompt: "Use $datool-traces to investigate recent errors and identify the relevant trace evidence."

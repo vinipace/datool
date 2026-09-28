@@ -1,6 +1,6 @@
 # MCP, CLI and skill foundations
 
-Datool now exposes **61 shared operations** through MCP and `POST /api/agent/:operation`: 39 read operations and 22 operations requiring write permission. This adds 29 operations to the previous 32. Each transport uses the same validation and execution catalog. The CLI adds workflow commands, bounded NDJSON exports and CI exit codes. The published [`datool` skill](https://github.com/vinpac/datool-skills/blob/main/skills/datool/SKILL.md) explains how to use the five groups together.
+Datool now exposes **61 shared operations** through MCP and `POST /api/agent/:operation`: 39 read operations and 22 operations requiring write permission. This adds 29 operations to the previous 32. Each transport uses the same validation and execution catalog. The CLI adds workflow commands, bounded NDJSON exports and CI exit codes. The published [`datool` skill](../skills/datool/SKILL.md) explains how to use the five groups together.
 
 ## Setup and permissions
 
@@ -174,19 +174,19 @@ This builds the local packages, installs the CLI in a temporary consumer, migrat
 
 ## Agent skills
 
-The maintained, installable pack lives in [vinpac/datool-skills](https://github.com/vinpac/datool-skills). Submit skill changes there. This application repository does not retain skill copies; its operation-contract fixtures are separate from the distributed pack.
+The maintained, installable pack lives in [`skills/`](../skills/README.md) in this repository. Submit skill changes alongside the server and CLI changes they require. Operation-contract fixtures remain separate from the distributed pack.
 
 The pack contains a general router and five focused workflows. Each specialized skill can operate with MCP or CLI and includes its own access and permission guidance.
 
 | Skill                                                       | Workflow                                       |
 | ----------------------------------------------------------- | ---------------------------------------------- |
-| [datool](https://github.com/vinpac/datool-skills/blob/main/skills/datool/SKILL.md)                         | Discover operations and combine workflows      |
-| [datool-traces](https://github.com/vinpac/datool-skills/blob/main/skills/datool-traces/SKILL.md)           | Investigate traces, spans, sessions and scores |
-| [datool-scorers](https://github.com/vinpac/datool-skills/blob/main/skills/datool-scorers/SKILL.md)         | Develop and preview versioned scorers          |
-| [datool-datasets](https://github.com/vinpac/datool-skills/blob/main/skills/datool-datasets/SKILL.md)       | Curate cases, bulk edit and freeze snapshots   |
-| [datool-evaluations](https://github.com/vinpac/datool-skills/blob/main/skills/datool-evaluations/SKILL.md) | Run, re-score, compare and gate evaluations    |
-| [datool-analytics](https://github.com/vinpac/datool-skills/blob/main/skills/datool-analytics/SKILL.md)     | Query, preview, resolve and export             |
+| [datool](../skills/datool/SKILL.md)                         | Discover operations and combine workflows      |
+| [datool-traces](../skills/datool-traces/SKILL.md)           | Investigate traces, spans, sessions and scores |
+| [datool-scorers](../skills/datool-scorers/SKILL.md)         | Develop and preview versioned scorers          |
+| [datool-datasets](../skills/datool-datasets/SKILL.md)       | Curate cases, bulk edit and freeze snapshots   |
+| [datool-evaluations](../skills/datool-evaluations/SKILL.md) | Run, re-score, compare and gate evaluations    |
+| [datool-analytics](../skills/datool-analytics/SKILL.md)     | Query, preview, resolve and export             |
 
-Install the complete pack with `npx skills add vinpac/datool-skills --skill '*'`. If a local development setup previously linked `~/.codex/skills` to this application checkout, replace those links with an installation from the dedicated repository. Invoke a focused skill by name, such as `$datool-evaluations`. Installing skills does not configure credentials or deploy the server.
+Install the complete pack with `npx skills add vinipace/datool --skill '*'`. If you installed from the former `datool-skills` repository, run this command again with the same agent and project/global scope to switch future updates to this repository. Invoke a focused skill by name, such as `$datool-evaluations`. Installing skills does not configure credentials or deploy the server.
 
-The dedicated repository validates pack structure, local links, JSON starters, installer discovery and published CLI compatibility. In this application, `bun test tests/agent-operation-fixtures.test.ts` checks `tests/fixtures/agent-operations/` against operation schemas and executes the example scorer on passing, failing, reordered-object, reordered-array and missing-context cases. These are server contract tests, not validation of the distributed skills.
+Run `bun run check:skills` for pack structure, local links and JSON starters. CircleCI also verifies installer discovery from the repository root and compatibility with the minimum published CLI. Separately, `bun test tests/agent-operation-fixtures.test.ts` checks `tests/fixtures/agent-operations/` against operation schemas and executes the example scorer on passing, failing, reordered-object, reordered-array and missing-context cases. These are server contract tests, not validation of the distributed skills.

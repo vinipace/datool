@@ -1,0 +1,8 @@
+{
+  "requestKey": "release-42-rescore-1",
+  "sourceRunId": "source-run-id",
+  "evaluatorIds": ["scorer-id"],
+  "evaluatorVersionIds": {
+    "scorer-id": "immutable-version-id"
+  }
+}

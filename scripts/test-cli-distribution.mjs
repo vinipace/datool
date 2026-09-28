@@ -176,20 +176,65 @@ try {
     assert.equal((await run(["--version"])).stdout.trim(), manifest.version)
     const tools = JSON.parse((await run(["agent", "tools"])).stdout)
     assert.equal(tools.path, "/api/agent/describe_agent_operations")
-    const iteration = JSON.parse((await run([
-      "evals", "run", "--parent-run-id", "parent-fixture", "--use-recorded-versions",
-    ])).stdout)
-    assert.equal(iteration.path, "/api/agent/start_eval_run")
-    assert.deepEqual(iteration.input, { parentRunId: "parent-fixture", useRecordedVersions: true })
-    const cancelled = JSON.parse((await run(["evals", "cancel", "run-fixture"])).stdout)
-    assert.equal(cancelled.path, "/api/agent/cancel_eval_run")
-    assert.deepEqual(cancelled.input, { id: "run-fixture" })
-    const recovered = JSON.parse((await run(["evals", "recover", "run-fixture"])).stdout)
-    assert.equal(recovered.path, "/api/agent/recover_eval_run")
-    assert.deepEqual(recovered.input, { id: "run-fixture" })
-    const waited = JSON.parse((await run(["evals", "recover", "run-fixture", "--wait"])).stdout)
-    assert.equal(waited.path, "/api/agent/get_eval_run")
-    assert.equal(waited.status, "cancelled")
+    // The skills still support 0.3.0 through generic calls. Keep the newer
+    // alias checks for every other release and local tarball.
+    if (manifest.version === "0.3.0") {
+      const inputs = [
+        [
+          "start_eval_run",
+          { parentRunId: "parent-fixture", useRecordedVersions: true },
+        ],
+        ["cancel_eval_run", { id: "run-fixture" }],
+        ["recover_eval_run", { id: "run-fixture" }],
+      ]
+      for (const [operation, input] of inputs) {
+        const result = JSON.parse(
+          (
+            await run([
+              "agent",
+              "call",
+              operation,
+              "--input",
+              JSON.stringify(input),
+            ])
+          ).stdout
+        )
+        assert.equal(result.path, `/api/agent/${operation}`)
+        assert.deepEqual(result.input, input)
+      }
+    } else {
+      const iteration = JSON.parse(
+        (
+          await run([
+            "evals",
+            "run",
+            "--parent-run-id",
+            "parent-fixture",
+            "--use-recorded-versions",
+          ])
+        ).stdout
+      )
+      assert.equal(iteration.path, "/api/agent/start_eval_run")
+      assert.deepEqual(iteration.input, {
+        parentRunId: "parent-fixture",
+        useRecordedVersions: true,
+      })
+      const cancelled = JSON.parse(
+        (await run(["evals", "cancel", "run-fixture"])).stdout
+      )
+      assert.equal(cancelled.path, "/api/agent/cancel_eval_run")
+      assert.deepEqual(cancelled.input, { id: "run-fixture" })
+      const recovered = JSON.parse(
+        (await run(["evals", "recover", "run-fixture"])).stdout
+      )
+      assert.equal(recovered.path, "/api/agent/recover_eval_run")
+      assert.deepEqual(recovered.input, { id: "run-fixture" })
+      const waited = JSON.parse(
+        (await run(["evals", "recover", "run-fixture", "--wait"])).stdout
+      )
+      assert.equal(waited.path, "/api/agent/get_eval_run")
+      assert.equal(waited.status, "cancelled")
+    }
     for (const cwd of [directory, join(directory, "src/deep")]) {
       const automatic = JSON.parse(
         (await run(["traces", "list", "--limit", "1"], { cwd })).stdout

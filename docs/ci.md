@@ -22,6 +22,13 @@ GitHub OAuth integration and this config path. Branch pushes run verification;
 main additionally builds and deploys the production image. No production secrets
 are needed for verification or image builds.
 
+The `verify` job also runs `bun run check:skills` and checks skill discovery
+from the repository root with the pinned skills installer. The installer runs
+from a temporary directory so npm does not interpret the Bun monorepo's
+dependency overrides. The job also installs the pack's minimum published CLI
+0.3.0 in a temporary consumer. Its Node and Bun checks use
+a local HTTP fixture; they do not require Datool credentials or a deployed server.
+
 | Workflow | Trigger | Coverage |
 | --- | --- | --- |
 | `ci` | Branch pushes; default manual pipeline | Builds SDK/CLI tarballs and runs backend/sandbox regressions once, then tests the same tarballs under Node 24 and 22.18.0. On main, builds and tests the production image, waits for package, Python SDK, and image verification, deploys that image, and checks the live app. Python checks test the built wheel and real ingestion on each branch; main and manual pipelines cover Python 3.10, 3.12, and 3.14. |

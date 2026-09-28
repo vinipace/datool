@@ -99,7 +99,7 @@ Every MCP operation also supports `datool agent call <operation> --input <json|@
 
 Eval reads, comparisons, waits and exports omit full trace spans by default. Use `evals target` with a returned row ID to inspect that case's frozen evidence and scorer spans. `--include-evidence` on get, compare or export opts into embedding full evidence. Always follow `nextCursor` or `nextOffset`: pages can shrink automatically to stay within 8 MiB. These defaults require the updated server; older CLI versions can use `datool agent call get_eval_target --input '{"id":"run-id","targetId":"target-row-id"}'`.
 
-See the repository's `docs/agent-foundations.md` for complete examples, bounds and execution semantics. Install agent workflow skills from [datool-skills](https://github.com/vinpac/datool-skills).
+See the repository's `docs/agent-foundations.md` for complete examples, bounds and execution semantics. Install the [agent workflow skills](https://github.com/vinipace/datool/tree/main/skills) with `npx skills add vinipace/datool --skill '*'`.
 
 ## License
 

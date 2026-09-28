@@ -14,6 +14,7 @@
     "hooks:install": "node scripts/install-git-hooks.mjs",
     "check:pre-push": "bun run lint && bun run check:styles && bun run typecheck && bun test tests/style-guard.test.ts tests/ui-controls.test.tsx tests/git-hooks.test.ts",
     "check:docs": "bun test tests/docs-content.test.ts tests/docs-page-tree.test.ts tests/docs-responses.test.ts && node scripts/generate-agent-output-schemas.mjs --check && bun --no-env-file scripts/generate-docs-reference.ts --check",
+    "check:skills": "node scripts/validate-skills.mjs",
     "check:styles": "node scripts/check-styles.mjs",
     "dev": "bun run build:monaco && next dev",
     "db:init": "bun run scripts/migrate.ts",

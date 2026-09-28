@@ -1,0 +1,10 @@
+{
+  "parentRunId": "observed-run-id",
+  "useRecordedVersions": true,
+  "promptOverrides": {
+    "support-reply": {
+      "model": "openai/gpt-4.1-mini"
+    }
+  },
+  "requestKey": "support-model-controlled-iteration-1"
+}

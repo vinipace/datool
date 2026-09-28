@@ -28,6 +28,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Agent skills distribution
 
-- Datool skills are maintained and shipped from [vinpac/datool-skills](https://github.com/vinpac/datool-skills). Make skill changes in that repository and include its PR or commit in the delivery report.
-- Do not keep skill copies in this application repository. Install skills from the dedicated repository; application contract-test inputs belong in `tests/fixtures/agent-operations/`.
-- Coordinate skill changes with the server/CLI capabilities they require. Distinguish a prepared skills PR from changes merged into the shipping repository; do not report a local copy as published.
+- Datool's six public user skills are maintained and shipped from [`skills/`](skills/README.md) in this repository. Install them with `npx skills add vinipace/datool --skill '*'`.
+- Keep complete skill folders together, including references and assets. Follow [`skills/AGENTS.md`](skills/AGENTS.md) and run `bun run check:skills` after changes. Application contract-test inputs remain in `tests/fixtures/agent-operations/`.
+- Coordinate skill changes with the server/CLI capabilities they require. Distinguish local or proposed changes from changes merged into the shipping branch; do not report a local copy as published.

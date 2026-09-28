@@ -1,0 +1,35 @@
+---
+name: Prompt comparison
+description: ""
+sources:
+  scores:
+    query:
+      measures:
+        - evalResults.meanScore
+      dimensions:
+        - evalResults.groupName
+        - evalResults.promptId
+        - evalResults.promptVersion
+        - evalResults.evaluatorName
+        - evalResults.evaluatorVersion
+        - evalResults.datasetId
+      filters: []
+      timeDimensions:
+        - dimension: evalResults.completedAt
+          dateRange:
+            - 2026-09-19T00:00:00.000Z
+            - 2026-09-26T00:00:00.000Z
+      segments: []
+      order: []
+      timezone: UTC
+      limit: 20
+      offset: 0
+      total: true
+bindings: {}
+---
+
+# Prompt comparison
+
+Add findings after inspecting the captured evidence.
+
+<Matrix source={"scores"} />

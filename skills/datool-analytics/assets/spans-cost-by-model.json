@@ -1,0 +1,16 @@
+{
+  "query": {
+    "measures": ["spans.costUsd"],
+    "timeDimensions": [
+      {
+        "dimension": "spans.startedAt",
+        "dateRange": ["2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z"]
+      }
+    ],
+    "timezone": "UTC",
+    "dimensions": ["spans.model"],
+    "order": [["spans.costUsd", "desc"]],
+    "limit": 50,
+    "total": true
+  }
+}
