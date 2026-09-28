@@ -46,7 +46,7 @@ import {
 import { formatDate, formatRelative } from "./format"
 import { useWorkspaceHref } from "./workspace-path"
 
-type ItemTab = "form" | "runs" | "views"
+import type { DatasetItemTab as ItemTab } from "@/src/lib/tracer/dataset-item-location"
 
 const icons = { input: ArrowDownRight, expectedOutput: Equal, metadata: Braces }
 
@@ -69,6 +69,11 @@ export function DatasetItemInspector({
   onLoadField,
   loadingField,
   fieldErrors,
+  activeTab: controlledTab,
+  onTabChange,
+  selectedViewId,
+  onViewChange,
+  onLoadView,
 }: {
   item: DatasetItemPreview
   draft: ItemDraft
@@ -88,9 +93,16 @@ export function DatasetItemInspector({
   onLoadField?: (field: DatasetItemField) => void
   loadingField?: DatasetItemField | null
   fieldErrors?: Partial<Record<DatasetItemField, string>>
+  activeTab?: ItemTab
+  onTabChange?: (tab: ItemTab) => void
+  selectedViewId?: string | null
+  onViewChange?: (id: string | null, replace?: boolean) => void
+  onLoadView?: () => void
 }) {
   const workspaceHref = useWorkspaceHref()
-  const [activeTab, setActiveTab] = React.useState<ItemTab>("form")
+  const [localTab, setLocalTab] = React.useState<ItemTab>("form")
+  const activeTab = controlledTab ?? localTab
+  const setActiveTab = (tab: ItemTab) => { setLocalTab(tab); onTabChange?.(tab) }
   const form = React.useRef<HTMLDivElement>(null)
   const previousOmissions = React.useRef(item.omittedFields)
   React.useEffect(() => {
@@ -187,7 +199,14 @@ export function DatasetItemInspector({
           <DatasetItemRuns key={item.id} itemId={item.id} />
         )
       ) : activeTab === "views" ? (
-        item.omittedFields ? <p className="p-4 text-sm text-foreground-muted">Load the large fields in Form to preview this row in Views.</p> : <DatasetItemViews item={item} draft={draft} isNew={isNew} />
+        <DatasetItemViews item={item} draft={draft} isNew={isNew}
+          selectedViewId={selectedViewId} onViewChange={onViewChange}
+          deferredData={item.omittedFields ? {
+            onLoad: onLoadView,
+            loading: Boolean(loadingField),
+            error: Object.values(fieldErrors ?? {}).find(Boolean),
+          } : undefined}
+        />
       ) : (
         <div ref={form} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-5">
           {datasetFields.map((field) => {
@@ -327,10 +346,16 @@ function DatasetItemViews({
   item,
   draft,
   isNew,
+  selectedViewId,
+  onViewChange,
+  deferredData,
 }: {
   item: DatasetItem
   draft: ItemDraft
   isNew: boolean
+  selectedViewId?: string | null
+  onViewChange?: (id: string | null, replace?: boolean) => void
+  deferredData?: React.ComponentProps<typeof ReactTraceViews>["deferredData"]
 }) {
   let trace
   try {
@@ -342,5 +367,6 @@ function DatasetItemViews({
       </Notice>
     )
   }
-  return <ReactTraceViews trace={trace} objectInput={datasetItemViewInput(item, draft, isNew)} source={isNew ? null : { kind: "dataset-item", id: item.id }} />
+  return <ReactTraceViews trace={trace} objectInput={datasetItemViewInput(item, draft, isNew)} source={isNew ? null : { kind: "dataset-item", id: item.id }}
+    selectedViewId={selectedViewId} onSelectedViewChange={onViewChange} deferredData={deferredData} />
 }

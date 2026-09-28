@@ -61,6 +61,9 @@ export function ReactTraceViews(props: {
   source?: ReactViewSource | null
   dataLoading?: boolean
   onDataModeChange?: (mode: TraceViewDataMode) => void
+  selectedViewId?: string | null
+  onSelectedViewChange?: (id: string | null, replace?: boolean) => void
+  deferredData?: { onLoad?: () => void; loading: boolean; error?: string }
 }) {
   const scope = useProjectScope()
   // Remount on project change so neither drafts nor late requests cross projects.
@@ -81,12 +84,18 @@ function ProjectViews({
   projectId,
   dataLoading,
   onDataModeChange,
+  selectedViewId,
+  onSelectedViewChange,
+  deferredData,
 }: {
   trace: TraceViewData
   objectInput?: ObjectViewInput
   source?: ReactViewSource | null
   dataLoading?: boolean
   onDataModeChange?: (mode: TraceViewDataMode) => void
+  selectedViewId?: string | null
+  onSelectedViewChange?: (id: string | null, replace?: boolean) => void
+  deferredData?: { onLoad?: () => void; loading: boolean; error?: string }
   projectId: string
 }) {
   const pathname = usePathname()
@@ -94,10 +103,17 @@ function ProjectViews({
   const kind = objectInput.kind
   const preferenceScope = "object-view:" + (pageResourceForPath(pathname) ?? "inspector") + ":" + kind
   const { preference, error: preferenceError, save: savePreference } = useViewPreference(projectId, preferenceScope)
+  const requestedViewId = selectedViewId ?? preference?.value.id
+  const selectionReady = Boolean(selectedViewId || preference || preferenceError)
   const [views, setViews] = React.useState<ReactViewSummary[]>([])
   const [selected, setSelected] = React.useState<ReactView | null>(null)
   const [draft, setDraft] = React.useState<ReactViewInput | null>(null)
-  const resolvedFields = useObjectViewFields(projectId, draft?.customFields ?? selected?.customFields ?? [], objectInput)
+  const [previousViewId, setPreviousViewId] = React.useState(selectedViewId)
+  if (previousViewId !== selectedViewId) {
+    setPreviousViewId(selectedViewId)
+    setDraft(null)
+  }
+  const resolvedFields = useObjectViewFields(projectId, deferredData ? [] : draft?.customFields ?? selected?.customFields ?? [], objectInput)
   const [draftSource, setDraftSource] = React.useState<ReactViewSource | null>(
     null
   )
@@ -118,13 +134,15 @@ function ProjectViews({
   }, [dataMode, onDataModeChange])
   const remember = (id: string) => {
     savePreference({ id })
+    onSelectedViewChange?.(id || null)
   }
   React.useEffect(() => {
     const controller = new AbortController()
     const id = ++requestId.current
     async function load() {
-      if (!preference && !preferenceError) return
+      if (!selectionReady) return
       setLoading(true)
+      setSelected(null)
       setError("")
       try {
         const all: ReactViewSummary[] = []
@@ -140,13 +158,18 @@ function ProjectViews({
         } while (cursor)
         if (controller.signal.aborted || requestId.current !== id) return
         setViews(all)
-        const saved = preference?.value.id
+        const saved = requestedViewId
         const viewId = all.find((view) => view.id === saved && (view.objectTypes ?? ["trace", "dataset-item"]).includes(kind))?.id
         if (viewId) {
           const view = await reactViewsApi.get(projectId, viewId)
-          if (!controller.signal.aborted && requestId.current === id)
+          if (!controller.signal.aborted && requestId.current === id) {
             setSelected(view)
-        } else setSelected(null)
+            if (!selectedViewId) onSelectedViewChange?.(view.id, true)
+          }
+        } else {
+          setSelected(null)
+          if (selectedViewId) setError("The linked view is unavailable or does not support dataset items. Select another project view.")
+        }
       } catch (error) {
         if (!controller.signal.aborted && requestId.current === id)
           setError(
@@ -160,8 +183,9 @@ function ProjectViews({
       }
     }
     void load()
-    return () => controller.abort()
-  }, [projectId, refresh, preference, preferenceError, kind])
+    const invalidate = () => { requestId.current++ }
+    return () => { controller.abort(); invalidate() }
+  }, [projectId, refresh, selectionReady, requestedViewId, kind, selectedViewId, onSelectedViewChange])
   React.useEffect(() => {
     const changed = (event: Event) => {
       if (event instanceof CustomEvent && event.detail?.projectId !== projectId)
@@ -354,7 +378,9 @@ function ProjectViews({
             }))}
             onValueChange={(id) =>
               void perform(async () => {
+                const request = ++requestId.current
                 const loaded = await reactViewsApi.get(projectId, id)
+                if (requestId.current !== request) return
                 if (!(loaded.objectTypes ?? ["trace", "dataset-item"]).includes(kind)) throw new Error(`This view does not support ${kind}.`)
                 setSelected(loaded)
                 remember(loaded.id)
@@ -436,7 +462,16 @@ function ProjectViews({
         </Notice>
       )}
       {draft && notice && <Notice className="m-3">{notice}</Notice>}
-      {draft ? (
+      {deferredData && (selected || (draft && preview)) ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
+          <p className="text-sm text-foreground-muted">This row has large fields. Load them to render the selected view.</p>
+          <Button size="sm" variant="outline" loading={deferredData.loading}
+            disabled={!deferredData.onLoad || busy || loading} onClick={deferredData.onLoad}>
+            {deferredData.loading ? "Loading and rendering…" : "Load and render"}
+          </Button>
+          {deferredData.error && <Notice variant="error" role="alert">{deferredData.error}</Notice>}
+        </div>
+      ) : draft ? (
         <div inert={busy} className="flex min-h-0 flex-1 flex-col">
           {preview ? (
             <ReactViewPreview

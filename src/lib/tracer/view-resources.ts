@@ -43,7 +43,7 @@ export const viewPreferenceSchema = z.object({
   value: z.record(z.string(), z.json()),
 }).strict()
 
-const transientParams = new Set(["view", "pageView", "pageViewRevision", "trace", "span", "item", "annotation", "cursor", "offset"])
+const transientParams = new Set(["view", "pageView", "pageViewRevision", "trace", "span", "item", "itemTab", "objectView", "annotation", "cursor", "offset"])
 /** Preserve the page's actual query grammar, including relative date expressions. */
 export function pageViewQueryParams(params: URLSearchParams) {
   const result: Record<string, string[]> = {}
@@ -60,6 +60,11 @@ export function applyPageViewQueryParams(current: URLSearchParams, saved: Record
     values.forEach(value => next.append(key, value))
   }
   return next
+}
+
+/** Item inspectors share the underlying dataset table's saved selection and drafts. */
+export function pageViewPathname(path: string) {
+  return path.replace(/^(\/p\/[^/]+\/datasets\/[^/]+)\/[^/]+\/?$/, "$1")
 }
 
 export function pageResourceForPath(path: string, context = ""): PageViewResource | undefined {
