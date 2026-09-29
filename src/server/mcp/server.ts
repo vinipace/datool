@@ -1,6 +1,10 @@
 import { z } from "zod"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
+import {
+  ListToolsRequestSchema,
+  type CallToolResult,
+  type Tool,
+} from "@modelcontextprotocol/sdk/types.js"
 import type { TracerService } from "../tracer/service"
 import { runTracerEffect } from "../tracer/effect"
 import { asTracerError } from "../tracer/errors"
@@ -11,19 +15,35 @@ export function createMcpServer(
   scopes: readonly string[]
 ) {
   const server = new McpServer({ name: "datool", version: "1.1.0" })
+  const describeTools: (() => Tool)[] = []
   for (const op of agentOperations) {
     if (!op.scopes.every((scope) => scopes.includes(scope))) continue
+    const metadata = {
+      description: op.description,
+      annotations: {
+        readOnlyHint: op.scopes.every((s) => s.endsWith(":read")),
+        destructiveHint: op.destructive,
+        openWorldHint:
+          op.name === "recover_eval_run" ||
+          op.name === "start_eval_run" ||
+          op.name === "test_scorer" ||
+          op.name === "run_app" ||
+          op.name === "probe_scorer_runtime",
+      },
+    }
+    describeTools.push(() => ({
+      name: op.name,
+      ...metadata,
+      inputSchema: z.toJSONSchema(op.schema, {
+        io: "input",
+        target: "draft-2020-12",
+      }) as Tool["inputSchema"],
+    }))
     server.registerTool(
       op.name,
       {
-        description: op.description,
+        ...metadata,
         inputSchema: op.schema.shape,
-        annotations: {
-          readOnlyHint: op.scopes.every((s) => s.endsWith(":read")),
-          destructiveHint: op.destructive,
-          openWorldHint:
-            op.name === "recover_eval_run" || op.name === "start_eval_run" || op.name === "test_scorer" || op.name === "run_app" || op.name === "probe_scorer_runtime",
-        },
       },
       async (input: unknown): Promise<CallToolResult> => {
         try {
@@ -51,6 +71,12 @@ export function createMcpServer(
       }
     )
   }
+  // The SDK defaults to draft-07, whose tuple `items: [...]` makes Codex omit
+  // semantic-query tools. Match the 2020-12 catalog/CLI contract (`prefixItems`)
+  // while retaining the SDK's Zod validation and tools/call dispatch.
+  server.server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: describeTools.map((describe) => describe()),
+  }))
   if (scopes.includes("reviews:read")) {
     server.registerPrompt("review_session", {
       description: "Walk through a review session's captured prompts and outputs in order.",
