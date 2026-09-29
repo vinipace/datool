@@ -75,6 +75,14 @@ Discovery endpoints include `/.well-known/oauth-authorization-server/api/auth`, 
 
 Write scopes do not imply read scopes. Tool discovery and calls enforce the same granted scopes. Dashboard tools manage configuration; semantic tools execute bounded reads. Scorer tools store configurations without executing code or invoking models. Updates/deletes of revisioned resources require `expectedRevision`.
 
+### Tool schema compatibility
+
+`tools/list` publishes JSON Schema 2020-12 from the operation registry, matching the dialect used by `describe_agent_operations` and the CLI contract. MCP calls still use the original Zod schemas for validation. In particular, `dateRange` and `order` remain positional tuples, and semantic filters retain their depth, node and value limits.
+
+The MCP SDK's default draft-07 export represents tuples as `items: [...]`. Codex 0.154.0 rejects that shape while building tool specifications, silently omitting the seven operations that embed semantic queries. The 2020-12 export uses `prefixItems` and loads successfully, including recursive filter references. Keep discovery schema conversion separate from call validation; do not weaken filters or change tuple inputs to work around client discovery.
+
+When a tool is missing, compare the authenticated `tools/list` response with the client's callable inventory. `describe_agent_operations` is an informational catalog of all operations, not proof that the current token grants them. After deploying a schema change, refresh the client's MCP inventory before checking availability again.
+
 ## Query semantic metrics
 
 Call `get_metrics_metadata` with `{}` first. It returns the source-owned catalog of models, measures, dimensions, and supported filters. Then call `query_metrics`:
