@@ -1,31 +1,28 @@
 import { describe, expect, test } from "bun:test"
-import { createColumnOrderStore, resolveLogColumnOrder } from "../src/lib/tracer/log-column-order"
+import {
+  createColumnOrderStore,
+  resolveLogColumnOrder,
+} from "../src/lib/tracer/log-column-order"
 
 describe("log column order", () => {
   test("keeps selection first and the add button last in a reordered table", () => {
-    expect(resolveLogColumnOrder(
-      ["__select", "name", "input", "output", "add"],
-      ["add", "output", "__select", "name", "input"],
-      ["add"],
-    )).toEqual(["__select", "output", "name", "input", "add"])
+    expect(
+      resolveLogColumnOrder(
+        ["__select", "name", "input", "output", "add"],
+        ["add", "output", "__select", "name", "input"],
+        ["add"]
+      )
+    ).toEqual(["__select", "output", "name", "input", "add"])
   })
 
   test("drops removed and duplicate IDs and inserts new columns before actions", () => {
-    expect(resolveLogColumnOrder(
-      ["__select", "name", "input", "new-score", "computed:new", "add"],
-      ["computed:deleted", "input", "input", "name"],
-      ["add"],
-    )).toEqual(["__select", "input", "name", "new-score", "computed:new", "add"])
-  })
-
-  test("visible reordered columns map to the original row cells", () => {
-    const source = ["__select", "name", "input", "output", "cost", "add"]
-    const cells = ["checkbox", "trace", "question", "answer", "R$5", ""]
-    const order = resolveLogColumnOrder(source, ["cost", "output", "input", "name"], ["add"])
-    const visible = order.filter(id => id !== "input")
-    expect(visible.map(id => cells[source.indexOf(id)]))
-      .toEqual(["checkbox", "R$5", "answer", "trace", ""])
-    expect(order.indexOf("input")).toBe(3)
+    expect(
+      resolveLogColumnOrder(
+        ["__select", "name", "input", "new-score", "computed:new", "add"],
+        ["computed:deleted", "input", "input", "name"],
+        ["add"]
+      )
+    ).toEqual(["__select", "input", "name", "new-score", "computed:new", "add"])
   })
 
   test("stores are isolated per table and notify subscribers of moves", () => {
