@@ -74,8 +74,15 @@ by older code. Keep those jobs for an authorized private investigation; do not
 clear them to make an alert disappear. Only replay a specifically diagnosed job
 using the existing `retry JOB_ID` command after checking its receipt/dependency.
 
-See [ingestion metric policies](ingestion-alerts/README.md) for the deployable
-replacement of the old per-log warning policy and its required rollout checks.
+Alert policies remain managed in the installation's existing GCP setup. The
+worker continues to emit `FAILED_EVENTS_RETAINED` warnings while failed jobs
+remain. Repeated warnings can exhaust a log policy's daily incident limit;
+silence or an auto-closed incident does not prove recovery. Inspect fresh logs,
+retained jobs and committed receipts. Replace the per-log warning policy with
+an unresolved-failure condition and independent availability/heartbeat checks
+in that setup, and verify notification delivery and recovery before suppressing
+the existing warning signal. This application change does not configure those
+policies or resolve the daily incident limit.
 
 ## Configure a private installation copy
 

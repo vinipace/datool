@@ -19,10 +19,9 @@ const data = () => ({ projectId: crypto.randomUUID(), event: {
   body: { id: crypto.randomUUID(), name: "private event body", startedAt: "2026-09-24T00:00:00Z" },
 } })
 
-test("permanent worker failures preserve their code and do not masquerade as unavailable ingestion", async () => {
+test("permanent worker failures preserve their code and existing retained-job warnings", async () => {
   const { connection, queue } = fixture()
   await queue.waitUntilReady()
-  const baseline = await readIngestionHealth(queue, connection)
   const input = data()
   const job = await queue.add("lifecycle", input)
   const worker = startIngestionWorker({ connection, database: () => {
@@ -47,18 +46,11 @@ test("permanent worker failures preserve their code and do not masquerade as una
     const log = ingestionFailureLog(retained, error)!
     expect(log).toMatchObject({ event: "ingestion_failed", terminal: true, reason: "VALIDATION_ERROR", projectId: input.projectId, eventId: input.event.id, jobId: job.id, diagnostic })
     expect(JSON.stringify(log)).not.toContain("private customer input")
-    // An unresolved job stays measurable beyond the old 20-incident daily cap,
-    // without producing another per-minute warning or an availability outage.
-    for (let tick = 0; tick < 21; tick++) {
-      const health = await readIngestionHealth(queue, connection, Date.now() + tick * 60_000)
-      expect(health.reasons).not.toContain("FAILED_EVENTS_RETAINED")
-      expect(health.severity).toBe(baseline.severity)
-      expect(health.reasons).toEqual(baseline.reasons)
-      expect(health.retainedFailureState).toBe(1)
-      expect(health.unavailableState).toBe(baseline.unavailableState)
-    }
+    const health = await readIngestionHealth(queue, connection)
+    expect(health.counts.failed).toBe(1)
+    expect(health.reasons).toContain("FAILED_EVENTS_RETAINED")
     await job.remove()
-    expect((await readIngestionHealth(queue, connection)).retainedFailureState).toBe(0)
+    expect((await readIngestionHealth(queue, connection)).reasons).not.toContain("FAILED_EVENTS_RETAINED")
   } finally {
     await worker.close(); await job.remove(); await queue.close(); await connection.quit()
   }

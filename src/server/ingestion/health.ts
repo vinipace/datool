@@ -34,14 +34,11 @@ export async function readIngestionHealth(queue: Queue, connection: ReturnType<t
   if (memory.maxmemory_policy !== "noeviction") critical.push("REDIS_EVICTION_ENABLED")
   if (persistence.aof_enabled !== "1") critical.push("REDIS_AOF_DISABLED")
   if (persistence.aof_last_write_status === "err" || persistence.aof_last_bgrewrite_status === "err") critical.push("REDIS_PERSISTENCE_ERROR")
+  if (counts.failed) warnings.push("FAILED_EVENTS_RETAINED")
   if (noProgressMs >= 120_000) critical.push("INGESTION_NO_PROGRESS")
   return { event: "ingestion_health", severity: critical.length ? "CRITICAL" : warnings.length ? "WARNING" : "INFO",
     reasons: [...critical, ...warnings], usedBytes, limitBytes, memoryRatio,
-    rssBytes: Number(memory.used_memory_rss), counts, noProgressMs,
-    // Stable 0/1 samples feed separate metric alerts. Historical failures do
-    // not continually reopen the log-based capacity/availability incident.
-    retainedFailureState: counts.failed > 0 ? 1 : 0, unavailableState: critical.length ? 1 : 0,
-    capacityWarningState: warnings.length ? 1 : 0, release: ingestionRelease() }
+    rssBytes: Number(memory.used_memory_rss), counts, noProgressMs, release: ingestionRelease() }
 }
 
 /** Independent, fail-fast connection so a stuck worker cannot hide its health. */
@@ -54,14 +51,14 @@ export function startIngestionHealthMonitor() {
   const tick = () => {
     if (running) return
     if (connection.status !== "ready") {
-      console.error(JSON.stringify({ event: "ingestion_health", severity: "CRITICAL", reasons: ["REDIS_UNAVAILABLE"], unavailableState: 1, release: ingestionRelease() }))
+      console.error(JSON.stringify({ event: "ingestion_health", severity: "CRITICAL", reasons: ["REDIS_UNAVAILABLE"], release: ingestionRelease() }))
       return
     }
     running = readIngestionHealth(queue, connection)
       .then(health => { console.info(JSON.stringify(health)) })
       .catch(error => {
         const diagnostic = describeIngestionError(error, "health")
-        console.error(JSON.stringify({ event: "ingestion_health", severity: "CRITICAL", reasons: [diagnostic.code], unavailableState: 1,
+        console.error(JSON.stringify({ event: "ingestion_health", severity: "CRITICAL", reasons: [diagnostic.code],
           release: ingestionRelease(), summary: diagnosticSummary(diagnostic), diagnostic }))
       })
       .finally(() => { running = undefined })

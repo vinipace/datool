@@ -208,7 +208,7 @@ test("operator inspection reports real failure and dependency receipts without c
       receipts: { eventSaved: true, predecessorSaved: true },
     })
     expect(
-      (await readIngestionHealth(queue, connection)).retainedFailureState
+      (await readIngestionHealth(queue, connection)).counts.failed
     ).toBe(0)
   } finally {
     await worker?.close()
