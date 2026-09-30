@@ -37,6 +37,46 @@ incident. Compare event `timestamp` with `receiveTimestamp` to detect delays.
 Check the installation's forwarding start time and freshness before interpreting
 missing records. Collection is not a complete historical archive.
 
+## Diagnose ingestion failures
+
+`ingestion_failed` now includes project/event/job IDs, predecessor ID, normalized
+operation, target ID, attempt count, terminal status and release SHA. Its bounded
+`diagnostic` envelope preserves the original code, HTTP status when applicable,
+processing stage, cause types, relative source frames and a stable fingerprint.
+`summary` is an allowlisted explanation. Raw messages, SQL, event bodies,
+credentials and arbitrary error properties are never exported. An unclassified
+code still includes stage/source context; it is not an empty `UNKNOWN` record.
+Set `DATOOL_RELEASE` to the deployed Git SHA; absent provenance is `release:null`.
+
+Filter `jsonPayload.message` for `ingestion_failed`, then for the event or job ID.
+Correlate it with `ingestion_saved` and the receipt. The first and final failed
+attempts are logged; intermediate retries do not emit identical error records.
+
+Inside the worker's existing authorized operator environment, use:
+
+```sh
+bun run ingestion:jobs inspect JOB_ID
+```
+
+This reads one retained job, at most one predecessor and project-scoped receipt
+existence checks in a read-only transaction with a five-second statement timeout.
+It performs no retry, cleanup or mutation, including queue metadata initialization.
+It reports `receiptStatus:unavailable` and null receipts
+when PostgreSQL cannot be checked; that is not evidence that receipts are absent.
+An absent predecessor in Redis can still have a committed PostgreSQL receipt.
+Redis state and PostgreSQL receipts are observed separately; repeat inspection
+if a concurrent retry changes the job state during the read.
+
+Legacy jobs show that structured context is unavailable and a fingerprint of
+their old failure text. Arbitrary legacy messages are withheld because they may
+contain customer data. This change cannot reconstruct details already discarded
+by older code. Keep those jobs for an authorized private investigation; do not
+clear them to make an alert disappear. Only replay a specifically diagnosed job
+using the existing `retry JOB_ID` command after checking its receipt/dependency.
+
+See [ingestion metric policies](ingestion-alerts/README.md) for the deployable
+replacement of the old per-log warning policy and its required rollout checks.
+
 ## Configure a private installation copy
 
 Copy this directory outside the source checkout before configuring it. Replace

@@ -5,10 +5,9 @@ import { db } from "../lib/db"
 import { startAlertWorker } from "../src/server/alerts/worker"
 import { startCloudRetentionWorker } from "../src/server/billing/retention"
 import { startBillingReconciliationWorker } from "../src/server/billing/reconciliation"
-import { ingestionFailureCode } from "../src/server/ingestion/diagnostics"
+import { describeIngestionError, diagnosticSummary, ingestionContext, ingestionFailureLog, ingestionRelease } from "../src/server/ingestion/diagnostics"
 import { startCompletedIngestionCleanup } from "../src/server/ingestion/retention"
 import { startIngestionHealthMonitor } from "../src/server/ingestion/health"
-import { UnrecoverableError } from "bullmq"
 const stopBillingReconciliation = startBillingReconciliationWorker()
 const stopRetention = startCloudRetentionWorker()
 const stopAlerts = startAlertWorker()
@@ -16,14 +15,17 @@ const connection = redisConnection(true)
 const stopIngestionCleanup = startCompletedIngestionCleanup(connection)
 const stopIngestionHealth = startIngestionHealthMonitor()
 const worker = startIngestionWorker({ connection })
-worker.on("error", error => console.error(JSON.stringify({ event: "ingestion_worker_error", reason: ingestionFailureCode(error) })))
+worker.on("error", error => {
+  const diagnostic = describeIngestionError(error, "worker")
+  console.error(JSON.stringify({ event: "ingestion_worker_error", severity: "ERROR", release: ingestionRelease(), reason: diagnostic.code, summary: diagnosticSummary(diagnostic), diagnostic }))
+})
 worker.on("failed", (job, error) => {
   // Report the first and final failure, not every intermediate retry. Queue
   // health still reports stalled persistence every minute during the outage.
-  if (!job || job.attemptsMade === 1 || job.attemptsMade >= (job.opts.attempts ?? 1) || error instanceof UnrecoverableError)
-    console.error(JSON.stringify({ event: "ingestion_failed", jobId: job?.id, attemptsMade: job?.attemptsMade, reason: ingestionFailureCode(error) }))
+  const record = ingestionFailureLog(job, error)
+  if (record) console.error(JSON.stringify(record))
 })
-worker.on("completed", job => console.info(JSON.stringify({ event: "ingestion_saved", jobId: job.id })))
+worker.on("completed", job => console.info(JSON.stringify({ event: "ingestion_saved", severity: "INFO", release: ingestionRelease(), ...ingestionContext(job) })))
 let stopping = false
 async function shutdown() {
   if (stopping) return

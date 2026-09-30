@@ -1,5 +1,5 @@
 import { createIngestionQueue, type redisConnection } from "./queue"
-import { ingestionFailureCode } from "./diagnostics"
+import { describeIngestionError, diagnosticSummary, ingestionRelease } from "./diagnostics"
 
 export const completedIngestionRetentionMs = 24 * 60 * 60 * 1000
 
@@ -12,9 +12,11 @@ export function cleanCompletedIngestionJobs(queue: ReturnType<typeof createInges
 /** BullMQ's removeOnComplete is lazy. Sweep even when no new job succeeds. */
 export function startCompletedIngestionCleanup(connection: ReturnType<typeof redisConnection>) {
   const queue = createIngestionQueue(connection)
-  const reportError = (error: unknown) => console.error(JSON.stringify({
-    event: "ingestion_cleanup_error", reason: ingestionFailureCode(error),
-  }))
+  const reportError = (error: unknown) => {
+    const diagnostic = describeIngestionError(error, "cleanup")
+    console.error(JSON.stringify({ event: "ingestion_cleanup_error", severity: "ERROR", reason: diagnostic.code,
+      release: ingestionRelease(), summary: diagnosticSummary(diagnostic), diagnostic }))
+  }
   queue.on("error", reportError)
   let running: Promise<void> | undefined
   const tick = () => {
