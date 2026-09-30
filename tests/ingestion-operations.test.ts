@@ -22,6 +22,7 @@ const data = () => ({ projectId: crypto.randomUUID(), event: {
 test("permanent worker failures preserve their code and do not masquerade as unavailable ingestion", async () => {
   const { connection, queue } = fixture()
   await queue.waitUntilReady()
+  const baseline = await readIngestionHealth(queue, connection)
   const input = data()
   const job = await queue.add("lifecycle", input)
   const worker = startIngestionWorker({ connection, database: () => {
@@ -51,9 +52,10 @@ test("permanent worker failures preserve their code and do not masquerade as una
     for (let tick = 0; tick < 21; tick++) {
       const health = await readIngestionHealth(queue, connection, Date.now() + tick * 60_000)
       expect(health.reasons).not.toContain("FAILED_EVENTS_RETAINED")
-      expect(health.severity).toBe("INFO")
+      expect(health.severity).toBe(baseline.severity)
+      expect(health.reasons).toEqual(baseline.reasons)
       expect(health.retainedFailureState).toBe(1)
-      expect(health.unavailableState).toBe(0)
+      expect(health.unavailableState).toBe(baseline.unavailableState)
     }
     await job.remove()
     expect((await readIngestionHealth(queue, connection)).retainedFailureState).toBe(0)
