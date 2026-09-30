@@ -10,7 +10,7 @@ import { getIngestionQueue, jobIdFor } from "@/src/server/ingestion/queue"
 import { TracerError } from "@/src/server/tracer/errors"
 import { db } from "@/lib/db"
 import { assertIngestionCapacity } from "@/src/server/billing/usage"
-import { ingestionFailureCode } from "@/src/server/ingestion/diagnostics"
+import { describeIngestionError, diagnosticSummary, ingestionEventContext, ingestionRelease, isRecordLimitFailure } from "@/src/server/ingestion/diagnostics"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export async function POST(request: Request) {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       }
       if (
         (await job.getState()) === "failed" &&
-        job.failedReason?.startsWith("Monthly record limit reached.")
+        isRecordLimitFailure(job.failedReason)
       )
         await job.retry()
       return NextResponse.json(
@@ -41,7 +41,9 @@ export async function POST(request: Request) {
       )
     } catch (error) {
       if (error instanceof TracerError) throw error
-      console.error(JSON.stringify({ event: "ingestion_queue_error", reason: ingestionFailureCode(error) }))
+      const diagnostic = describeIngestionError(error, "enqueue")
+      console.error(JSON.stringify({ event: "ingestion_queue_error", severity: "ERROR", jobId: jobIdFor(projectId, event.id), ...ingestionEventContext(projectId, event),
+        release: ingestionRelease(), reason: diagnostic.code, summary: diagnosticSummary(diagnostic), diagnostic }))
       throw new TracerError(
         "INTERNAL_ERROR",
         "Trace queue unavailable; retry this event with the same ID.",
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
         data: {
           status: await job.getState(),
           attempts: job.attemptsMade,
-          ...(job.failedReason?.startsWith("Monthly record limit reached.")
+          ...(isRecordLimitFailure(job.failedReason)
             ? { reason: "RECORD_LIMIT_REACHED", billingUrl: "/billing" }
             : {}),
         },

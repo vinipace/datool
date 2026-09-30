@@ -4,6 +4,8 @@ import { createIngestionQueue, redisConnection } from "../src/server/ingestion/q
 import { startIngestionWorker } from "../src/server/ingestion/worker"
 import { readIngestionHealth } from "../src/server/ingestion/health"
 import { compactFailedIngestionStacks } from "../src/server/ingestion/recovery"
+import { ingestionFailureCode, ingestionFailureLog, readRetainedDiagnostic } from "../src/server/ingestion/diagnostics"
+import { TracerError } from "../src/server/tracer/errors"
 
 function fixture() {
   const url = process.env.DATOOL_TEST_REDIS_URL
@@ -16,6 +18,43 @@ const data = () => ({ projectId: crypto.randomUUID(), event: {
   id: crypto.randomUUID(), previousId: null, method: "POST" as const, path: "/api/traces",
   body: { id: crypto.randomUUID(), name: "private event body", startedAt: "2026-09-24T00:00:00Z" },
 } })
+
+test("permanent worker failures preserve their code and existing retained-job warnings", async () => {
+  const { connection, queue } = fixture()
+  await queue.waitUntilReady()
+  const input = data()
+  const job = await queue.add("lifecycle", input)
+  const worker = startIngestionWorker({ connection, database: () => {
+    throw new TracerError("VALIDATION_ERROR", "private customer input")
+  } })
+  try {
+    const error = await new Promise<Error>((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error("Expected permanent failure")), 5000)
+      worker.on("failed", (failed, error) => {
+        if (failed?.id === job.id) { clearTimeout(timer); resolve(error) }
+      })
+    })
+    expect(ingestionFailureCode(error)).toBe("VALIDATION_ERROR")
+    const retained = (await queue.getJob(job.id!))!
+    expect(await retained.getState()).toBe("failed")
+    expect(retained.attemptsMade).toBe(1)
+    expect(retained.failedReason).not.toContain("private customer input")
+    const diagnostic = readRetainedDiagnostic(retained.failedReason)!
+    expect(diagnostic.stage).toBe("database")
+    expect(diagnostic.retryable).toBe(false)
+    expect(diagnostic.causes[0].frames.some(frame => frame.includes("tests/ingestion-operations.test.ts:"))).toBe(true)
+    const log = ingestionFailureLog(retained, error)!
+    expect(log).toMatchObject({ event: "ingestion_failed", terminal: true, reason: "VALIDATION_ERROR", projectId: input.projectId, eventId: input.event.id, jobId: job.id, diagnostic })
+    expect(JSON.stringify(log)).not.toContain("private customer input")
+    const health = await readIngestionHealth(queue, connection)
+    expect(health.counts.failed).toBe(1)
+    expect(health.reasons).toContain("FAILED_EVENTS_RETAINED")
+    await job.remove()
+    expect((await readIngestionHealth(queue, connection)).reasons).not.toContain("FAILED_EVENTS_RETAINED")
+  } finally {
+    await worker.close(); await job.remove(); await queue.close(); await connection.quit()
+  }
+})
 
 test("health detects accepted work without progress, stays quiet on fresh work, and excludes payloads", async () => {
   const { connection, queue } = fixture()

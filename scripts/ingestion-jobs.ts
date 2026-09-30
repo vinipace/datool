@@ -2,12 +2,17 @@ import { createIngestionQueue, redisConnection } from "../src/server/ingestion/q
 import { readIngestionHealth } from "../src/server/ingestion/health"
 import { compactFailedIngestionStacks } from "../src/server/ingestion/recovery"
 import { cleanCompletedIngestionJobs } from "../src/server/ingestion/retention"
+import { inspectIngestionJob } from "../src/server/ingestion/inspect"
+import { db, analyticsDb } from "../lib/db"
+const [action, id, extra] = process.argv.slice(2)
 const connection = redisConnection()
-const queue = createIngestionQueue(connection)
+const queue = createIngestionQueue(connection, { skipMetasUpdate: !action || ["status", "health", "inspect"].includes(action) })
 try {
   await queue.waitUntilReady()
-  const [action, id] = process.argv.slice(2)
-  if (action === "health") {
+  if (extra) throw new Error("Unexpected ingestion command argument")
+  if (action === "inspect" && id) {
+    console.info(JSON.stringify(await inspectIngestionJob(queue, id)))
+  } else if (action === "health") {
     const health = await readIngestionHealth(queue, connection)
     console.info(JSON.stringify(health))
     if (health.severity === "CRITICAL") process.exitCode = 2
@@ -28,5 +33,5 @@ try {
   } else if (action === "status" || !action) {
     console.info(JSON.stringify(await queue.getJobCounts("waiting", "active", "delayed", "failed", "completed")))
     for (const job of await queue.getJobs(["failed"], 0, 99)) console.info(JSON.stringify({ id: job.id, attempts: job.attemptsMade, timestamp: job.timestamp }))
-  } else throw new Error("Usage: bun run ingestion:jobs [status | health | compact-stacks | clean-completed | retry JOB_ID]")
-} finally { await queue.close(); await connection.quit() }
+  } else throw new Error("Usage: bun run ingestion:jobs [status | inspect JOB_ID | health | compact-stacks | clean-completed | retry JOB_ID]")
+} finally { await queue.close(); await connection.quit(); await db.end(); if (analyticsDb !== db) await analyticsDb.end() }

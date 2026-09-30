@@ -203,7 +203,7 @@ jobs:
       - start-services
       - run:
           name: Verify ingestion retries, retention, and safe diagnostics
-          command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-sequence.test.ts
+          command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-inspection.test.ts tests/ingestion-sequence.test.ts
       - run:
           name: Verify release safety contracts
           command: |-
