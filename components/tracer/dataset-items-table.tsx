@@ -3,19 +3,19 @@
 import * as React from "react"
 import { ArrowDownRight, Braces, Calendar, Equal, Link2 } from "lucide-react"
 import type { DatasetItemPreview, DatasetField, JsonValue } from "@/src/lib/tracer/contracts"
-import type { LogTableSettings } from "@/src/lib/tracer/custom-views"
+import type { CollectionTableSettings } from "@/src/lib/tracer/custom-views"
 import { datasetFields, datasetFieldLabels } from "@/src/lib/tracer/dataset-schemas"
 import { availableValueViews, isValueView, valueViews, valueViewLabels, type ValueView } from "@/src/lib/tracer/value-views"
 import { StructuredValueView } from "@/components/ui/structured-value-view"
 import { Notice } from "@/components/ui/notice"
 import {
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-  LogTable,
-  LogTableBody,
-} from "./log-table"
-import { logTable } from "./log-table-styles"
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+  CollectionTable,
+  CollectionTableBody,
+} from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { LogTimestamp } from "./log-timestamp"
 import { ColumnEditor, ComputedValue } from "./eval-computed-columns"
 import type { useComputedColumns } from "./use-computed-columns"
@@ -52,13 +52,13 @@ export function DatasetItemsTable({
   filtered: boolean
   datasetId: string
   drafts: Set<string>
-  settings: LogTableSettings
+  settings: CollectionTableSettings
   settingsError?: string
-  onSettingsChange: React.Dispatch<React.SetStateAction<LogTableSettings>>
+  onSettingsChange: React.Dispatch<React.SetStateAction<CollectionTableSettings>>
   onFieldViewChange: (field: string, view: ValueView) => void
 }) {
   const tall = settings.view === "cards" || settings.rowHeight === "tall"
-  const contentClass = tall ? logTable.tallContent : logTable.compactContent
+  const contentClass = tall ? collectionTable.tallContent : collectionTable.compactContent
   const renderValue = (value: JsonValue, field: string) => (
     <div className={`font-mono text-xs text-foreground-muted ${contentClass}`}>
       <StructuredValueView value={value} view={settings.fieldViews?.[field] ?? "json"} compact={!tall} />
@@ -80,7 +80,7 @@ export function DatasetItemsTable({
           {computed.storageError || settingsError}
         </Notice>
       ) : null}
-      <LogTable
+      <CollectionTable
         fillHeight
         enableRowHeight
         settings={settings}
@@ -112,10 +112,10 @@ export function DatasetItemsTable({
         reorderable
         orderStorageKey={`datool:dataset:${datasetId}:columns`}
       >
-        <thead className={logTable.head}>
+        <thead className={collectionTable.head}>
           <tr>
             <th scope="col" className="px-3">
-              <LogSelectAll
+              <CollectionSelectAll
                 checked={count > 0 && count === items.length}
                 partial={count > 0 && count < items.length}
                 disabled={!items.length}
@@ -134,7 +134,7 @@ export function DatasetItemsTable({
                 key={id}
                 scope="col"
                 aria-label={label}
-                className={logTable.heading}
+                className={collectionTable.heading}
               >
                 <span className="flex items-center gap-2">
                   <Icon className="size-3.5" />
@@ -147,7 +147,7 @@ export function DatasetItemsTable({
                 key={column.id}
                 scope="col"
                 aria-label={column.name}
-                className={logTable.heading}
+                className={collectionTable.heading}
               >
                 <ColumnEditor
                   resource="dataset"
@@ -174,7 +174,7 @@ export function DatasetItemsTable({
             <th
               scope="col"
               aria-label="Add column"
-              className={logTable.heading}
+              className={collectionTable.heading}
             >
               <ColumnEditor
                 borderless
@@ -188,7 +188,7 @@ export function DatasetItemsTable({
             </th>
           </tr>
         </thead>
-        <LogTableBody
+        <CollectionTableBody
           rows={items}
           estimatedRowHeight={tall ? 120 : 42}
           empty={
@@ -205,7 +205,7 @@ export function DatasetItemsTable({
           }
         >
           {(item, index) => (
-            <LogRow
+            <CollectionRow
               key={item.id}
               active={selectedId === item.id}
               checked={checked.has(item.id)}
@@ -225,7 +225,7 @@ export function DatasetItemsTable({
                 }
               }}
             >
-              <LogRowSelection
+              <CollectionRowSelection
                 index={index}
                 checked={checked.has(item.id)}
                 label={`Select row ${index + 1}`}
@@ -236,7 +236,7 @@ export function DatasetItemsTable({
                   onCheck(next)
                 }}
               />
-              <td className={logTable.cell}>
+              <td className={collectionTable.cell}>
                 {drafts.has(item.id) ? (
                   <span className="text-sm text-foreground-secondary">
                     Unsaved row
@@ -245,12 +245,12 @@ export function DatasetItemsTable({
                   <LogTimestamp value={item.createdAt} />
                 )}
               </td>
-              <td className={logTable.cell}>{renderField(item, "input")}</td>
-              <td className={logTable.cell}>
+              <td className={collectionTable.cell}>{renderField(item, "input")}</td>
+              <td className={collectionTable.cell}>
                 {renderField(item, "expectedOutput")}
               </td>
-              <td className={logTable.cell}>{renderField(item, "metadata")}</td>
-              <td className={logTable.cell}>
+              <td className={collectionTable.cell}>{renderField(item, "metadata")}</td>
+              <td className={collectionTable.cell}>
                 <span
                   className={`block font-mono text-xs text-foreground-muted ${contentClass}`}
                 >
@@ -258,7 +258,7 @@ export function DatasetItemsTable({
                 </span>
               </td>
               {computed.columns.map((column) => (
-                <td key={column.id} className={logTable.cell}>
+                <td key={column.id} className={collectionTable.cell}>
                   <div className={contentClass}>
                     {item.omittedFields && !computed.cells[column.id]?.[item.id] ? <span className="text-xs text-foreground-muted">Open row to calculate</span> : <ComputedValue
                       cell={computed.cells[column.id]?.[item.id]}
@@ -267,11 +267,11 @@ export function DatasetItemsTable({
                   </div>
                 </td>
               ))}
-              <td className={logTable.cell} />
-            </LogRow>
+              <td className={collectionTable.cell} />
+            </CollectionRow>
           )}
-        </LogTableBody>
-      </LogTable>
+        </CollectionTableBody>
+      </CollectionTable>
     </>
   )
 }

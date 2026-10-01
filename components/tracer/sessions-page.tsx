@@ -1,18 +1,18 @@
 "use client"
 
-import { logTable } from "./log-table-styles"
+import { collectionTable } from "./collection-table-styles"
 
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
-  LogTableBody,
-  LogRowSelection,
-  LogSelectAll,
-  LogTable,
-  LogRow,
-} from "./log-table"
+  CollectionTableBody,
+  CollectionRowSelection,
+  CollectionSelectAll,
+  CollectionTable,
+  CollectionRow,
+} from "./collection-table"
 import { ArrowUpRight, Route } from "lucide-react"
 
 import { SessionKindIcon } from "./span-kind-icon"
@@ -91,16 +91,16 @@ export function SessionsPage() {
       >
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <LogTable
+            <CollectionTable
               persistenceKey="sessions"
               fillHeight
               columnIds={["session", "traces", "attributes", "updated"]}
               widths={[280, 100, 300, 180]}
             >
-              <thead className={logTable.head}>
+              <thead className={collectionTable.head}>
                 <tr>
                   <th className="px-3 align-middle" scope="col">
-                    <LogSelectAll
+                    <CollectionSelectAll
                       checked={allChecked}
                       partial={checkedCount > 0 && !allChecked}
                       disabled={!sessions.length}
@@ -117,26 +117,26 @@ export function SessionsPage() {
                       }
                     />
                   </th>
-                  <th scope="col" className={logTable.heading}>
+                  <th scope="col" className={collectionTable.heading}>
                     Session
                     <span className="mt-0.5 block text-xs">
                       {sessions.length} sessions
                     </span>
                   </th>
-                  <th scope="col" className={logTable.heading}>
+                  <th scope="col" className={collectionTable.heading}>
                     Traces
                   </th>
-                  <th scope="col" className={logTable.heading}>
+                  <th scope="col" className={collectionTable.heading}>
                     Attributes
                   </th>
-                  <th scope="col" className={logTable.heading}>
+                  <th scope="col" className={collectionTable.heading}>
                     Updated
                   </th>
                 </tr>
               </thead>
-              <LogTableBody rows={sessions}>
+              <CollectionTableBody rows={sessions}>
                 {(session, index) => (
-                  <LogRow
+                  <CollectionRow
                     checked={checkedIds.has(session.id)}
                     key={session.id}
                     tabIndex={0}
@@ -162,13 +162,13 @@ export function SessionsPage() {
                       )
                     }}
                   >
-                    <LogRowSelection
+                    <CollectionRowSelection
                       index={index}
                       checked={checkedIds.has(session.id)}
                       label={`Select session ${index + 1}: ${session.name ?? "Untitled session"}`}
                       onChange={() => toggleSession(session.id)}
                     />
-                    <td className={logTable.cell}>
+                    <td className={collectionTable.cell}>
                       <Link
                         className="inline-flex max-w-full items-center gap-2 rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                         title={session.id}
@@ -183,22 +183,22 @@ export function SessionsPage() {
                         <ArrowUpRight className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                       </Link>
                     </td>
-                    <td className={cn(logTable.cell, "tabular-nums")}>
+                    <td className={cn(collectionTable.cell, "tabular-nums")}>
                       {session.traceCount}
                     </td>
-                    <td className={logTable.cell}>
+                    <td className={collectionTable.cell}>
                       <ValuePreview value={session.attributes} />
                     </td>
                     <td
-                      className={cn(logTable.cell, "tabular-nums")}
+                      className={cn(collectionTable.cell, "tabular-nums")}
                       title={formatDate(session.updatedAt)}
                     >
                       {formatRelative(session.updatedAt)}
                     </td>
-                  </LogRow>
+                  </CollectionRow>
                 )}
-              </LogTableBody>
-            </LogTable>
+              </CollectionTableBody>
+            </CollectionTable>
           </div>
         </section>
       </CollectionPage>

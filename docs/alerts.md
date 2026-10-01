@@ -4,7 +4,7 @@ Open **Alerts** in the main project sidebar.
 
 | Page | URL | Behavior |
 | --- | --- | --- |
-| Alerts | `/p/<projectSlug>/alerts` | All project rules in the shared log table, with filters, Display preferences, refresh, row links and export. |
+| Alerts | `/p/<projectSlug>/alerts` | All project rules in the shared collection table, with filters, Display preferences, refresh, row links and export. |
 | New alert | `/p/<projectSlug>/alerts/new` | Configure an empty rule, or use `?template=<id>` to prefill it. Saving opens its notification history. |
 | Alert notifications | `/p/<projectSlug>/alerts/<id>` | This alert's paginated notifications, delivery status, attempts, errors and trace links, plus Edit, pause/resume and Delete controls. |
 | Edit alert | `/p/<projectSlug>/alerts/<id>/edit` | The same configuration form, prefilled from the saved rule. Save is disabled until something changes and again after reverting it. |

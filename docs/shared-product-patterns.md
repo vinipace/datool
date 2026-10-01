@@ -20,10 +20,10 @@ layout applies the `Page · Datool` format.
 | Plain text search | `CollectionSearch` in `collection-page.tsx` | Use for secondary local search fields, not as a replacement for the shared collection filter bar. |
 | Cursor pagination and polling | `use-collection-pages.ts` | Pass its result as both `state` and `pagination`. |
 | Non-paginated request state | `hooks.ts` / `useRemote` | Pass its result as `state`. |
-| Table/card rendering, display controls, column ordering | `log-table.tsx` | Reuse row cells and headers; opt into supported table capabilities. |
+| Table/card rendering, display controls, column ordering | `collection-table.tsx` | Reuse row cells and headers; opt into supported table capabilities. |
 | Page View menu and Display controls | `table-view-controls.tsx`, `custom-view-controls.tsx`, `components/ui/page-view-menu.tsx` | Already composed by `CollectionPage`; pass `savedView` when supported. Page Views sit before the filter bar. |
 | Table preferences and saved-view settings | `use-table-view.ts` | Persist visibility, widths, order and presentation locally. Pass `resource` for saved views; computed columns are optional. |
-| Custom-column agent tools | `log-table.tsx`, `use-column-webmcp.ts` | Supply the computed-column store; do not register duplicate page tools. |
+| Custom-column agent tools | `collection-table.tsx`, `use-column-webmcp.ts` | Supply the computed-column store; do not register duplicate page tools. |
 | Trace inspector overlay | `trace-list-overlay.tsx` | Reuse the overlay and its focus behavior. |
 | Inspector panels | `inspector-panels.tsx` | Compose existing panels and context instead of another inspector. |
 | Input/output and dataset value presentation | `components/ui/structured-value-view.tsx`, `structured-value-viewer.tsx`, `value-view-select.tsx` | Share rendering and format selection; dataset tables keep their field settings in Display. |
@@ -31,7 +31,12 @@ layout applies the `Page · Datool` format.
 
 Paths in the table are under `components/tracer/` unless specified otherwise.
 
-`LogTable` exposes one Display view picker by default: Compact, Tall, and Card.
+`CollectionTable` is the shared renderer for resource collections, including
+traces, datasets, evals, scorers, reports, projects and members. Its name follows
+`CollectionPage`, `CollectionPanel` and `CollectionHeader`; resource pages own
+their queries and row content.
+
+`CollectionTable` exposes one Display view picker by default: Compact, Tall, and Card.
 Column visibility is managed in Display, including restoring hidden columns.
 Compact is the default and clips text previews to one line, including structured
 values and computed columns. Controls, avatars, and percentage cells retain their
@@ -43,7 +48,7 @@ project. Existing `orderStorageKey` values remain supported.
 
 For tables with named saved views or externally rendered value formats, call
 `useTableView` and pass its settings, change handler and column-order store to
-`LogTable`. Its `selectedView` and `details` props preserve URL selection and
+`CollectionTable`. Its `selectedView` and `details` props preserve URL selection and
 Details-panel behavior on eval run details. Saved views include row height; older
 views without it mean Compact. Do not create page-local table settings stores.
 
@@ -88,9 +93,9 @@ such as the dataset tree can disable table capabilities with `enableCardView`,
 `enableRowHeight`, `displayControls` and `reorderable`; do not fork Display.
 
 ```tsx
-<LogTable persistenceKey="eval-runs" columnIds={columnIds} widths={widths}>
-  {/* Existing headers and LogTableBody rows. */}
-</LogTable>
+<CollectionTable persistenceKey="eval-runs" columnIds={columnIds} widths={widths}>
+  {/* Existing headers and CollectionTableBody rows. */}
+</CollectionTable>
 ```
 
 ## Structured value views
@@ -305,7 +310,7 @@ Unversioned operations remain in operation counts, latency, errors and cost.
 Calculate metrics from the combined observations, not from per-version averages.
 Entity links filter Traces by group type and name without restricting version.
 
-`LogTable` owns the single Display menu for its columns and presentation. Do not
+`CollectionTable` owns the single Display menu for its columns and presentation. Do not
 add a second menu in a resource toolbar: built-in, score and computed columns
 must use the table's visibility state so hidden columns can be restored there.
 `CollectionPage` already groups this menu with `CustomViewControls`. Connect
@@ -325,8 +330,8 @@ browser column-order key is retained.
 - Header exports retain the supplied rows and callbacks. Resource pages decide whether to export selected or loaded rows.
 - Filters, saved views, selection and inspector state retain their existing persistence scopes. A shared layout does not introduce new storage.
 - Keep the collection content flexible (`flex-1 min-h-0`) so tables scroll inside the workspace; toolbars and pagination do not shrink.
-- Trace tables use `LogTable.pagination` (forwarded by `TraceListTable`) to append pages automatically near the end of the table or card viewport. `InfiniteScroll` also serves trace lists in sessions and review selection; place it inside their scroll container. Keep loaded rows on page errors and show an explicit retry. Eval details and comparisons use `useCollectionPages` with `refreshLoadedPages` to keep all loaded results current while a run is active.
-- `LogTable` always hides native scrollbars for both tables and cards. Retain `overflow-auto`, its focusable scroll region and native wheel/touch/keyboard scrolling; do not hide overflow or add page-specific scrollbar flags.
+- Trace tables use `CollectionTable.pagination` (forwarded by `TraceListTable`) to append pages automatically near the end of the table or card viewport. `InfiniteScroll` also serves trace lists in sessions and review selection; place it inside their scroll container. Keep loaded rows on page errors and show an explicit retry. Eval details and comparisons use `useCollectionPages` with `refreshLoadedPages` to keep all loaded results current while a run is active.
+- `CollectionTable` always hides native scrollbars for both tables and cards. Retain `overflow-auto`, its focusable scroll region and native wheel/touch/keyboard scrolling; do not hide overflow or add page-specific scrollbar flags.
 
 ```tsx
 const search = useCollectionFilter("sessions")
@@ -465,11 +470,11 @@ AI provider pages own their credential dialogs, permissions and mutations.
 
 Do not migrate specialized screens merely to make their JSX look alike. Trace exploration, dataset editing, eval detail and playground layouts retain their existing shared pieces until a change needs the collection lifecycle. Local Display preferences are shared across collection tables; named saved views and structured filtering remain opt-in resource contracts.
 
-Verification: `bun test tests/collection-page.test.tsx tests/log-table-cards.test.tsx tests/log-card-reordering.test.tsx tests/custom-view-table.test.tsx tests/column-webmcp.test.ts`, followed by `bun run typecheck` and scoped ESLint. Browser verification is also required before claiming header portal placement, focus or responsive layout is visually confirmed.
+Verification: `bun test tests/collection-page.test.tsx tests/collection-table-cards.test.tsx tests/collection-card-reordering.test.tsx tests/custom-view-table.test.tsx tests/column-webmcp.test.ts`, followed by `bun run typecheck` and scoped ESLint. Browser verification is also required before claiming header portal placement, focus or responsive layout is visually confirmed.
 
 ## Reviews
 
-`components/tracer/reviews-page.tsx` owns the review collection, session creation, assignment, and ordered player. It uses `CollectionPage`, the registered `reviews` filter fields, `LogTable`, and the existing `TraceInspector`. SDK conversation sessions remain a separate resource. Review instructions and trace order belong to the session; progress comes from saved item reviews. Initial errors never imply an empty collection, and failed score submissions keep the draft in place. The player autosaves edits through a queue per trace and preserves drafts during previous/next navigation. Invalid input stays local; failed saves keep edits available for retry.
+`components/tracer/reviews-page.tsx` owns the review collection, session creation, assignment, and ordered player. It uses `CollectionPage`, the registered `reviews` filter fields, `CollectionTable`, and the existing `TraceInspector`. SDK conversation sessions remain a separate resource. Review instructions and trace order belong to the session; progress comes from saved item reviews. Initial errors never imply an empty collection, and failed score submissions keep the draft in place. The player autosaves edits through a queue per trace and preserves drafts during previous/next navigation. Invalid input stays local; failed saves keep edits available for retry.
 
 `src/server/tracer/reviews.ts` owns the shared REST/MCP service, project membership checks, score attribution and item revisions. See [MCP review workflow](./mcp.md#review-prompts-and-traces) for scopes and input contracts.
 
@@ -513,7 +518,7 @@ update permission, unique slugs and trusted origins. Saving refreshes the page a
 updates the sidebar selector; the organization ID remains stable.
 
 `components/workspace/members-page.tsx` uses `CollectionPanel`, `CollectionPage`,
-`CollectionSearch`, and `LogTable`. Search filters the fully loaded member list by
+`CollectionSearch`, and `CollectionTable`. Search filters the fully loaded member list by
 name, email, or role. Invite member and Pending invitations open separate dialogs;
 errors and retry actions stay in the active dialog. The pending count remains
 visible when `PanelActionLabel collapseAt="md"` hides its text below 768px of panel
@@ -577,7 +582,7 @@ are exposed by these views.
 
 `components/workspace/alerts-page.tsx` owns the rule catalog and per-alert
 notification history. Both use `CollectionPanel`, `CollectionPage`, the shared
-filter bar and `LogTable`. The bounded rule catalog filters locally; notification
+filter bar and `CollectionTable`. The bounded rule catalog filters locally; notification
 history uses `useCollectionPages` and server filtering before cursor pagination.
 `components/workspace/alert-editor-page.tsx` owns the shared new/edit form;
 `components/workspace/alert-create-dialog.tsx` uses the dashboard-style dialog and

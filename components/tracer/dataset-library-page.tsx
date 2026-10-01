@@ -40,8 +40,8 @@ import {
 import { CollectionPanel } from "./collection-panel"
 import { CollectionPage, CollectionSearch } from "./collection-page"
 import { formatDate, formatRelative } from "./format"
-import { LogRow, LogRowSelection, LogSelectAll, LogTable } from "./log-table"
-import { logTable } from "./log-table-styles"
+import { CollectionRow, CollectionRowSelection, CollectionSelectAll, CollectionTable } from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { useWorkspaceHref, useWorkspaceStorageScope } from "./workspace-path"
 import { useProjectScope } from "./project-scope-context"
 
@@ -97,13 +97,13 @@ function AddRow({ target, depth }: { target: FolderTarget; depth: number }) {
   const library = React.useContext(LibraryContext)
   const drop = useDropTarget(target)
   return (
-    <LogRow
+    <CollectionRow
       className={treeTable.row}
       {...drop}
       aria-label={`Add row in ${target.name || "root"}`}
     >
-      <td className={logTable.cell} />
-      <td className={`${logTable.cell} ${treeTable.nameCell}`}>
+      <td className={collectionTable.cell} />
+      <td className={`${collectionTable.cell} ${treeTable.nameCell}`}>
         <TreeIndent depth={depth}>
           {library.adding?.name === target.name ? (
             <InlineAddInput target={target} />
@@ -115,10 +115,10 @@ function AddRow({ target, depth }: { target: FolderTarget; depth: number }) {
           )}
         </TreeIndent>
       </td>
-      <td className={logTable.cell} />
-      <td className={logTable.cell} />
-      <td className={logTable.cell} />
-    </LogRow>
+      <td className={collectionTable.cell} />
+      <td className={collectionTable.cell} />
+      <td className={collectionTable.cell} />
+    </CollectionRow>
   )
 }
 
@@ -234,7 +234,7 @@ function LibraryRow({
   }
   return (
     <>
-      <LogRow
+      <CollectionRow
         className={treeTable.row}
         checked={library.checkedIds.has(entry.id)}
         data-entry-id={entry.id}
@@ -243,14 +243,14 @@ function LibraryRow({
         data-dragging={library.dragged?.id === entry.id || undefined}
         {...(entry.kind === "folder" ? drop : {})}
       >
-        <LogRowSelection
+        <CollectionRowSelection
           className={treeTable.selectionCell}
           checked={library.checkedIds.has(entry.id)}
           disabled={entry.id.startsWith("pending:")}
           label={`Select ${entry.kind} ${entry.name}`}
           onChange={() => library.toggleSelection(entry.id)}
         />
-        <td className={`${logTable.cell} ${treeTable.nameCell}`}>
+        <td className={`${collectionTable.cell} ${treeTable.nameCell}`}>
           <TreeIndent depth={depth}>
             <ContextMenu>
               <ContextMenuTrigger asChild disabled={pending}>
@@ -308,14 +308,14 @@ function LibraryRow({
             </ContextMenu>
           </TreeIndent>
         </td>
-        <td className={`${logTable.cell} text-foreground-muted tabular-nums`}>
+        <td className={`${collectionTable.cell} text-foreground-muted tabular-nums`}>
           {entry.kind === "folder" ? "Folder" : `${entry.itemCount ?? 0} items`}
         </td>
-        <td className={`${logTable.cell} text-foreground-muted`}>
+        <td className={`${collectionTable.cell} text-foreground-muted`}>
           <div className="truncate">{entry.description || "—"}</div>
         </td>
         <td
-          className={`${logTable.cell} text-foreground-muted`}
+          className={`${collectionTable.cell} text-foreground-muted`}
           title={formatDate(entry.updatedAt)}
         >
           {pending ? (
@@ -324,7 +324,7 @@ function LibraryRow({
             formatRelative(entry.updatedAt)
           )}
         </td>
-      </LogRow>
+      </CollectionRow>
       {entry.kind === "folder" && expanded && !search && (
         <FolderRows target={target} depth={depth + 1} />
       )}
@@ -368,17 +368,17 @@ function StatusRow({
   children,
 }: React.PropsWithChildren<{ depth: number }>) {
   return (
-    <LogRow className="cursor-default">
-      <td className={logTable.cell} />
+    <CollectionRow className="cursor-default">
+      <td className={collectionTable.cell} />
       <td
-        className={`${logTable.cell} ${treeTable.nameCell} text-foreground-muted`}
+        className={`${collectionTable.cell} ${treeTable.nameCell} text-foreground-muted`}
       >
         <TreeIndent depth={depth}>{children}</TreeIndent>
       </td>
       <td />
       <td />
       <td />
-    </LogRow>
+    </CollectionRow>
   )
 }
 
@@ -595,7 +595,7 @@ function DatasetLibraryView() {
           </>
         }
       >
-        <LogTable
+        <CollectionTable
           fillHeight
           displayControls={false}
           enableCardView={false}
@@ -609,10 +609,10 @@ function DatasetLibraryView() {
             Datasets and folders. Drag an icon and name to move. Right-click or
             press Shift+F10 on a name to choose a destination.
           </caption>
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
               <th className={treeTable.selectionCell} scope="col">
-                <LogSelectAll
+                <CollectionSelectAll
                   checked={allChecked}
                   partial={checkedCount > 0 && !allChecked}
                   disabled={!selectableEntries.length}
@@ -630,18 +630,18 @@ function DatasetLibraryView() {
                 />
               </th>
               <th
-                className={`${logTable.heading} ${treeTable.columnHeading} ${treeTable.heading}`}
+                className={`${collectionTable.heading} ${treeTable.columnHeading} ${treeTable.heading}`}
                 scope="col"
               >
                 Name
               </th>
-              <th className={`${logTable.heading} ${treeTable.columnHeading}`}>
+              <th className={`${collectionTable.heading} ${treeTable.columnHeading}`}>
                 Items
               </th>
-              <th className={`${logTable.heading} ${treeTable.columnHeading}`}>
+              <th className={`${collectionTable.heading} ${treeTable.columnHeading}`}>
                 Description
               </th>
-              <th className={`${logTable.heading} ${treeTable.columnHeading}`}>
+              <th className={`${collectionTable.heading} ${treeTable.columnHeading}`}>
                 Updated
               </th>
             </tr>
@@ -649,7 +649,7 @@ function DatasetLibraryView() {
           <tbody>
             <BranchRows page={page} target={root} depth={0} search={!!filter} />
           </tbody>
-        </LogTable>
+        </CollectionTable>
       </CollectionPage>
       {moving && (
         <MoveEntryDialog

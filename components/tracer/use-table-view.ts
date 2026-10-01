@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { usePathname, useSearchParams } from "next/navigation"
 import type { ComputedColumnStore } from "@/src/lib/tracer/computed-column-store"
 import type { ComputedColumn } from "@/src/lib/tracer/computed-columns"
-import { defaultTableSettings, evalViewSettingsSchema, type CustomView, type EvalViewSettings, type LogTableSettings } from "@/src/lib/tracer/custom-views"
-import { createColumnOrderStore } from "@/src/lib/tracer/log-column-order"
+import { defaultTableSettings, evalViewSettingsSchema, type CustomView, type EvalViewSettings, type CollectionTableSettings } from "@/src/lib/tracer/custom-views"
+import { createColumnOrderStore } from "@/src/lib/tracer/collection-column-order"
 import { createTableSettingsStore } from "@/src/lib/tracer/table-settings-store"
 import { createPageViewSelectionStore } from "@/src/lib/tracer/page-view-drafts"
 import { pageResourceForPath, pageViewPathname, pageViewQueryParams, applyPageViewQueryParams } from "@/src/lib/tracer/view-resources"
@@ -21,7 +21,7 @@ export function useTableView({
   settingsStorageKey?: string
   orderStorageKey?: string
   computed?: { store: ComputedColumnStore; columns: ComputedColumn[] }
-  defaultSettings?: LogTableSettings
+  defaultSettings?: CollectionTableSettings
   selectedView?: { id: string | null; onSelect: (id: string | null) => void }
   details?: { open: boolean; onOpenChange: (open: boolean) => void }
 }) {

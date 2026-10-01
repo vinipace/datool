@@ -27,10 +27,10 @@ export const strictFiles = new Set([
     "trace-list-toolbar",
     "traces-page",
     "performance-page",
-    "log-table-styles",
+    "collection-table-styles",
   ].map(
     (name) =>
-      `components/tracer/${name}.${name === "log-table-styles" ? "ts" : "tsx"}`
+      `components/tracer/${name}.${name === "collection-table-styles" ? "ts" : "tsx"}`
   ),
   ...[
     "button",

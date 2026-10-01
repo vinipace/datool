@@ -82,9 +82,9 @@
     "story": "components/tracer/json-code.stories.tsx"
   },
   {
-    "component": "components/tracer/log-table.tsx",
+    "component": "components/tracer/collection-table.tsx",
     "kind": "direct",
-    "story": "components/tracer/log-table.stories.tsx"
+    "story": "components/tracer/collection-table.stories.tsx"
   },
   {
     "component": "components/tracer/log-timestamp.tsx",

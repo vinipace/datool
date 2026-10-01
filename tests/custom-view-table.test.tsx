@@ -1,11 +1,11 @@
 import * as React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "bun:test"
-import { LogTable, LogRow } from "@/components/tracer/log-table"
+import { CollectionTable, CollectionRow } from "@/components/tracer/collection-table"
 
 test("saved visibility and presentation drive the existing table while action columns remain available", () => {
   const markup = renderToStaticMarkup(
-    <LogTable
+    <CollectionTable
       settings={{
         view: "cards",
         columnVisibility: { output: false, name: false, add: false },
@@ -26,13 +26,13 @@ test("saved visibility and presentation drive the existing table while action co
           </th>
         </tr>
       </thead>
-      <LogRow>
+      <CollectionRow>
         <td />
         <td>Sample target</td>
         <td>Hidden output payload</td>
         <td />
-      </LogRow>
-    </LogTable>
+      </CollectionRow>
+    </CollectionTable>
   )
   expect(markup).toContain("<article")
   expect(markup).toContain("Sample target")

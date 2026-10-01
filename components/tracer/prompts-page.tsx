@@ -15,13 +15,13 @@ import {
 } from "@/src/lib/tracer/prompts"
 import { useWorkspaceHref, useWorkspaceStorageScope } from "./workspace-path"
 import {
-  LogTable,
-  LogTableBody,
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-} from "./log-table"
-import { logTable } from "./log-table-styles"
+  CollectionTable,
+  CollectionTableBody,
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+} from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { useRemote } from "./hooks"
 import { CollectionPanel } from "./collection-panel"
 import { CollectionPage } from "./collection-page"
@@ -88,7 +88,7 @@ export function PromptsPage() {
           ),
         }}
       >
-        <LogTable
+        <CollectionTable
           fillHeight
           enableCardView
           settings={tableView.settings}
@@ -106,10 +106,10 @@ export function PromptsPage() {
           ]}
           reorderable
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
-              <th className={logTable.heading}>
-                <LogSelectAll
+              <th className={collectionTable.heading}>
+                <CollectionSelectAll
                   label="Select all prompts"
                   disabled={!rows.length}
                   checked={
@@ -137,13 +137,13 @@ export function PromptsPage() {
                 "Version",
                 "Updated",
               ].map((label) => (
-                <th key={label} className={logTable.heading}>
+                <th key={label} className={collectionTable.heading}>
                   {label}
                 </th>
               ))}
             </tr>
           </thead>
-          <LogTableBody
+          <CollectionTableBody
             rows={rows}
             empty={
               <tr>
@@ -168,7 +168,7 @@ export function PromptsPage() {
             }
           >
             {(row, index) => (
-              <LogRow
+              <CollectionRow
                 rowLabel={`Open ${row.name}`}
                 onClick={() =>
                   router.push(
@@ -178,7 +178,7 @@ export function PromptsPage() {
                 key={row.id}
                 checked={selected.has(row.id)}
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   checked={selected.has(row.id)}
                   label={`Select ${row.name}`}
@@ -191,7 +191,7 @@ export function PromptsPage() {
                     })
                   }
                 />
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <Link
                     className="font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     href={workspaceHref(
@@ -203,37 +203,37 @@ export function PromptsPage() {
                   </Link>
                 </td>
                 <td
-                  className={`${logTable.cell} font-mono text-xs text-foreground-muted`}
+                  className={`${collectionTable.cell} font-mono text-xs text-foreground-muted`}
                 >
                   {row.slug}
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <span className="text-xs text-foreground-muted">
                     {row.model}
                   </span>
                 </td>
                 <td
-                  className={`${logTable.cell} truncate text-foreground-muted`}
+                  className={`${collectionTable.cell} truncate text-foreground-muted`}
                 >
                   {row.description || "—"}
                 </td>
-                <td className={`${logTable.cell} text-foreground-muted`}>
+                <td className={`${collectionTable.cell} text-foreground-muted`}>
                   {promptPublicationLabel(row)}
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   {row.publishedVersion === null
                     ? "—"
                     : `v${row.publishedVersion}`}
                 </td>
                 <td
-                  className={`${logTable.cell} text-xs text-foreground-muted`}
+                  className={`${collectionTable.cell} text-xs text-foreground-muted`}
                 >
                   {formatDate(row.updatedAt)}
                 </td>
-              </LogRow>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
       </CollectionPage>
     </CollectionPanel>
   )

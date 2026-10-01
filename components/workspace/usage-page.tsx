@@ -15,7 +15,7 @@ import { Notice } from "@/components/ui/notice"
 import { DonutProgress } from "@/components/ui/donut-progress"
 import { SegmentedProgress } from "@/components/ui/segmented-progress"
 import { Skeleton } from "@/components/ui/skeleton"
-import { logTable } from "@/components/tracer/log-table-styles"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 import { useRemote } from "@/components/tracer/hooks"
 import {
   workspaceRequest,
@@ -239,27 +239,27 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
         <CardContent className="pt-5">
           {credits.projects.length ? (
             <div className="overflow-x-auto">
-              <table className={`${logTable.table} min-w-96`}>
-                <thead className={logTable.head}>
+              <table className={`${collectionTable.table} min-w-96`}>
+                <thead className={collectionTable.head}>
                   <tr>
-                    <th scope="col" className={logTable.heading}>
+                    <th scope="col" className={collectionTable.heading}>
                       Project
                     </th>
                     <th
                       scope="col"
-                      className={`${logTable.heading} text-right`}
+                      className={`${collectionTable.heading} text-right`}
                     >
                       Scorers
                     </th>
                     <th
                       scope="col"
-                      className={`${logTable.heading} text-right`}
+                      className={`${collectionTable.heading} text-right`}
                     >
                       Sandboxes
                     </th>
                     <th
                       scope="col"
-                      className={`${logTable.heading} text-right`}
+                      className={`${collectionTable.heading} text-right`}
                     >
                       Reserved
                     </th>
@@ -269,23 +269,23 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
                   {credits.projects.map((project) => (
                     <tr
                       key={project.id}
-                      className={`${logTable.row} cursor-default`}
+                      className={`${collectionTable.row} cursor-default`}
                     >
-                      <td className={`${logTable.cell} font-medium`}>
+                      <td className={`${collectionTable.cell} font-medium`}>
                         {project.name}
                       </td>
                       <td
-                        className={`${logTable.cell} text-right tabular-nums`}
+                        className={`${collectionTable.cell} text-right tabular-nums`}
                       >
                         {formatCredits(project.model)}
                       </td>
                       <td
-                        className={`${logTable.cell} text-right tabular-nums`}
+                        className={`${collectionTable.cell} text-right tabular-nums`}
                       >
                         {formatCredits(project.sandbox)}
                       </td>
                       <td
-                        className={`${logTable.cell} text-right tabular-nums`}
+                        className={`${collectionTable.cell} text-right tabular-nums`}
                       >
                         {formatCredits(project.reserved)}
                       </td>

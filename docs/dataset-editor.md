@@ -1,6 +1,6 @@
 # Dataset item editor
 
-The dataset detail route uses the shared LogTable, CollectionFilterBar and workspace inspector dock. Selecting a row opens its input, expected output and metadata editors. With no row selected, the dock shows the dataset description, metadata and evaluation runs. Narrow screens use a dialog with keyboard focus containment.
+The dataset detail route uses the shared CollectionTable, CollectionFilterBar and workspace inspector dock. Selecting a row opens its input, expected output and metadata editors. With no row selected, the dock shows the dataset description, metadata and evaluation runs. Narrow screens use a dialog with keyboard focus containment.
 
 `components/tracer/datasets-page.tsx` owns queries, selection, drafts and optimistic writes. The row table, item inspector, dataset details and schema dialog are adjacent `dataset-*` components. Reusable Monaco, structured-value, schema-preview and section controls live in `components/ui/`. The existing scorer editor delegates to the same Monaco control.
 

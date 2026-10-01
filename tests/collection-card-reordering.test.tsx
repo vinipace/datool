@@ -1,13 +1,13 @@
 import * as React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "bun:test"
-import { LogTable, LogRow, LogSelectAll } from "@/components/tracer/log-table"
+import { CollectionTable, CollectionRow, CollectionSelectAll } from "@/components/tracer/collection-table"
 
 function Example({ view = "cards" }: { view?: "cards" | "table" }) {
-  return <LogTable defaultView={view} widths={[200, 200]} columnIds={["name", "output"]} displayControls={false} reorderable selectionActions={<button>Details</button>}>
-    <thead><tr><th><LogSelectAll checked={false} partial={false} disabled={false} label="Select all examples" onChange={() => {}} /></th><th>Name</th><th><button>Edit output</button></th></tr></thead>
-    {[1, 2].map(id => <LogRow key={id}><td /><td>Target {id}</td><td>Output {id}</td></LogRow>)}
-  </LogTable>
+  return <CollectionTable defaultView={view} widths={[200, 200]} columnIds={["name", "output"]} displayControls={false} reorderable selectionActions={<button>Details</button>}>
+    <thead><tr><th><CollectionSelectAll checked={false} partial={false} disabled={false} label="Select all examples" onChange={() => {}} /></th><th>Name</th><th><button>Edit output</button></th></tr></thead>
+    {[1, 2].map(id => <CollectionRow key={id}><td /><td>Target {id}</td><td>Output {id}</td></CollectionRow>)}
+  </CollectionTable>
 }
 
 test("repeated card fields use independent drag contexts and preserve editor controls", () => {

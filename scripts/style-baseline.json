@@ -25,7 +25,7 @@
   },
   "components/tracer/legacy-playground.tsx": {
   },
-  "components/tracer/log-table.tsx": {
+  "components/tracer/collection-table.tsx": {
   },
   "components/tracer/playground-page.tsx": {
     "bg-black": 6,

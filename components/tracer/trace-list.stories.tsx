@@ -154,7 +154,7 @@ export const PersistentDisplay: Story = {
     await expect(body.getByRole("menuitemradio", { name: "Tall" })).toHaveAttribute("aria-checked", "true")
     await userEvent.click(body.getByRole("menuitemradio", { name: "Card" }))
     await remount()
-    await expect(canvas.getByLabelText("Log cards scroll area")).toBeVisible()
+    await expect(canvas.getByLabelText("Collection cards scroll area")).toBeVisible()
     await expect(canvas.queryByRole("term", { name: "Input" })).not.toBeInTheDocument()
     await openDisplay()
     await userEvent.click(body.getByRole("menuitemcheckbox", { name: "Input" }))

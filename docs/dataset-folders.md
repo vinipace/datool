@@ -1,6 +1,6 @@
 # Dataset folders
 
-The datasets collection uses the shared `LogTable`. Each expanded folder and
+The datasets collection uses the shared `CollectionTable`. Each expanded folder and
 the root end with a **+ Add** row. Clicking Add replaces that button with a
 focused inline input. Press Enter to create or Escape to cancel. A trailing
 slash (`Foo/Bar/`) creates a folder; otherwise the final segment is a dataset

@@ -24,7 +24,7 @@ import {
   DialogClose,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { logTable } from "@/components/tracer/log-table-styles"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 
 export function UiReference() {
   const [checked, setChecked] = useState(false)
@@ -119,31 +119,31 @@ export function UiReference() {
         <section className="min-w-0" aria-label="Table reference">
           <h2 className="mb-3 text-base font-semibold">Trace table surfaces</h2>
           <div className="overflow-x-auto">
-            <table className={`${logTable.table} min-w-[480px]`}>
-              <thead className={logTable.head}>
+            <table className={`${collectionTable.table} min-w-[480px]`}>
+              <thead className={collectionTable.head}>
                 <tr>
-                  <th className={logTable.heading}>Trace</th>
-                  <th className={logTable.heading}>Status</th>
-                  <th className={logTable.heading}>Latency</th>
+                  <th className={collectionTable.heading}>Trace</th>
+                  <th className={collectionTable.heading}>Status</th>
+                  <th className={collectionTable.heading}>Latency</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className={logTable.row} tabIndex={0}>
-                  <td className={logTable.cell}>Document summary</td>
-                  <td className={`${logTable.cell} text-success`}>Completed</td>
-                  <td className={`${logTable.cell} text-foreground-muted`}>
+                <tr className={collectionTable.row} tabIndex={0}>
+                  <td className={collectionTable.cell}>Document summary</td>
+                  <td className={`${collectionTable.cell} text-success`}>Completed</td>
+                  <td className={`${collectionTable.cell} text-foreground-muted`}>
                     1.2s
                   </td>
                 </tr>
-                <tr className={logTable.row} data-selected="true" tabIndex={0}>
-                  <td className={logTable.cell}>Selected trace</td>
-                  <td className={logTable.cell}>Completed</td>
-                  <td className={logTable.cell}>850ms</td>
+                <tr className={collectionTable.row} data-selected="true" tabIndex={0}>
+                  <td className={collectionTable.cell}>Selected trace</td>
+                  <td className={collectionTable.cell}>Completed</td>
+                  <td className={collectionTable.cell}>850ms</td>
                 </tr>
-                <tr className={logTable.row} tabIndex={0}>
-                  <td className={logTable.cell}>Failed request</td>
-                  <td className={`${logTable.cell} text-destructive`}>Error</td>
-                  <td className={logTable.cell}>
+                <tr className={collectionTable.row} tabIndex={0}>
+                  <td className={collectionTable.cell}>Failed request</td>
+                  <td className={`${collectionTable.cell} text-destructive`}>Error</td>
+                  <td className={collectionTable.cell}>
                     <span data-empty="true">—</span>
                   </td>
                 </tr>

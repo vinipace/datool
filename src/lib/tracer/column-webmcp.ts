@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { ComputedColumnStore } from "./computed-column-store"
 import type { ComputedColumn } from "./computed-columns"
-import { resolveLogColumnOrder, type EvalColumnLayout } from "./log-column-order"
+import { resolveCollectionColumnOrder, type EvalColumnLayout } from "./collection-column-order"
 
 export type PageTool = {
   name: string
@@ -149,7 +149,7 @@ export function createColumnTools(store: ComputedColumnStore, layout?: EvalColum
   const readOrder = () => {
     if (!layout) throw new Error("Column ordering is unavailable on this page.")
     const definitions = layout.getColumns()
-    const order = resolveLogColumnOrder(definitions.map(column => column.id), layout.order.getSnapshot())
+    const order = resolveCollectionColumnOrder(definitions.map(column => column.id), layout.order.getSnapshot())
     return {
       order,
       columns: order.map(id => ({ id, name: definitions.find(column => column.id === id)!.name })),
@@ -168,21 +168,21 @@ export function createColumnTools(store: ComputedColumnStore, layout?: EvalColum
   return [
     tool(
       "list_eval_columns",
-      "List all computed column definitions and the current table scope ID. These are selected global fields on the active log table; built-in columns are excluded. Use the returned runId for other column tools.",
+      "List all computed column definitions and the current table scope ID. These are selected global fields on the active collection table; built-in columns are excluded. Use the returned runId for other column tools.",
       z.strictObject({}),
       true,
       () => ({ columns: store.getSnapshot().columns })
     ),
     tool(
       "get_eval_column",
-      "Read one computed column definition (id, name, code, mode) on the active log table.",
+      "Read one computed column definition (id, name, code, mode) on the active collection table.",
       target,
       true,
       (args) => ({ column: find(args.id) })
     ),
     tool(
       "create_eval_column",
-      "Create and persist a read-only computed column on the active log table. Dataset rows expose row.input, row.expectedOutput, and row.metadata. Eval and trace rows also expose row.output, row.results, row.trace, and row.metrics.cost (USD). Agent and workflow rows aggregate across versions by name and expose row.name, row.groupType, and row.metrics aggregates such as versionCount, count, completedCount, meanDurationMs, and reportedCostUsd (nullable). The table evaluates the column per row without changing source data. Reusing an explicit ID with the same definition is a no-op; a conflicting definition is an error.",
+      "Create and persist a read-only computed column on the active collection table. Dataset rows expose row.input, row.expectedOutput, and row.metadata. Eval and trace rows also expose row.output, row.results, row.trace, and row.metrics.cost (USD). Agent and workflow rows aggregate across versions by name and expose row.name, row.groupType, and row.metrics aggregates such as versionCount, count, completedCount, meanDurationMs, and reportedCostUsd (nullable). The table evaluates the column per row without changing source data. Reusing an explicit ID with the same definition is a no-op; a conflicting definition is an error.",
       create,
       false,
       async (args) => {

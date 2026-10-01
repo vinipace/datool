@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createComputedColumnStore } from "../src/lib/tracer/computed-column-store"
 import { createColumnTools } from "../src/lib/tracer/column-webmcp"
-import { createColumnOrderStore } from "../src/lib/tracer/log-column-order"
+import { createColumnOrderStore } from "../src/lib/tracer/collection-column-order"
 import { getEvalTableColumns } from "../src/lib/tracer/eval-table-columns"
 
 function fixture() {

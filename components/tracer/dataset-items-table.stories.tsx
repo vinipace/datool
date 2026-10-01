@@ -9,7 +9,7 @@ import {
 } from "../../.storybook/scenarios/datasets-evals/fixtures"
 import {
   defaultTableSettings,
-  type LogTableSettings,
+  type CollectionTableSettings,
 } from "@/src/lib/tracer/custom-views"
 import { DatasetItemsTable } from "./dataset-items-table"
 import { useComputedColumns } from "./use-computed-columns"
@@ -29,7 +29,7 @@ function DatasetItemsTableExample({
   const [checked, setChecked] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [settings, setSettings] =
-    useState<LogTableSettings>(defaultTableSettings)
+    useState<CollectionTableSettings>(defaultTableSettings)
   return (
     <>
       <p className="sr-only" role="status">

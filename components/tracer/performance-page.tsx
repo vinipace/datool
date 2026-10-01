@@ -24,13 +24,13 @@ import { HeaderSlot } from "./collection-header"
 import { CollectionPanel } from "./collection-panel"
 import { CollectionPage } from "./collection-page"
 import { ColumnEditor, ComputedValue } from "./eval-computed-columns"
-import { LogRow, LogRowSelection, LogSelectAll, LogTable, LogTableBody } from "./log-table"
+import { CollectionRow, CollectionRowSelection, CollectionSelectAll, CollectionTable, CollectionTableBody } from "./collection-table"
 import { useComputedColumns } from "./use-computed-columns"
 import { useTableView } from "./use-table-view"
 import { Notice } from "@/components/ui/notice"
 import { formatDuration } from "./format"
 import { useRemote } from "./hooks"
-import { logTable } from "./log-table-styles"
+import { collectionTable } from "./collection-table-styles"
 import { EmptyState } from "./primitives"
 import { SpanKindIcon } from "./span-kind-icon"
 
@@ -215,7 +215,7 @@ function PerformanceResults({
         ) : null
       }
     >
-      <LogTable
+      <CollectionTable
         fillHeight
         reorderable
         enableCardView
@@ -235,10 +235,10 @@ function PerformanceResults({
           160,
         ]}
       >
-        <thead className={logTable.head}>
+        <thead className={collectionTable.head}>
           <tr>
             <th className="px-3" scope="col">
-              <LogSelectAll
+              <CollectionSelectAll
                 label={`Select all visible ${model}`}
                 checked={allChecked}
                 partial={checkedRows.length > 0 && !allChecked}
@@ -250,7 +250,7 @@ function PerformanceResults({
               <th
                 key={column.id}
                 scope="col"
-                className={logTable.heading}
+                className={collectionTable.heading}
                 title={column.title}
               >
                 {column.label}
@@ -261,7 +261,7 @@ function PerformanceResults({
                 key={column.id}
                 scope="col"
                 aria-label={column.name}
-                className={logTable.heading}
+                className={collectionTable.heading}
               >
                 <ColumnEditor
                   resource="performance"
@@ -288,7 +288,7 @@ function PerformanceResults({
             <th
               scope="col"
               aria-label="Add column"
-              className={logTable.heading}
+              className={collectionTable.heading}
             >
               <ColumnEditor
                 borderless
@@ -302,7 +302,7 @@ function PerformanceResults({
             </th>
           </tr>
         </thead>
-        <LogTableBody
+        <CollectionTableBody
           rows={rows}
           empty={
             <tr>
@@ -334,8 +334,8 @@ function PerformanceResults({
               `/traces?${new URLSearchParams({ filter })}`
             )
             return (
-              <LogRow key={row.id} checked={checkedIds.has(row.id)} className="cursor-default">
-                <LogRowSelection
+              <CollectionRow key={row.id} checked={checkedIds.has(row.id)} className="cursor-default">
+                <CollectionRowSelection
                   index={offset + index}
                   checked={checkedIds.has(row.id)}
                   label={`Select ${name}`}
@@ -346,7 +346,7 @@ function PerformanceResults({
                     return next
                   })}
                 />
-                <td className={`${logTable.cell} font-medium`}>
+                <td className={`${collectionTable.cell} font-medium`}>
                   <Link
                     className="flex max-w-full items-center gap-2 rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                     href={href}
@@ -357,14 +357,14 @@ function PerformanceResults({
                     </span>
                   </Link>
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {metrics.versionCount?.toLocaleString() ?? "—"}
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {count.toLocaleString()}
                 </td>
                 <td
-                  className={`${logTable.cell} whitespace-nowrap tabular-nums`}
+                  className={`${collectionTable.cell} whitespace-nowrap tabular-nums`}
                 >
                   <span
                     className={metrics.erroredCount ? "text-destructive" : ""}
@@ -375,25 +375,25 @@ function PerformanceResults({
                     ({metrics.erroredCount} errors)
                   </span>
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {metrics.runningCount}
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {metrics.cancelledCount}
                 </td>
                 <td
-                  className={`${logTable.cell} tabular-nums`}
+                  className={`${collectionTable.cell} tabular-nums`}
                   title={`${metrics.durationSampleCount} completed/errored latency samples`}
                 >
                   {latency(metrics.meanDurationMs)}
                 </td>
                 <td
-                  className={`${logTable.cell} tabular-nums`}
+                  className={`${collectionTable.cell} tabular-nums`}
                   title="Nearest-rank 95th percentile of completed/errored latency samples"
                 >
                   {latency(metrics.p95DurationMs)}
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {cost === null ? (
                     <span className="text-foreground-muted">Not reported</span>
                   ) : (
@@ -408,8 +408,8 @@ function PerformanceResults({
                   )}
                 </td>
                 {computed.columns.map((column) => (
-                  <td key={column.id} className={logTable.cell}>
-                    <div className={logTable.compactContent}>
+                  <td key={column.id} className={collectionTable.cell}>
+                    <div className={collectionTable.compactContent}>
                       <ComputedValue
                         cell={computed.cells[column.id]?.[row.id]}
                         format={column.format}
@@ -417,12 +417,12 @@ function PerformanceResults({
                     </div>
                   </td>
                 ))}
-                <td className={logTable.cell} />
-              </LogRow>
+                <td className={collectionTable.cell} />
+              </CollectionRow>
             )
           }}
-        </LogTableBody>
-      </LogTable>
+        </CollectionTableBody>
+      </CollectionTable>
       <div className="flex shrink-0 items-center justify-between gap-3 px-1 py-3 text-xs text-foreground-muted">
         <span>
           {rows.length

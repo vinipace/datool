@@ -8,16 +8,16 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import {
-  LogTableBody,
-  LogTable,
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-} from "./log-table"
+  CollectionTableBody,
+  CollectionTable,
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+} from "./collection-table"
 import { PercentageCell } from "./percentage-cell"
 import { ResultIcon } from "./result-icon"
 import { SpanKindIcon } from "./span-kind-icon"
-import { logTable } from "./log-table-styles"
+import { collectionTable } from "./collection-table-styles"
 import type {
   EvalRunSummary,
   EvalRunGroupSummary,
@@ -105,7 +105,7 @@ function EvalRunsTable({
   const allChecked = runs.length > 0 && checkedCount === runs.length
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <LogTable
+      <CollectionTable
         settings={tableView?.settings}
         onSettingsChange={tableView?.onSettingsChange}
         columnOrderStore={tableView?.columnOrderStore}
@@ -126,10 +126,10 @@ function EvalRunsTable({
         ]}
         widths={[280, 300, 120, ...scoreNames.map(() => 160), 120, 260, 200]}
       >
-        <thead className={logTable.head}>
+        <thead className={collectionTable.head}>
           <tr>
             <th scope="col" className="px-3 align-middle">
-              <LogSelectAll
+              <CollectionSelectAll
                 checked={allChecked}
                 partial={checkedCount > 0 && !allChecked}
                 disabled={!runs.length}
@@ -146,7 +146,7 @@ function EvalRunsTable({
                 }
               />
             </th>
-            <th scope="col" className={logTable.heading}>
+            <th scope="col" className={collectionTable.heading}>
               Run
               <span className="mt-0.5 block text-xs">{runs.length} runs</span>
             </th>
@@ -158,13 +158,13 @@ function EvalRunsTable({
               "Metadata",
               "Created",
             ].map((label) => (
-              <th key={label} scope="col" className={logTable.heading}>
+              <th key={label} scope="col" className={collectionTable.heading}>
                 {label}
               </th>
             ))}
           </tr>
         </thead>
-        <LogTableBody
+        <CollectionTableBody
           rows={rows}
           empty={
             !runs.length ? (
@@ -184,7 +184,7 @@ function EvalRunsTable({
           {(entry) => {
             const { run, index } = entry
             return (
-              <LogRow
+              <CollectionRow
                 key={run.id}
                 checked={checkedIds.has(run.id)}
                 tabIndex={0}
@@ -206,7 +206,7 @@ function EvalRunsTable({
                   )
                 }}
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   checked={checkedIds.has(run.id)}
                   label={`Select eval run ${index + 1}: ${run.name ?? "Untitled eval run"}`}
@@ -219,7 +219,7 @@ function EvalRunsTable({
                     })
                   }
                 />
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <Link
                     className="flex min-w-0 items-center gap-2 font-medium hover:underline focus-visible:outline-ring"
                     title={run.id}
@@ -231,10 +231,10 @@ function EvalRunsTable({
                     </span>
                   </Link>
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <EvalGroupLinks run={run} compact />
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <PercentageCell value={run.score} />
                 </td>
                 {scoreNames.map((name) => {
@@ -242,7 +242,7 @@ function EvalRunsTable({
                     (score) => score.name === name
                   )?.value
                   return (
-                    <td key={name} className={logTable.cell}>
+                    <td key={name} className={collectionTable.cell}>
                       {typeof value === "boolean" ? (
                         <ResultIcon success={value} />
                       ) : value == null || (value >= 0 && value <= 1) ? (
@@ -255,22 +255,22 @@ function EvalRunsTable({
                     </td>
                   )
                 })}
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <span className="tabular-nums">{run.resultCount}</span>
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <ValuePreview value={run.metadata ?? {}} />
                 </td>
-                <td className={logTable.cell} title={formatDate(run.createdAt)}>
+                <td className={collectionTable.cell} title={formatDate(run.createdAt)}>
                   <span className="tabular-nums">
                     {formatRelative(run.createdAt)}
                   </span>
                 </td>
-              </LogRow>
+              </CollectionRow>
             )
           }}
-        </LogTableBody>
-      </LogTable>
+        </CollectionTableBody>
+      </CollectionTable>
     </div>
   )
 }

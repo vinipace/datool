@@ -51,7 +51,7 @@ import { readModel } from "@/src/lib/tracer/usage"
 import { platformPreviewTraces } from "./platform-preview-fixtures"
 import {
   defaultTableSettings,
-  type LogTableSettings,
+  type CollectionTableSettings,
 } from "@/src/lib/tracer/custom-views"
 import styles from "./platform-preview.module.css"
 
@@ -145,7 +145,7 @@ export function PlatformPreview() {
     "generate"
   )
   const [query, setQuery] = useState("")
-  const [tableSettings, setTableSettings] = useState<LogTableSettings>(() => ({
+  const [tableSettings, setTableSettings] = useState<CollectionTableSettings>(() => ({
     ...defaultTableSettings,
     columnSizing: {
       name: 168,

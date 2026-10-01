@@ -1,9 +1,9 @@
-import { defaultTableSettings, evalViewSettingsSchema, type LogTableSettings } from "./custom-views"
+import { defaultTableSettings, evalViewSettingsSchema, type CollectionTableSettings } from "./custom-views"
 import { z } from "zod"
 import { valueViews } from "./value-views"
 
 const schema = evalViewSettingsSchema.pick({ columnVisibility: true, columnSizing: true, view: true, rowHeight: true }).extend({ fieldViews: z.record(z.string(), z.enum(valueViews)).optional() })
-export function createTableSettingsStore(key?: string, storage: () => Pick<Storage, "getItem" | "setItem"> = () => localStorage, defaults: LogTableSettings = defaultTableSettings) {
+export function createTableSettingsStore(key?: string, storage: () => Pick<Storage, "getItem" | "setItem"> = () => localStorage, defaults: CollectionTableSettings = defaultTableSettings) {
   const initial = { settings: defaults, loaded: !key, error: "" }
   let snapshot = initial
   const listeners = new Set<() => void>()
@@ -19,7 +19,7 @@ export function createTableSettingsStore(key?: string, storage: () => Pick<Stora
         publish({ settings: raw ? schema.parse(JSON.parse(raw)) : defaults, loaded: true, error: "" })
       } catch { publish({ ...snapshot, loaded: true, error: "Saved table settings could not be loaded." }) }
     },
-    set: (change: LogTableSettings | ((current: LogTableSettings) => LogTableSettings)) => {
+    set: (change: CollectionTableSettings | ((current: CollectionTableSettings) => CollectionTableSettings)) => {
       const settings = schema.parse(typeof change === "function" ? change(snapshot.settings) : change)
       let error = ""
       try { if (key) storage().setItem(key, JSON.stringify(settings)) }

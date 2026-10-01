@@ -2,7 +2,7 @@
 
 import { InfiniteScroll, type InfiniteScrollState } from "./infinite-scroll"
 
-import { defaultTableSettings, type LogTableSettings } from "@/src/lib/tracer/custom-views"
+import { defaultTableSettings, type CollectionTableSettings } from "@/src/lib/tracer/custom-views"
 
 /* eslint-disable react-hooks/incompatible-library */
 
@@ -12,10 +12,10 @@ import { useReducedMotion } from "motion/react"
 import { closestCenter, DndContext, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { arrayMove, horizontalListSortingStrategy, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { resolveLogColumnOrder, type ColumnOrderStore } from "@/src/lib/tracer/log-column-order"
+import { resolveCollectionColumnOrder, type ColumnOrderStore } from "@/src/lib/tracer/collection-column-order"
 import { getCoreRowModel, useReactTable, type ColumnSizingState, type VisibilityState } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { logTable } from "./log-table-styles"
+import { collectionTable } from "./collection-table-styles"
 import { useTableView } from "./use-table-view"
 import { useColumnValues } from "./use-computed-columns"
 import { ColumnEditor, ComputedValue } from "./eval-computed-columns"
@@ -29,12 +29,12 @@ import { cn } from "@/lib/utils"
 import type { ComputedColumnStore } from "@/src/lib/tracer/computed-column-store"
 import { useColumnWebMcp } from "./use-column-webmcp"
 import { HeaderDisplay } from "./collection-header"
-import { LogColumnEditorContext } from "./log-column-editor-context"
+import { CollectionColumnEditorContext } from "./collection-column-editor-context"
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 
 /** Omit the index to keep the checkbox visible instead of swapping it with a row number. */
-export function LogRowSelection({ index, checked, label, onChange, disabled, className, align = "middle" }: { index?: number; checked: boolean; label: string; onChange: () => void; disabled?: boolean; className?: string; align?: "top" | "middle" }) {
-  const context = React.useContext(LogTableContext)
+export function CollectionRowSelection({ index, checked, label, onChange, disabled, className, align = "middle" }: { index?: number; checked: boolean; label: string; onChange: () => void; disabled?: boolean; className?: string; align?: "top" | "middle" }) {
+  const context = React.useContext(CollectionTableContext)
   const Cell = context?.view === "cards" ? "div" : "td"
   return (
     <Cell className={cn("rounded-l-md px-3", context?.view === "cards" ? "py-3" : align === "top" ? "align-top pt-4" : "align-middle", className)} onClick={(event) => event.stopPropagation()}>
@@ -49,13 +49,13 @@ export function LogRowSelection({ index, checked, label, onChange, disabled, cla
   )
 }
 
-export function LogSelectAll({ checked, partial, disabled, label, onChange }: { checked: boolean; partial: boolean; disabled: boolean; label: string; onChange: () => void }) {
+export function CollectionSelectAll({ checked, partial, disabled, label, onChange }: { checked: boolean; partial: boolean; disabled: boolean; label: string; onChange: () => void }) {
   const ref = React.useRef<HTMLInputElement>(null)
   React.useEffect(() => { if (ref.current) ref.current.indeterminate = partial }, [partial])
   return <input ref={ref} type="checkbox" checked={checked} disabled={disabled} aria-label={label} onChange={onChange} className="size-4 cursor-pointer accent-selection-control" />
 }
 
-type LogTableContextValue = {
+type CollectionTableContextValue = {
   extraFields?: { columns: ComputedColumn[]; cells: Record<string, Record<string, ComputedCell>> }
 
   rowHeight?: "compact" | "tall"
@@ -73,17 +73,17 @@ type LogTableContextValue = {
   reorderable: boolean
   onDragEnd: (event: DragEndEvent) => void
 }
-const LogTableContext = React.createContext<LogTableContextValue | null>(null)
+const CollectionTableContext = React.createContext<CollectionTableContextValue | null>(null)
 const EMPTY_DATA: unknown[] = []
 
 function hasSelectionControl(node: React.ReactNode): boolean {
   return React.Children.toArray(node).some(child => {
     if (!React.isValidElement<React.PropsWithChildren<{ type?: string }>>(child)) return false
-    return child.type === LogSelectAll || (child.type === "input" && child.props.type === "checkbox") || hasSelectionControl(child.props.children)
+    return child.type === CollectionSelectAll || (child.type === "input" && child.props.type === "checkbox") || hasSelectionControl(child.props.children)
   })
 }
 
-function SortableLogHeader({ id, label, enabled, element, menu, selected, onSelectHeader }: {
+function SortableCollectionHeader({ id, label, enabled, element, menu, selected, onSelectHeader }: {
   selected: boolean
   onSelectHeader: (additive: boolean) => void
   menu?: { count: number; hide?: () => void; left?: () => void; right?: () => void }
@@ -116,7 +116,7 @@ function SortableLogHeader({ id, label, enabled, element, menu, selected, onSele
     className: cn(element.props.className, selected && "bg-selection ring-1 ring-inset ring-ring", menu && "data-[state=open]:bg-selection data-[state=open]:ring-1 data-[state=open]:ring-inset data-[state=open]:ring-ring", enabled && "touch-none select-none cursor-grab active:cursor-grabbing [&_button]:cursor-grab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", isDragging && "z-30 bg-surface-canvas shadow-md opacity-80"),
     style: { ...element.props.style, transform: CSS.Translate.toString(transform), transition },
   })
-  return <LogColumnEditorContext.Provider value={registerEditor}>
+  return <CollectionColumnEditorContext.Provider value={registerEditor}>
     {menu ? <ContextMenu>
       <ContextMenuTrigger asChild>{heading}</ContextMenuTrigger>
       <ContextMenuContent>
@@ -127,11 +127,11 @@ function SortableLogHeader({ id, label, enabled, element, menu, selected, onSele
         <ContextMenuItem disabled={!menu.hide} onSelect={menu.hide}>{menu.count > 1 ? `Hide ${menu.count} columns` : "Hide column"}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu> : heading}
-  </LogColumnEditorContext.Provider>
+  </CollectionColumnEditorContext.Provider>
 }
 
 /** Shared Display and rendering; persistence and additional settings are configured with props. */
-export function LogTable({ pagination, displaySettings, persistenceKey, enableRowHeight = true, computedColumnStore, selectionActions, selectionToolbarClassName, selectionColumnWidth = 44, settings: controlledSettings, onSettingsChange: controlledOnSettingsChange, widths, columnIds, actionColumnIds = [], reorderable = true, orderStorageKey, columnOrderStore, children, displayControls = true, enableCardView = true, defaultView = "table", fillHeight = false, animateRows = false }: React.PropsWithChildren<{ pagination?: InfiniteScrollState; displaySettings?: React.ComponentProps<typeof HeaderDisplay>["settings"]; persistenceKey?: string; enableRowHeight?: boolean; computedColumnStore?: ComputedColumnStore; selectionActions?: React.ReactNode; selectionToolbarClassName?: string; selectionColumnWidth?: number; settings?: LogTableSettings; onSettingsChange?: React.Dispatch<React.SetStateAction<LogTableSettings>>; widths: number[]; columnIds?: string[]; actionColumnIds?: string[]; reorderable?: boolean; orderStorageKey?: string; columnOrderStore?: ColumnOrderStore; displayControls?: boolean; enableCardView?: boolean; defaultView?: "table" | "cards"; fillHeight?: boolean; animateRows?: boolean }>) {
+export function CollectionTable({ pagination, displaySettings, persistenceKey, enableRowHeight = true, computedColumnStore, selectionActions, selectionToolbarClassName, selectionColumnWidth = 44, settings: controlledSettings, onSettingsChange: controlledOnSettingsChange, widths, columnIds, actionColumnIds = [], reorderable = true, orderStorageKey, columnOrderStore, children, displayControls = true, enableCardView = true, defaultView = "table", fillHeight = false, animateRows = false }: React.PropsWithChildren<{ pagination?: InfiniteScrollState; displaySettings?: React.ComponentProps<typeof HeaderDisplay>["settings"]; persistenceKey?: string; enableRowHeight?: boolean; computedColumnStore?: ComputedColumnStore; selectionActions?: React.ReactNode; selectionToolbarClassName?: string; selectionColumnWidth?: number; settings?: CollectionTableSettings; onSettingsChange?: React.Dispatch<React.SetStateAction<CollectionTableSettings>>; widths: number[]; columnIds?: string[]; actionColumnIds?: string[]; reorderable?: boolean; orderStorageKey?: string; columnOrderStore?: ColumnOrderStore; displayControls?: boolean; enableCardView?: boolean; defaultView?: "table" | "cards"; fillHeight?: boolean; animateRows?: boolean }>) {
   const [selectedHeaders, setSelectedHeaders] = React.useState<Set<string>>(() => new Set())
   const appearedRows = React.useRef(new Set<string>())
   const storageScope = useWorkspaceStorageScope()
@@ -150,7 +150,7 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
   function findRows(nodes: React.ReactNode) {
     React.Children.forEach(nodes, node => {
       if (!React.isValidElement<{ rows?: unknown[]; children?: React.ReactNode }>(node)) return
-      if (node.type === LogTableBody && node.props.rows) fieldRows.push(...node.props.rows.map(row => fieldRow(fieldKind, row)))
+      if (node.type === CollectionTableBody && node.props.rows) fieldRows.push(...node.props.rows.map(row => fieldRow(fieldKind, row)))
       else if (node.type === React.Fragment) findRows(node.props.children)
     })
   }
@@ -161,7 +161,7 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
     widths = [...widths, ...fieldColumns.map(() => 240), 160]
     actionColumnIds = [...actionColumnIds, "add-auto-field"]
     const editor = <ColumnEditor objectKind={fieldKind} addedFields={fieldColumns} rows={fieldRows} addLabel="Custom Fields" onSave={field => { void tableView.computed.store.update([...fieldColumns, field]) }} />
-    const extraHeaders = [...fieldColumns.map(field => <th key={field.id} className={logTable.head}><ColumnEditor objectKind={fieldKind} column={field} rows={fieldRows} onSave={saved => { void tableView.computed.store.update(fieldColumns.map(current => current.id === field.id ? saved : current)) }} onDelete={() => { void tableView.computed.store.update(fieldColumns.filter(current => current.id !== field.id)) }} /></th>), <th key="add-auto-field" className={logTable.head}>{editor}</th>]
+    const extraHeaders = [...fieldColumns.map(field => <th key={field.id} className={collectionTable.head}><ColumnEditor objectKind={fieldKind} column={field} rows={fieldRows} onSave={saved => { void tableView.computed.store.update(fieldColumns.map(current => current.id === field.id ? saved : current)) }} onDelete={() => { void tableView.computed.store.update(fieldColumns.filter(current => current.id !== field.id)) }} /></th>), <th key="add-auto-field" className={collectionTable.head}>{editor}</th>]
     children = React.Children.map(children, child => {
       if (!React.isValidElement<React.PropsWithChildren>(child) || child.type !== "thead") return child
       return React.cloneElement(child, {}, React.Children.map(child.props.children, row => React.isValidElement<React.PropsWithChildren>(row) && row.type === "tr" ? React.cloneElement(row, {}, [...React.Children.toArray(row.props.children), ...extraHeaders]) : row))
@@ -203,7 +203,7 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
     })),
   ]
   const sourceIds = columns.map(column => column.id)
-  const columnOrder = resolveLogColumnOrder(sourceIds, reorderable ? savedOrder : [], actionColumnIds)
+  const columnOrder = resolveCollectionColumnOrder(sourceIds, reorderable ? savedOrder : [], actionColumnIds)
   const table = useReactTable({
     data: EMPTY_DATA, columns, getCoreRowModel: getCoreRowModel(),
     columnResizeMode: "onChange", state: { columnSizing, columnVisibility, columnOrder }, onColumnSizingChange: setColumnSizing, onColumnVisibilityChange: setColumnVisibility,
@@ -305,7 +305,7 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
               left: reorderable && position > 0 ? move(-1) : undefined,
               right: reorderable && position < movableIds.length - 1 ? move(1) : undefined,
             } : undefined
-            return <SortableLogHeader selected={!!menu && selectedHeaders.has(column.id)} onSelectHeader={additive => setSelectedHeaders(current => {
+            return <SortableCollectionHeader selected={!!menu && selectedHeaders.has(column.id)} onSelectHeader={additive => setSelectedHeaders(current => {
               if (!additive) return new Set(current.size === 1 && current.has(column.id) ? [] : [column.id])
               const next = new Set(current)
               if (next.has(column.id)) next.delete(column.id)
@@ -324,14 +324,14 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
     <div className="flex items-center gap-3">{view === "cards" && hasSelectionControl(headers[0]) ? <label className="flex cursor-pointer items-center gap-2">{headers[0]}<span>Select all</span></label> : null}{selectionActions}</div>
     {view === "cards" ? actionIndices.map(index => <React.Fragment key={sourceIds[index]}>{headers[index]}</React.Fragment>) : null}
   </div>
-  return <LogTableContext.Provider value={{ extraFields: automaticFields ? { columns: fieldColumns, cells: fieldCells } : undefined, rowHeight, animateRows, appearedRows, scrollRef, headerHeight, columnCount: visibleColumns.length, visibleIndices, view, headers, actionIndices, sourceIds, labels, reorderable, onDragEnd }}>
+  return <CollectionTableContext.Provider value={{ extraFields: automaticFields ? { columns: fieldColumns, cells: fieldCells } : undefined, rowHeight, animateRows, appearedRows, scrollRef, headerHeight, columnCount: visibleColumns.length, visibleIndices, view, headers, actionIndices, sourceIds, labels, reorderable, onDragEnd }}>
     {!controlledSettings && tableView.savedView && <CustomViewControls {...tableView.savedView} />}
     {!controlledSettings && tableView.storageError ? <Notice variant="error" role="status">{tableView.storageError}</Notice> : null}
     {displayControls || enableCardView || enableRowHeight ? <HeaderDisplay settings={displaySettings} rowHeight={rowHeight} onRowHeightChange={setRowHeight} view={enableCardView ? view : undefined} onViewChange={setView} columns={displayControls ? leafColumns.slice(1).map((column) => ({ id: column.id, label: labels[sourceIds.indexOf(column.id)] || column.id, visible: column.getIsVisible(), disabled: column.id === sourceIds[1] })).filter(column => !actionColumnIds.includes(column.id)) : []} onChange={(id, visible) => table.getColumn(id)?.toggleVisibility(visible)} /> : null}
     {view === "table" && selectionActions ? selectionToolbar : null}
     <DndContext id={React.useId()} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
     <SortableContext items={reorderable ? movableIds : []} strategy={horizontalListSortingStrategy}>
-    <div ref={scrollRef} tabIndex={0} aria-label={view === "cards" ? "Log cards scroll area" : "Log table scroll area"} className={cn("log-table-scroll relative overflow-auto", fillHeight && "min-h-0 flex-1")} style={{ height: fillHeight ? "100%" : undefined, maxHeight: fillHeight ? "none" : viewportHeight ?? "calc(100dvh - 12rem)" }}>
+    <div ref={scrollRef} tabIndex={0} aria-label={view === "cards" ? "Collection cards scroll area" : "Collection table scroll area"} className={cn("collection-table-scroll relative overflow-auto", fillHeight && "min-h-0 flex-1")} style={{ height: fillHeight ? "100%" : undefined, maxHeight: fillHeight ? "none" : viewportHeight ?? "calc(100dvh - 12rem)" }}>
       {view === "cards" ? <>
         {selectionToolbar}
         {React.Children.map(children, child => {
@@ -340,7 +340,7 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
           if (child.type === "caption") return <div {...child.props} />
           return child
         })}
-      </> : <table className={logTable.table} style={{ width: total }}>
+      </> : <table className={collectionTable.table} style={{ width: total }}>
         <colgroup>{leafColumns.filter(column => column.getIsVisible()).map((column) => <col key={column.id} style={{ width: column.getSize() }} />)}</colgroup>
         {decorate(children)}
       </table>}
@@ -348,19 +348,19 @@ export function LogTable({ pagination, displaySettings, persistenceKey, enableRo
     </div>
     </SortableContext>
     </DndContext>
-  </LogTableContext.Provider>
+  </CollectionTableContext.Provider>
 }
 
 /** Render only visible rows; ResizeObserver measures tall JSON rows after resizing. */
-export function LogTableBody<T extends { id: string }>({ rows, children, empty, estimatedRowHeight = 42, renderComparison }: {
+export function CollectionTableBody<T extends { id: string }>({ rows, children, empty, estimatedRowHeight = 42, renderComparison }: {
   rows: T[]
-  children: (row: T, index: number) => React.ReactElement<React.ComponentProps<typeof LogRow>>
+  children: (row: T, index: number) => React.ReactElement<React.ComponentProps<typeof CollectionRow>>
   empty?: React.ReactNode
-  renderComparison?: (row: T, index: number) => React.ReactElement<React.ComponentProps<typeof LogRow>>
+  renderComparison?: (row: T, index: number) => React.ReactElement<React.ComponentProps<typeof CollectionRow>>
   estimatedRowHeight?: number
 }) {
-  const context = React.useContext(LogTableContext)
-  if (!context) throw new Error("LogTableBody must be inside LogTable")
+  const context = React.useContext(CollectionTableContext)
+  if (!context) throw new Error("CollectionTableBody must be inside CollectionTable")
   const pairedTable = !!renderComparison && context.view === "table"
   const virtualizer = useVirtualizer({
     count: rows.length * (pairedTable ? 2 : 1),
@@ -385,7 +385,7 @@ export function LogTableBody<T extends { id: string }>({ rows, children, empty, 
       {React.cloneElement(renderComparison(rows[item.index], item.index), { animationKey: `${item.key}:comparison`, fieldRowId: rows[item.index].id })}
     </div> : React.cloneElement(children(rows[item.index], item.index), {
       key: item.key, fieldRowId: rows[pairedTable ? Math.floor(item.index / 2) : item.index].id, animationKey: String(item.key), ref: virtualizer.measureElement, "data-index": item.index,
-    } as React.ComponentProps<typeof LogRow>))}
+    } as React.ComponentProps<typeof CollectionRow>))}
     {bottom > 0 ? <div aria-hidden="true" style={{ height: Math.max(0, bottom - 12) }} /> : null}
     {!rows.length ? <div className="py-10 text-center text-muted-foreground">{unwrapTableCells(empty)}</div> : null}
   </div>
@@ -397,7 +397,7 @@ export function LogTableBody<T extends { id: string }>({ rows, children, empty, 
       return React.cloneElement(render(rows[index], index), {
         key: item.key, fieldRowId: rows[pairedTable ? Math.floor(item.index / 2) : item.index].id, animationKey: String(item.key), ref: virtualizer.measureElement, "data-index": item.index,
         "aria-rowindex": item.index + 2,
-      } as React.ComponentProps<typeof LogRow>)
+      } as React.ComponentProps<typeof CollectionRow>)
     })}
     {bottom > 0 ? <tr aria-hidden="true"><td colSpan={context.columnCount} style={{ height: bottom, padding: 0 }} /></tr> : null}
     {!rows.length ? empty : null}
@@ -408,11 +408,11 @@ function unwrapTableCells(node: React.ReactNode): React.ReactNode {
   return React.Children.map(node, child => React.isValidElement<React.PropsWithChildren>(child) && ["tr", "td", "tbody"].includes(String(child.type)) ? unwrapTableCells(child.props.children) : child)
 }
 
-type LogRowProps = React.HTMLAttributes<HTMLElement> & { fieldRowId?: string; ref?: React.Ref<HTMLElement>; checked?: boolean; active?: boolean; rowLabel?: React.ReactNode; animationKey?: string }
+type CollectionRowProps = React.HTMLAttributes<HTMLElement> & { fieldRowId?: string; ref?: React.Ref<HTMLElement>; checked?: boolean; active?: boolean; rowLabel?: React.ReactNode; animationKey?: string }
 
-export function LogRow({ checked = false, active = false, className, children, ref, rowLabel, animationKey, fieldRowId, ...props }: LogRowProps) {
-  const context = React.useContext(LogTableContext)
-  if (context?.extraFields && fieldRowId) children = [...React.Children.toArray(children), ...context.extraFields.columns.map(field => <td key={field.id} className={logTable.cell}><ComputedValue cell={context.extraFields!.cells[field.id]?.[fieldRowId]} format={field.format} /></td>), <td key="add-auto-field" />]
+export function CollectionRow({ checked = false, active = false, className, children, ref, rowLabel, animationKey, fieldRowId, ...props }: CollectionRowProps) {
+  const context = React.useContext(CollectionTableContext)
+  if (context?.extraFields && fieldRowId) children = [...React.Children.toArray(children), ...context.extraFields.columns.map(field => <td key={field.id} className={collectionTable.cell}><ComputedValue cell={context.extraFields!.cells[field.id]?.[fieldRowId]} format={field.format} /></td>), <td key="add-auto-field" />]
   const elementRef = React.useRef<HTMLElement | null>(null)
   const entryStarted = React.useRef(false)
   const fallbackKey = React.useId()
@@ -439,14 +439,14 @@ export function LogRow({ checked = false, active = false, className, children, r
     if (typeof ref === "function") return ref(element)
     if (ref) ref.current = element
   }
-  if (context?.view === "cards") return <article {...props} ref={setRef} data-selected={checked || active ? "true" : undefined} className={cn(logTable.row, "@container !h-auto overflow-hidden rounded-none border border-border", className)}>
+  if (context?.view === "cards") return <article {...props} ref={setRef} data-selected={checked || active ? "true" : undefined} className={cn(collectionTable.row, "@container !h-auto overflow-hidden rounded-none border border-border", className)}>
     <div className="flex items-center gap-2">{React.isValidElement<React.PropsWithChildren>(cells[0]) && cells[0].type === "td" ? <div>{cells[0].props.children}</div> : cells[0]}{rowLabel ? <div className="min-w-0 py-3 pr-3 text-xs text-muted-foreground">{rowLabel}</div> : null}</div>
-    <LogCardFields context={context} cells={cells} />
+    <CollectionCardFields context={context} cells={cells} />
   </article>
-  return <tr {...props} ref={setRef} data-selected={checked || active ? "true" : undefined} className={cn(logTable.row, context?.rowHeight === "compact" && logTable.compactRow, context?.rowHeight === "tall" && "h-auto [&>td]:h-auto [&>td]:py-3 [&>td]:align-top", className)}>{context ? context.visibleIndices.map(index => {
+  return <tr {...props} ref={setRef} data-selected={checked || active ? "true" : undefined} className={cn(collectionTable.row, context?.rowHeight === "compact" && collectionTable.compactRow, context?.rowHeight === "tall" && "h-auto [&>td]:h-auto [&>td]:py-3 [&>td]:align-top", className)}>{context ? context.visibleIndices.map(index => {
     const cell = cells[index]
     if (context.rowHeight !== "compact" || index === 0 || context.actionIndices.includes(index) || !React.isValidElement<React.ComponentProps<"td">>(cell) || cell.type !== "td") return cell
-    return React.cloneElement(cell, {}, <div className={logTable.compactCellContent}>{cell.props.children}</div>)
+    return React.cloneElement(cell, {}, <div className={collectionTable.compactCellContent}>{cell.props.children}</div>)
   }) : cells}</tr>
 }
 
@@ -470,7 +470,7 @@ function SortableCardField({ id, label, enabled, header, cell }: {
   </div>
 }
 
-function LogCardFields({ context, cells }: { context: LogTableContextValue; cells: React.ReactNode[] }) {
+function CollectionCardFields({ context, cells }: { context: CollectionTableContextValue; cells: React.ReactNode[] }) {
   const indices = context.visibleIndices.filter(index => index !== 0 && !context.actionIndices.includes(index))
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
