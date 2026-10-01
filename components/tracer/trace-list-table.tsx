@@ -1,6 +1,6 @@
 "use client"
 
-import { logTable } from "./log-table-styles"
+import { collectionTable } from "./collection-table-styles"
 
 import * as React from "react"
 
@@ -19,12 +19,12 @@ import {
 } from "./trace-list-utils"
 import { JsonCode } from "./json-code"
 import { previewValue } from "./format"
-import { LogTableBody, LogRowSelection, LogTable, LogRow } from "./log-table"
+import { CollectionTableBody, CollectionRowSelection, CollectionTable, CollectionRow } from "./collection-table"
 import { LogTimestamp } from "./log-timestamp"
 import { getTraceIconKind } from "./trace-icon-kind"
 import { SpanKindIcon } from "./span-kind-icon"
-import type { LogTableSettings } from "@/src/lib/tracer/custom-views"
-import type { ColumnOrderStore } from "@/src/lib/tracer/log-column-order"
+import type { CollectionTableSettings } from "@/src/lib/tracer/custom-views"
+import type { ColumnOrderStore } from "@/src/lib/tracer/collection-column-order"
 import type { EvalResult } from "@/src/lib/tracer/contracts"
 import { EvalScoreCell } from "./eval-score-cell"
 import { ColumnEditor, ComputedValue } from "./eval-computed-columns"
@@ -39,7 +39,7 @@ export type TraceTableColumn = {
 }
 
 type TraceListTableProps = {
-  pagination?: React.ComponentProps<typeof LogTable>["pagination"]
+  pagination?: React.ComponentProps<typeof CollectionTable>["pagination"]
   additionalColumns?: TraceTableColumn[]
   orderStorageKey?: string
   persistenceKey?: string
@@ -50,8 +50,8 @@ type TraceListTableProps = {
   onCheckedIdsChange?: (ids: Set<string>) => void
   columnTools?: ReturnType<typeof import("./use-computed-columns").useComputedColumns> & { rows: import("@/src/lib/tracer/computed-columns").EvalTableRow[]; orderStorageKey: string }
   scores?: { columns: { id: string; name: string }[]; results: EvalResult[] }
-  settings?: LogTableSettings
-  onSettingsChange?: React.Dispatch<React.SetStateAction<LogTableSettings>>
+  settings?: CollectionTableSettings
+  onSettingsChange?: React.Dispatch<React.SetStateAction<CollectionTableSettings>>
   columnOrderStore?: ColumnOrderStore
   enableCardView?: boolean
   animateRows?: boolean
@@ -266,12 +266,12 @@ export function TraceListTable({
   enabledColumns.push(...additionalColumns.filter((column) => !enabledColumns.includes(column)))
   return (
     <div className="overflow-x-auto" style={fillHeight ? { height: "100%", overflow: "hidden" } : undefined}>
-      <LogTable pagination={pagination} persistenceKey={persistenceKey} computedColumnStore={columnTools?.store} settings={settings} onSettingsChange={onSettingsChange} columnOrderStore={columnOrderStore} enableCardView={enableCardView} animateRows={animateRows} fillHeight={fillHeight} orderStorageKey={orderStorageKey ?? columnTools?.orderStorageKey} actionColumnIds={columnTools ? ["add-column"] : []} columnIds={[...enabledColumns.map((column) => column.id), ...(scores?.columns.map(column => `score:${column.id}`) ?? []), ...(columnTools?.columns.map(column => `computed:${column.id}`) ?? []), ...(columnTools ? ["add-column"] : [])]} widths={[...enabledColumns.map((column) => column.width), ...(scores?.columns.map(() => 140) ?? []), ...(columnTools?.columns.map(() => 180) ?? []), ...(columnTools ? [160] : [])]}>
+      <CollectionTable pagination={pagination} persistenceKey={persistenceKey} computedColumnStore={columnTools?.store} settings={settings} onSettingsChange={onSettingsChange} columnOrderStore={columnOrderStore} enableCardView={enableCardView} animateRows={animateRows} fillHeight={fillHeight} orderStorageKey={orderStorageKey ?? columnTools?.orderStorageKey} actionColumnIds={columnTools ? ["add-column"] : []} columnIds={[...enabledColumns.map((column) => column.id), ...(scores?.columns.map(column => `score:${column.id}`) ?? []), ...(columnTools?.columns.map(column => `computed:${column.id}`) ?? []), ...(columnTools ? ["add-column"] : [])]} widths={[...enabledColumns.map((column) => column.width), ...(scores?.columns.map(() => 140) ?? []), ...(columnTools?.columns.map(() => 180) ?? []), ...(columnTools ? [160] : [])]}>
         <caption className="sr-only">
           Trace log rows. Press Enter or Space on a focused row to open its
           inspector.
         </caption>
-        <thead className={logTable.head}>
+        <thead className={collectionTable.head}>
           <tr>
             <th scope="col" className="px-3 align-middle">
               <input
@@ -293,19 +293,19 @@ export function TraceListTable({
             </th>
             {enabledColumns.map((column) => (
               <th
-                className={logTable.heading}
+                className={collectionTable.heading}
                 key={column.id}
                 scope="col"
               >
                 <span className="block truncate">{column.label}</span>
               </th>
             ))}
-            {scores?.columns.map(column => <th key={column.id} scope="col" className={logTable.heading}>{column.name}</th>)}
-            {columnTools?.columns.map(column => <th key={column.id} scope="col" className={logTable.heading} aria-label={column.name}><ColumnEditor addedFields={columnTools.columns} description="Calculate a value for each trace. Columns are saved for this app in this browser." column={column} rows={columnTools.rows} onSave={next => columnTools.update(columnTools.columns.map(current => current.id === next.id ? next : current))} onDelete={() => columnTools.update(columnTools.columns.filter(current => current.id !== column.id))} /></th>)}
-            {columnTools && <th scope="col" className={logTable.heading}><ColumnEditor addedFields={columnTools.columns} description="Calculate a value for each trace. Columns are saved for this app in this browser." rows={columnTools.rows} onSave={column => columnTools.update([...columnTools.columns, column])} /></th>}
+            {scores?.columns.map(column => <th key={column.id} scope="col" className={collectionTable.heading}>{column.name}</th>)}
+            {columnTools?.columns.map(column => <th key={column.id} scope="col" className={collectionTable.heading} aria-label={column.name}><ColumnEditor addedFields={columnTools.columns} description="Calculate a value for each trace. Columns are saved for this app in this browser." column={column} rows={columnTools.rows} onSave={next => columnTools.update(columnTools.columns.map(current => current.id === next.id ? next : current))} onDelete={() => columnTools.update(columnTools.columns.filter(current => current.id !== column.id))} /></th>)}
+            {columnTools && <th scope="col" className={collectionTable.heading}><ColumnEditor addedFields={columnTools.columns} description="Calculate a value for each trace. Columns are saved for this app in this browser." rows={columnTools.rows} onSave={column => columnTools.update([...columnTools.columns, column])} /></th>}
           </tr>
         </thead>
-        <LogTableBody rows={traces} empty={traces.length === 0 ? (
+        <CollectionTableBody rows={traces} empty={traces.length === 0 ? (
             <tr>
               <td
                 className="px-3 py-10 text-center text-sm text-foreground-subtle"
@@ -317,10 +317,10 @@ export function TraceListTable({
           ) : null}>{(trace, index) => {
             const latestRun = !!highlightedCallId && trace.attributes["datool.call.id"] === highlightedCallId
             return (
-            <LogRow
+            <CollectionRow
               aria-label={rowLabel?.(trace) ?? `Open ${trace.name || trace.operation}, ${statusLabel(trace.status)}${latestRun ? ", latest run" : ""}`}
               data-latest-run={latestRun || undefined}
-              className={trace.status === "running" ? logTable.runningRow : undefined}
+              className={trace.status === "running" ? collectionTable.runningRow : undefined}
               style={latestRun ? { backgroundColor: trace.status === "running" ? undefined : "var(--info-background)", boxShadow: "inset 3px 0 var(--info)" } : undefined}
               checked={checkedIds.has(trace.id)}
               active={selectedTraceId === trace.id}
@@ -334,21 +334,21 @@ export function TraceListTable({
               }}
               tabIndex={0}
             >
-              <LogRowSelection index={index} checked={checkedIds.has(trace.id)} label={`Select trace ${index + 1}: ${trace.name || trace.operation}`} onChange={() => toggleTrace(trace.id)} />
+              <CollectionRowSelection index={index} checked={checkedIds.has(trace.id)} label={`Select trace ${index + 1}: ${trace.name || trace.operation}`} onChange={() => toggleTrace(trace.id)} />
               {enabledColumns.map((column) => (
                 <td
-                  className={logTable.cell}
+                  className={collectionTable.cell}
                   key={column.id}
                 >
                   {column.render(trace)}
                 </td>
               ))}
-              {scores?.columns.map(column => <td key={column.id} className={logTable.cell}><EvalScoreCell result={scores.results.find(result => result.traceId === trace.id && result.evaluatorId === column.id)} /></td>)}
-              {columnTools?.columns.map(column => <td key={column.id} className={logTable.cell}><ComputedValue format={column.format} cell={columnTools.cells[column.id]?.[trace.id]} /></td>)}
-              {columnTools && <td className={logTable.cell} onClick={event => event.stopPropagation()} />}
-            </LogRow>
-          )}}</LogTableBody>
-      </LogTable>
+              {scores?.columns.map(column => <td key={column.id} className={collectionTable.cell}><EvalScoreCell result={scores.results.find(result => result.traceId === trace.id && result.evaluatorId === column.id)} /></td>)}
+              {columnTools?.columns.map(column => <td key={column.id} className={collectionTable.cell}><ComputedValue format={column.format} cell={columnTools.cells[column.id]?.[trace.id]} /></td>)}
+              {columnTools && <td className={collectionTable.cell} onClick={event => event.stopPropagation()} />}
+            </CollectionRow>
+          )}}</CollectionTableBody>
+      </CollectionTable>
     </div>
   )
 }

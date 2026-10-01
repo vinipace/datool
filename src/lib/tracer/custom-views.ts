@@ -75,11 +75,11 @@ export const customViewSchema = customViewInputSchema.extend({
   createdAt: z.string(),
   updatedAt: z.string(),
 })
-export type LogTableSettings = Pick<
+export type CollectionTableSettings = Pick<
   EvalViewSettings,
   "columnVisibility" | "columnSizing" | "view" | "rowHeight"
 > & { fieldViews?: Record<string, ValueView> }
-export const defaultTableSettings: LogTableSettings = {
+export const defaultTableSettings: CollectionTableSettings = {
   columnVisibility: {},
   columnSizing: {},
   view: "table",

@@ -24,7 +24,7 @@ The latest 50 saved revisions observed in a browser are stored under `datool:cus
 
 Routes use the existing local mutation/origin protection. Settings are validated at the service boundary and formulas remain data on the server; evaluation still happens in the existing bounded browser worker.
 
-`resource` scopes a view to its surface; `settings.schemaVersion` versions its settings contract independently of the saved revision. Currently only `eval-runs` with schema version 1 is accepted. To add traces or sessions, add a resource-specific settings schema and adapter, then expose the picker on that page. Don't apply eval-only formulas or fields to another resource implicitly. The `LogTable` accepts controlled presentation settings while retaining its existing uncontrolled behavior elsewhere.
+`resource` scopes a view to its surface; `settings.schemaVersion` versions its settings contract independently of the saved revision. Currently only `eval-runs` with schema version 1 is accepted. To add traces or sessions, add a resource-specific settings schema and adapter, then expose the picker on that page. Don't apply eval-only formulas or fields to another resource implicitly. The `CollectionTable` accepts controlled presentation settings while retaining its existing uncontrolled behavior elsewhere.
 
 ## Validation
 

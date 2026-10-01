@@ -24,13 +24,13 @@ import { useCollectionFilter } from "@/components/tracer/use-collection-filter"
 import { useCollectionPages } from "@/components/tracer/use-collection-pages"
 import type { CollectionListOptions } from "@/components/tracer/api"
 import {
-  LogTable,
-  LogTableBody,
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-} from "@/components/tracer/log-table"
-import { logTable } from "@/components/tracer/log-table-styles"
+  CollectionTable,
+  CollectionTableBody,
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+} from "@/components/tracer/collection-table"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 import { useRemote } from "@/components/tracer/hooks"
 import { formatDate } from "@/components/tracer/format"
 import { workspaceRequest } from "@/lib/workspace-api"
@@ -153,7 +153,7 @@ export function AlertsPage({ projectId, projectSlug, canManage }: PageProps) {
           ) : undefined,
         }}
       >
-        <LogTable
+        <CollectionTable
           fillHeight
           persistenceKey="alerts"
           widths={[250, 140, 170, 340, 140, 190, 240]}
@@ -167,10 +167,10 @@ export function AlertsPage({ projectId, projectSlug, canManage }: PageProps) {
             "lastError",
           ]}
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
-              <th className={logTable.heading}>
-                <LogSelectAll {...selection.all(rows)} />
+              <th className={collectionTable.heading}>
+                <CollectionSelectAll {...selection.all(rows)} />
               </th>
               {[
                 "Name",
@@ -181,13 +181,13 @@ export function AlertsPage({ projectId, projectSlug, canManage }: PageProps) {
                 "Last notification",
                 "Last error",
               ].map((label) => (
-                <th className={logTable.heading} key={label}>
+                <th className={collectionTable.heading} key={label}>
                   {label}
                 </th>
               ))}
             </tr>
           </thead>
-          <LogTableBody
+          <CollectionTableBody
             rows={rows}
             empty={
               <EmptyRows
@@ -202,7 +202,7 @@ export function AlertsPage({ projectId, projectSlug, canManage }: PageProps) {
             }
           >
             {(row, index) => (
-              <LogRow
+              <CollectionRow
                 key={row.id}
                 rowLabel={`Open ${row.name}`}
                 checked={selection.selected.has(row.id)}
@@ -210,13 +210,13 @@ export function AlertsPage({ projectId, projectSlug, canManage }: PageProps) {
                   router.push(`${base}/${encodeURIComponent(row.id)}`)
                 }
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   checked={selection.selected.has(row.id)}
                   label={`Select ${row.name}`}
                   onChange={() => selection.toggle(row.id)}
                 />
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <Link
                     href={`${base}/${encodeURIComponent(row.id)}`}
                     className={linkClass}
@@ -225,36 +225,36 @@ export function AlertsPage({ projectId, projectSlug, canManage }: PageProps) {
                     {row.name}
                   </Link>
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   {row.enabled ? "Enabled" : "Paused"}
                 </td>
-                <td className={`${logTable.cell} text-foreground-muted`}>
+                <td className={`${collectionTable.cell} text-foreground-muted`}>
                   {typeLabel(row.type)}
                 </td>
                 <td
-                  className={`${logTable.cell} font-mono text-xs`}
+                  className={`${collectionTable.cell} font-mono text-xs`}
                   title={row.filter || "All logs"}
                 >
                   {row.filter || "All logs"}
                 </td>
-                <td className={logTable.cell}>{actionLabel(row.action)}</td>
+                <td className={collectionTable.cell}>{actionLabel(row.action)}</td>
                 <td
-                  className={`${logTable.cell} text-xs text-foreground-muted`}
+                  className={`${collectionTable.cell} text-xs text-foreground-muted`}
                 >
                   {row.lastNotifiedAt
                     ? formatDate(row.lastNotifiedAt)
                     : "Never"}
                 </td>
                 <td
-                  className={`${logTable.cell} text-xs text-destructive`}
+                  className={`${collectionTable.cell} text-xs text-destructive`}
                   title={row.lastError ?? undefined}
                 >
                   {row.lastError || "—"}
                 </td>
-              </LogRow>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
       </CollectionPage>
     </CollectionPanel>
   )
@@ -435,7 +435,7 @@ export function AlertDetailPage({
             ) : undefined,
         }}
       >
-        <LogTable
+        <CollectionTable
           fillHeight
           persistenceKey="alert-notifications"
           widths={[200, 140, 140, 120, 130, 240, 280]}
@@ -449,10 +449,10 @@ export function AlertDetailPage({
             "error",
           ]}
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
-              <th className={logTable.heading}>
-                <LogSelectAll {...selection.all(history.items)} />
+              <th className={collectionTable.heading}>
+                <CollectionSelectAll {...selection.all(history.items)} />
               </th>
               {[
                 "Created",
@@ -463,13 +463,13 @@ export function AlertDetailPage({
                 "Trace",
                 "Last error",
               ].map((label) => (
-                <th className={logTable.heading} key={label}>
+                <th className={collectionTable.heading} key={label}>
                   {label}
                 </th>
               ))}
             </tr>
           </thead>
-          <LogTableBody
+          <CollectionTableBody
             rows={history.items}
             empty={
               <EmptyRows
@@ -488,25 +488,25 @@ export function AlertDetailPage({
             }
           >
             {(row, index) => (
-              <LogRow key={row.id} checked={selection.selected.has(row.id)}>
-                <LogRowSelection
+              <CollectionRow key={row.id} checked={selection.selected.has(row.id)}>
+                <CollectionRowSelection
                   index={index}
                   checked={selection.selected.has(row.id)}
                   label={`Select notification ${row.id}`}
                   onChange={() => selection.toggle(row.id)}
                 />
-                <td className={`${logTable.cell} text-xs`}>
+                <td className={`${collectionTable.cell} text-xs`}>
                   {formatDate(row.createdAt)}
                 </td>
                 <td
-                  className={`${logTable.cell} ${row.status === "failed" ? "text-destructive" : row.status === "delivered" ? "text-success" : "text-foreground-muted"}`}
+                  className={`${collectionTable.cell} ${row.status === "failed" ? "text-destructive" : row.status === "delivered" ? "text-success" : "text-foreground-muted"}`}
                 >
                   {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
                 </td>
-                <td className={logTable.cell}>{actionLabel(row.action)}</td>
-                <td className={logTable.cell}>{row.matchCount}</td>
-                <td className={logTable.cell}>{row.attempts}</td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>{actionLabel(row.action)}</td>
+                <td className={collectionTable.cell}>{row.matchCount}</td>
+                <td className={collectionTable.cell}>{row.attempts}</td>
+                <td className={collectionTable.cell}>
                   {row.traceId ? (
                     <Link
                       className={linkClass}
@@ -520,15 +520,15 @@ export function AlertDetailPage({
                   )}
                 </td>
                 <td
-                  className={`${logTable.cell} text-xs text-foreground-muted`}
+                  className={`${collectionTable.cell} text-xs text-foreground-muted`}
                   title={row.lastError ?? undefined}
                 >
                   {row.lastError || "—"}
                 </td>
-              </LogRow>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
       </CollectionPage>
       <Dialog
         open={removing}

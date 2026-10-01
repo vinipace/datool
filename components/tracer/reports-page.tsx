@@ -15,13 +15,13 @@ import { useCollectionFilter } from "./use-collection-filter"
 import { useTableView } from "./use-table-view"
 import { useWorkspaceHref, useWorkspaceStorageScope } from "./workspace-path"
 import {
-  LogTable,
-  LogTableBody,
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-} from "./log-table"
-import { logTable } from "./log-table-styles"
+  CollectionTable,
+  CollectionTableBody,
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+} from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { useRemote } from "./hooks"
 import { dashboardRequest } from "./dashboard-utils"
 import { formatDate } from "./format"
@@ -83,7 +83,7 @@ export function ReportsPage() {
           actions: create,
         }}
       >
-        <LogTable
+        <CollectionTable
           fillHeight
           enableCardView
           reorderable
@@ -102,10 +102,10 @@ export function ReportsPage() {
             "frozen",
           ]}
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
-              <th className={logTable.heading}>
-                <LogSelectAll
+              <th className={collectionTable.heading}>
+                <CollectionSelectAll
                   label="Select all reports"
                   disabled={!rows.length}
                   checked={
@@ -134,13 +134,13 @@ export function ReportsPage() {
                 "Widgets",
                 "Frozen at",
               ].map((name) => (
-                <th className={logTable.heading} key={name}>
+                <th className={collectionTable.heading} key={name}>
                   {name}
                 </th>
               ))}
             </tr>
           </thead>
-          <LogTableBody
+          <CollectionTableBody
             rows={rows}
             empty={
               <tr>
@@ -160,13 +160,13 @@ export function ReportsPage() {
             }
           >
             {(row, index) => (
-              <LogRow
+              <CollectionRow
                 key={row.id}
                 checked={selected.has(row.id)}
                 rowLabel={`Open ${row.name}`}
                 onClick={() => router.push(href(`/reports/${row.number}`))}
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   checked={selected.has(row.id)}
                   label={`Select ${row.name}`}
@@ -179,10 +179,10 @@ export function ReportsPage() {
                     })
                   }
                 />
-                <td className={`${logTable.cell} text-foreground-muted`}>
+                <td className={`${collectionTable.cell} text-foreground-muted`}>
                   #{row.number}
                 </td>
-                <td className={`${logTable.cell} font-medium`}>
+                <td className={`${collectionTable.cell} font-medium`}>
                   <Link
                     className="hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     href={href(`/reports/${row.number}`)}
@@ -191,7 +191,7 @@ export function ReportsPage() {
                     {row.name}
                   </Link>
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <span className="inline-flex items-center gap-2">
                     <span
                       aria-hidden="true"
@@ -200,25 +200,25 @@ export function ReportsPage() {
                     {row.status === "draft" ? "Draft" : "Published"}
                   </span>
                 </td>
-                <td className={`${logTable.cell} text-foreground-muted`}>
+                <td className={`${collectionTable.cell} text-foreground-muted`}>
                   {row.author?.name ?? "Not recorded"}
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   {reportTemplates.find(
                     (template) => template.id === row.templateId
                   )?.name ?? "Custom dashboard"}
                 </td>
-                <td className={`${logTable.cell} text-foreground-muted`}>
+                <td className={`${collectionTable.cell} text-foreground-muted`}>
                   {row.description || "—"}
                 </td>
-                <td className={logTable.cell}>{row.widgetCount}</td>
-                <td className={`${logTable.cell} text-foreground-muted`}>
+                <td className={collectionTable.cell}>{row.widgetCount}</td>
+                <td className={`${collectionTable.cell} text-foreground-muted`}>
                   {formatDate(row.frozenAt)}
                 </td>
-              </LogRow>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
       </CollectionPage>
     </CollectionPanel>
   )

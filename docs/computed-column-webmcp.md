@@ -46,4 +46,4 @@ Pass this to `move_eval_column`, using IDs returned by `get_eval_column_order`.
 
 The integration feature-detects the [WebMCP draft's `document.modelContext`](https://webmachinelearning.github.io/webmcp/) and falls back to `navigator.modelContext` in older implementations. Registrations are removed when leaving the eval detail page using abort signals or legacy `unregisterTool`. Browsers without WebMCP retain the regular column UI; no fake browser API or remote MCP server is installed.
 
-Validation: `bun test tests/column-webmcp.test.ts tests/column-order-webmcp.test.ts tests/log-column-order.test.ts`.
+Validation: `bun test tests/column-webmcp.test.ts tests/column-order-webmcp.test.ts tests/collection-column-order.test.ts`.

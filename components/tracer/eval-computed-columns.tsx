@@ -13,7 +13,7 @@ import { useOverlayContainer } from "@/components/ui/overlay-container"
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { createColumnOrderStore, resolveLogColumnOrder } from "@/src/lib/tracer/log-column-order"
+import { createColumnOrderStore, resolveCollectionColumnOrder } from "@/src/lib/tracer/collection-column-order"
 import { ChevronDown, Code2, Plus, X } from "lucide-react"
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,7 @@ import {
 import { JsonCode } from "./json-code"
 import { useColumnValues } from "./use-computed-columns"
 import { ColumnCodeEditor } from "./column-code-editor"
-import { LogColumnEditorContext } from "./log-column-editor-context"
+import { CollectionColumnEditorContext } from "./collection-column-editor-context"
 import { useTraceSectionDisclosure } from "./hooks"
 import { useReviewAnnotations } from "./review-annotation-context"
 
@@ -109,7 +109,7 @@ export function ColumnEditor({
     objectTypes: targets.length ? targets : [objectKind ?? (resource === "dataset" ? "dataset-item" : "trace")],
     resultType,
   })
-  const registerEditor = React.useContext(LogColumnEditorContext)
+  const registerEditor = React.useContext(CollectionColumnEditorContext)
   const changeOpen = React.useCallback((value: boolean) => {
     if (value) {
       setRegistryError(null)
@@ -332,7 +332,7 @@ export function ComputedColumnDetails({ columns, cells, rowId, action, onRemove,
   const store = React.useMemo(() => createColumnOrderStore("datool:custom-field-section-order"), [])
   const saved = React.useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot)
   React.useEffect(() => { store.load() }, [store])
-  const order = resolveLogColumnOrder(columns.map(column => column.id), saved)
+  const order = resolveCollectionColumnOrder(columns.map(column => column.id), saved)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, {
     coordinateGetter: sortableKeyboardCoordinates,
     // Keep Enter available for the disclosure; Space starts keyboard reordering.

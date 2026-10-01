@@ -725,33 +725,33 @@
 
 /* Scrollable regions retain native scrolling and keyboard access without gutters. */
 .scrollbar-hidden,
-.log-table-scroll {
+.collection-table-scroll {
   scrollbar-width: none;
 }
 .scrollbar-hidden::-webkit-scrollbar,
-.log-table-scroll::-webkit-scrollbar {
+.collection-table-scroll::-webkit-scrollbar {
   display: none;
 }
 
 /* Shared checked/open state, including cell text that has its own default tone. */
-.log-table-row[data-selected="true"],
-.log-table-row[data-selected="true"]:hover {
+.collection-table-row[data-selected="true"],
+.collection-table-row[data-selected="true"]:hover {
   background-color: var(--selection);
   color: var(--selection-foreground);
 }
-.log-table-row[data-selected="true"] td,
-.log-table-row[data-selected="true"] td a,
-.log-table-row[data-selected="true"] td span:not(:has(svg)):not(.token),
-.log-table-row[data-selected="true"] dd,
-.log-table-row[data-selected="true"] dd a,
-.log-table-row[data-selected="true"] dd span:not(:has(svg)):not(.token) {
+.collection-table-row[data-selected="true"] td,
+.collection-table-row[data-selected="true"] td a,
+.collection-table-row[data-selected="true"] td span:not(:has(svg)):not(.token),
+.collection-table-row[data-selected="true"] dd,
+.collection-table-row[data-selected="true"] dd a,
+.collection-table-row[data-selected="true"] dd span:not(:has(svg)):not(.token) {
   color: inherit;
 }
 
-.log-table-row td [data-empty="true"],
-.log-table-row[data-selected="true"] td [data-empty="true"],
-.log-table-row dd [data-empty="true"],
-.log-table-row[data-selected="true"] dd [data-empty="true"] {
+.collection-table-row td [data-empty="true"],
+.collection-table-row[data-selected="true"] td [data-empty="true"],
+.collection-table-row dd [data-empty="true"],
+.collection-table-row[data-selected="true"] dd [data-empty="true"] {
   color: var(--empty-foreground);
 }
 

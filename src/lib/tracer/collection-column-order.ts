@@ -1,5 +1,5 @@
 /** Reconcile saved order with dynamic columns, keeping table controls fixed. */
-export function resolveLogColumnOrder(source: string[], saved: string[], actions: string[] = []) {
+export function resolveCollectionColumnOrder(source: string[], saved: string[], actions: string[] = []) {
   const movable = source.filter(id => id !== "__select" && !actions.includes(id))
   const ordered = [...new Set([...saved.filter(id => movable.includes(id)), ...movable])]
   return [

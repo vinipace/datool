@@ -7,13 +7,13 @@ import { Database, FlaskConical, Network, Plus, Search } from "lucide-react"
 import { CollectionPage } from "@/components/tracer/collection-page"
 import { useRemote } from "@/components/tracer/hooks"
 import {
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-  LogTable,
-  LogTableBody,
-} from "@/components/tracer/log-table"
-import { logTable } from "@/components/tracer/log-table-styles"
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+  CollectionTable,
+  CollectionTableBody,
+} from "@/components/tracer/collection-table"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -95,16 +95,16 @@ export function ProjectsPage({
           </div>
         }
       >
-        <LogTable
+        <CollectionTable
           persistenceKey="projects"
           fillHeight
           columnIds={["name", "evals", "datasets", "traces", "created"]}
           widths={[360, 140, 140, 140, 180]}
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
               <th scope="col" className="px-3 align-middle">
-                <LogSelectAll
+                <CollectionSelectAll
                   checked={allChecked}
                   partial={selected.length > 0 && !allChecked}
                   disabled={!projects.length}
@@ -121,33 +121,33 @@ export function ProjectsPage({
                   }
                 />
               </th>
-              <th scope="col" className={logTable.heading}>
+              <th scope="col" className={collectionTable.heading}>
                 Name
               </th>
-              <th scope="col" aria-label="Evals" className={logTable.heading}>
+              <th scope="col" aria-label="Evals" className={collectionTable.heading}>
                 <span className="inline-flex items-center gap-1.5">
                   <FlaskConical className="size-3.5" />
                   Evals
                 </span>
               </th>
-              <th scope="col" aria-label="Datasets" className={logTable.heading}>
+              <th scope="col" aria-label="Datasets" className={collectionTable.heading}>
                 <span className="inline-flex items-center gap-1.5">
                   <Database className="size-3.5" />
                   Datasets
                 </span>
               </th>
-              <th scope="col" aria-label="Traces" className={logTable.heading}>
+              <th scope="col" aria-label="Traces" className={collectionTable.heading}>
                 <span className="inline-flex items-center gap-1.5">
                   <Network className="size-3.5" />
                   Traces
                 </span>
               </th>
-              <th scope="col" className={logTable.heading}>
+              <th scope="col" className={collectionTable.heading}>
                 Created
               </th>
             </tr>
           </thead>
-          <LogTableBody
+          <CollectionTableBody
             rows={projects}
             empty={
               <tr>
@@ -166,7 +166,7 @@ export function ProjectsPage({
             }
           >
             {(project, index) => (
-              <LogRow
+              <CollectionRow
                 key={project.id}
                 checked={checkedIds.has(project.id)}
                 tabIndex={0}
@@ -182,13 +182,13 @@ export function ProjectsPage({
                   router.push(projectHref(organization, project))
                 }}
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   checked={checkedIds.has(project.id)}
                   label={`Select ${project.name}`}
                   onChange={() => toggle(project.id)}
                 />
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <Link
                     href={projectHref(organization, project)}
                     onClick={(event) => event.stopPropagation()}
@@ -197,24 +197,24 @@ export function ProjectsPage({
                     {project.name}
                   </Link>
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {project.evalCount ?? "—"}
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {project.datasetCount ?? "—"}
                 </td>
-                <td className={`${logTable.cell} tabular-nums`}>
+                <td className={`${collectionTable.cell} tabular-nums`}>
                   {project.traceCount ?? "—"}
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   {new Intl.DateTimeFormat(undefined, {
                     dateStyle: "medium",
                   }).format(new Date(project.createdAt))}
                 </td>
-              </LogRow>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
         {total > (state.data?.pageSize ?? 25) ? (
           <nav
             aria-label="Project pages"

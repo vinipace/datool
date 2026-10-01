@@ -74,16 +74,16 @@ Token roles to standardize when migrating the remaining hardcoded styles:
 
 ## Shared implementation
 
-Traces and sessions must consume `components/tracer/log-table-styles.ts` for table, header, row, selection, and cell styles, and `log-table.tsx` for numbered selection controls. Change these shared definitions instead of recreating the pattern per page. Sessions has no extra page header or New session button above its table. Selection tokens are now defined in `app/globals.css`.
+Traces and sessions must consume `components/tracer/collection-table-styles.ts` for table, header, row, selection, and cell styles, and `collection-table.tsx` for numbered selection controls. Change these shared definitions instead of recreating the pattern per page. Sessions has no extra page header or New session button above its table. Selection tokens are now defined in `app/globals.css`.
 
-Use `LogTable columnIds={["session", "traces", "attributes", "updated"]} widths={[280, 100, 300, 180]}` and `LogRow checked={checked}` from `log-table.tsx` for new lists. `LogTable` reserves exactly 44px for selection and gives spare width to the last content column; do not provide a separate colgroup or make every column fixed under a full-width table. `LogRow` owns the selected/open state through `data-selected`, with one token-based CSS rule for background and foreground. Do not implement page-specific selected row classes.
+Use `CollectionTable columnIds={["session", "traces", "attributes", "updated"]} widths={[280, 100, 300, 180]}` and `CollectionRow checked={checked}` from `collection-table.tsx` for new lists. `CollectionTable` reserves exactly 44px for selection and gives spare width to the last content column; do not provide a separate colgroup or make every column fixed under a full-width table. `CollectionRow` owns the selected/open state through `data-selected`, with one token-based CSS rule for background and foreground. Do not implement page-specific selected row classes.
 
 JSON uses Geist Mono through `next/font/google`. Use `JsonCode` to highlight JSON with Prism and React text nodes. Syntax colors live in the `--json-*` theme tokens; do not import a hardcoded highlighter theme. UI prose remains Inter, and expanded eval payloads must remain fully visible.
 
 ### Resizing and virtualization
 
-- `LogTable` uses TanStack Table column sizing in `onChange` mode. Drag a header edge to resize, double-click to reset, or focus its separator and use Left/Right. Selection stays 44px; content columns have an 80px minimum. Supply stable `columnIds`, especially for dynamic score columns, so live updates and visibility changes do not transfer a width to another column. Widths currently last for the mounted view.
-- Put data rows in `LogTableBody rows={rows}` with a `(row, index) => <LogRow ...>` child callback. Do not eagerly map all rows into a `tbody`. TanStack Virtual mounts only the visible window plus 12 overscan rows on each side, keyed by row ID.
+- `CollectionTable` uses TanStack Table column sizing in `onChange` mode. Drag a header edge to resize, double-click to reset, or focus its separator and use Left/Right. Selection stays 44px; content columns have an 80px minimum. Supply stable `columnIds`, especially for dynamic score columns, so live updates and visibility changes do not transfer a width to another column. Widths currently last for the mounted view.
+- Put data rows in `CollectionTableBody rows={rows}` with a `(row, index) => <CollectionRow ...>` child callback. Do not eagerly map all rows into a `tbody`. TanStack Virtual mounts only the visible window plus 12 overscan rows on each side, keyed by row ID.
 - The shared scroll viewport is bounded by available window height and keeps the header sticky. Rows are measured with ResizeObserver, so wrapped eval JSON grows naturally and remeasures after a column resize. Use `estimatedRowHeight={300}` for expanded eval results; compact lists use the default.
 - Keep checkbox state and aggregate calculations over the full filtered/loaded data, never just the mounted virtual rows. Preserve the existing token-based row appearance and custom cell renderers.
 
@@ -91,5 +91,5 @@ JSON uses Geist Mono through `next/font/google`. Use `JsonCode` to highlight JSO
 
 - The shell owns a single sticky, non-wrapping row: sidebar collapse, page title, flexible filter field, refresh, Display, and an ellipsis menu. Export belongs inside that menu. Do not add another filter/action toolbar or Local API badge above the content.
 - Use `CollectionHeaderControls` from `collection-header.tsx` to publish page filters, refresh and export actions into the shell slots. Portals preserve the page's state and handlers; components clean up automatically on navigation.
-- `LogTable` provides the shared Display column menu by default. Pages with their own column model (traces) use `HeaderDisplay` and set `displayControls={false}` on their table. Column visibility must affect both headers and row cells.
+- `CollectionTable` provides the shared Display column menu by default. Pages with their own column model (traces) use `HeaderDisplay` and set `displayControls={false}` on their table. Column visibility must affect both headers and row cells.
 - Filter guidance must not create a permanent second row. Show validation errors below the field only when present. Keep autocomplete above the table and keep header actions visible at narrow widths.

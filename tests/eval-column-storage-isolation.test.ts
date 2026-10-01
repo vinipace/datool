@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { createComputedColumnStore } from "../src/lib/tracer/computed-column-store"
-import { createColumnOrderStore } from "../src/lib/tracer/log-column-order"
+import { createColumnOrderStore } from "../src/lib/tracer/collection-column-order"
 
 function memoryStorage() {
   const values = new Map<string, string>()

@@ -1,27 +1,27 @@
 import { describe, expect, test } from "bun:test"
 import * as React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { LogRow, LogRowSelection, LogSelectAll, LogTable, LogTableBody } from "@/components/tracer/log-table"
-import { createColumnOrderStore } from "@/src/lib/tracer/log-column-order"
+import { CollectionRow, CollectionRowSelection, CollectionSelectAll, CollectionTable, CollectionTableBody } from "@/components/tracer/collection-table"
+import { createColumnOrderStore } from "@/src/lib/tracer/collection-column-order"
 
 function Example({ view = "table" }: { view?: "table" | "cards" }) {
   const store = createColumnOrderStore()
   store.set(["c", "a", "b"])
-  return <LogTable enableCardView defaultView={view} displayControls={false} reorderable columnOrderStore={{ ...store, getServerSnapshot: store.getSnapshot }} columnIds={["a", "b", "c", "add"]} widths={[200, 200, 200, 100]} actionColumnIds={["add"]}>
+  return <CollectionTable enableCardView defaultView={view} displayControls={false} reorderable columnOrderStore={{ ...store, getServerSnapshot: store.getSnapshot }} columnIds={["a", "b", "c", "add"]} widths={[200, 200, 200, 100]} actionColumnIds={["add"]}>
     <caption className="sr-only">Example rows. Open a row to inspect it.</caption>
     <thead><tr>
-      <th><LogSelectAll checked={false} partial disabled={false} label="Select all examples" onChange={() => {}} /></th>
+      <th><CollectionSelectAll checked={false} partial disabled={false} label="Select all examples" onChange={() => {}} /></th>
       <th>A</th><th>B</th><th aria-label="C"><button>Edit C</button></th>
       <th><button>Add column</button></th>
     </tr></thead>
-    <LogRow checked tabIndex={0} aria-label="Open example">
-      <LogRowSelection index={0} checked label="Select example" onChange={() => {}} />
+    <CollectionRow checked tabIndex={0} aria-label="Open example">
+      <CollectionRowSelection index={0} checked label="Select example" onChange={() => {}} />
       <td><strong>foo</strong></td><td>bar</td><td><span>doe</span></td><td />
-    </LogRow>
-  </LogTable>
+    </CollectionRow>
+  </CollectionTable>
 }
 
-describe("log table card view", () => {
+describe("collection table card view", () => {
   test("pairs existing headers and rich cells in saved order, retaining selection and actions", () => {
     const markup = renderToStaticMarkup(<Example view="cards" />)
     const fields = [...markup.matchAll(/<dt\b[^>]*>(.*?)<\/dt><dd\b[^>]*>(.*?)<\/dd>/g)].map(([, header, value]) => [header, value])
@@ -43,20 +43,20 @@ describe("log table card view", () => {
   })
 
   test("reuses table empty messages without invalid table elements in card mode", () => {
-    const markup = renderToStaticMarkup(<LogTable widths={[200]} defaultView="cards" displayControls={false}>
+    const markup = renderToStaticMarkup(<CollectionTable widths={[200]} defaultView="cards" displayControls={false}>
       <thead><tr><th /><th>Name</th></tr></thead>
-      <LogTableBody rows={[]} empty={<tr><td colSpan={2}>No matching rows.</td></tr>}>{() => <LogRow />}</LogTableBody>
-    </LogTable>)
+      <CollectionTableBody rows={[]} empty={<tr><td colSpan={2}>No matching rows.</td></tr>}>{() => <CollectionRow />}</CollectionTableBody>
+    </CollectionTable>)
     expect(markup).toContain("No matching rows.")
     expect(markup).not.toContain("Select all")
     expect(/<(table|caption|thead|tbody|tr|td|th)\b/.test(markup)).toBe(false)
   })
 
   test("numbered collections do not advertise selection without a checkbox", () => {
-    const markup = renderToStaticMarkup(<LogTable widths={[200]} defaultView="cards">
+    const markup = renderToStaticMarkup(<CollectionTable widths={[200]} defaultView="cards">
       <thead><tr><th>No.</th><th>Name</th></tr></thead>
-      <LogRow><td>1</td><td>Review session</td></LogRow>
-    </LogTable>)
+      <CollectionRow><td>1</td><td>Review session</td></CollectionRow>
+    </CollectionTable>)
     expect(markup).toContain("Review session")
     expect(markup).not.toContain("Select all")
   })

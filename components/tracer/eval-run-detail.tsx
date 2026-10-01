@@ -48,13 +48,13 @@ import {
   headerButtonClass,
 } from "./collection-header"
 import {
-  LogTableBody,
-  LogTable,
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-} from "./log-table"
-import { logTable } from "./log-table-styles"
+  CollectionTableBody,
+  CollectionTable,
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+} from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { EvalScoreCell } from "./eval-score-cell"
 import { PercentageCell } from "./percentage-cell"
 import { getTraceIconKind } from "./trace-icon-kind"
@@ -269,7 +269,7 @@ function EvalDetail({ runId }: { runId: string }) {
       : undefined
     if (!row)
       return (
-        <LogRow
+        <CollectionRow
           rowLabel={rowLabel}
           className={
             `cursor-default ${comparisonRun ? comparisonRowClass(seriesIndex) : ""}`
@@ -279,13 +279,13 @@ function EvalDetail({ runId }: { runId: string }) {
           {tableColumns.map((column) => (
             <td
               key={column.id}
-              className={`${logTable.cell} !py-4 !align-top text-muted-foreground`}
+              className={`${collectionTable.cell} !py-4 !align-top text-muted-foreground`}
             >
               {column.id === "name" ? "No matching target in this run" : "—"}
             </td>
           ))}
           <td />
-        </LogRow>
+        </CollectionRow>
       )
 
     const score = averageEvalScore(row)
@@ -295,7 +295,7 @@ function EvalDetail({ runId }: { runId: string }) {
       setOpenTrace(row.id)
     }
     return (
-      <LogRow
+      <CollectionRow
         key={row.id}
         rowLabel={rowLabel}
         data-comparison={compared ? "true" : undefined}
@@ -316,7 +316,7 @@ function EvalDetail({ runId }: { runId: string }) {
           open(event.currentTarget)
         }}
       >
-        <LogRowSelection
+        <CollectionRowSelection
           align="top"
           index={index}
           checked={checked.has(row.id)}
@@ -330,7 +330,7 @@ function EvalDetail({ runId }: { runId: string }) {
             })
           }
         />
-        <td className={`${logTable.cell} !py-4 !align-top`}>
+        <td className={`${collectionTable.cell} !py-4 !align-top`}>
           <span className="flex items-center gap-2">
             {comparisonRun ? <span title={rowRun.name ?? rowRun.id}><ComparisonDot index={seriesIndex} /></span> : <SpanKindIcon kind={getTraceIconKind(row.trace)} />}
             {comparisonRun && <span className="shrink-0 text-xs text-foreground-muted">{seriesIndex === 0 ? "Baseline" : `Run ${seriesIndex + 1}`}</span>}
@@ -341,12 +341,12 @@ function EvalDetail({ runId }: { runId: string }) {
         </td>
         {[row.trace.input, row.trace.output, row.expectedOutput].map(
           (value, i) => (
-            <td key={i} className={`${logTable.cell} !py-4 !align-top`}>
+            <td key={i} className={`${collectionTable.cell} !py-4 !align-top`}>
               <Payload value={value} />
             </td>
           )
         )}
-        <td className={`${logTable.cell} !py-4 !align-top`}>
+        <td className={`${collectionTable.cell} !py-4 !align-top`}>
           <div className="flex items-center gap-3">
             <PercentageCell value={score} />
             {compared && <EvalMetricDifference value={score} baseline={averageEvalScore(baselineRow)} />}
@@ -355,7 +355,7 @@ function EvalDetail({ runId }: { runId: string }) {
         {scorers.map(([id]) => {
           const result = row.results.find((result) => result.evaluatorId === id)
           return (
-            <td key={id} className={`${logTable.cell} !py-4 !align-top`}>
+            <td key={id} className={`${collectionTable.cell} !py-4 !align-top`}>
               <div className="flex items-center gap-3">
               {result ? (
                 <EvalScoreCell result={result} />
@@ -369,13 +369,13 @@ function EvalDetail({ runId }: { runId: string }) {
             </td>
           )
         })}
-        <td className={`${logTable.cell} !py-4 !align-top`}>
+        <td className={`${collectionTable.cell} !py-4 !align-top`}>
           <div className="flex items-center gap-3">
             <span className="tabular-nums">{formatDuration(row.trace.durationMs)}</span>
             {compared && <EvalMetricDifference value={row.trace.durationMs} baseline={baselineRow?.trace.durationMs} format="duration" />}
           </div>
         </td>
-        <td className={`${logTable.cell} !py-4 !align-top`}>
+        <td className={`${collectionTable.cell} !py-4 !align-top`}>
           <Payload
             value={
               row.results
@@ -386,7 +386,7 @@ function EvalDetail({ runId }: { runId: string }) {
           />
         </td>
         {computed.columns.map((column) => (
-          <td key={column.id} className={`${logTable.cell} !py-4 !align-top`}>
+          <td key={column.id} className={`${collectionTable.cell} !py-4 !align-top`}>
             <ComputedValue
               format={column.format}
               cell={computed.cells[column.id]?.[row.id]}
@@ -394,10 +394,10 @@ function EvalDetail({ runId }: { runId: string }) {
           </td>
         ))}
         <td
-          className={`${logTable.cell} cursor-default`}
+          className={`${collectionTable.cell} cursor-default`}
           onClick={(event) => event.stopPropagation()}
         />
-      </LogRow>
+      </CollectionRow>
     )
   }
   const detailsContent = (
@@ -524,7 +524,7 @@ function EvalDetail({ runId }: { runId: string }) {
                 </p>
               ) : null}
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <LogTable
+                <CollectionTable
                   pagination={compareKey ? other : state}
                   fillHeight
                   computedColumnStore={computed.store}
@@ -567,10 +567,10 @@ function EvalDetail({ runId }: { runId: string }) {
                   ]}
                   widths={[...tableColumns.map((column) => comparing && (column.id === "all-scores" || column.id.startsWith("score:") || column.id === "duration") ? Math.max(column.width, 210) : column.width), 160]}
                 >
-                  <thead className={logTable.head}>
+                  <thead className={collectionTable.head}>
                     <tr>
                       <th className="px-3" scope="col">
-                        <LogSelectAll
+                        <CollectionSelectAll
                           checked={all}
                           partial={count > 0 && !all}
                           disabled={!allRows.length}
@@ -597,7 +597,7 @@ function EvalDetail({ runId }: { runId: string }) {
                         <th
                           key={index}
                           scope="col"
-                          className={logTable.heading}
+                          className={collectionTable.heading}
                         >
                           {name}
                           {index === 0 ? (
@@ -611,7 +611,7 @@ function EvalDetail({ runId }: { runId: string }) {
                         <th
                           key={column.id}
                           scope="col"
-                          className={logTable.heading}
+                          className={collectionTable.heading}
                           aria-label={column.name}
                         >
                           <ColumnEditor
@@ -635,7 +635,7 @@ function EvalDetail({ runId }: { runId: string }) {
                           />
                         </th>
                       ))}
-                      <th scope="col" className={logTable.heading}>
+                      <th scope="col" className={collectionTable.heading}>
                         <ColumnEditor
                           addedFields={computed.columns}
                           rows={allRows}
@@ -646,7 +646,7 @@ function EvalDetail({ runId }: { runId: string }) {
                       </th>
                     </tr>
                   </thead>
-                  <LogTableBody
+                  <CollectionTableBody
                     rows={pairs}
                     estimatedRowHeight={300}
                     empty={
@@ -675,8 +675,8 @@ function EvalDetail({ runId }: { runId: string }) {
                     {(pair, index) =>
                       renderRow(pair.left, index, false, pair.comparisonRun)
                     }
-                  </LogTableBody>
-                </LogTable>
+                  </CollectionTableBody>
+                </CollectionTable>
               </div>
             </TableViewControls>
           </div>

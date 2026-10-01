@@ -333,7 +333,7 @@ export const PersistentDisplay: Story = {
       canvas.getByRole("button", { name: "Remount eval detail" })
     )
     await expect(
-      canvas.findByLabelText("Log cards scroll area")
+      canvas.findByLabelText("Collection cards scroll area")
     ).resolves.toBeVisible()
     await expect(
       canvas.queryByRole("term", { name: "Expected" })
@@ -510,7 +510,7 @@ function paginatedStory({
     play: async ({ canvasElement }) => {
       const canvas = within(canvasElement)
       const area = await canvas.findByLabelText(
-        cards ? "Log cards scroll area" : "Log table scroll area"
+        cards ? "Collection cards scroll area" : "Collection table scroll area"
       )
       await waitFor(() =>
         expect(canvas.getAllByText("Scroll trace 1").length).toBeGreaterThan(0)
@@ -593,7 +593,7 @@ export const CardSelectionHeader: Story = {
     await canvas.findByRole("checkbox", { name: "Select all eval traces" })
     await userEvent.click(canvas.getByRole("button", { name: "Display" }))
     await userEvent.click(within(document.body).getByRole("menuitemradio", { name: "Card" }))
-    await expect(canvas.getByLabelText("Log cards scroll area")).toBeVisible()
+    await expect(canvas.getByLabelText("Collection cards scroll area")).toBeVisible()
     await checkCollectionSelection(canvasElement, "Eval traces")
   },
 }

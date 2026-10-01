@@ -30,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Card } from "@/components/ui/card"
-import { logTable } from "@/components/tracer/log-table-styles"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 import {
   workspaceScopes,
   type WorkspaceScope,
@@ -348,11 +348,11 @@ export function ApiKeysPage({
           </p>
         ) : null}
         <div className="relative mt-6 overflow-x-auto" aria-busy={loading}>
-          <table className={`${logTable.table} min-w-[760px]`}>
-            <thead className={logTable.head}>
+          <table className={`${collectionTable.table} min-w-[760px]`}>
+            <thead className={collectionTable.head}>
               <tr>
                 {["Owner", "Name", "Key", "Scope"].map((label) => (
-                  <th key={label} className={logTable.heading}>
+                  <th key={label} className={collectionTable.heading}>
                     {label}
                   </th>
                 ))}
@@ -364,7 +364,7 @@ export function ApiKeysPage({
                 ).map(([field, label]) => (
                   <th
                     key={field}
-                    className={logTable.heading}
+                    className={collectionTable.heading}
                     aria-sort={
                       sort.field === field
                         ? sort.descending
@@ -392,7 +392,7 @@ export function ApiKeysPage({
                     </button>
                   </th>
                 ))}
-                <th className={logTable.heading}>
+                <th className={collectionTable.heading}>
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -424,25 +424,25 @@ export function ApiKeysPage({
                 </tr>
               ) : null}
               {filtered.map((key) => (
-                <tr key={key.id} className={logTable.row}>
+                <tr key={key.id} className={collectionTable.row}>
                   <td
-                    className={`${logTable.cell} max-w-40 truncate`}
+                    className={`${collectionTable.cell} max-w-40 truncate`}
                     title={key.owner ?? undefined}
                   >
                     {key.owner ?? "—"}
                   </td>
                   <td
-                    className={`${logTable.cell} max-w-48 truncate`}
+                    className={`${collectionTable.cell} max-w-48 truncate`}
                     title={key.name ?? undefined}
                   >
                     {key.name ?? "Unnamed key"}
                   </td>
                   <td
-                    className={`${logTable.cell} font-mono text-foreground-muted`}
+                    className={`${collectionTable.cell} font-mono text-foreground-muted`}
                   >
                     {key.maskedKey}
                   </td>
-                  <td className={`${logTable.cell} max-w-64`}>
+                  <td className={`${collectionTable.cell} max-w-64`}>
                     <div className="flex flex-wrap gap-1">
                       {key.scopes.map((scope) => (
                         <span
@@ -454,15 +454,15 @@ export function ApiKeysPage({
                       ))}
                     </div>
                   </td>
-                  <td className={`${logTable.cell} whitespace-nowrap`}>
+                  <td className={`${collectionTable.cell} whitespace-nowrap`}>
                     {dateLabel(key.createdAt)}
                   </td>
                   <td
-                    className={`${logTable.cell} whitespace-nowrap text-foreground-subtle`}
+                    className={`${collectionTable.cell} whitespace-nowrap text-foreground-subtle`}
                   >
                     {dateLabel(key.expiresAt)}
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {canManage ? (
                       <Button
                         variant="ghost"

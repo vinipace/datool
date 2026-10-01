@@ -13,8 +13,8 @@ import {
   CollectionPage,
   CollectionSearch,
 } from "@/components/tracer/collection-page"
-import { LogRow, LogTable, LogTableBody } from "@/components/tracer/log-table"
-import { logTable } from "@/components/tracer/log-table-styles"
+import { CollectionRow, CollectionTable, CollectionTableBody } from "@/components/tracer/collection-table"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 import { SettingsShell } from "./settings-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -251,7 +251,7 @@ export function MembersPage({
             </div>
           }
         >
-          <LogTable
+          <CollectionTable
             persistenceKey={`organization-members:${organizationId}`}
             fillHeight
             columnIds={[
@@ -264,35 +264,35 @@ export function MembersPage({
             actionColumnIds={data?.canManage ? ["actions"] : []}
             widths={[220, 300, 120, 150, ...(data?.canManage ? [80] : [])]}
           >
-            <thead className={logTable.head}>
+            <thead className={collectionTable.head}>
               <tr>
                 <th
                   scope="col"
                   aria-label="Row number"
-                  className={logTable.heading}
+                  className={collectionTable.heading}
                 >
                   <span className="sr-only">Row number</span>
                 </th>
-                <th scope="col" className={logTable.heading}>
+                <th scope="col" className={collectionTable.heading}>
                   Name
                 </th>
-                <th scope="col" className={logTable.heading}>
+                <th scope="col" className={collectionTable.heading}>
                   Email
                 </th>
-                <th scope="col" className={logTable.heading}>
+                <th scope="col" className={collectionTable.heading}>
                   Role
                 </th>
-                <th scope="col" className={logTable.heading}>
+                <th scope="col" className={collectionTable.heading}>
                   Joined
                 </th>
                 {data?.canManage ? (
-                  <th scope="col" className={logTable.heading}>
+                  <th scope="col" className={collectionTable.heading}>
                     Actions
                   </th>
                 ) : null}
               </tr>
             </thead>
-            <LogTableBody
+            <CollectionTableBody
               rows={members}
               empty={
                 <tr>
@@ -308,25 +308,25 @@ export function MembersPage({
               }
             >
               {(member, index) => (
-                <LogRow key={member.id} className="cursor-default">
-                  <td className={logTable.cell}>
+                <CollectionRow key={member.id} className="cursor-default">
+                  <td className={collectionTable.cell}>
                     <span className="text-xs text-foreground-muted tabular-nums">
                       {index + 1}
                     </span>
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {member.name}
                     {member.userId === data?.currentUserId ? " (you)" : ""}
                   </td>
-                  <td className={logTable.cell}>{member.email}</td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>{member.email}</td>
+                  <td className={collectionTable.cell}>
                     <OrganizationRoleBadge role={member.role} />
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {new Date(member.createdAt).toLocaleDateString()}
                   </td>
                   {data?.canManage ? (
-                    <td className={logTable.cell}>
+                    <td className={collectionTable.cell}>
                       {member.role !== "owner" &&
                       member.userId !== data.currentUserId ? (
                         <DropdownMenu>
@@ -386,10 +386,10 @@ export function MembersPage({
                       )}
                     </td>
                   ) : null}
-                </LogRow>
+                </CollectionRow>
               )}
-            </LogTableBody>
-          </LogTable>
+            </CollectionTableBody>
+          </CollectionTable>
         </CollectionPage>
       </CollectionPanel>
       <Dialog
@@ -512,22 +512,22 @@ export function MembersPage({
             {pendingCount ? (
               <table
                 aria-label="Pending invitations"
-                className={logTable.table}
+                className={collectionTable.table}
               >
-                <thead className={logTable.head}>
+                <thead className={collectionTable.head}>
                   <tr>
-                    <th scope="col" className={logTable.heading}>
+                    <th scope="col" className={collectionTable.heading}>
                       Recipient
                     </th>
                     <th
                       scope="col"
-                      className={`${logTable.heading} hidden sm:table-cell`}
+                      className={`${collectionTable.heading} hidden sm:table-cell`}
                     >
                       Status
                     </th>
                     <th
                       scope="col"
-                      className={`${logTable.heading} w-36 sm:w-44`}
+                      className={`${collectionTable.heading} w-36 sm:w-44`}
                     >
                       Actions
                     </th>
@@ -545,7 +545,7 @@ export function MembersPage({
                       : `Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`
                     return (
                       <tr key={invitation.id} className="bg-surface-row">
-                        <td className={`${logTable.cell} py-3`}>
+                        <td className={`${collectionTable.cell} py-3`}>
                           <p className="mb-1 wrap-anywhere">
                             {invitation.email}
                           </p>
@@ -556,12 +556,12 @@ export function MembersPage({
                           </div>
                         </td>
                         <td
-                          className={`${logTable.cell} hidden space-y-1 text-xs text-foreground-muted sm:table-cell`}
+                          className={`${collectionTable.cell} hidden space-y-1 text-xs text-foreground-muted sm:table-cell`}
                         >
                           <p>{expiry}</p>
                           <p>{delivery}</p>
                         </td>
-                        <td className={logTable.cell}>
+                        <td className={collectionTable.cell}>
                           <div className="flex items-center gap-1">
                             <Button
                               size="sm"

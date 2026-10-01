@@ -7,13 +7,13 @@ import type { Dashboard } from "@/src/lib/tracer/dashboards"
 import { dashboardRequest } from "./dashboard-utils"
 import { DashboardCreateDialog } from "./dashboard-create-dialog"
 import {
-  LogTable,
-  LogTableBody,
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-} from "./log-table"
-import { logTable } from "./log-table-styles"
+  CollectionTable,
+  CollectionTableBody,
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+} from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { useRemote } from "./hooks"
 import { CollectionPanel } from "./collection-panel"
 import { CollectionPage, CollectionSearch } from "./collection-page"
@@ -57,7 +57,7 @@ export function DashboardsPage() {
           ),
         }}
       >
-        <LogTable
+        <CollectionTable
           persistenceKey="dashboards"
           fillHeight
           widths={[280, 340, 110, 220, 190]}
@@ -65,10 +65,10 @@ export function DashboardsPage() {
           reorderable
           orderStorageKey="datool.dashboards.columns"
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
-              <th className={logTable.heading}>
-                <LogSelectAll
+              <th className={collectionTable.heading}>
+                <CollectionSelectAll
                   label="Select all dashboards"
                   disabled={!rows.length}
                   checked={
@@ -89,14 +89,14 @@ export function DashboardsPage() {
               </th>
               {["Name", "Description", "Widgets", "Models", "Updated"].map(
                 (label) => (
-                  <th key={label} className={logTable.heading}>
+                  <th key={label} className={collectionTable.heading}>
                     {label}
                   </th>
                 )
               )}
             </tr>
           </thead>
-          <LogTableBody
+          <CollectionTableBody
             rows={rows}
             empty={
               <tr>
@@ -112,7 +112,7 @@ export function DashboardsPage() {
             }
           >
             {(row, index) => (
-              <LogRow
+              <CollectionRow
                 key={row.id}
                 checked={selected.has(row.id)}
                 rowLabel={`Open ${row.name}`}
@@ -122,7 +122,7 @@ export function DashboardsPage() {
                   )
                 }
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   checked={selected.has(row.id)}
                   label={`Select ${row.name}`}
@@ -135,7 +135,7 @@ export function DashboardsPage() {
                     })
                   }
                 />
-                <td className={`${logTable.cell} font-medium`}>
+                <td className={`${collectionTable.cell} font-medium`}>
                   <Link
                     className="text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     href={workspaceHref(
@@ -147,12 +147,12 @@ export function DashboardsPage() {
                   </Link>
                 </td>
                 <td
-                  className={`${logTable.cell} truncate text-foreground-muted`}
+                  className={`${collectionTable.cell} truncate text-foreground-muted`}
                 >
                   {row.description || "—"}
                 </td>
-                <td className={logTable.cell}>{row.widgets.length}</td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>{row.widgets.length}</td>
+                <td className={collectionTable.cell}>
                   {[
                     ...new Set(
                       row.widgets.flatMap((w) =>
@@ -163,13 +163,13 @@ export function DashboardsPage() {
                     ),
                   ].join(", ")}
                 </td>
-                <td className={`${logTable.cell} text-foreground-muted`}>
+                <td className={`${collectionTable.cell} text-foreground-muted`}>
                   {formatDate(row.updatedAt)}
                 </td>
-              </LogRow>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
       </CollectionPage>
     </CollectionPanel>
   )

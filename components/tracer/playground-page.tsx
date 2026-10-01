@@ -35,13 +35,13 @@ import { CollectionPanel } from "./collection-panel"
 import { CollectionPage, CollectionSearch } from "./collection-page"
 import { HeaderSlot } from "./collection-header"
 import {
-  LogTable,
-  LogTableBody,
-  LogRow,
-  LogRowSelection,
-  LogSelectAll,
-} from "./log-table"
-import { logTable } from "./log-table-styles"
+  CollectionTable,
+  CollectionTableBody,
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+} from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { SpanKindIcon } from "./span-kind-icon"
 import { useRemote } from "./hooks"
 import { useWorkspaceHref, useWorkspaceStorageScope } from "./workspace-path"
@@ -112,7 +112,7 @@ export function PlaygroundPage() {
           ),
         }}
       >
-        <LogTable
+        <CollectionTable
           fillHeight
           enableCardView
           settings={tableView.settings}
@@ -122,10 +122,10 @@ export function PlaygroundPage() {
           columnIds={["name", "id", "type", "status", "revision"]}
           reorderable
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
-              <th className={logTable.heading}>
-                <LogSelectAll
+              <th className={collectionTable.heading}>
+                <CollectionSelectAll
                   label="Select all apps"
                   disabled={!rows.length}
                   checked={
@@ -149,13 +149,13 @@ export function PlaygroundPage() {
                 />
               </th>
               {["Name", "App ID", "Type", "Status", "Version"].map((label) => (
-                <th key={label} className={logTable.heading}>
+                <th key={label} className={collectionTable.heading}>
                   {label}
                 </th>
               ))}
             </tr>
           </thead>
-          <LogTableBody
+          <CollectionTableBody
             rows={rows}
             empty={
               <tr>
@@ -177,7 +177,7 @@ export function PlaygroundPage() {
             }
           >
             {(app, index) => (
-              <LogRow
+              <CollectionRow
                 key={app.id}
                 checked={selected.has(app.id)}
                 rowLabel={`Open ${app.name}`}
@@ -187,7 +187,7 @@ export function PlaygroundPage() {
                   )
                 }
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   label={`Select ${app.name}`}
                   checked={selected.has(app.id)}
@@ -200,7 +200,7 @@ export function PlaygroundPage() {
                     })
                   }
                 />
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <Link
                     className="flex items-center gap-2 font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     href={workspaceHref(
@@ -215,21 +215,21 @@ export function PlaygroundPage() {
                   </Link>
                 </td>
                 <td
-                  className={`${logTable.cell} font-mono text-xs text-foreground-muted`}
+                  className={`${collectionTable.cell} font-mono text-xs text-foreground-muted`}
                 >
                   {app.id}
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   {app.mode === "agent" ? "Agent" : "Workflow"}
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <AppStatus online={app.online} webhook={app.connection?.type === "webhook"} />
                 </td>
-                <td className={logTable.cell}>v{app.revision}</td>
-              </LogRow>
+                <td className={collectionTable.cell}>v{app.revision}</td>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
       </CollectionPage>
     </CollectionPanel>
   )

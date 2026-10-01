@@ -17,7 +17,7 @@ Traces defines the product's visual language. The theme is centrally owned in `a
 
 `text-muted-foreground` remains compatible with shared library consumers but new product code uses `text-foreground-muted`. Do not create a second palette in page code. Charts, syntax highlighting and categorical data colors may use narrowly documented exceptions; ordinary page surfaces and controls may not.
 
-Use shared Button and form primitives for controls, shared notices for feedback, shared dialog framing for overlays, and the shared log-table styles for tabular collections. Auth and settings layouts may differ from trace exploration while using the same surface, typography and interaction rules. Preserve authentication, authorization, navigation and resource behavior during styling changes.
+Use shared Button and form primitives for controls, shared notices for feedback, shared dialog framing for overlays, and the shared collection-table styles for tabular collections. Auth and settings layouts may differ from trace exploration while using the same surface, typography and interaction rules. Preserve authentication, authorization, navigation and resource behavior during styling changes.
 
 ### Report composition
 
@@ -47,13 +47,13 @@ Metric tile histories span the card width with a muted line and subtle area fill
 
 ## Shared component owners
 
-Use `components/ui/button.tsx`, `input.tsx`, `textarea.tsx`, `select.tsx`, `checkbox.tsx`, `switch.tsx`, `card.tsx`, `notice.tsx`, and `dialog.tsx`. Native input/select props remain available. Standard Input and Textarea controls use `bg-input-background`; title inputs and plain textareas stay transparent. `Button loading` disables the control and announces busy state. `Notice variant` accepts info, success, warning and error. Dialog content supplies its overlay, portal and focus behavior. `components/auth/auth-shell.tsx` owns auth framing. Tables use `components/tracer/log-table-styles.ts` with the existing table behavior components.
+Use `components/ui/button.tsx`, `input.tsx`, `textarea.tsx`, `select.tsx`, `checkbox.tsx`, `switch.tsx`, `card.tsx`, `notice.tsx`, and `dialog.tsx`. Native input/select props remain available. Standard Input and Textarea controls use `bg-input-background`; title inputs and plain textareas stay transparent. `Button loading` disables the control and announces busy state. `Notice variant` accepts info, success, warning and error. Dialog content supplies its overlay, portal and focus behavior. `components/auth/auth-shell.tsx` owns auth framing. Tables use `components/tracer/collection-table-styles.ts` with the existing table behavior components.
 
 Use `DialogContent variant="panel"` for a full-height right-side panel. It fills narrow screens and is capped at `max-w-4xl` on desktop. Keep the header and footer outside a `min-h-0 flex-1 overflow-auto` body so long tables scroll within the panel while its controls stay available.
 
 ## Enforcement and review
 
-`RunningSpinner` in `components/ui/execution-status.tsx` supplies the shared radial spinner for running traces and spans. Place it immediately after the kind icon in trace rows, the span hierarchy, detail headings, and timeline labels. It announces "Running" and respects reduced-motion preferences. Trace rows use `logTable.runningRow` for a subtle warning-token tint while running.
+`RunningSpinner` in `components/ui/execution-status.tsx` supplies the shared radial spinner for running traces and spans. Place it immediately after the kind icon in trace rows, the span hierarchy, detail headings, and timeline labels. It announces "Running" and respects reduced-motion preferences. Trace rows use `collectionTable.runningRow` for a subtle warning-token tint while running.
 
 `bun run lint` also enforces `shadcn/no-raw-colors` in `app/` and
 `components/`, including shared primitives and stories. Choose replacement

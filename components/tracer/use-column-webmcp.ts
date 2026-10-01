@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import type { ComputedColumnStore } from "@/src/lib/tracer/computed-column-store"
-import type { EvalColumnLayout } from "@/src/lib/tracer/log-column-order"
+import type { EvalColumnLayout } from "@/src/lib/tracer/collection-column-order"
 import {
   createColumnTools,
   registerColumnTools,

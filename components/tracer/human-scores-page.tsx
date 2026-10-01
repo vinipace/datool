@@ -28,8 +28,8 @@ import {
 import { CollectionPanel } from "./collection-panel"
 import { HeaderSlot } from "./collection-header"
 import { CollectionPage, CollectionSearch } from "./collection-page"
-import { LogTable, LogTableBody, LogRow, LogRowSelection, LogSelectAll } from "./log-table"
-import { logTable } from "./log-table-styles"
+import { CollectionTable, CollectionTableBody, CollectionRow, CollectionRowSelection, CollectionSelectAll } from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { EmptyState, ErrorState, LoadingState } from "./primitives"
 import { useMutation, useRemote } from "./hooks"
 import { tracerApi } from "./api"
@@ -105,16 +105,16 @@ export function HumanScoresPage() {
           />
         }
       >
-        <LogTable
+        <CollectionTable
           persistenceKey={`human-scores:${tab}`}
           fillHeight
           columnIds={["name", "type", "description"]}
           widths={[260, 220, 420]}
         >
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
-              <th className={logTable.heading} scope="col">
-                <LogSelectAll
+              <th className={collectionTable.heading} scope="col">
+                <CollectionSelectAll
                   label={`Select all ${tab === "scores" ? "Human Scores" : "collections"}`}
                   checked={rows.length > 0 && rows.every((row) => checkedIds.has(row.id))}
                   partial={rows.some((row) => checkedIds.has(row.id)) && !rows.every((row) => checkedIds.has(row.id))}
@@ -127,22 +127,22 @@ export function HumanScoresPage() {
                 tab === "scores" ? "Type" : "Human Scores",
                 "Description",
               ].map((label) => (
-                <th key={label} className={logTable.heading} scope="col">
+                <th key={label} className={collectionTable.heading} scope="col">
                   {label}
                 </th>
               ))}
             </tr>
           </thead>
-          <LogTableBody rows={rows} empty="No entries.">
+          <CollectionTableBody rows={rows} empty="No entries.">
             {(row, index) => (
-              <LogRow
+              <CollectionRow
                 key={row.id}
                 checked={checkedIds.has(row.id)}
                 onClick={() =>
                   "type" in row ? setEditing(row) : setCollection(row)
                 }
               >
-                <LogRowSelection
+                <CollectionRowSelection
                   index={index}
                   checked={checkedIds.has(row.id)}
                   label={`Select ${row.name}`}
@@ -153,7 +153,7 @@ export function HumanScoresPage() {
                     return next
                   })}
                 />
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -164,16 +164,16 @@ export function HumanScoresPage() {
                     {row.name}
                   </Button>
                 </td>
-                <td className={logTable.cell}>
+                <td className={collectionTable.cell}>
                   {"type" in row
                     ? humanScoreTypeLabel(row)
                     : `${row.scoreIds.length} scores`}
                 </td>
-                <td className={logTable.cell}>{row.description || "—"}</td>
-              </LogRow>
+                <td className={collectionTable.cell}>{row.description || "—"}</td>
+              </CollectionRow>
             )}
-          </LogTableBody>
-        </LogTable>
+          </CollectionTableBody>
+        </CollectionTable>
       </CollectionPage>
     </CollectionPanel>
   )

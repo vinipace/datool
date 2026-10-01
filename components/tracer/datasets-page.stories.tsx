@@ -323,7 +323,7 @@ export const DetailCardSelectionHeader: Story = {
     const controls = within(canvas.getByRole("group", { name: "Dataset rows controls" }))
     await userEvent.click(controls.getByRole("button", { name: "Display" }))
     await userEvent.click(within(document.body).getByRole("menuitemradio", { name: "Card" }))
-    await expect(canvas.getByLabelText("Log cards scroll area")).toBeVisible()
+    await expect(canvas.getByLabelText("Collection cards scroll area")).toBeVisible()
     await checkCollectionSelection(canvasElement, "Dataset rows")
   },
 }

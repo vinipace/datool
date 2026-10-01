@@ -4,7 +4,7 @@ import type { ReactNode } from "react"
 import { Check } from "lucide-react"
 import { Button } from "./button"
 import { Skeleton } from "./skeleton"
-import { logTable } from "@/components/tracer/log-table-styles"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 
 export function ProviderSettingsLayout({
   description,
@@ -73,7 +73,7 @@ export function ProviderSettingsTable({
         className="overflow-x-auto rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <table
-          className={`${logTable.table} min-w-[900px]`}
+          className={`${collectionTable.table} min-w-[900px]`}
           aria-busy={loading}
         >
           <caption className="sr-only">{label}</caption>
@@ -85,10 +85,10 @@ export function ProviderSettingsTable({
             <col className="w-[18%]" />
             <col className="w-[22%]" />
           </colgroup>
-          <thead className={logTable.head}>
+          <thead className={collectionTable.head}>
             <tr>
               {headings.map((heading) => (
-                <th key={heading} scope="col" className={logTable.heading}>
+                <th key={heading} scope="col" className={collectionTable.heading}>
                   {heading === "Actions" ? (
                     <span className="sr-only">Actions</span>
                   ) : (
@@ -104,10 +104,10 @@ export function ProviderSettingsTable({
                 <tr
                   key={index}
                   aria-hidden="true"
-                  className={`${logTable.row} cursor-default`}
+                  className={`${collectionTable.row} cursor-default`}
                 >
                   {headings.map((heading) => (
-                    <td key={heading} className={`${logTable.cell} h-16`}>
+                    <td key={heading} className={`${collectionTable.cell} h-16`}>
                       <Skeleton className="h-4 w-2/3" />
                     </td>
                   ))}
@@ -115,8 +115,8 @@ export function ProviderSettingsTable({
               ))
             ) : rows.length ? (
               rows.map((row) => (
-                <tr key={row.id} className={`${logTable.row} cursor-default`}>
-                  <td className={`${logTable.cell} py-3`}>
+                <tr key={row.id} className={`${collectionTable.row} cursor-default`}>
+                  <td className={`${collectionTable.cell} py-3`}>
                     <div className="flex items-center gap-3">
                       <span className="flex size-8 shrink-0 items-center justify-center">
                         {row.icon}
@@ -129,17 +129,17 @@ export function ProviderSettingsTable({
                       </div>
                     </div>
                   </td>
-                  <td className={`${logTable.cell} text-foreground-muted`}>
+                  <td className={`${collectionTable.cell} text-foreground-muted`}>
                     {row.kind}
                   </td>
-                  <td className={`${logTable.cell} text-foreground-muted`}>
+                  <td className={`${collectionTable.cell} text-foreground-muted`}>
                     {row.status}
                   </td>
-                  <td className={`${logTable.cell} text-foreground-muted`}>
+                  <td className={`${collectionTable.cell} text-foreground-muted`}>
                     {row.secret}
                   </td>
-                  <td className={logTable.cell}>{row.detail}</td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>{row.detail}</td>
+                  <td className={collectionTable.cell}>
                     <div className="flex items-center justify-end gap-1">
                       {row.actions}
                     </div>

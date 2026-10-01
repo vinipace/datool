@@ -71,8 +71,8 @@ import { useMutation, useRemote } from "./hooks"
 import { useWorkspaceHref, useWorkspaceStorageScope } from "./workspace-path"
 import { useReviewSessionCreation } from "./review-session-creation"
 import { EmptyState, ErrorState, LoadingState } from "./primitives"
-import { LogTable, LogTableBody, LogRow } from "./log-table"
-import { logTable } from "./log-table-styles"
+import { CollectionTable, CollectionTableBody, CollectionRow } from "./collection-table"
+import { collectionTable } from "./collection-table-styles"
 import { formatDate } from "./format"
 import { TraceInspector } from "./trace-inspector"
 import { ReviewPanels } from "./review-panels"
@@ -130,13 +130,13 @@ export function ReviewsPage() {
             />
           }
         >
-          <LogTable
+          <CollectionTable
             persistenceKey="reviews"
             fillHeight
             columnIds={["name", "assignee", "progress", "provenance", "status", "created"]}
             widths={[300, 200, 160, 280, 140, 180]}
           >
-            <thead className={logTable.head}>
+            <thead className={collectionTable.head}>
               <tr>
                 {[
                   "No.",
@@ -147,24 +147,24 @@ export function ReviewsPage() {
                   "Status",
                   "Created",
                 ].map((label) => (
-                  <th key={label} scope="col" className={logTable.heading}>
+                  <th key={label} scope="col" className={collectionTable.heading}>
                     {label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <LogTableBody
+            <CollectionTableBody
               rows={page.items}
               empty="No review sessions."
               children={(session) => (
-                <LogRow
+                <CollectionRow
                   key={session.id}
                   onClick={() =>
                     router.push(href(`/reviews/${session.number}`))
                   }
                 >
-                  <td className={logTable.cell}>{session.number}</td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>{session.number}</td>
+                  <td className={collectionTable.cell}>
                     <Link
                       href={href(`/reviews/${session.number}`)}
                       className="block truncate font-medium"
@@ -172,7 +172,7 @@ export function ReviewsPage() {
                       {session.name}
                     </Link>
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {session.reviewers.length ? (
                       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                         {session.reviewers.map((reviewer) => (
@@ -196,25 +196,25 @@ export function ReviewsPage() {
                       "Unassigned"
                     )}
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {session.reviewedCount} /{" "}
                     {session.traceCount - session.skippedCount}
                     {session.skippedCount > 0 &&
                       ` · ${session.skippedCount} skipped`}
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {session.humanReviewedCount ?? session.reviewedCount} human · {session.aiReviewedCount ?? 0} AI complete · {session.aiLabelledCount ?? 0} AI-labelled
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {reviewStatus[session.status]}
                   </td>
-                  <td className={logTable.cell}>
+                  <td className={collectionTable.cell}>
                     {formatDate(session.createdAt)}
                   </td>
-                </LogRow>
+                </CollectionRow>
               )}
             />
-          </LogTable>
+          </CollectionTable>
         </CollectionPage>
       </CollectionPanel>
       <Dialog open={creating} onOpenChange={setCreating}>

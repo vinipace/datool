@@ -126,7 +126,7 @@ export const PersistentDisplay: Story = {
       canvas.getByRole("button", { name: "Remount eval runs" })
     )
     await expect(
-      canvas.findByLabelText("Log cards scroll area")
+      canvas.findByLabelText("Collection cards scroll area")
     ).resolves.toBeVisible()
     await expect(
       canvas.queryByRole("term", { name: "Metadata" })
@@ -303,7 +303,7 @@ export const CardSelectionHeader: Story = {
     await userEvent.click(
       within(document.body).getByRole("menuitemradio", { name: "Card" })
     )
-    await expect(canvas.getByLabelText("Log cards scroll area")).toBeVisible()
+    await expect(canvas.getByLabelText("Collection cards scroll area")).toBeVisible()
     await checkCollectionSelection(canvasElement, "Evals")
   },
 }
