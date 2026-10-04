@@ -1,11 +1,13 @@
 ---
 name: datool
-description: Use Datool MCP, CLI and SDK to connect apps, integrate managed prompts, debug AI workflows, submit AI-labelled reviews, and route evaluation work.
+description: Use Datool MCP, CLI, SDK and browser WebMCP to connect apps, integrate managed prompts, debug AI workflows, submit AI-labelled reviews, route evaluation work and customize Page or Object Views.
 ---
 
 # Datool
 
 ## Connection and discovery
+
+For custom Datool screens, first read [choosing Page Views and Object Views](references/views.md). Use a Table Page View for collection settings, a React or MDX Page View for custom collection content, and an Object View for one trace or dataset item. Discover the deployed schemas before using a renderer or transport.
 
 Use the user's configured connection; prefer connected MCP tools when both transports are available. Discover MCP operation schemas with `describe_agent_operations`. An MCP-only workflow does not require a local CLI or CLI credentials. Reuse verified project and capability information while the connection and task requirements remain unchanged.
 

@@ -7,6 +7,8 @@ description: Curate Datool evaluation cases, import or edit dataset items atomic
 
 Use the configured Datool connection. See [connection and discovery](../datool/SKILL.md#connection-and-discovery) when setting up access or checking a required capability.
 
+For custom dataset UI, read [choosing views](../datool/references/views.md). Use a Page View for the dataset-items collection and an Object View for one item's current form values, including valid unsaved edits. Open its source trace using a recorded trace ID; a dataset item ID is not a trace ID.
+
 Reads require datasets:read; edits need datasets:write, and snapshot creation requires both.
 
 ```sh
