@@ -6,7 +6,7 @@ export function traceViewTypes() {
   const root = process.cwd()
   const config = ts.readConfigFile('tsconfig.json', ts.sys.readFile)
   const { options } = ts.parseJsonConfigFileContent(config.config, ts.sys, root)
-  const program = ts.createProgram(['src/browser/trace-view-ui.ts', 'components/ui/chart.tsx', 'src/lib/tracer/contracts.ts'], {
+  const program = ts.createProgram(['src/browser/trace-view-ui.ts', 'components/ui/chart.tsx', 'src/lib/tracer/contracts.ts', 'src/lib/tracer/react-page-views.ts'], {
     ...options, noEmit: false, declaration: true, emitDeclarationOnly: true, incremental: false,
     declarationMap: false, types: [], preserveSymlinks: true, rootDir: root, outDir: root,
   })
@@ -19,6 +19,7 @@ export function traceViewTypes() {
   libraries['file:///node_modules/@datool/ui/index.d.ts'] = 'export * from "../../../src/browser/trace-view-ui";'
   libraries['file:///node_modules/@datool/charts/index.d.ts'] = 'export * from "recharts"; export * from "../../../components/ui/chart";'
   libraries['file:///view-props.d.ts'] = 'type TraceViewData = import("./src/lib/tracer/contracts").TraceSummary & Partial<Pick<import("./src/lib/tracer/contracts").TraceDetail, "spans" | "scores" | "spanStats">>; type ViewProps = { trace: TraceViewData; fields: Record<string, import("./src/lib/tracer/contracts").JsonValue>; context: { unsaved: boolean; fieldErrors?: Record<string,string>; fieldRevisions?: Record<string,number> } } & ({ kind: "trace"; object: TraceViewData } | { kind: "dataset-item"; object: import("./src/lib/tracer/contracts").DatasetItem });'
+  libraries['file:///view-props.d.ts'] += ' type PageViewProps<Row = Record<string, unknown>> = import("./src/lib/tracer/react-page-views").PageViewProps<Row>;'
   // Keep only declarations reachable from the public API. Implementation-only
   // imports (for example the complete icon catalog) should not enter Monaco.
   const files = new Map(Object.entries(libraries).map(([key, text]) => [path.join(root, key.slice('file:///'.length)), text]))

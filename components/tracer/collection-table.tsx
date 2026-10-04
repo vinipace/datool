@@ -20,6 +20,8 @@ import { useTableView } from "./use-table-view"
 import { useColumnValues } from "./use-computed-columns"
 import { ColumnEditor, ComputedValue } from "./eval-computed-columns"
 import { CustomViewControls } from "./custom-view-controls"
+import { PageViewDataSource } from "./page-view-surface"
+import { PageViewDataOwnerContext, type PageViewCollectionData } from "./page-view-surface-context"
 import { fieldRow, type FieldRow } from "@/src/lib/tracer/field-row"
 import { pageViewResources } from "@/src/lib/tracer/view-resources"
 import type { ComputedCell, ComputedColumn } from "@/src/lib/tracer/computed-columns"
@@ -133,6 +135,7 @@ function SortableCollectionHeader({ id, label, enabled, element, menu, selected,
 /** Shared Display and rendering; persistence and additional settings are configured with props. */
 export function CollectionTable({ pagination, displaySettings, persistenceKey, enableRowHeight = true, computedColumnStore, selectionActions, selectionToolbarClassName, selectionColumnWidth = 44, settings: controlledSettings, onSettingsChange: controlledOnSettingsChange, widths, columnIds, actionColumnIds = [], reorderable = true, orderStorageKey, columnOrderStore, children, displayControls = true, enableCardView = true, defaultView = "table", fillHeight = false, animateRows = false }: React.PropsWithChildren<{ pagination?: InfiniteScrollState; displaySettings?: React.ComponentProps<typeof HeaderDisplay>["settings"]; persistenceKey?: string; enableRowHeight?: boolean; computedColumnStore?: ComputedColumnStore; selectionActions?: React.ReactNode; selectionToolbarClassName?: string; selectionColumnWidth?: number; settings?: CollectionTableSettings; onSettingsChange?: React.Dispatch<React.SetStateAction<CollectionTableSettings>>; widths: number[]; columnIds?: string[]; actionColumnIds?: string[]; reorderable?: boolean; orderStorageKey?: string; columnOrderStore?: ColumnOrderStore; displayControls?: boolean; enableCardView?: boolean; defaultView?: "table" | "cards"; fillHeight?: boolean; animateRows?: boolean }>) {
   const [selectedHeaders, setSelectedHeaders] = React.useState<Set<string>>(() => new Set())
+  const parentOwnsData = React.useContext(PageViewDataOwnerContext)
   const appearedRows = React.useRef(new Set<string>())
   const storageScope = useWorkspaceStorageScope()
   const storageKey = persistenceKey ? `datool:table:${storageScope}:${persistenceKey}` : undefined
@@ -155,6 +158,25 @@ export function CollectionTable({ pagination, displaySettings, persistenceKey, e
     })
   }
   if (automaticFields) findRows(children)
+  const pageRows = React.useMemo(() => {
+    const rows: unknown[] = []
+    function collect(nodes: React.ReactNode) {
+      React.Children.forEach(nodes, node => {
+        if (!React.isValidElement<{ rows?: unknown[]; children?: React.ReactNode }>(node)) return
+        if (node.type === CollectionTableBody && node.props.rows) rows.push(...node.props.rows)
+        else if (node.type === React.Fragment) collect(node.props.children)
+      })
+    }
+    collect(children)
+    return rows
+  }, [children])
+  const pageData = React.useMemo<PageViewCollectionData>(() => ({
+    rows: pageRows.map(row => fieldRow(fieldKind, row).object), total: null,
+    isLoading: false, isRefreshing: pagination?.isFetching ?? false,
+    error: pagination?.loadMoreError?.message ?? null,
+    hasMore: pagination?.canLoadMore ?? false, isLoadingMore: pagination?.isLoadingMore ?? false,
+    loadMore: pagination?.loadMore,
+  }), [pageRows, fieldKind, pagination])
   const fieldCells = useColumnValues(fieldRows, fieldColumns)
   if (automaticFields) {
     columnIds = [...(columnIds ?? widths.map((_, index) => `column-${index}`)), ...fieldColumns.map(field => `computed:${field.id}`), "add-auto-field"]
@@ -325,6 +347,7 @@ export function CollectionTable({ pagination, displaySettings, persistenceKey, e
     {view === "cards" ? actionIndices.map(index => <React.Fragment key={sourceIds[index]}>{headers[index]}</React.Fragment>) : null}
   </div>
   return <CollectionTableContext.Provider value={{ extraFields: automaticFields ? { columns: fieldColumns, cells: fieldCells } : undefined, rowHeight, animateRows, appearedRows, scrollRef, headerHeight, columnCount: visibleColumns.length, visibleIndices, view, headers, actionIndices, sourceIds, labels, reorderable, onDragEnd }}>
+    {!parentOwnsData && !controlledSettings && tableView.savedView && <PageViewDataSource data={pageData} />}
     {!controlledSettings && tableView.savedView && <CustomViewControls {...tableView.savedView} />}
     {!controlledSettings && tableView.storageError ? <Notice variant="error" role="status">{tableView.storageError}</Notice> : null}
     {displayControls || enableCardView || enableRowHeight ? <HeaderDisplay settings={displaySettings} rowHeight={rowHeight} onRowHeightChange={setRowHeight} view={enableCardView ? view : undefined} onViewChange={setView} columns={displayControls ? leafColumns.slice(1).map((column) => ({ id: column.id, label: labels[sourceIds.indexOf(column.id)] || column.id, visible: column.getIsVisible(), disabled: column.id === sourceIds[1] })).filter(column => !actionColumnIds.includes(column.id)) : []} onChange={(id, visible) => table.getColumn(id)?.toggleVisibility(visible)} /> : null}

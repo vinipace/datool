@@ -56,7 +56,12 @@ export function PlaygroundTraces({
   const latestCallId = collection.items[0]?.attributes["datool.call.id"]
   return (
     <CollectionHeaderContext.Provider value={{ display: displayTarget, filter: displayTarget }}>
-    <TableViewControls savedView={tableView.savedView}>
+    <TableViewControls savedView={tableView.savedView} pageData={{
+      rows: collection.items, total: collection.total, isLoading: collection.isLoading,
+      isRefreshing: collection.isRefreshing, error: collection.error?.message ?? collection.loadMoreError?.message ?? null,
+      hasMore: collection.canLoadMore, isLoadingMore: collection.isLoadingMore,
+      refresh: collection.refresh, loadMore: collection.loadMore,
+    }}>
     <section
       className="flex h-full min-h-0 min-w-0 flex-col bg-background"
       aria-label="App traces"

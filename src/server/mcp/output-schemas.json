@@ -7254,6 +7254,9 @@
         "queryParams": {
           "$ref": "#/components/schemas/Output_list_views_item_settings_queryParams"
         },
+        "renderer": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_renderer"
+        },
         "rowHeight": {
           "$ref": "#/components/schemas/Output_list_views_item_settings_rowHeight"
         },
@@ -7494,6 +7497,30 @@
     },
     "Output_list_views_item_settings_queryParams": {
       "$ref": "#/components/schemas/Output_Record_10"
+    },
+    "Output_list_views_item_settings_renderer": {
+      "$ref": "#/components/schemas/Output_list_views_item_settings_renderer_2"
+    },
+    "Output_list_views_item_settings_renderer_2": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/Output_list_views_item_settings_renderer_kind"
+        }
+      },
+      "required": [
+        "code",
+        "kind"
+      ]
+    },
+    "Output_list_views_item_settings_renderer_kind": {
+      "enum": [
+        "react",
+        "mdx"
+      ]
     },
     "Output_list_views_item_settings_rowHeight": {
       "enum": [

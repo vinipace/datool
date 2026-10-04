@@ -40,7 +40,7 @@ export function useTableView({
   const selectionKey = `${draftStorageKey}:selected`
   const selectionStore = useMemo(() => createPageViewSelectionStore(selectionKey), [selectionKey])
   const selection = useSyncExternalStore(selectionStore.subscribe, selectionStore.getSnapshot, selectionStore.getServerSnapshot)
-  const [extra, setExtra] = useState<Pick<EvalViewSettings, "pageSettings" | "objectViews" | "query">>({})
+  const [extra, setExtra] = useState<Pick<EvalViewSettings, "pageSettings" | "objectViews" | "query" | "renderer">>({})
   const [applyError, setApplyError] = useState("")
   const [defaultDetailsOpen] = useState(details?.open ?? false)
   const baseSettings = useMemo<EvalViewSettings>(() => ({
@@ -69,7 +69,7 @@ export function useTableView({
     orderStore.set(next.columnOrder)
     settingsStore.set({ columnVisibility: next.columnVisibility, columnSizing: next.columnSizing, view: next.view, rowHeight: next.rowHeight, fieldViews: next.fieldViews })
     onDetailsChange?.(next.detailsOpen)
-    setExtra({ pageSettings: next.pageSettings, objectViews: next.objectViews, query: next.query })
+    setExtra({ pageSettings: next.pageSettings, objectViews: next.objectViews, query: next.query, renderer: next.renderer })
     if (restoreQuery) {
       const params = applyPageViewQueryParams(new URLSearchParams(window.location.search), next.queryParams ?? {})
       window.history.replaceState(null, "", window.location.pathname + "?" + params)

@@ -504,7 +504,10 @@ function EvalDetail({ runId }: { runId: string }) {
         )}
         <ResizablePanel id="eval-table" minSize="30%">
           <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden px-3 py-1">
-            <TableViewControls savedView={tableView.savedView}>
+            <TableViewControls savedView={tableView.savedView} pageData={{
+              rows: allRows, total: allRows.length, isLoading: false, isRefreshing: false,
+              error: null, hasMore: false, isLoadingMore: false,
+            }}>
               {tableView.storageError ? <Notice variant="error" role="status">{tableView.storageError}</Notice> : null}
               {comparisonRuns.map(otherRun => {
                 const changes = evalConfigurationChanges(otherRun, run)

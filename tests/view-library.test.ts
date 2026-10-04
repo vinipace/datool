@@ -8,6 +8,31 @@ import { withWorkspace } from "../src/server/auth/context"
 import { customFieldSchema } from "../src/lib/tracer/custom-fields"
 import { customViewSchema } from "../src/lib/tracer/custom-views"
 
+test("React and MDX Page Views persist source, retain history, and restore alongside existing table views", async () => {
+  const db = await createTracerFixture()
+  try {
+    const library = createViewLibrary(db)
+    for (const kind of ["react", "mdx"] as const) {
+      const definition = {
+        resource: "traces", name: "Trace cards",
+        settings: { schemaVersion: 1, renderer: { kind, code: kind === "mdx" ? "# Page\n\nLoaded {props.rows.length} rows" : "export default function Page({ rows }) { return rows.length }" } },
+      }
+      const initial = customViewSchema.parse(await run(library.create("page-view", definition)))
+      expect(customViewSchema.parse(await run(createViewLibrary(db).get("page-view", initial.id))).settings.renderer).toEqual(definition.settings.renderer)
+      const next = { ...definition, settings: { ...definition.settings, renderer: { kind, code: kind === "mdx" ? "# Updated page" : "export default function Page() { return 'Updated page' }" } }, expectedRevision: initial.revision }
+      const updated = customViewSchema.parse(await run(library.update("page-view", initial.id, next)))
+      expect(updated.settings.renderer?.code).toContain("Updated page")
+      await assert.rejects(run(library.update("page-view", initial.id, next)), /changed/)
+      expect(customViewSchema.parse(await run(library.get("page-view", initial.id, 1))).settings.renderer).toEqual(definition.settings.renderer)
+      const restored = customViewSchema.parse(await run(library.restore("page-view", initial.id, 1, updated.revision)))
+      expect(restored.settings.renderer).toEqual(definition.settings.renderer)
+      expect(restored.revision).toBe(3)
+      await assert.rejects(run(library.create("page-view", { ...definition, settings: { schemaVersion: 1, renderer: { kind, code: " " } } })), /code/)
+      await assert.rejects(run(library.create("page-view", { ...definition, settings: { schemaVersion: 1, renderer: { kind: "html", code: "<p>Unsupported</p>" } } })), /react/)
+    }
+  } finally { await closeTracerFixture(db) }
+})
+
 test("Page View history pins dependencies without replacing the shared field", async () => {
   const db = await createTracerFixture()
   try {

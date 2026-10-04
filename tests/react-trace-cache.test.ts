@@ -10,8 +10,8 @@ test("compilation is deduplicated, cached across traces, and usable when storage
     onmessage?: (event: {data: unknown}) => void
     onerror?: () => void
     constructor() { workers++ }
-    postMessage({source}: {source: string}) {
-      queueMicrotask(() => this.onmessage?.({data: {artifact: {source, buildId:"cache-test", javascript:"", css:"", modules:[]}}}))
+    postMessage({source, format}: {source: string; format: string}) {
+      queueMicrotask(() => this.onmessage?.({data: {artifact: {source, format, buildId:"cache-test", javascript:"", css:"", modules:[]}}}))
     }
     terminate() { terminated++ }
   }
@@ -27,6 +27,13 @@ test("compilation is deduplicated, cached across traces, and usable when storage
     await prepareTraceView("changed code")
     expect(workers).toBe(2)
     expect(terminated).toBe(2)
+    const mdx = await prepareTraceView("first", "mdx")
+    expect(mdx.format).toBe("mdx")
+    expect(mdx).not.toBe(first)
+    expect(await prepareTraceView("first")).toBe(first)
+    expect(await prepareTraceView("first", "mdx")).toBe(mdx)
+    expect(workers).toBe(3)
+    expect(terminated).toBe(3)
   } finally {
     for (const [key, descriptor] of Object.entries(previous)) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor)

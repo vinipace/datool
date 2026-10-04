@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { valueViews, type ValueView } from "./value-views"
 import { fieldReferenceSchema, pageViewResourceSchema } from "./view-resources"
+import { pageViewRendererSchema } from "./react-page-views"
 
 const columnId = z.string().min(1).max(200)
 const column = z
@@ -24,19 +25,20 @@ export const evalViewSettingsSchema = z
       .refine(
         (columns) => new Set(columns.map((c) => c.id)).size === columns.length,
         "Column IDs must be unique."
-      ),
+      ).default([]),
     columnOrder: z
       .array(columnId)
       .max(200)
       .refine(
         (ids) => new Set(ids).size === ids.length,
         "Column order must be unique."
-      ),
-    columnVisibility: z.record(columnId, z.boolean()),
-    columnSizing: z.record(columnId, z.number().min(44).max(1200)),
-    view: z.enum(["table", "cards"]),
+      ).default([]),
+    columnVisibility: z.record(columnId, z.boolean()).default({}),
+    columnSizing: z.record(columnId, z.number().min(44).max(1200)).default({}),
+    view: z.enum(["table", "cards"]).default("table"),
     rowHeight: z.enum(["compact", "tall"]).optional(),
-    detailsOpen: z.boolean(),
+    detailsOpen: z.boolean().default(false),
+    renderer: pageViewRendererSchema.optional(),
     fieldViews: z.record(columnId, z.enum(valueViews)).optional(),
     customFields: z.array(fieldReferenceSchema).max(50).optional(),
     queryParams: z.record(columnId, z.array(z.string().max(4000)).max(50)).optional(),

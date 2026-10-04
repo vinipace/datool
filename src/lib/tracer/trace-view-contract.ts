@@ -1,12 +1,14 @@
 import type { TraceDetail, TraceSummary } from "./contracts"
 
-export const TRACE_VIEW_MODULES = ["react", "@datool/ui", "@datool/charts"] as const
+export const TRACE_VIEW_MODULES = ["react", "react/jsx-runtime", "@datool/ui", "@datool/charts"] as const
+export type ViewSourceFormat = "react" | "mdx"
 export type TraceViewModule = typeof TRACE_VIEW_MODULES[number]
 export type TraceViewDataMode = "full" | "summary"
 export type TraceViewData = TraceDetail | TraceSummary
 export type CompiledTraceView = {
   buildId: string
   source: string
+  format?: ViewSourceFormat
   javascript: string
   css: string
   modules: TraceViewModule[]

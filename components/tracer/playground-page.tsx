@@ -91,6 +91,7 @@ export function PlaygroundPage() {
       <CollectionPage
         className="contents"
         state={state}
+        pageRows={rows}
         loadingLabel="Loading registered apps"
         toolbar={
           tableView.storageError ? (

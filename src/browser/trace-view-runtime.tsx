@@ -1,12 +1,23 @@
 /* eslint-disable react-refresh/only-export-components -- Standalone iframe entrypoint. */
 import * as React from "react"
+import * as jsxRuntime from "react/jsx-runtime"
 import { createRoot } from "react-dom/client"
 import * as ui from "./trace-view-ui"
 import { evaluateTraceView } from "../lib/tracer/trace-view-evaluate"
-import { traceObjectViewInput, type ObjectViewInput, type ObjectViewProps } from "../lib/tracer/object-views"
+import {
+  traceObjectViewInput,
+  type ObjectViewInput,
+  type ObjectViewProps,
+} from "../lib/tracer/object-views"
+import type {
+  PageViewInput,
+  PageViewProps,
+} from "../lib/tracer/react-page-views"
+import { MdxPageContent } from "./page-view-mdx"
 import type {
   CompiledTraceView,
   TraceViewData,
+  ViewSourceFormat,
 } from "../lib/tracer/trace-view-contract"
 
 declare global {
@@ -20,12 +31,16 @@ const root = createRoot(document.getElementById("root")!)
 const dynamicStyle = document.createElement("style")
 document.head.append(dynamicStyle)
 let installed: CompiledTraceView | undefined
-let Component: React.ComponentType<ObjectViewProps> | undefined
+let Component:
+  React.ComponentType<ObjectViewProps | PageViewProps<unknown>> | undefined
 let objectInput: ObjectViewInput | undefined
 let trace: TraceViewData | undefined
+let pageInput: PageViewInput | undefined
 let generation = 0
 let token = ""
+let actionToken = ""
 let expectedSource = ""
+let expectedFormat: ViewSourceFormat = "react"
 function report(error?: string) {
   parent.postMessage({ type: "trace-view-result", token, error }, "*")
 }
@@ -68,13 +83,49 @@ function RenderComplete({ requestToken }: { requestToken: string }) {
   return null
 }
 function render() {
-  if (Component && trace && installed && installed.source === expectedSource)
-    root.render(
-      <ViewErrorBoundary key={`${installed.source}:${trace.id}`}>
-        <Component {...(objectInput ?? traceObjectViewInput(trace))} trace={trace} />
-        <RenderComplete requestToken={token} />
-      </ViewErrorBoundary>
+  if (!Component || (!trace && !pageInput) || !installed) return
+  const installedFormat = installed.format ?? "react"
+  if (installed.source !== expectedSource || installedFormat !== expectedFormat)
+    return
+  // Polling preserves callbacks; replacing the view invalidates its action token.
+  const requestToken = actionToken
+  const action = (name: string, payload?: unknown) =>
+    parent.postMessage(
+      {
+        type: "page-view-action",
+        token: requestToken,
+        action: name,
+        payload,
+      },
+      "*"
     )
+  const pageProps: PageViewProps<unknown> | undefined = pageInput
+    ? {
+        ...pageInput,
+        openTrace: (
+          traceId: string,
+          options?: Parameters<PageViewProps["openTrace"]>[1]
+        ) => action("openTrace", { ...options, traceId }),
+        refresh: () => action("refresh"),
+        loadMore: () => action("loadMore"),
+      }
+    : undefined
+  const props = pageProps ?? {
+    ...(objectInput ?? traceObjectViewInput(trace!)),
+    trace: trace!,
+  }
+  root.render(
+    <ViewErrorBoundary
+      key={`${installedFormat}:${installed.source}:${pageInput?.page.resource ?? trace!.id}`}
+    >
+      {installed.format === "mdx" && pageProps ? (
+        <MdxPageContent Component={Component} input={pageProps} />
+      ) : (
+        <Component {...props} />
+      )}
+      <RenderComplete requestToken={token} />
+    </ViewErrorBoundary>
+  )
 }
 function loadCharts() {
   charts ??= new Promise<void>((resolve, reject) => {
@@ -94,8 +145,11 @@ window.addEventListener("message", async (event) => {
   if (event.data?.type === "trace-view-data") {
     trace = event.data.trace
     objectInput = event.data.objectInput
+    pageInput = event.data.pageInput
     token = event.data.token
+    actionToken = event.data.actionToken
     expectedSource = event.data.source
+    expectedFormat = event.data.format ?? "react"
     document.documentElement.classList.toggle("dark", event.data.dark === true)
     render()
     return
@@ -105,17 +159,23 @@ window.addEventListener("message", async (event) => {
   const artifact = event.data.artifact as CompiledTraceView
   if (
     installed?.source === artifact.source &&
-    installed.buildId === artifact.buildId
+    installed.buildId === artifact.buildId &&
+    (installed.format ?? "react") === (artifact.format ?? "react")
   )
     return
   try {
     if (artifact.modules.includes("@datool/charts")) await loadCharts()
     if (sequence !== generation) return
-    Component = evaluateTraceView(artifact, React, {
-      react: React,
-      "@datool/ui": ui,
-      "@datool/charts": window.__datoolTraceCharts,
-    })
+    Component = evaluateTraceView<ObjectViewProps | PageViewProps<unknown>>(
+      artifact,
+      React,
+      {
+        react: React,
+        "react/jsx-runtime": jsxRuntime,
+        "@datool/ui": ui,
+        "@datool/charts": window.__datoolTraceCharts,
+      }
+    )
     installed = artifact
     dynamicStyle.textContent = artifact.css
     render()

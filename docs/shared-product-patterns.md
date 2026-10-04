@@ -22,6 +22,7 @@ layout applies the `Page · Datool` format.
 | Non-paginated request state | `hooks.ts` / `useRemote` | Pass its result as `state`. |
 | Table/card rendering, display controls, column ordering | `collection-table.tsx` | Reuse row cells and headers; opt into supported table capabilities. |
 | Page View menu and Display controls | `table-view-controls.tsx`, `custom-view-controls.tsx`, `components/ui/page-view-menu.tsx` | Already composed by `CollectionPage`; pass `savedView` when supported. Page Views sit before the filter bar. |
+| Custom React Page View content | `page-view-surface.tsx`, `react-page-view.tsx` | `CollectionPanel` supplies the replacement content slot. `CollectionPage` supplies loaded rows and request state; other collection owners use `PageViewDataSource`. See [React Page Views](./react-page-views.md). |
 | Table preferences and saved-view settings | `use-table-view.ts` | Persist visibility, widths, order and presentation locally. Pass `resource` for saved views; computed columns are optional. |
 | Custom-column agent tools | `collection-table.tsx`, `use-column-webmcp.ts` | Supply the computed-column store; do not register duplicate page tools. |
 | Trace inspector overlay | `trace-list-overlay.tsx` | Reuse the overlay and its focus behavior. |
