@@ -54,6 +54,14 @@ needed. Never run `FLUSHDB`, `FLUSHALL`, queue obliteration, or enable eviction.
 
 Resolve the reported error before retrying a failed job:
 
+For `READ_RESULT_TOO_LARGE` with `Complete evidence exceeds 8 MiB`, a legacy
+trace mutation may have tried to read the complete trace back before committing
+its ingestion receipt. Queued lifecycle writes now acknowledge only the saved
+resource ID; complete-evidence reads retain their size limit. Deploy this fix
+before retrying affected events with their original IDs and payloads, then verify
+their PostgreSQL receipts. Replaying an already saved event still returns its
+original stored receipt result.
+
 For `POSTGRES_22P02`, inspect the PostgreSQL error at the same timestamp without
 exporting SQL parameters or customer payloads. Unpaired UTF-16 surrogates can be
 accepted by JavaScript JSON but rejected by PostgreSQL JSONB. Ingestion replaces

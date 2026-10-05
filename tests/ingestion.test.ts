@@ -10,6 +10,8 @@ import { startIngestionWorker } from "../src/server/ingestion/worker"
 import { DatoolClient } from "../src/lib/tracer/client"
 import { fetchWithRetry } from "../src/lib/tracer/retry"
 import { cleanCompletedIngestionJobs, completedIngestionRetentionMs } from "../src/server/ingestion/retention"
+import { TracerService } from "../src/server/tracer/service"
+import { runTracerEffect } from "../src/server/tracer/effect"
 
 const event = (previousId: string | null = null): IngestionEvent => ({ id: crypto.randomUUID(), previousId, method: "POST", path: "/api/traces", body: { id: `trace_${crypto.randomUUID()}`, name: "delivery proof", startedAt: "2026-09-09T00:00:00Z", status: "running" } })
 test("retry keeps the same event ID/body and does not retry authentication errors", async () => {
@@ -86,6 +88,92 @@ test("malformed Unicode persists with its original receipt identity and unblocks
     expect(absent.rowCount).toBe(0)
   } finally { await closeTracerFixture(db) }
 })
+
+test("queued completion commits a compact receipt for a trace exceeding the complete-read limit", async () => {
+  const db = await createTracerFixture()
+  try {
+    const sessionId = `session_${crypto.randomUUID()}`
+    const session: IngestionEvent = {
+      id: crypto.randomUUID(),
+      previousId: null,
+      path: "/api/sessions",
+      method: "POST",
+      body: { id: sessionId, name: "large delivery" },
+    }
+    const first = event()
+    first.previousId = session.id
+    first.body = { ...(first.body as object), sessionId }
+    const traceId = (first.body as { id: string }).id
+    const acknowledgments: { id: string; result: unknown }[] = [
+      { id: sessionId, result: await persistEvent(db, session) },
+      { id: traceId, result: await persistEvent(db, first) },
+    ]
+    let previousId = first.id
+    // Every event fits the 1 MiB request limit; their combined evidence exceeds 8 MiB.
+    for (let index = 0; index < 10; index++) {
+      const spanId = `span_${crypto.randomUUID()}`
+      const span: IngestionEvent = {
+        id: crypto.randomUUID(),
+        previousId,
+        path: `/api/traces/${traceId}/spans`,
+        method: "POST",
+        body: {
+          id: spanId,
+          name: "large evidence",
+          output: "x".repeat(900 * 1024),
+        },
+      }
+      acknowledgments.push({ id: spanId, result: await persistEvent(db, span) })
+      previousId = span.id
+      if (index === 0) {
+        const patch: IngestionEvent = {
+          id: crypto.randomUUID(),
+          previousId,
+          path: `/api/spans/${spanId}`,
+          method: "PATCH",
+          body: { status: "completed", endedAt: "2026-09-09T00:00:01Z" },
+        }
+        acknowledgments.push({
+          id: spanId,
+          result: await persistEvent(db, patch),
+        })
+        previousId = patch.id
+      }
+    }
+    const last: IngestionEvent = {
+      id: crypto.randomUUID(),
+      previousId,
+      path: `/api/traces/${traceId}`,
+      method: "PATCH",
+      body: {
+        status: "completed",
+        endedAt: "2026-09-09T00:00:01Z",
+        output: { saved: true },
+      },
+    }
+    expect(await persistEvent(db, last)).toEqual({ id: traceId })
+    const stored = await db.execute(
+      sql`select status, output_json from traces where id=${traceId}`
+    )
+    expect(stored.rows).toEqual([
+      { status: "completed", output_json: '{"saved":true}' },
+    ])
+    const receipt = await db.execute(
+      sql`select digest, result_json from ingestion_receipts where event_id=${last.id}::uuid`
+    )
+    expect(receipt.rows).toEqual([
+      { digest: eventDigest(last), result_json: { id: traceId } },
+    ])
+    for (const acknowledgment of acknowledgments)
+      expect(acknowledgment.result).toEqual({ id: acknowledgment.id })
+    await rejects(
+      runTracerEffect(new TracerService(db).getTraceArtifact(traceId)),
+      /Complete evidence exceeds 8 MiB/
+    )
+  } finally {
+    await closeTracerFixture(db)
+  }
+}, 30_000)
 
 test("Redis retains events without a worker and retries persistence before saving once", async () => {
   const db = await createTracerFixture()
