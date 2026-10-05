@@ -250,5 +250,16 @@
     "kind": "composite",
     "story": "components/tracer/eval-run-detail.stories.tsx",
     "reason": "Selection header stories check selected counts, export and clearing across table and card layouts."
+  },
+  {
+    "component": "components/tracer/react-page-view.tsx",
+    "kind": "direct",
+    "story": "components/tracer/react-page-view.stories.tsx"
+  },
+  {
+    "component": "components/tracer/page-view-surface.tsx",
+    "kind": "composite",
+    "story": "components/tracer/react-page-view.stories.tsx",
+    "reason": "React page stories replace the default collection surface and supply loaded, empty and loading row data."
   }
 ]

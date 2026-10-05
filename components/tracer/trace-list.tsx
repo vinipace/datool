@@ -15,6 +15,8 @@ import {
 import { useComputedColumns } from "./use-computed-columns"
 import { useTableView } from "./use-table-view"
 import { CustomViewControls } from "./custom-view-controls"
+import { PageViewDataSource } from "./page-view-surface"
+import type { PageViewCollectionData } from "./page-view-surface-context"
 import { useWorkspaceStorageScope } from "./workspace-path"
 import { ComputedColumnDetails, ColumnEditor } from "./eval-computed-columns"
 import { DemoWorkflowAction } from "./app-shell"
@@ -99,6 +101,10 @@ export function TraceListWorkspace() {
   const selectedSpanId = searchParams.get("span")
   const [now, setNow] = React.useState(() => Date.now())
   const visibleTraces = traces
+  const pageData = React.useMemo<PageViewCollectionData>(() => ({
+    rows: traces, total, isLoading, isRefreshing, error: error?.message ?? loadMoreError?.message ?? null,
+    hasMore: canLoadMore, isLoadingMore, refresh, loadMore,
+  }), [traces, total, isLoading, isRefreshing, error, loadMoreError, canLoadMore, isLoadingMore, refresh, loadMore])
   const selectionScope = `${pathname}:${search.filter}`
   const [selection, setSelection] = React.useState<{ scope: string; traces: Map<string, TraceSummary> }>(() => ({ scope: selectionScope, traces: new Map() }))
   const checkedTraces = selection.scope === selectionScope ? [...selection.traces.values()] : []
@@ -198,6 +204,7 @@ export function TraceListWorkspace() {
           query={search.value}
           filterError={search.error}
         />
+        <PageViewDataSource data={pageData} />
         {tableView.savedView && <CustomViewControls {...tableView.savedView} />}
         {tableView.storageError ? <Notice variant="error" role="status">{tableView.storageError}</Notice> : null}
         {error && !data ? (

@@ -168,7 +168,7 @@ function ProjectViews({
           }
         } else {
           setSelected(null)
-          if (selectedViewId) setError("The linked view is unavailable or does not support dataset items. Select another project view.")
+          if (selectedViewId) setError(`The linked view is unavailable or does not support ${kind === "trace" ? "traces" : "dataset items"}. Select another project view.`)
         }
       } catch (error) {
         if (!controller.signal.aborted && requestId.current === id)

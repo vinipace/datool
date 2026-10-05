@@ -5,6 +5,7 @@ import { CollectionToolbarSkeleton } from "@/components/ui/collection-skeleton"
 import { cn } from "@/lib/utils"
 
 import { CollectionHeaderContext } from "./collection-header-context"
+import { PageViewSurface } from "./page-view-surface"
 
 /** A collection owns its data controls; the surrounding page owns navigation. */
 export function CollectionPanel({
@@ -126,7 +127,7 @@ export function CollectionPanel({
           </div>
         </div>
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-auto px-3 py-1 [&>*]:shrink-0", contentClassName)}>
-          {children}
+          <PageViewSurface>{children}</PageViewSurface>
         </div>
       </section>
     </CollectionHeaderContext.Provider>

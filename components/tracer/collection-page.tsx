@@ -12,6 +12,7 @@ import { CollectionHeaderContext } from "./collection-header-context"
 import { CollectionPagination } from "./collection-pagination"
 import { ErrorState } from "./primitives"
 import { TableViewControls } from "./table-view-controls"
+import type { PageViewCollectionData } from "./page-view-surface-context"
 import {
   CollectionSelectionActions,
   type CollectionSelection,
@@ -31,6 +32,7 @@ type CollectionPageProps = React.PropsWithChildren<{
     "onRefresh" | "isRefreshing"
   >
   pagination?: React.ComponentProps<typeof CollectionPagination>
+  pageRows?: unknown[]
   savedView?: React.ComponentProps<typeof TableViewControls>["savedView"]
   selection?: CollectionSelection
   toolbar?: React.ReactNode
@@ -45,6 +47,7 @@ export function CollectionPage({
   loadingLabel,
   header,
   pagination,
+  pageRows,
   savedView,
   selection,
   toolbar,
@@ -54,6 +57,17 @@ export function CollectionPage({
   children,
 }: CollectionPageProps) {
   const { displayIconOnly } = React.useContext(CollectionHeaderContext)
+  const pageData = React.useMemo<PageViewCollectionData>(() => {
+    const collection = state.data as { items?: unknown[]; total?: number } | null
+    return {
+      rows: pageRows ?? header?.exportRows ?? (Array.isArray(state.data) ? state.data : collection?.items ?? []),
+      total: collection?.total ?? null,
+      isLoading: state.isLoading, isRefreshing: state.isRefreshing,
+      error: state.error?.message ?? pagination?.loadMoreError?.message ?? null,
+      hasMore: pagination?.canLoadMore ?? false, isLoadingMore: pagination?.isLoadingMore ?? false,
+      refresh: state.refresh, loadMore: pagination?.loadMore,
+    }
+  }, [state.data, state.isLoading, state.isRefreshing, state.error, state.refresh, pageRows, header?.exportRows, pagination])
   const hasData = state.data != null
   const showContent = hasData || (!state.isLoading && !state.error)
   return (
@@ -63,7 +77,7 @@ export function CollectionPage({
         className
       )}
     >
-      <TableViewControls savedView={savedView}>
+      <TableViewControls savedView={savedView} pageData={pageData}>
         {selection && (
           <HeaderSlot name="selection">
             <CollectionSelectionActions
@@ -91,7 +105,10 @@ export function CollectionPage({
             <CollectionTableSkeleton label={loadingLabel} />
           </>
         )}
-        {showContent && (isEmpty && empty != null ? empty : children)}
+        {showContent && (isEmpty && empty != null ? <>
+          {empty}
+          <div className="hidden">{children}</div>
+        </> : children)}
         {showContent && pagination && (
           <div className="shrink-0">
             <CollectionPagination {...pagination} />

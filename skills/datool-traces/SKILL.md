@@ -1,11 +1,13 @@
 ---
 name: datool-traces
-description: Investigate Datool trace failures, latency, spans, scores and multi-step sessions using recorded execution evidence through MCP or CLI.
+description: Investigate Datool trace failures, latency, spans, scores and multi-step sessions using recorded execution evidence through MCP or CLI, and choose Page or Object Views to visualize that evidence.
 ---
 
 # Investigate Datool traces
 
 Use the configured Datool connection. See [connection and discovery](../datool/SKILL.md#connection-and-discovery) when setting up access or checking a required capability.
+
+For a custom investigation screen, read [choosing views](../datool/references/views.md): a Page View organizes the loaded trace collection; an Object View renders one trace, including its spans. A Page View can open that trace with a chosen Object View. Follow the linked authoring workflow and discover the deployed schemas before generating code.
 
 These reads require traces:read.
 

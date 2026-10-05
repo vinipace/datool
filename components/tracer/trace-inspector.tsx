@@ -104,6 +104,7 @@ export interface TraceInspectorProps {
   snapshot?: TraceDetail
   customColumnDetails?: React.ReactNode
   initialSpanId?: string
+  initialObjectViewId?: string
   hideTraceNavigation?: boolean
   hideOverviewScores?: boolean
   mode?: InspectorMode
@@ -338,7 +339,11 @@ function TraceInspectorSession(props: TraceInspectorProps) {
     ["trace", "evaluators", "timeline", "views"],
     "trace"
   )
-  const [activeTab, selectTab] = useReviewAnnotationTab(storedTab, selectStoredTab, "trace")
+  const [annotationTab, selectAnnotationTab] = useReviewAnnotationTab(storedTab, selectStoredTab, "trace")
+  const [requestedTab, setRequestedTab] = React.useState<InspectorTab | null>(props.initialObjectViewId ? "views" : null)
+  const [selectedObjectViewId, setSelectedObjectViewId] = React.useState<string | null>(props.initialObjectViewId ?? null)
+  const activeTab = requestedTab ?? annotationTab
+  const selectTab = (tab: InspectorTab) => { setRequestedTab(null); selectAnnotationTab(tab) }
 
   if (isLoading && !trace) {
     return (
@@ -398,6 +403,8 @@ function TraceInspectorSession(props: TraceInspectorProps) {
         scorePage={scorePage}
         activeTab={activeTab}
         onTabChange={selectTab}
+        selectedObjectViewId={props.initialObjectViewId ? selectedObjectViewId : undefined}
+        onSelectedObjectViewChange={props.initialObjectViewId ? setSelectedObjectViewId : undefined}
         trace={{
           ...trace,
           scores: scorePage.items,
@@ -416,6 +423,8 @@ function LoadedInspector({
   initialSpanId,
   onSpanChange,
   onTabChange,
+  selectedObjectViewId,
+  onSelectedObjectViewChange,
   trace,
   ...props
 }: TraceInspectorProps & {
@@ -423,6 +432,8 @@ function LoadedInspector({
   scorePage: CollectionScrollState
   activeTab: InspectorTab
   onTabChange: (tab: InspectorTab) => void
+  selectedObjectViewId?: string | null
+  onSelectedObjectViewChange?: (id: string | null) => void
   trace: TraceOverview
 }) {
   const validInitialSpanId = trace.spans.some(
@@ -467,7 +478,7 @@ function LoadedInspector({
       ) : activeTab === "evaluators" ? (
         <EvaluatorWorkspace scores={trace.scores} pagination={scorePage} />
       ) : (
-        <FullTraceViews trace={trace} loader={loader} />
+        <FullTraceViews trace={trace} loader={loader} selectedViewId={selectedObjectViewId} onSelectedViewChange={onSelectedObjectViewChange} />
       )}
     </InspectorFrame>
   )
@@ -1078,7 +1089,7 @@ function SelectedPayload({ loader, trace, span, full, detailTab, onDetailTabChan
     detailTab={detailTab} onDetailTabChange={onDetailTabChange} />
 }
 
-function FullTraceViews({ trace, loader }: { trace: TraceOverview; loader: TraceDetailLoader }) {
+function FullTraceViews({ trace, loader, selectedViewId, onSelectedViewChange }: { trace: TraceOverview; loader: TraceDetailLoader; selectedViewId?: string | null; onSelectedViewChange?: (id: string | null) => void }) {
   const [mode, setMode] = React.useState<TraceViewDataMode>("summary")
   const load = React.useCallback((signal: AbortSignal) => mode === "summary" ? loader.payload(trace, signal) : loader.full(trace, signal),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1087,7 +1098,7 @@ function FullTraceViews({ trace, loader }: { trace: TraceOverview; loader: Trace
   if (!state.data) return <DetailRequestState {...state} label="Loading view data…" />
   return <>
     {state.error ? <DetailRequestState {...state} label="Loading view data…" /> : null}
-    <ReactTraceViews trace={state.data} onDataModeChange={setMode} dataLoading={mode === "full" && !("spans" in state.data)} />
+    <ReactTraceViews trace={state.data} selectedViewId={selectedViewId} onSelectedViewChange={onSelectedViewChange} onDataModeChange={setMode} dataLoading={mode === "full" && !("spans" in state.data)} />
   </>
 }
 

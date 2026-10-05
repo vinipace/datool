@@ -49,7 +49,7 @@ If you installed from `vinpac/datool-skills` or `vinipace/datool-skills`, run th
 
 ## Connect to Datool
 
-Skills contain instructions and examples. They require an existing Datool deployment and either an authenticated MCP connection or a compatible Datool CLI.
+Skills contain instructions and examples. Server workflows require an existing Datool deployment and either an authenticated MCP connection or a compatible Datool CLI. [Choose Page Views or Object Views](datool/references/views.md) before customizing Datool UI: Table Page Views save collection settings, React/MDX Page Views provide custom collection content, and Object Views render one record. Current definitions are shared project resources; discover the deployed schemas and browser tools before using newer renderers or navigation.
 
 For MCP, connect your agent to your deployment's `/api/mcp` endpoint and complete its OAuth project selection and permission consent. Use `describe_agent_operations` to inspect available operations. MCP-only workflows require no CLI installation or CLI doctor checks. Reuse verified connection information across skill handoffs; see [connection and discovery](datool/SKILL.md#connection-and-discovery) for when to check again.
 

@@ -11,6 +11,7 @@ import {
   type Page,
 } from "playwright"
 import { Pool } from "pg"
+import { verifyReactPageViews } from "../tests/helpers/react-page-views-browser-proof"
 import {
   createIsolatedPostgres,
   migrateIsolatedPostgres,
@@ -94,17 +95,17 @@ async function openTrace(page: Page, id: string) {
   await page.goto(`${base}/p/views-e2e/traces/${id}`)
   await page.getByRole("button", { name: "Views", exact: true }).click()
   await page
-    .getByRole("combobox", { name: "React view", exact: true })
+    .getByRole("combobox", { name: "View", exact: true })
     .waitFor()
   await page.waitForFunction(
     () =>
       !document
-        .querySelector('[aria-label="React view"]')
+        .querySelector('[aria-label="View"]')
         ?.hasAttribute("disabled")
   )
 }
 async function select(page: Page, name: string) {
-  await page.getByRole("combobox", { name: "React view", exact: true }).click()
+  await page.getByRole("combobox", { name: "View", exact: true }).click()
   await page.getByRole("option").filter({ hasText: name }).click()
 }
 async function code(page: Page, text: string) {
@@ -172,6 +173,11 @@ try {
   page.setDefaultNavigationTimeout(120000)
   const errors: string[] = []
   page.on("pageerror", (error) => errors.push(error.message))
+  const pageTeammate = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" })
+  await pageTeammate.addCookies([{ ...fixture.member, url: base }])
+  proof.reactPageViews = await verifyReactPageViews({ page, owner, teammate: pageTeammate, base, projectId, output })
+  await pageTeammate.close()
+  console.log("PASS React Page View editor, persistence, sandbox navigation and selected Object View")
   await openTrace(page, "view-source")
   await page
     .getByText("Create a view from the view menu to get started.")
@@ -194,7 +200,7 @@ try {
     .getByRole("heading", { name: "Hello from source" })
     .waitFor()
   await page.getByRole("button", { name: "Save view", exact: true }).click()
-  await page.getByRole("combobox", { name: "React view", exact: true }).waitFor()
+  await page.getByRole("combobox", { name: "View", exact: true }).waitFor()
   const response = await request(owner, "GET", "/api/react-views")
   assert.equal(response.status(), 200)
   let saved = (await response.json()).data.items[0]
@@ -500,7 +506,7 @@ try {
     1
   )
   await openTrace(page, "view-mismatch")
-  await page.getByRole("combobox", { name: "React view", exact: true }).click()
+  await page.getByRole("combobox", { name: "View", exact: true }).click()
   const options = page.getByRole("option")
   await options.first().waitFor()
   assert.deepEqual(await options.allTextContents(), [
@@ -509,7 +515,7 @@ try {
     "Answer card",
   ])
   const triggerBox = await page
-    .getByRole("combobox", { name: "React view", exact: true })
+    .getByRole("combobox", { name: "View", exact: true })
     .boundingBox()
   const popupBox = await page
     .locator('[data-slot="combobox-content"]')
@@ -532,7 +538,7 @@ try {
   proof.lazyChartsBundle = true
   await select(page, "Answer card")
   await page
-    .getByRole("combobox", { name: "React view", exact: true })
+    .getByRole("combobox", { name: "View", exact: true })
     .waitFor()
   proof.compatibilityOrderingAndSelectableMismatch = true
   // Dataset uses expected output and the exact same saved renderer.
@@ -541,6 +547,8 @@ try {
     .getByRole("row", { name: "Open dataset row 1", exact: true })
     .click()
   await page.getByRole("button", { name: "Views", exact: true }).click()
+  // Object View preferences are scoped to the page and object kind.
+  await select(page, "Answer card")
   await page
     .frameLocator('iframe[title="React view preview"]')
     .getByRole("heading", { name: "Expected dataset answer" })
@@ -552,7 +560,7 @@ try {
   await page
     .getByRole("menuitem", { name: "Save as new view", exact: true })
     .click()
-  await page.getByRole("combobox", { name: "React view", exact: true }).waitFor()
+  await page.getByRole("combobox", { name: "View", exact: true }).waitFor()
   const datasetView = (
     await (await request(owner, "GET", "/api/react-views")).json()
   ).data.items.find((view: { name: string }) => view.name === "Dataset answer")
@@ -600,7 +608,7 @@ try {
   await page
     .getByRole("menuitem", { name: "Save as new view", exact: true })
     .click()
-  await page.getByRole("combobox", { name: "React view", exact: true }).waitFor()
+  await page.getByRole("combobox", { name: "View", exact: true }).waitFor()
   proof.concurrentEditRecovery = true
   console.log("PASS stale editor draft recovery")
   // Runtime errors are explicit and recover by selecting another view.
@@ -624,8 +632,9 @@ try {
     .waitFor()
   proof.renderErrorAndRecovery = true
   await openTrace(page, "view-other")
+  await select(page, "Dataset answer")
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole("combobox", { name: "React view", exact: true }).click()
+  await page.getByRole("combobox", { name: "View", exact: true }).click()
   await page.screenshot({ path: resolve(output, "mobile-picker.png") })
   await page.keyboard.press("Escape")
   await page.getByRole("button", { name: "View actions", exact: true }).click()
@@ -660,7 +669,7 @@ try {
   )
   await code(page, `${viewCode}\n// Revised in the UI`)
   await page.getByRole("button", { name: "Save view", exact: true }).click()
-  await page.getByRole("combobox", { name: "React view", exact: true }).waitFor()
+  await page.getByRole("combobox", { name: "View", exact: true }).waitFor()
   assert.equal(
     (
       await (

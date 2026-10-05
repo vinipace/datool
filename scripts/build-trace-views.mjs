@@ -29,8 +29,9 @@ for (const file of new Set([...Object.keys(runtime.metafile.inputs), ...Object.k
 }
 const css = (await compile(theme)).build([...candidates])
 await writeFile(`${outdir}/theme.css`, css)
-const buildId = createHash('sha256').update(theme).update(await readFile('bun.lock')).update(await readFile(`${outdir}/runtime.js`)).update(await readFile(`${outdir}/charts.js`)).update(await readFile('src/lib/tracer/trace-view-compiler.ts')).update(await readFile('src/browser/trace-view-compiler.worker.ts')).digest('hex').slice(0, 20)
-await build({ ...options, entryPoints: ['src/browser/trace-view-compiler.worker.ts'], outfile: `${outdir}/compiler.js`, define: { ...options.define, TRACE_VIEW_THEME: JSON.stringify(theme), TRACE_VIEW_BUILD_ID: JSON.stringify(buildId) } })
+const buildId = createHash('sha256').update(theme).update(await readFile('bun.lock')).update(await readFile(`${outdir}/runtime.js`)).update(await readFile(`${outdir}/charts.js`)).update(await readFile('src/lib/tracer/trace-view-compiler.ts')).update(await readFile('src/browser/trace-view-compiler.worker.ts')).update(await readFile('scripts/build-trace-views.mjs')).digest('hex').slice(0, 20)
+// MDX's entity decoder provides a worker export without a document dependency.
+await build({ ...options, conditions: ['worker'], entryPoints: ['src/browser/trace-view-compiler.worker.ts'], outfile: `${outdir}/compiler.js`, define: { ...options.define, TRACE_VIEW_THEME: JSON.stringify(theme), TRACE_VIEW_BUILD_ID: JSON.stringify(buildId) } })
 await writeFile(`${outdir}/manifest.json`, JSON.stringify({ buildId }))
 await writeFile(`${outdir}/types.json`, JSON.stringify(traceViewTypes()))
 console.log(`Built trace view runtime ${buildId}`)

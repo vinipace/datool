@@ -1,14 +1,35 @@
 "use client"
 import * as React from "react"
 import { Notice } from "@/components/ui/notice"
-import { traceObjectViewInput, type ObjectViewInput } from "@/src/lib/tracer/object-views"
+import {
+  traceObjectViewInput,
+  type ObjectViewInput,
+} from "@/src/lib/tracer/object-views"
 import { prepareTraceView } from "@/src/lib/tracer/trace-view-client"
+import {
+  openPageTraceSchema,
+  type OpenPageTrace,
+  type PageViewInput,
+} from "@/src/lib/tracer/react-page-views"
 import {
   projectTraceViewData,
   type CompiledTraceView,
   type TraceViewData,
   type TraceViewDataMode,
+  type ViewSourceFormat,
 } from "@/src/lib/tracer/trace-view-contract"
+
+function projectObjectInput(
+  trace: TraceViewData,
+  dataMode: TraceViewDataMode,
+  objectInput?: ObjectViewInput
+) {
+  if (objectInput?.kind === "dataset-item") return objectInput
+  return {
+    ...(objectInput ?? traceObjectViewInput(trace)),
+    object: projectTraceViewData(trace, dataMode),
+  }
+}
 
 export function ReactViewPreview({
   code,
@@ -16,16 +37,27 @@ export function ReactViewPreview({
   objectInput,
   dataMode = "full",
   dataLoading = false,
+  format = "react",
+  pageInput,
+  onOpenTrace,
+  onRefresh,
+  onLoadMore,
 }: {
   code: string
-  trace: TraceViewData
+  trace?: TraceViewData
   objectInput?: ObjectViewInput
   dataMode?: TraceViewDataMode
   dataLoading?: boolean
+  format?: ViewSourceFormat
+  pageInput?: PageViewInput
+  onOpenTrace?: (request: OpenPageTrace) => void
+  onRefresh?: () => void
+  onLoadMore?: () => void
 }) {
   const frame = React.useRef<HTMLIFrameElement>(null)
   const [compiled, setCompiled] = React.useState<{
     source: string
+    format: ViewSourceFormat
     artifact?: CompiledTraceView
     error?: string
   } | null>(null)
@@ -34,24 +66,44 @@ export function ReactViewPreview({
     error?: string
   } | null>(null)
   const { token } = React.useMemo(
-    () => ({ token: crypto.randomUUID(), code, trace, dataMode, objectInput }),
-    [code, trace, dataMode, objectInput]
+    () => ({
+      token: crypto.randomUUID(),
+      code,
+      trace,
+      dataMode,
+      objectInput,
+      pageInput,
+      format,
+    }),
+    [code, trace, dataMode, objectInput, pageInput, format]
   )
-  const artifact = compiled?.source === code ? compiled.artifact : undefined
-  const compileError = compiled?.source === code ? compiled.error : undefined
+  const actionToken = React.useMemo(
+    () => ({
+      token: crypto.randomUUID(),
+      code,
+      format,
+      resource: pageInput?.page.resource,
+    }),
+    [code, format, pageInput?.page.resource]
+  ).token
+  const currentCompilation =
+    compiled?.source === code && compiled.format === format ? compiled : null
+  const artifact = currentCompilation?.artifact
+  const compileError = currentCompilation?.error
   React.useEffect(() => {
     let cancelled = false
-    prepareTraceView(code)
+    prepareTraceView(code, format)
       .then((artifact) => {
-        if (!cancelled) setCompiled({ source: code, artifact })
+        if (!cancelled) setCompiled({ source: code, format, artifact })
       })
       .catch((error) => {
-        if (!cancelled) setCompiled({ source: code, error: String(error) })
+        if (!cancelled)
+          setCompiled({ source: code, format, error: String(error) })
       })
     return () => {
       cancelled = true
     }
-  }, [code])
+  }, [code, format])
   const install = React.useCallback(() => {
     if (artifact)
       frame.current?.contentWindow?.postMessage(
@@ -60,22 +112,60 @@ export function ReactViewPreview({
       )
   }, [artifact])
   const send = React.useCallback(() => {
-    if (!dataLoading)
-      frame.current?.contentWindow?.postMessage(
-        {
-          type: "trace-view-data",
-          source: code,
-          token,
-          trace: projectTraceViewData(trace, dataMode),
-          objectInput: objectInput?.kind === "dataset-item" ? objectInput : { ...(objectInput ?? traceObjectViewInput(trace)), object: projectTraceViewData(trace, dataMode) },
-          dark: document.documentElement.classList.contains("dark"),
-        },
-        "*"
-      )
-  }, [code, trace, dataMode, dataLoading, token, objectInput])
+    if (dataLoading || (!trace && !pageInput)) return
+    if (!frame.current?.contentWindow) return
+
+    const projectedTrace = trace
+      ? projectTraceViewData(trace, dataMode)
+      : undefined
+    const projectedObjectInput = trace
+      ? projectObjectInput(trace, dataMode, objectInput)
+      : undefined
+    frame.current.contentWindow.postMessage(
+      {
+        type: "trace-view-data",
+        source: code,
+        format,
+        token,
+        trace: projectedTrace,
+        objectInput: projectedObjectInput,
+        pageInput,
+        actionToken,
+        dark: document.documentElement.classList.contains("dark"),
+      },
+      "*"
+    )
+  }, [
+    code,
+    format,
+    trace,
+    dataMode,
+    dataLoading,
+    token,
+    objectInput,
+    pageInput,
+    actionToken,
+  ])
   React.useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return
+      if (
+        event.data?.type === "page-view-action" &&
+        event.data.token === actionToken &&
+        pageInput
+      ) {
+        if (event.data.action === "openTrace") {
+          const request = openPageTraceSchema.safeParse(event.data.payload)
+          if (request.success) onOpenTrace?.(request.data)
+        } else if (event.data.action === "refresh") onRefresh?.()
+        else if (
+          event.data.action === "loadMore" &&
+          pageInput.page.hasMore &&
+          !pageInput.page.isLoadingMore
+        )
+          onLoadMore?.()
+        return
+      }
       if (event.data?.type === "trace-view-ready") {
         install()
         send()
@@ -98,7 +188,16 @@ export function ReactViewPreview({
       observer.disconnect()
       window.removeEventListener("message", receive)
     }
-  }, [install, send, token])
+  }, [
+    install,
+    send,
+    token,
+    pageInput,
+    onOpenTrace,
+    onRefresh,
+    onLoadMore,
+    actionToken,
+  ])
   const origin = typeof window === "undefined" ? "" : window.location.origin
   const frameDocument = `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-eval' ${origin}/trace-views/; style-src 'unsafe-inline' ${origin}/trace-views/; connect-src 'none';"><link rel="stylesheet" href="${origin}/trace-views/theme.css?v=${artifact?.buildId ?? ""}"><div id="root"></div><script src="${origin}/trace-views/runtime.js?v=${artifact?.buildId ?? ""}"></script>`
   return (
