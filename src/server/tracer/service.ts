@@ -647,6 +647,11 @@ export class TracerService {
     return tracerEffect(() => this.createTraceUnsafe(input))
   }
 
+  /** Queue receipts acknowledge the write without materializing complete evidence. */
+  createTraceReceipt(input: CreateTraceInput): TracerEffect<{ id: string }> {
+    return tracerEffect(async () => ({ id: await this.insertTraceUnsafe(input) }))
+  }
+
   listTraces(
     options: ListOptions & { sessionId?: string | null; datasetItemId?: string } = {}
   ): TracerEffect<{
@@ -836,6 +841,13 @@ export class TracerService {
 
   patchTrace(id: string, input: PatchTraceInput): TracerEffect<TraceDetail> {
     return tracerEffect(() => this.patchTraceUnsafe(id, input))
+  }
+
+  patchTraceReceipt(
+    id: string,
+    input: PatchTraceInput
+  ): TracerEffect<{ id: string }> {
+    return tracerEffect(async () => ({ id: await this.updateTraceUnsafe(id, input) }))
   }
 
   mutateTraceSelection(input: unknown) {
@@ -1266,6 +1278,10 @@ export class TracerService {
   private async createTraceUnsafe(
     input: CreateTraceInput
   ): Promise<TraceDetail> {
+    return this.getTraceUnsafe(await this.insertTraceUnsafe(input))
+  }
+
+  private async insertTraceUnsafe(input: CreateTraceInput): Promise<string> {
     if (!input.name && !input.operation) {
       throw validation("A trace needs either name or operation.")
     }
@@ -1339,7 +1355,7 @@ export class TracerService {
       }
     })
 
-    return this.getTraceUnsafe(traceId)
+    return traceId
   }
 
   private async listTracesUnsafe(
@@ -1694,6 +1710,13 @@ export class TracerService {
     id: string,
     input: PatchTraceInput
   ): Promise<TraceDetail> {
+    return this.getTraceUnsafe(await this.updateTraceUnsafe(id, input))
+  }
+
+  private async updateTraceUnsafe(
+    id: string,
+    input: PatchTraceInput
+  ): Promise<string> {
     const [current] = await this.database
       .select()
       .from(traces)
@@ -1726,7 +1749,7 @@ export class TracerService {
       .update(traces)
       .set(next)
       .where(and(eq(traces.projectId, this.projectId), eq(traces.id, id)))
-    return this.getTraceUnsafe(id)
+    return id
   }
 
   private async createSpanUnsafe(
