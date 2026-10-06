@@ -1,3 +1,4 @@
+import { readTelemetry } from "@/src/server/semantic/telemetry"
 import { scopeRows } from "./helpers/tracer-fixture"
 import {
   createTracerFixture,
@@ -423,4 +424,83 @@ test("SQL percentiles retain nearest-rank semantics and daily results are chrono
     expect(days.data.length).toBe(90)
     expect(days.data[0]["logs.startedAt"]).toBe("2026-06-10")
     expect(days.data[89]["logs.startedAt"]).toBe("2026-09-07")
+  }))
+
+test("matching daily usage widgets share one database read and retain their individual results", () =>
+  fixture(async (db) => {
+    await db.insert(traces).values(scopeRows(db, trace("daily")))
+    await db.insert(spans).values(
+      scopeRows(db, [
+        span("paid", "daily", 2, {
+          attributesJson: JSON.stringify({
+            "cost.usd": 2,
+            "usage.input_tokens": 100,
+            "usage.output_tokens": 20,
+            "usage.cache_read_tokens": 30,
+          }),
+        }),
+        span("unpriced", "daily", 0, { attributesJson: "{}" }),
+      ])
+    )
+    const daily = (measure: string, extra = {}) =>
+      query([measure], {
+        timeDimensions: [
+          {
+            dimension: "logs.startedAt",
+            granularity: "day",
+            dateRange: [from, "2026-09-09T00:00:00Z"],
+          },
+        ],
+        order: [["logs.startedAt", "asc"]],
+        total: true,
+        limit: 100,
+        ...extra,
+      })
+    const queries = [
+      daily("costUsd"),
+      daily("llmCount", { having: [] }),
+      daily("tokenCount"),
+      daily("cacheTokens"),
+    ]
+    const options = {
+      catalog: semanticCatalog,
+      requestId: "daily-usage",
+      snapshotRunner: createSemanticSnapshotRunner(db),
+    }
+    let statements = 0
+    const observe = () => statements++
+    readTelemetry.subscribe(observe)
+    let results
+    try {
+      results = await executeSemanticBatch({ queries }, options)
+    } finally {
+      readTelemetry.unsubscribe(observe)
+    }
+    expect(statements).toBe(1)
+    expect(
+      results.map((result) => result.data[0][result.query.measures[0]])
+    ).toEqual([2, 2, 120, 30])
+    expect(
+      results.map((result) => result.data[1][result.query.measures[0]])
+    ).toEqual([null, 0, null, null])
+    const variants = [
+      ...queries,
+      daily("costUsd", { order: [["logs.startedAt", "desc"]], limit: 1 }),
+      daily("llmCount", { offset: 1, limit: 1 }),
+      daily("costUsd", {
+        having: [{ member: "logs.costUsd", operator: "gt", values: [1] }],
+      }),
+    ]
+    const variantResults = await executeSemanticBatch(
+      { queries: variants },
+      options
+    )
+    for (const [index, q] of variants.entries()) {
+      const single = await executeSemanticQuery(q, options)
+      expect(variantResults[index].data).toEqual(single.data)
+      expect(variantResults[index].query).toEqual(single.query)
+      expect(variantResults[index].meta.page).toEqual(single.meta.page)
+      expect(variantResults[index].meta.quality).toEqual(single.meta.quality)
+      expect(variantResults[index].annotation).toEqual(single.annotation)
+    }
   }))
