@@ -40,6 +40,7 @@ test("semantic cost ownership reconciles nested groups, old parents, reused SDK 
             name: "Batch",
             groupType: "workflow",
             groupName: "batch-workflow",
+            groupVersion: "trace-version",
           },
           {
             id: "other",
@@ -87,12 +88,15 @@ test("semantic cost ownership reconciles nested groups, old parents, reused SDK 
           kind: "workflow",
           groupType: "workflow",
           groupName: "outer-workflow",
+          groupVersion: "outer-version",
+          attributesJson: '{"datool.execution.role":"scorer"}',
           startedAt: "2026-09-06T23:00:00Z",
         }),
         span("enrich", "outer", {
           kind: "workflow",
           groupType: "workflow",
           groupName: "enrich-workflow",
+          groupVersion: "enrich-version",
         }),
         span("step", "enrich", { kind: "task", name: "enrichPromptRun" }),
         span("agent", "step", {
@@ -102,7 +106,7 @@ test("semantic cost ownership reconciles nested groups, old parents, reused SDK 
         }),
         span("fn", "agent", {
           name: "extract-mentioned-brands",
-          attributesJson: '{"cost.usd":900}',
+          attributesJson: '{"cost.usd":900,"datool.execution.role":"workload"}',
         }),
         span("sdk", "fn", { name: "ai.generateObject" }),
         llm("paid", "sdk", 2),
@@ -266,6 +270,49 @@ test("semantic cost ownership reconciles nested groups, old parents, reused SDK 
         allGroups.data.find((row) => row["logs.functionName"] === "brand-agent")
       ).toMatchObject({ "logs.llmCount": 0 })
     }
+    // Resolving one nearer context must not hide older contexts or scorer
+    // ancestry, and an unversioned nearest agent stays unversioned.
+    const contexts = await execute({
+      measures: ["spans.costUsd", "spans.llmCount"],
+      dimensions: [
+        "spans.functionName",
+        "spans.agentName",
+        "spans.agentVersion",
+        "spans.workflowName",
+        "spans.workflowVersion",
+        "spans.stepName",
+        "spans.executionRole",
+      ],
+      timeDimensions: [{ dimension: "spans.startedAt", dateRange: [from, to] }],
+      filters: [{ member: "spans.kind", operator: "equals", values: ["llm"] }],
+    })
+    expect(
+      contexts.data.find(
+        (row) => row["spans.functionName"] === "extract-mentioned-brands"
+      )
+    ).toMatchObject({
+      "spans.costUsd": 2,
+      "spans.agentName": "brand-agent",
+      "spans.agentVersion": null,
+      "spans.workflowName": "enrich-workflow",
+      "spans.workflowVersion": "enrich-version",
+      "spans.stepName": "enrichPromptRun",
+      "spans.executionRole": "scorer",
+    })
+    const nearestVersions = await execute({
+      measures: ["spans.costUsd"],
+      dimensions: ["spans.workflowName", "spans.workflowVersion"],
+      timeDimensions: [{ dimension: "spans.startedAt", dateRange: [from, to] }],
+      filters: [{ member: "spans.kind", operator: "equals", values: ["llm"] }],
+    })
+    expect(
+      nearestVersions.data.find(
+        (row) => row["spans.workflowName"] === "enrich-workflow"
+      )
+    ).toMatchObject({
+      "spans.workflowVersion": "enrich-version",
+      "spans.costUsd": 5,
+    })
     const latencyError = await execute({
       ...base,
       measures: ["logs.meanLatencyMs"],

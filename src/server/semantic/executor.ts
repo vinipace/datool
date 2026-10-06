@@ -226,14 +226,14 @@ export async function executeSemanticBatch(
     const deadline = Date.now() + READ_BATCH_DEADLINE_MS
     let bytes = 0
     const completed = new Map<string, SemanticResult>()
-    // Fuse matching scalar measures. Eval quality also permits daily series
-    // with identical time ordering: its quality semantics do not vary by measure.
+    // Fuse matching scalar measures. Logs and eval quality also permit daily
+    // series with identical time ordering and measure-independent quality.
     // Other grouped/top-N panels retain their SQL ordering and page boundaries.
     const fusionKey = (query: NormalizedSemanticQuery) => {
       const model = semanticModelName(query.measures[0]!)
       const timeSeries = query.timeDimensions.some((t) => t.granularity)
       const fuseDaily =
-        ["evalQuality", "evalResults"].includes(model) &&
+        ["logs", "evalQuality", "evalResults"].includes(model) &&
         timeSeries &&
         query.order.length > 0 &&
         query.order.every(([member]) =>
@@ -257,12 +257,14 @@ export async function executeSemanticBatch(
         (timeSeries && !fuseDaily)
       )
         return JSON.stringify(query)
+      const { measures, order, having, ...population } = query
       const costQuality =
-        model !== "logs" && query.measures.some((m) => /cost/i.test(m))
+        model !== "logs" && measures.some((m) => /cost/i.test(m))
       return JSON.stringify({
-        ...query,
+        ...population,
         measures: [model, costQuality],
-        order: fuseDaily ? query.order : [],
+        having: having ?? [],
+        order: fuseDaily ? order : [],
       })
     }
     const groups = new Map<string, NormalizedSemanticQuery[]>()
