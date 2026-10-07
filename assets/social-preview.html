@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Datool social preview</title>
+    <style>
+      /* The renderer supplies the product's dark tokens, logo, and local font. */
+      /* __THEME__ */
+      @font-face {
+        font-family: Geist;
+        src: url("__FONT__") format("truetype");
+        font-weight: 400;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: Geist, sans-serif;
+      }
+      .card {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: 52px 60px;
+        background: radial-gradient(
+          ellipse at 94% 44%,
+          color-mix(in srgb, var(--marketing-primary) 17%, transparent),
+          transparent 54%
+        );
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        font-size: 34px;
+        font-weight: 600;
+        letter-spacing: -1.4px;
+      }
+      .brand img {
+        width: 43px;
+        height: 43px;
+      }
+      .category {
+        color: var(--foreground-muted);
+        font-size: 14px;
+        letter-spacing: 2px;
+      }
+      h1 {
+        position: absolute;
+        left: 60px;
+        top: 171px;
+        margin: 0;
+        font-size: 73px;
+        font-weight: 600;
+        line-height: 1.05;
+        letter-spacing: -3.8px;
+      }
+      h1 span {
+        display: block;
+      }
+      h1 em {
+        color: var(--marketing-leaf);
+        font-style: normal;
+      }
+      .description {
+        position: absolute;
+        left: 63px;
+        top: 427px;
+        margin: 0;
+        color: var(--foreground-muted);
+        font-size: 24px;
+        line-height: 1.5;
+      }
+      .workflow {
+        position: absolute;
+        top: 178px;
+        right: 60px;
+        width: 482px;
+        height: 302px;
+        border: 1px solid var(--border-strong);
+        border-radius: 16px;
+        background: var(--muted);
+        overflow: hidden;
+      }
+      .workflow-header {
+        height: 67px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--border-strong);
+      }
+      .workflow-header svg {
+        width: 22px;
+        height: 22px;
+        color: var(--marketing-leaf);
+      }
+      .workflow-header strong {
+        font-size: 20px;
+        font-weight: 500;
+      }
+      .workflow-header span {
+        margin-left: auto;
+        font-size: 13px;
+        color: var(--foreground-muted);
+      }
+      .timeline {
+        margin: 22px 24px 0;
+      }
+      .axis {
+        display: flex;
+        justify-content: space-between;
+        margin: 0 0 15px 124px;
+        color: var(--foreground-subtle);
+        font-size: 12px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 124px 1fr;
+        align-items: center;
+        height: 46px;
+        border-top: 1px solid var(--border);
+      }
+      .label {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 15px;
+      }
+      .label svg {
+        width: 16px;
+        height: 16px;
+        color: var(--foreground-muted);
+      }
+      .track {
+        height: 26px;
+        position: relative;
+      }
+      .bar {
+        position: absolute;
+        top: 0;
+        height: 26px;
+        border-radius: 5px;
+        background: var(--marketing-signal);
+      }
+      .retrieve {
+        left: 0;
+        width: 26%;
+      }
+      .generate {
+        left: 28%;
+        width: 51%;
+        background: var(--foreground-secondary);
+      }
+      .verify {
+        left: 81%;
+        width: 19%;
+        background: var(--marketing-leaf);
+      }
+      .evaluation {
+        position: absolute;
+        right: 83px;
+        top: 457px;
+        width: 337px;
+        padding: 20px 23px;
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        background: var(--marketing-paper);
+        color: var(--marketing-ink);
+        border: 1px solid var(--marketing-rule);
+        border-radius: 12px;
+        box-shadow: 0 12px 35px
+          color-mix(in srgb, var(--background) 40%, transparent);
+      }
+      .evaluation svg {
+        width: 29px;
+        height: 29px;
+        color: var(--marketing-forest);
+      }
+      .evaluation strong {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .evaluation span {
+        display: block;
+        margin-top: 4px;
+        font-size: 14px;
+        color: var(--marketing-ink-muted);
+      }
+      footer {
+        position: absolute;
+        bottom: 46px;
+        left: 60px;
+        right: 60px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .stages {
+        display: flex;
+        gap: 17px;
+        align-items: center;
+        color: var(--foreground-secondary);
+        font-size: 17px;
+      }
+      .stages i {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--marketing-signal);
+      }
+      .domain {
+        font-size: 17px;
+        color: var(--foreground-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <div class="brand"><img src="__LOGO__" alt="" />datool</div>
+        <div class="category">AI OBSERVABILITY &amp; EVALS</div>
+      </header>
+      <h1>
+        <span>Understand</span><span>and <em>improve</em></span
+        ><span>your AI.</span>
+      </h1>
+      <p class="description">From every request<br />to a better result.</p>
+      <!-- An illustrative workflow, with no customer data or metric claims. -->
+      <section class="workflow" aria-label="Illustrative AI workflow trace">
+        <div class="workflow-header">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="6" height="6" rx="1.5" />
+            <rect x="15" y="3" width="6" height="6" rx="1.5" />
+            <rect x="9" y="15" width="6" height="6" rx="1.5" />
+            <path d="M6 9v3h12V9M12 12v3" />
+          </svg>
+          <strong>ai.workflow</strong><span>Request → response</span>
+        </div>
+        <div class="timeline">
+          <div class="axis"><span>0s</span><span>1s</span><span>2s</span></div>
+          <div class="row">
+            <div class="label">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              >
+                <circle cx="10" cy="10" r="6" />
+                <path d="m15 15 5 5" /></svg
+              >retrieve
+            </div>
+            <div class="track"><div class="bar retrieve"></div></div>
+          </div>
+          <div class="row">
+            <div class="label">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"
+                /></svg
+              >generate
+            </div>
+            <div class="track"><div class="bar generate"></div></div>
+          </div>
+          <div class="row">
+            <div class="label">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="m8 12 3 3 5-6" /></svg
+              >verify
+            </div>
+            <div class="track"><div class="bar verify"></div></div>
+          </div>
+        </div>
+      </section>
+      <aside class="evaluation">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="m8 12 3 3 5-6" />
+        </svg>
+        <div>
+          <strong>Better answers start here.</strong
+          ><span>Trace. Evaluate. Improve.</span>
+        </div>
+      </aside>
+      <footer>
+        <div class="stages">
+          <span>Trace</span><i></i><span>Evaluate</span><i></i
+          ><span>Improve</span>
+        </div>
+        <span class="domain">trydatool.com</span>
+      </footer>
+    </main>
+  </body>
+</html>

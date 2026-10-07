@@ -11,6 +11,7 @@ import {
 } from "fumadocs-ui/page"
 import { Button } from "@/components/ui/button"
 import { docsMarkdownUrl, docsSource } from "@/lib/docs-source"
+import { socialPreviewImage } from "@/lib/page-metadata"
 
 export const dynamic = "force-static"
 export const dynamicParams = false
@@ -35,6 +36,7 @@ export async function generateMetadata({
       title: `${page.data.title} · Datool`,
       description: page.data.description,
       type: "article",
+      images: [socialPreviewImage],
     },
   }
 }

@@ -52,3 +52,21 @@ Next.js composes titles and the file-based favicon links. Keep favicon assets in
 the root `app/` segment; a page title change does not need an `icons` override.
 Route files use ESLint's Next.js Fast Refresh configuration to allow standard
 framework exports such as `metadata` and `generateMetadata`.
+
+## Social previews
+
+The root `app/opengraph-image.png` is the shared 1200 × 630 social image.
+`socialPreviewImage` in `lib/page-metadata.ts` supplies its path, dimensions,
+MIME type, and alt text. Root metadata, CMS metadata, and docs metadata all reuse
+it: a page that declares `openGraph` replaces that entire object and must
+include the shared image. Twitter/X inherits the image and the page's title and
+description; root metadata selects `summary_large_image`. `metadataBase` uses
+the installation's `BETTER_AUTH_URL` so crawlers receive an absolute image URL.
+When the build has no installation origin, static docs use `https://trydatool.com`
+for the shared brand image instead of embedding a localhost URL.
+
+Edit `assets/social-preview.html` and regenerate with
+`node scripts/generate-social-image.mjs`. The renderer reuses the logo and dark
+theme from `app/globals.css`, embeds Next.js's bundled Geist font, and exports
+the PNG locally. It needs the Playwright Chromium browser installed;
+image requests in production need no renderer, font fetch, or database access.
