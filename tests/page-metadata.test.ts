@@ -10,6 +10,10 @@ const appDirectory = fileURLToPath(new URL("../app", import.meta.url))
 
 // These pages only redirect. A route that starts rendering must declare metadata.
 const redirectPages = new Set([
+  "(app)/reports/page.tsx",
+  "(app)/reports/new/page.tsx",
+  "(app)/reports/[reportNumber]/page.tsx",
+  "(marketing)/product/page.tsx",
   "(app)/agents/page.tsx",
   "(app)/dashboards/page.tsx",
   "(app)/playground/page.tsx",
@@ -99,7 +103,9 @@ describe("page metadata contract", () => {
             source,
             (node) =>
               ts.isCallExpression(node) &&
-              node.expression.getText(source) === "redirect"
+              ["redirect", "permanentRedirect"].includes(
+                node.expression.getText(source)
+              )
           ),
           true,
           `${path} must still redirect`

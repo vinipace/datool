@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import type { Page } from "@/payload-types"
+import { socialPreviewImage } from "@/lib/page-metadata"
 
 export function cmsMetadata(
   doc: { title: string; seo?: Page["seo"] },
@@ -16,6 +17,13 @@ export function cmsMetadata(
     description,
     alternates: { canonical: url },
     robots: { index: !doc.seo?.noIndex, follow: true },
-    openGraph: { title, description, url, siteName: "Datool", type: "website" },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: "Datool",
+      type: "website",
+      images: [socialPreviewImage],
+    },
   }
 }

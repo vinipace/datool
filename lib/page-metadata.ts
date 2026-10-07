@@ -57,13 +57,25 @@ export const pageTitles = {
 
 export type PageKey = keyof typeof pageTitles
 
+/** Reuse when a page replaces the root Open Graph metadata. */
+export const socialPreviewImage = {
+  url: "/opengraph-image.png",
+  width: 1200,
+  height: 630,
+  type: "image/png",
+  alt: "Datool — Understand and improve your AI. Trace, evaluate, and improve AI workflows.",
+}
+
 /** The brand suffix belongs only to the root layout. */
 export const rootMetadata: Metadata = {
+  metadataBase: new URL(process.env.BETTER_AUTH_URL || "https://trydatool.com"),
   applicationName: "Datool",
   title: {
     default: "Datool",
     template: "%s · Datool",
   },
+  openGraph: { siteName: "Datool", images: [socialPreviewImage] },
+  twitter: { card: "summary_large_image" },
 }
 
 export function pageMetadata(page: PageKey): Metadata {
