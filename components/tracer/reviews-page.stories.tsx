@@ -577,6 +577,7 @@ function ReviewStoryRoute({ initialTraceId }: { initialTraceId?: string }) {
   return (
     <StorybookProjectFrame
       title="Review session"
+      className="h-dvh min-h-0"
       breadcrumbs={[
         { label: "Reviews", href: `${storybookProject.prefix}/reviews` },
         ...(traceId
