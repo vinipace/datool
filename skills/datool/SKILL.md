@@ -21,7 +21,7 @@ For local development, `datool connect --watch` reloads source/import edits in f
 
 For playground apps, local-to-hosted connections and HTTP webhook registration, read [app connections](references/apps.md). The shared operations include list_apps, get_app, register_app and run_app. AI/sandbox provider setup and custom-sample scorer previews still use separate UI surfaces; managed prompt operations are not in the shared catalog. Inspect discovery before assuming a newer server has closed these gaps.
 
-For evidence review and findings, read [AI-labelled reviews](references/reviews.md). API-key and OAuth agents can submit notes, scores and annotations with trusted server attribution; completion is not human verification.
+For evidence review, criteria changes or a review's starting trace view, read [AI-labelled reviews](references/reviews.md). API-key and OAuth agents can submit notes, scores and annotations with trusted server attribution; completion is not human verification. Item-specific criteria changes and shared session defaults have different scopes.
 
 For published prompt fetching, rendering, invocation-scoped overrides and connected prompt experiments, read [managed prompts](references/prompts.md). Confirm installed SDK and deployed server support before using the native API.
 

@@ -38,6 +38,9 @@ import { humanScoreValueLabel } from "@/src/lib/tracer/human-scores"
 import { columnWorkerSource } from "@/src/lib/tracer/column-worker-source"
 import { ReviewsPage, ReviewSessionPage } from "./reviews-page"
 import { ReviewSessionRoute } from "./review-session-route"
+import { useReactViewWebMcp } from "./use-react-view-webmcp"
+import { selectProjectReactView } from "@/src/lib/tracer/react-view-preferences"
+import type { PageModelContext, PageTool } from "@/src/lib/tracer/column-webmcp"
 const fields = {
   revision: 1,
   description: "",
@@ -725,6 +728,68 @@ export const NarrowPlayer: Story = {
 
 export const CompactPlayerPreview: Story = {
   render: () => <ReviewStoryRoute initialTraceId={traceRow.id} />,
+}
+
+const browserViewTools = new Map<string, PageTool>()
+function BrowserViewTools() {
+  useReactViewWebMcp(storybookProject.projectId)
+  return null
+}
+export const BrowserViewSelection: Story = {
+  render: () => <><BrowserViewTools /><ReviewStoryRoute initialTraceId={traceRow.id} /></>,
+  parameters: { msw: { handlers: [
+    http.put("/api/object-views/:id", async ({ params, request }) => {
+      const input = await request.json() as ReactViewInput & { expectedRevision: number }
+      const index = projectViews.findIndex(view => view.id === params.id)
+      projectViews[index] = { ...projectViews[index], ...input, revision: input.expectedRevision + 1 }
+      return HttpResponse.json(envelope(projectViews[index]))
+    }),
+    ...handlers,
+  ] } },
+  beforeEach: () => {
+    reset()
+    projectViews[0] = { ...projectViews[0], objectTypes: ["trace"], inputContract: "object",
+      code: "export default function View({ object }: ViewProps) { return <pre>{JSON.stringify(object.output)}</pre> }" }
+    projectViews[1] = { ...projectViews[1], objectTypes: ["dataset-item"] }
+    browserViewTools.clear()
+    const previous = Object.getOwnPropertyDescriptor(document, "modelContext")
+    const context: PageModelContext = {
+      registerTool: tool => { browserViewTools.set(tool.name, tool) },
+      unregisterTool: name => { browserViewTools.delete(name) },
+    }
+    Object.defineProperty(document, "modelContext", { configurable: true, value: context })
+    return () => {
+      if (previous) Object.defineProperty(document, "modelContext", previous)
+      else delete (document as Document & { modelContext?: PageModelContext }).modelContext
+      browserViewTools.clear()
+    }
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole("button", { name: "Trace", pressed: true })
+    await waitFor(() => expect(browserViewTools.has("select_trace_view")).toBe(true))
+    const select = browserViewTools.get("select_trace_view")!
+    await expect(select.execute({ id: storybookReactView.id })).resolves.not.toHaveProperty("isError", true)
+    await expect(canvas.findByRole("button", { name: "Answer view", pressed: true })).resolves.toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "Trace" }))
+    await select.execute({ id: storybookReactView.id })
+    await expect(canvas.findByRole("button", { name: "Answer view", pressed: true })).resolves.toBeVisible()
+    await expect(canvas.getAllByRole("button", { name: "Answer view" })).toHaveLength(1)
+    await expect(select.execute({ id: "evidence-view" })).resolves.toHaveProperty("isError", true)
+    selectProjectReactView("another-project", projectViews[2])
+    await expect(canvas.queryByRole("button", { name: "Trace summary", pressed: true })).not.toBeInTheDocument()
+    const update = await browserViewTools.get("update_trace_view")!.execute({
+      id: storybookReactView.id, expectedRevision: 1, name: "Reviewed answer",
+    })
+    await expect(update).not.toHaveProperty("isError", true)
+    await expect(projectViews[0].objectTypes).toEqual(["trace"])
+    await expect(projectViews[0].inputContract).toBe("object")
+    await expect(canvas.findByRole("button", { name: "Reviewed answer", pressed: true }, { timeout: 10000 })).resolves.toBeVisible()
+    await expect(titleWrites).toHaveLength(0)
+    await expect(writes).toHaveLength(0)
+    await userEvent.click(canvas.getByRole("button", { name: "Close Reviewed answer" }))
+    await expect(canvas.getByRole("button", { name: "Trace", pressed: true })).toBeVisible()
+  },
 }
 
 export const ViewTabs: Story = {

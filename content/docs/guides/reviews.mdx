@@ -51,6 +51,10 @@ datool reviews export 1 --out review.ndjson
 
 MCP exposes the same operations. API clients cannot choose their reviewer identity or claim a human source. Exported items preserve explicit provenance. See [CLI reference](/docs/reference/cli) and [authentication](/docs/reference/authentication).
 
+`create_review_session` and `update_review_session` accept `defaultObjectViewId` for the session's shared starting trace view. Choose a project Object View that supports traces; send `null` to restore the standard inspector. Updates require the current session revision, and omitting the field preserves it.
+
+Read `get_review_item.definitions` for each trace's effective criteria. `record_review` normally preserves those required criteria. To change the selection for only that item, send `replaceCriteria: true` with the full desired `scores` array and current item revision. Keep existing values and comments for retained scores and use `null` for an unanswered score. An empty array saves an empty selection and leaves the item incomplete. This does not edit the collection or other traces. Omit `scores` entirely for notes-only changes.
+
 ## Use feedback in an evaluation
 
 A review preserves a judgment; it does not silently rewrite a dataset. After checking a human review, explicitly curate the reference answer in a [dataset](/docs/evaluation/datasets), preserve the original trace as evidence, and use a snapshot for the next evaluation.

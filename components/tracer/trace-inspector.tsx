@@ -14,6 +14,8 @@ import { ScorerIcon } from "./scorer-icon"
 import { ReactTraceViews } from "./react-trace-views"
 import { TraceViewPicker } from "./trace-view-picker"
 import type { ReactView, ReactViewSummary } from "@/src/lib/tracer/react-views"
+import { reactViewLibraryEvent } from "@/src/lib/tracer/react-view-preferences"
+import { useProjectScope } from "./project-scope-context"
 import { TraceTimeline, RunTraceTimeline } from "./trace-timeline"
 import { Combobox } from "@/components/ui/combobox"
 import { InspectorGroupMembership } from "./inspector-group-membership"
@@ -543,6 +545,17 @@ function InspectorFrame({
       return { tabs: existing ? current.tabs : [...current.tabs, { key, viewId: view.id, name: view.name }], active: key }
     })
   }, [])
+  const projectId = useProjectScope()?.projectId
+  React.useEffect(() => {
+    if (!projectId || !trace || !viewLoader) return
+    const selected = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail?.projectId !== projectId) return
+      const view = event.detail?.view as ReactViewSummary | undefined
+      if (view && (view.objectTypes ?? ["trace", "dataset-item"]).includes("trace")) openView(view)
+    }
+    window.addEventListener(reactViewLibraryEvent, selected)
+    return () => window.removeEventListener(reactViewLibraryEvent, selected)
+  }, [projectId, trace, viewLoader, openView])
   const createView = React.useCallback(() => {
     const key = `new:${++newViewCount.current}`
     setViewTabs(current => ({ tabs: [...current.tabs, { key, viewId: null, name: "New view" }], active: key }))
