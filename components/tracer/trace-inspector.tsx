@@ -531,6 +531,17 @@ function InspectorFrame({
     tabs: initialObjectViewId ? [{ key: `view:${initialObjectViewId}`, viewId: initialObjectViewId, name: "View" }] : [],
     active: initialObjectViewId ? `view:${initialObjectViewId}` : null,
   }))
+  const [tabActionsContainers, setTabActionsContainers] = React.useState<Record<string, HTMLDivElement>>({})
+  const registerTabActionsContainer = React.useCallback((key: string, container: HTMLDivElement | null) => {
+    setTabActionsContainers(current => {
+      if ((current[key] ?? null) === container) return current
+      const next = { ...current }
+      if (container) next[key] = container
+      else delete next[key]
+      return next
+    })
+  }, [])
+  const activateView = React.useCallback((key: string) => setViewTabs(current => ({ ...current, active: key })), [])
   const newViewCount = React.useRef(0)
   const annotationFocus = useReviewAnnotations()?.focus ?? null
   const [viewFocus, setViewFocus] = React.useState(annotationFocus)
@@ -547,7 +558,7 @@ function InspectorFrame({
   }, [])
   const projectId = useProjectScope()?.projectId
   React.useEffect(() => {
-    if (!projectId || !trace || !viewLoader) return
+    if (!projectId || !viewLoader) return
     const selected = (event: Event) => {
       if (!(event instanceof CustomEvent) || event.detail?.projectId !== projectId) return
       const view = event.detail?.view as ReactViewSummary | undefined
@@ -555,7 +566,7 @@ function InspectorFrame({
     }
     window.addEventListener(reactViewLibraryEvent, selected)
     return () => window.removeEventListener(reactViewLibraryEvent, selected)
-  }, [projectId, trace, viewLoader, openView])
+  }, [projectId, viewLoader, openView])
   const createView = React.useCallback(() => {
     const key = `new:${++newViewCount.current}`
     setViewTabs(current => ({ tabs: [...current.tabs, { key, viewId: null, name: "New view" }], active: key }))
@@ -727,12 +738,13 @@ function InspectorFrame({
             if (viewTabs.tabs.some(view => view.key === tab)) setViewTabs(current => ({ ...current, active: tab }))
             else { setViewTabs(current => ({ ...current, active: null })); onTabChange(tab as InspectorTab) }
           }}
+          onActionsContainerChange={registerTabActionsContainer}
           tabs={[
             { value: "trace", label: "Trace", icon: ListTree },
             { value: "evaluators", label: "Evaluators", icon: ScorerIcon },
             { value: "timeline", label: "Timeline", icon: Clock3 },
             { value: "views", label: "Views", icon: Code2 },
-            ...viewTabs.tabs.map(tab => ({ value: tab.key, label: tab.name, icon: Code2, onClose: () => closeView(tab.key) })),
+            ...viewTabs.tabs.map(tab => ({ value: tab.key, label: tab.name, icon: Code2, hasActions: true, onClose: () => closeView(tab.key) })),
           ]}
           afterTabs={<TraceViewPicker disabled={!trace || !viewLoader} onOpenView={openView} onCreateView={createView} />}
         >
@@ -744,7 +756,7 @@ function InspectorFrame({
       <TraceViewLibraryContext.Provider value={libraryControls}>
         <div className={viewTabs.active ? "hidden" : "flex min-h-0 flex-1 flex-col"}>{children}</div>
         {trace && viewLoader && viewTabs.tabs.map(tab => <div key={tab.key} className={viewTabs.active === tab.key ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <TraceObjectViewPanel key={trace.id} trace={trace} loader={viewLoader} tab={tab} onUpdate={updateView} onClose={closeView} />
+          <TraceObjectViewPanel key={trace.id} trace={trace} loader={viewLoader} tab={tab} actionsContainer={tabActionsContainers[tab.key] ?? null} onActivate={activateView} onUpdate={updateView} onClose={closeView} />
         </div>)}
       </TraceViewLibraryContext.Provider>
     </section>
@@ -1157,17 +1169,19 @@ function SelectedPayload({ loader, trace, span, full, detailTab, onDetailTabChan
     detailTab={detailTab} onDetailTabChange={onDetailTabChange} />
 }
 
-function TraceObjectViewPanel({ trace, loader, tab, onUpdate, onClose }: {
+function TraceObjectViewPanel({ trace, loader, tab, actionsContainer, onActivate, onUpdate, onClose }: {
   trace: TraceOverview; loader: TraceDetailLoader; tab: OpenTraceView
+  actionsContainer: HTMLDivElement | null
+  onActivate: (key: string) => void
   onUpdate: (key: string, view: ReactView | null) => void
   onClose: (key: string) => void
 }) {
   const onViewChange = React.useCallback((view: ReactView | null) => onUpdate(tab.key, view), [tab.key, onUpdate])
   const onCancelCreate = React.useCallback(() => onClose(tab.key), [tab.key, onClose])
-  return <FullTraceViews trace={trace} loader={loader} displayMode="view" selectedViewId={tab.viewId ?? undefined} createNew={!tab.viewId} onViewChange={onViewChange} onCancelCreate={onCancelCreate} />
+  return <FullTraceViews trace={trace} loader={loader} tabActions={{ container: actionsContainer, label: tab.name, onActivate: () => onActivate(tab.key) }} displayMode="view" selectedViewId={tab.viewId ?? undefined} createNew={!tab.viewId} onViewChange={onViewChange} onCancelCreate={onCancelCreate} />
 }
 
-function FullTraceViews({ trace, loader, ...viewProps }: { trace: TraceOverview; loader: TraceDetailLoader } & Pick<React.ComponentProps<typeof ReactTraceViews>, "selectedViewId" | "onSelectedViewChange" | "displayMode" | "createNew" | "onViewChange" | "onCancelCreate">) {
+function FullTraceViews({ trace, loader, ...viewProps }: { trace: TraceOverview; loader: TraceDetailLoader } & Pick<React.ComponentProps<typeof ReactTraceViews>, "selectedViewId" | "onSelectedViewChange" | "displayMode" | "createNew" | "onViewChange" | "onCancelCreate" | "tabActions">) {
   const libraryControls = React.useContext(TraceViewLibraryContext)
   const [mode, setMode] = React.useState<TraceViewDataMode>("summary")
   const load = React.useCallback((signal: AbortSignal) => mode === "summary" ? loader.payload(trace, signal) : loader.full(trace, signal),

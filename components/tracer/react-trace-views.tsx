@@ -1,5 +1,7 @@
 "use client"
 import * as React from "react"
+import { createPortal } from "react-dom"
+import { InspectorTabAction } from "@/components/ui/inspector-tabs"
 import { Combobox } from "@/components/ui/combobox"
 import { Code2, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -76,6 +78,7 @@ export function ReactTraceViews(props: {
   onCreateView?: () => void
   onViewChange?: (view: ReactView | null) => void
   onCancelCreate?: () => void
+  tabActions?: { container: HTMLElement | null; label: string; onActivate: () => void }
 }) {
   const scope = useProjectScope()
   // Remount on project change so neither drafts nor late requests cross projects.
@@ -105,6 +108,7 @@ function ProjectViews({
   onCreateView,
   onViewChange,
   onCancelCreate,
+  tabActions,
 }: {
   trace: TraceViewData
   objectInput?: ObjectViewInput
@@ -120,6 +124,7 @@ function ProjectViews({
   onCreateView?: () => void
   onViewChange?: (view: ReactView | null) => void
   onCancelCreate?: () => void
+  tabActions?: { container: HTMLElement | null; label: string; onActivate: () => void }
   projectId: string
 }) {
   const pathname = usePathname()
@@ -309,9 +314,86 @@ function ProjectViews({
       window.dispatchEvent(new CustomEvent(reactViewLibraryEvent, { detail: { projectId } }))
     })
   }
+  const ActionsButton = tabActions ? InspectorTabAction : Button
+  const actionsMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionsButton
+          aria-label={tabActions ? `Actions for ${tabActions.label}` : "View actions"}
+          variant="ghost"
+          size="icon-sm"
+          disabled={busy || (!draft && loading)}
+          onClick={tabActions?.onActivate}
+        >
+          <MoreHorizontal className={tabActions ? "size-3" : "size-4"} />
+        </ActionsButton>
+      </DropdownMenuTrigger>
+      {draft ? (
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Trace data</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={draft.dataMode}
+            onValueChange={(value) =>
+              setDraft({
+                ...draft,
+                dataMode: value as TraceViewDataMode,
+                requirements: null,
+              })
+            }
+          >
+            <DropdownMenuRadioItem value="summary">
+              Input and output only
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="full">
+              Complete trace with spans and scores
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => setPreview((value) => !value)}
+          >
+            {preview ? "Edit code" : "Preview"}
+          </DropdownMenuItem>
+          {selected && (
+            <DropdownMenuItem onSelect={() => void save(true)}>
+              Save as new view
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      ) : (
+        <DropdownMenuContent align="end">
+          {selected && (
+            <DropdownMenuItem onSelect={() => edit(selected)}>
+              <Pencil className="size-4" />
+              Edit view
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onSelect={() => setRefresh((value) => value + 1)}
+          >
+            <RefreshCw className="size-4" />
+            Refresh
+          </DropdownMenuItem>
+          {selected && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => setDeleting(true)}
+              >
+                <Trash2 className="size-4" />
+                Delete view
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      )}
+    </DropdownMenu>
+  )
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-      {displayMode !== "library" && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-0.5">
+      {tabActions?.container && createPortal(actionsMenu, tabActions.container)}
+      {displayMode !== "library" && (!tabActions || draft) && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-0.5">
         {draft ? (
           <>
             <Input
@@ -327,49 +409,7 @@ function ProjectViews({
               }
             />
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label="View actions"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={busy}
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Trace data</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={draft.dataMode}
-                    onValueChange={(value) =>
-                      setDraft({
-                        ...draft,
-                        dataMode: value as TraceViewDataMode,
-                        requirements: null,
-                      })
-                    }
-                  >
-                    <DropdownMenuRadioItem value="summary">
-                      Input and output only
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="full">
-                      Complete trace with spans and scores
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => setPreview((value) => !value)}
-                  >
-                    {preview ? "Edit code" : "Preview"}
-                  </DropdownMenuItem>
-                  {selected && (
-                    <DropdownMenuItem onSelect={() => void save(true)}>
-                      Save as new view
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {!tabActions && actionsMenu}
               <Button
                 size="sm"
                 variant="ghost"
@@ -426,46 +466,7 @@ function ProjectViews({
             }
           />
         )}
-        {!draft && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label="View actions"
-                size="icon-sm"
-                variant="ghost"
-                disabled={busy || loading}
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {selected && (
-                <DropdownMenuItem onSelect={() => edit(selected)}>
-                  <Pencil className="size-4" />
-                  Edit view
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onSelect={() => setRefresh((value) => value + 1)}
-              >
-                <RefreshCw className="size-4" />
-                Refresh
-              </DropdownMenuItem>
-              {selected && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => setDeleting(true)}
-                  >
-                    <Trash2 className="size-4" />
-                    Delete view
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {!draft && !tabActions && actionsMenu}
       </div>}
       {(error || preferenceError) && (
         <Notice variant="error" role="alert" className="m-3">

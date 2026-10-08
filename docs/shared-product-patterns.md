@@ -157,7 +157,7 @@ trace loading, missing payloads and request errors outside the value renderer.
 
 ## Page layout
 
-`InspectorTabs` supports optional close controls for resource-owned tabs and an `afterTabs` action. Fixed inspector sections remain available; Object Views open as separate tabs, and the Views section stays the searchable library. `Combobox variant="tab"` supplies the compact **+** picker, including its controlled open state and icon trigger.
+`InspectorTabs` supports optional close controls for resource-owned tabs, an actions container before the close control, and an `afterTabs` action. `InspectorTabAction` styles menus within a tab; view panels portal their own actions into that container and omit a duplicate saved-view header. Drafts retain their name and save/cancel toolbar. Fixed inspector sections remain available; Object Views open as separate tabs, and the Views section stays the searchable library. `Combobox variant="tab"` supplies the compact **+** picker, including its controlled open state and icon trigger.
 
 Pages with sibling panels can portal a shared `TabsList variant="panel"` into
 `HeaderSlot name="tabs"`. `PageLayout` places these tabs along the header's bottom
