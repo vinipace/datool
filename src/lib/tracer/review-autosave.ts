@@ -126,6 +126,8 @@ export function createReviewAutosave({
         const saved = await save({
           expectedRevision: snapshot.saved.revision,
           ...(scores ? { scores } : {}),
+          ...(scores && snapshot.saved.definitions.some(definition => !drafts.some(draft => draft.key === definition.id))
+            ? { replaceCriteria: true as const } : {}),
           ...(saveNotes ? { notes } : {}),
           ...(saveAnnotations ? { annotations } : {}),
         })

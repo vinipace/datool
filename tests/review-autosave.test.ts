@@ -48,6 +48,24 @@ const response = (input: RecordReview): ReviewItemDetail => ({
   revision: input.expectedRevision + 1,
 })
 
+test("removing a collection criterion replaces only this item's criteria and survives reopening", async () => {
+  const writes: RecordReview[] = []
+  const required = { ...initial, definitions: [score.definition] }
+  const store = createReviewAutosave({
+    initial: required,
+    save: async input => {
+      writes.push(input)
+      return { ...required, definitions: [], revision: input.expectedRevision + 1 }
+    },
+  })
+  store.update(() => [])
+  await store.flush()
+  expect(writes).toEqual([{ expectedRevision: 0, scores: [], replaceCriteria: true }])
+  const reopened = createReviewAutosave({ initial: store.getSnapshot().saved, save: async () => required })
+  expect(reopened.getSnapshot().drafts).toEqual([])
+  expect(required.definitions).toEqual([score.definition])
+})
+
 test("annotation autosave serializes deletion during a save without overwriting notes or scores", async () => {
   const writes: RecordReview[] = []
   let resolveFirst!: (value: ReviewItemDetail) => void

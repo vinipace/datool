@@ -105,6 +105,8 @@ export interface TraceInspectorProps {
   customColumnDetails?: React.ReactNode
   initialSpanId?: string
   initialObjectViewId?: string
+  initialTab?: InspectorTab
+  compactHeader?: boolean
   hideTraceNavigation?: boolean
   hideOverviewScores?: boolean
   mode?: InspectorMode
@@ -340,7 +342,7 @@ function TraceInspectorSession(props: TraceInspectorProps) {
     "trace"
   )
   const [annotationTab, selectAnnotationTab] = useReviewAnnotationTab(storedTab, selectStoredTab, "trace")
-  const [requestedTab, setRequestedTab] = React.useState<InspectorTab | null>(props.initialObjectViewId ? "views" : null)
+  const [requestedTab, setRequestedTab] = React.useState<InspectorTab | null>(props.initialObjectViewId ? "views" : props.initialTab ?? null)
   const [selectedObjectViewId, setSelectedObjectViewId] = React.useState<string | null>(props.initialObjectViewId ?? null)
   const activeTab = requestedTab ?? annotationTab
   const selectTab = (tab: InspectorTab) => { setRequestedTab(null); selectAnnotationTab(tab) }
@@ -489,6 +491,7 @@ function InspectorFrame({
   children,
   mode = "overlay",
   hideTraceNavigation = false,
+  compactHeader = false,
   nextTraceId,
   onClose,
   onToggleMaximize,
@@ -566,7 +569,7 @@ function InspectorFrame({
       )}
     >
       <header className="shrink-0 border-b border-white/[0.12] bg-black">
-        <div className="flex min-h-11 items-center justify-between gap-3 px-3">
+        <div className={cn("flex items-center justify-between gap-3 px-3", compactHeader ? "min-h-8" : "min-h-11")}>
           <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
             {!hideTraceNavigation && <>
             <TraceNavigationButton

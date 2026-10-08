@@ -18,6 +18,7 @@ import {
 import {
   isHumanScoreValue,
   humanScoreValueLabel,
+  type HumanScore,
   type HumanScoreCollectionSnapshot,
 } from "@/src/lib/tracer/human-scores"
 import { readHumanCollection, readHumanScore } from "./human-scores"
@@ -53,7 +54,7 @@ export function createReviewService(
   const aiLabelled = sql`(${aiScores} or i.notes_provenance_json->>'label'='AI-labelled'
     or i.last_submission_json->>'label'='AI-labelled'
     or exists(select 1 from jsonb_array_elements(i.annotations_json) a where a->'provenance'->>'label'='AI-labelled' or a->'updatedBy'->>'label'='AI-labelled'))`
-  const sessionRelation = sql`select r.collection_id as "collectionId", r.collection_snapshot_json as collection, r.id, r.number, r.name, r.prompt, r.assignee_user_id as "assigneeUserId",
+  const sessionRelation = sql`select r.default_object_view_id as "defaultObjectViewId", r.collection_id as "collectionId", r.collection_snapshot_json as collection, r.id, r.number, r.name, r.prompt, r.assignee_user_id as "assigneeUserId",
     u.name as "assigneeName", assigned.reviewers, assigned.names as "reviewerNames", r.created_by as "createdBy", r.created_at as "createdAt",
     r.updated_at as "updatedAt", r.revision, counts.total::int as "traceCount", counts.reviewed::int as "reviewedCount",
     counts.skipped::int as "skippedCount", counts.human::int as "humanReviewedCount",
@@ -82,6 +83,13 @@ export function createReviewService(
     coalesce(s.edited_by_json->'principal'->>'name',s.provenance_json->'principal'->>'name',u.name) as "reviewerName", u.image as "reviewerImage", s.source, s.provenance_json as provenance, s.edited_by_json as "editedBy", s.updated_at as "updatedAt"
     from review_scores s left join "user" u on u.id=s.reviewer_id where s.project_id=${projectId}`
   type Executor = Pick<TracerDatabase, "execute">
+  async function validateDefaultView(db: Executor, id: string | null) {
+    if (!id) return
+    const [view] = await rows<{ id: string }>(db,
+      sql`select id from react_views where project_id=${projectId} and id=${id}
+        and object_types @> '["trace"]'::jsonb for key share`)
+    if (!view) throw validation("Choose a trace Object View from this project.")
+  }
   async function rows<T>(db: Executor, query: SQL): Promise<T[]> {
     return (await db.execute(query)).rows as T[]
   }
@@ -155,8 +163,8 @@ export function createReviewService(
       sql`${itemRelation} and i.session_id=${sessionId} and i.id=${itemId}`
     )
     if (!item) throw notFound("Review item", itemId)
-    const [feedback] = await rows<{ annotations: ReviewAnnotation[] }>(db,
-      sql`select annotations_json as annotations from review_items where project_id=${projectId} and id=${itemId}`)
+    const [feedback] = await rows<{ annotations: ReviewAnnotation[]; criteria: HumanScore[] | null }>(db,
+      sql`select annotations_json as annotations, criteria_snapshot_json as criteria from review_items where project_id=${projectId} and id=${itemId}`)
     const scores = await rows<ReviewScore>(
       db,
       sql`${scoreRelation} and s.item_id=${itemId} order by s.name limit 30`
@@ -179,7 +187,7 @@ export function createReviewService(
       annotations: feedback.annotations,
       // Existing feedback retains the rubric it was recorded against, even
       // when another collection now includes a newer version of that score.
-      definitions: (session[0]?.collection?.scores ?? []).map(
+      definitions: (feedback.criteria ?? session[0]?.collection?.scores ?? []).map(
         (definition) =>
           scores.find((score) => score.humanScoreId === definition.id)
             ?.definition ?? definition
@@ -411,8 +419,9 @@ export function createReviewService(
           )
             throw validation("Choose an active collection and Human Scores.")
           const now = new Date().toISOString()
-          await tx.execute(sql`insert into review_sessions (id,project_id,name,prompt,assignee_user_id,created_by,created_at,updated_at,collection_id,collection_snapshot_json)
-          values (${id},${projectId},${value.name},${value.prompt},${reviewerUserIds[0] ?? null},${createdBy},${now},${now},${value.collectionId},${collection ? JSON.stringify(collection) : null}::jsonb)`)
+          await validateDefaultView(tx, value.defaultObjectViewId)
+          await tx.execute(sql`insert into review_sessions (id,project_id,name,prompt,assignee_user_id,created_by,created_at,updated_at,collection_id,collection_snapshot_json,default_object_view_id)
+          values (${id},${projectId},${value.name},${value.prompt},${reviewerUserIds[0] ?? null},${createdBy},${now},${now},${value.collectionId},${collection ? JSON.stringify(collection) : null}::jsonb,${value.defaultObjectViewId})`)
           await setReviewers(tx, id, reviewerUserIds)
           await tx.execute(
             sql`insert into review_items (id,project_id,session_id,trace_id,ordinal) values ${sql.join(
@@ -446,7 +455,8 @@ export function createReviewService(
             value.prompt === undefined &&
             value.assigneeUserId === undefined &&
             value.reviewerUserIds === undefined &&
-            value.collectionId === undefined
+            value.collectionId === undefined &&
+            value.defaultObjectViewId === undefined
           )
             return getSession(tx, id)
           const reviewerUserIds =
@@ -461,6 +471,10 @@ export function createReviewService(
             sql`revision=revision+1`,
             sql`updated_at=${new Date().toISOString()}`,
           ]
+          if (value.defaultObjectViewId !== undefined) {
+            await validateDefaultView(tx, value.defaultObjectViewId)
+            changes.push(sql`default_object_view_id=${value.defaultObjectViewId}`)
+          }
           if (value.collectionId !== undefined) {
             const collection = value.collectionId
               ? await readHumanCollection(
@@ -492,7 +506,7 @@ export function createReviewService(
                 union
                 select i.id, required.score_id from review_items i
                 cross join jsonb_array_elements_text(${required}::jsonb) required(score_id)
-                where i.project_id=${projectId} and i.session_id=${id}
+                where i.project_id=${projectId} and i.session_id=${id} and i.criteria_snapshot_json is null
               ) select item_id as "itemId" from criteria group by item_id having count(*)>30 limit 1`
             )
             if (tooMany.length)
@@ -504,7 +518,8 @@ export function createReviewService(
               select i.id,
                 exists(select 1 from review_scores s where s.project_id=i.project_id and s.item_id=i.id)
                 and not exists(select 1 from review_scores s where s.project_id=i.project_id and s.item_id=i.id and (s.human_value is null or s.human_value='null'::jsonb))
-                and not exists(select 1 from jsonb_array_elements_text(${required}::jsonb) required(score_id)
+                and not exists(select 1 from jsonb_array_elements_text(case when i.criteria_snapshot_json is null then ${required}::jsonb
+                  else (select coalesce(jsonb_agg(criterion->>'id'),'[]'::jsonb) from jsonb_array_elements(i.criteria_snapshot_json) criterion) end) required(score_id)
                   where not exists(select 1 from review_scores s where s.project_id=i.project_id and s.item_id=i.id and s.human_score_id=required.score_id)) as complete,
                 (select s.reviewer_id from review_scores s where s.project_id=i.project_id and s.item_id=i.id order by s.updated_at desc,s.id desc limit 1) as last_reviewer
               from review_items i where i.project_id=${projectId} and i.session_id=${id}
@@ -631,10 +646,12 @@ export function createReviewService(
           const complete =
             entries.length > 0 &&
             entries.every((entry) => entry.value !== null) &&
-            item.definitions.every((definition) =>
+            (value.replaceCriteria ? entries.map(entry => entry.definition) : item.definitions).every((definition) =>
               keys.has(`human:${definition.id}`)
             )
           const changes = [sql`revision=revision+1`, sql`last_submission_json=${encodedProvenance}::jsonb`]
+          if (value.replaceCriteria)
+            changes.push(sql`criteria_snapshot_json=${JSON.stringify(entries.map(entry => entry.definition))}::jsonb`)
           if (value.annotations !== undefined) {
             const annotations: ReviewAnnotation[] = []
             for (const entry of value.annotations) {

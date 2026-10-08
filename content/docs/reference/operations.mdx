@@ -1096,6 +1096,7 @@ Required scopes: `reviews:read`.
 | `collectionId` | null or string | Yes |
 | `createdAt` | string | Yes |
 | `createdBy` | null or string | Yes |
+| `defaultObjectViewId` | null or string | No |
 | `humanReviewedCount` | number | No |
 | `id` | string | Yes |
 | `items` | array of object | Yes |
@@ -1145,6 +1146,7 @@ Required scopes: `reviews:write`, `traces:read`.
 | `assigneeUserId` | string or null | No |
 | `reviewerUserIds` | array of string | No |
 | `collectionId` | string or null | No |
+| `defaultObjectViewId` | string or null | No |
 | `traceIds` | array of string | Yes |
 
 **Result**
@@ -1159,6 +1161,7 @@ Required scopes: `reviews:write`, `traces:read`.
 | `collectionId` | null or string | Yes |
 | `createdAt` | string | Yes |
 | `createdBy` | null or string | Yes |
+| `defaultObjectViewId` | null or string | No |
 | `humanReviewedCount` | number | No |
 | `id` | string | Yes |
 | `items` | array of object | Yes |
@@ -1187,6 +1190,7 @@ Required scopes: `reviews:write`.
 | `id` | string | Yes |
 | `expectedRevision` | integer | Yes |
 | `collectionId` | string or null | No |
+| `defaultObjectViewId` | string or null | No |
 | `name` | string | No |
 | `prompt` | string | No |
 | `assigneeUserId` | string or null | No |
@@ -1204,6 +1208,7 @@ Required scopes: `reviews:write`.
 | `collectionId` | null or string | Yes |
 | `createdAt` | string | Yes |
 | `createdBy` | null or string | Yes |
+| `defaultObjectViewId` | null or string | No |
 | `humanReviewedCount` | number | No |
 | `id` | string | Yes |
 | `items` | array of object | Yes |
@@ -1292,6 +1297,7 @@ Required scopes: `reviews:write`.
 | `itemId` | string | Yes |
 | `expectedRevision` | integer | Yes |
 | `scores` | array of object | No |
+| `replaceCriteria` | true | No |
 | `notes` | string | No |
 | `annotations` | array of object | No |
 | `agent` | object | No |

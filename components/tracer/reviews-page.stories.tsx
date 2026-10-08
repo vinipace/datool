@@ -12,6 +12,7 @@ import {
   storybookProject,
 } from "../../.storybook/component-frame"
 import { traceHandlers } from "../../.storybook/scenarios/traces/handlers"
+import { storybookReactView } from "../../.storybook/scenarios/react-views"
 import {
   traceRow,
   traceDetail,
@@ -182,6 +183,7 @@ function record(body: RecordReview, item: ReviewItemDetail): ReviewItemDetail {
     scores.every((score) => score.value !== null)
   return {
     ...item,
+    ...(body.replaceCriteria ? { definitions: scores.map(score => score.definition) } : {}),
     notes: body.notes ?? item.notes,
     annotations: body.annotations?.map((entry) => ({ ...entry, author: { id: "reviewer", name: "Alex Morgan", image: null }, createdAt: fields.createdAt, updatedAt: fields.updatedAt })) ?? item.annotations,
     revision: body.expectedRevision + 1,
@@ -191,6 +193,11 @@ function record(body: RecordReview, item: ReviewItemDetail): ReviewItemDetail {
   }
 }
 const handlers = [
+  http.get("/api/page-views", () => HttpResponse.json(envelope({ items: [], nextCursor: null }))),
+  http.get("/api/object-views", () => HttpResponse.json(envelope({ items: [storybookReactView], nextCursor: null }))),
+  http.get("/api/object-views/:id", () => HttpResponse.json(envelope({ ...storybookReactView, dataMode: "summary" }))),
+  http.post("/api/agent/get_view_preference", () => HttpResponse.json(envelope({ revision: 0, value: {} }))),
+  http.post("/api/agent/save_view_preference", () => HttpResponse.json(envelope({ revision: 1, value: {} }))),
   http.post("/api/reviews", async ({ request }) => {
     const body = (await request.json()) as CreateReviewSession
     creates.push(body)
@@ -254,6 +261,7 @@ const handlers = [
       )
     currentSession = {
       ...currentSession,
+      ...(body.defaultObjectViewId !== undefined ? { defaultObjectViewId: body.defaultObjectViewId } : {}),
       name: body.name?.trim() ?? currentSession.name,
       ...(body.collectionId !== undefined
         ? {
@@ -592,9 +600,9 @@ export const Player: Story = {
     await expect(
       canvas.queryByRole("combobox", { name: "Answer quality value" })
     ).not.toBeInTheDocument()
-    await expect(
-      canvas.getByRole("button", { name: "Remove Answer quality" })
-    ).toHaveAttribute("aria-disabled", "true")
+    await expect(canvas.getByRole("button", { name: "Create Human Score" })).toBeVisible()
+    await expect(canvas.queryByText(collection.name)).not.toBeInTheDocument()
+    await expect(picker.getBoundingClientRect().height).toBeLessThanOrEqual(36)
     const slider = canvas.getByRole("slider", {
       name: "Completeness value slider",
     })
@@ -640,6 +648,71 @@ export const Player: Story = {
     ).resolves.toBeVisible()
   },
 }
+export const EditTraceScores: Story = {
+  render: () => <ReviewStoryRoute initialTraceId={traceRow.id} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const picker = await canvas.findByRole("combobox", { name: "Human Scores" })
+    await userEvent.click(picker)
+    const popup = within(document.body)
+    await userEvent.click(await popup.findByRole("option", { name: /Answer quality/ }))
+    await userEvent.keyboard("{Escape}")
+    await waitFor(() => expect(canvas.queryByRole("group", { name: "Answer quality" })).not.toBeInTheDocument())
+    await waitFor(() => expect(writes.at(-1)?.replaceCriteria).toBe(true))
+    await expect(currentSession.collection?.scoreIds).toEqual(collection.scoreIds)
+    await userEvent.click(canvas.getByRole("combobox", { name: "Human Scores" }))
+    await userEvent.click(await popup.findByRole("option", { name: /Answer quality/ }))
+    await userEvent.keyboard("{Escape}")
+    await expect(canvas.findByRole("radio", { name: "Accurate" })).resolves.toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "Create Human Score" }))
+    await expect(popup.findByRole("dialog", { name: "Create Human Score" })).resolves.toBeVisible()
+    await userEvent.keyboard("{Escape}")
+  },
+}
+
+export const DefaultTraceView: Story = {
+  render: () => <ReviewStoryRoute initialTraceId={traceRow.id} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const picker = await canvas.findByRole("combobox", { name: "Default trace view" })
+    await waitFor(() => expect(picker).toBeEnabled())
+    await userEvent.click(picker)
+    await userEvent.click(await within(document.body).findByRole("option", { name: "Answer view" }))
+    await waitFor(() => expect(titleWrites.at(-1)?.defaultObjectViewId).toBe(storybookReactView.id))
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Views", pressed: true })).toBeVisible())
+    await waitFor(() => expect(canvas.getByRole("combobox", { name: "View" })).toHaveTextContent("Answer view"))
+    await userEvent.click(canvas.getByRole("combobox", { name: "Default trace view" }))
+    await userEvent.click(await within(document.body).findByRole("option", { name: "Use trace inspector" }))
+    await waitFor(() => expect(titleWrites.at(-1)?.defaultObjectViewId).toBeNull())
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Trace", pressed: true })).toBeVisible())
+  },
+}
+
+export const SavedDefaultTraceView: Story = {
+  ...DefaultTraceView,
+  beforeEach: () => { reset(); currentSession.defaultObjectViewId = storybookReactView.id },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByRole("button", { name: "Views", pressed: true })).resolves.toBeVisible()
+    await waitFor(() => expect(canvas.getByRole("combobox", { name: "Default trace view" })).toHaveTextContent("Answer view"))
+    await expect(titleWrites).toHaveLength(0)
+  },
+}
+
+export const NarrowPlayer: Story = {
+  render: () => <div className="w-[375px] max-w-full"><ReviewStoryRoute initialTraceId={traceRow.id} /></div>,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByRole("combobox", { name: "Human Scores" })).resolves.toBeVisible()
+    await expect(canvas.getByRole("button", { name: "Create Human Score" })).toBeVisible()
+    await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth)
+  },
+}
+
+export const CompactPlayerPreview: Story = {
+  render: () => <ReviewStoryRoute initialTraceId={traceRow.id} />,
+}
+
 export const EditorAvatars: Story = {
   render: player,
   beforeEach: () => {
