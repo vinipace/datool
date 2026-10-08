@@ -610,7 +610,7 @@ function InspectorFrame({
             : "h-[calc(100dvh-24px)] max-h-full rounded-md"
       )}
     >
-      <header className="shrink-0 border-b border-white/[0.12] bg-black">
+      <header className="shrink-0 border-b border-foreground bg-background">
         <div className={cn("flex items-center justify-between gap-3 px-3", compactHeader ? "min-h-8" : "min-h-11")}>
           <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
             {!hideTraceNavigation && <>

@@ -40,7 +40,7 @@ export function InspectorTabs<Value extends string>({
         <div
           key={tab}
           className={cn(
-            "flex shrink-0 items-center rounded-md",
+            "flex shrink-0 self-end items-center rounded-t-md",
             value === tab && "bg-foreground text-background"
           )}
         >
@@ -48,7 +48,8 @@ export function InspectorTabs<Value extends string>({
             type="button"
             aria-pressed={value === tab}
             className={cn(
-              "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium whitespace-nowrap text-foreground-muted transition-colors outline-none hover:bg-muted hover:text-foreground-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+              "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-t-md px-2 text-xs font-medium whitespace-nowrap text-foreground-muted transition-colors outline-none hover:bg-muted hover:text-foreground-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+              onClose && "rounded-tr-none",
               value === tab &&
                 "bg-foreground text-background hover:bg-foreground hover:text-background"
             )}
@@ -74,7 +75,7 @@ export function InspectorTabs<Value extends string>({
                 )
               }}
               className={cn(
-                "grid size-6 shrink-0 place-items-center rounded-r-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "grid h-7 w-6 shrink-0 place-items-center rounded-tr-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 value === tab
                   ? "text-background hover:bg-background/15"
                   : "text-foreground-muted hover:bg-muted hover:text-foreground-secondary"

@@ -191,7 +191,7 @@ export function Combobox({
         className={cn(
           "flex h-9 w-full items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-sm text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
           variant === "toolbar" && "h-8 w-auto gap-1.5 px-2 text-xs",
-          variant === "tab" && "h-6 w-auto shrink-0 border-0 bg-transparent px-2 text-xs text-foreground-muted hover:bg-muted hover:text-foreground-secondary focus-visible:ring-inset",
+          variant === "tab" && "h-7 w-auto shrink-0 self-end rounded-t-md rounded-b-none border-0 bg-transparent px-2 text-xs text-foreground-muted hover:bg-muted hover:text-foreground-secondary focus-visible:ring-inset",
           (variant === "title" || variant === "title-sm") &&
             "h-auto w-auto max-w-full border-transparent bg-transparent px-2 py-1 text-2xl font-medium hover:bg-muted",
           variant === "title-sm" && "px-1 text-xl",
