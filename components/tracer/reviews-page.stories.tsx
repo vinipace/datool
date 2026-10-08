@@ -13,6 +13,7 @@ import {
 } from "../../.storybook/component-frame"
 import { traceHandlers } from "../../.storybook/scenarios/traces/handlers"
 import { storybookReactView } from "../../.storybook/scenarios/react-views"
+import type { ReactView, ReactViewInput } from "@/src/lib/tracer/react-views"
 import {
   traceRow,
   traceDetail,
@@ -125,6 +126,12 @@ const session: ReviewSessionDetail = {
     },
   ],
 }
+const seedProjectViews: ReactView[] = [
+  { ...storybookReactView, dataMode: "summary" },
+  { ...storybookReactView, id: "evidence-view", name: "Evidence review", description: "Review source excerpts and supporting evidence", dataMode: "summary" },
+  { ...storybookReactView, id: "trace-summary-view", name: "Trace summary", description: "Inspect the captured input and final response", dataMode: "summary" },
+]
+let projectViews: ReactView[]
 let currentSession: ReviewSessionDetail
 let items: Map<string, ReviewItemDetail>
 let titleWrites: UpdateReviewSession[]
@@ -133,6 +140,7 @@ let writes: RecordReview[]
 let failSave = false
 let collectionDelay = 0
 function reset() {
+  projectViews = structuredClone(seedProjectViews)
   currentSession = structuredClone(session)
   writes = []
   titleWrites = []
@@ -194,8 +202,14 @@ function record(body: RecordReview, item: ReviewItemDetail): ReviewItemDetail {
 }
 const handlers = [
   http.get("/api/page-views", () => HttpResponse.json(envelope({ items: [], nextCursor: null }))),
-  http.get("/api/object-views", () => HttpResponse.json(envelope({ items: [storybookReactView], nextCursor: null }))),
-  http.get("/api/object-views/:id", () => HttpResponse.json(envelope({ ...storybookReactView, dataMode: "summary" }))),
+  http.get("/api/object-views", () => HttpResponse.json(envelope({ items: projectViews, nextCursor: null }))),
+  http.get("/api/object-views/:id", ({ params }) => HttpResponse.json(envelope(projectViews.find(view => view.id === params.id)))),
+  http.post("/api/object-views", async ({ request }) => {
+    const body = await request.json() as ReactViewInput
+    const view = { ...storybookReactView, ...body, id: `created-view-${projectViews.length}` }
+    projectViews.push(view)
+    return HttpResponse.json(envelope(view))
+  }),
   http.post("/api/agent/get_view_preference", () => HttpResponse.json(envelope({ revision: 0, value: {} }))),
   http.post("/api/agent/save_view_preference", () => HttpResponse.json(envelope({ revision: 1, value: {} }))),
   http.post("/api/reviews", async ({ request }) => {
@@ -679,8 +693,8 @@ export const DefaultTraceView: Story = {
     await userEvent.click(picker)
     await userEvent.click(await within(document.body).findByRole("option", { name: "Answer view" }))
     await waitFor(() => expect(titleWrites.at(-1)?.defaultObjectViewId).toBe(storybookReactView.id))
-    await waitFor(() => expect(canvas.getByRole("button", { name: "Views", pressed: true })).toBeVisible())
-    await waitFor(() => expect(canvas.getByRole("combobox", { name: "View" })).toHaveTextContent("Answer view"))
+    await expect(canvas.findByRole("button", { name: "Answer view", pressed: true })).resolves.toBeVisible()
+    await expect(canvas.getByRole("button", { name: "Close Answer view" })).toBeVisible()
     await userEvent.click(canvas.getByRole("combobox", { name: "Default trace view" }))
     await userEvent.click(await within(document.body).findByRole("option", { name: "Use trace inspector" }))
     await waitFor(() => expect(titleWrites.at(-1)?.defaultObjectViewId).toBeNull())
@@ -693,7 +707,7 @@ export const SavedDefaultTraceView: Story = {
   beforeEach: () => { reset(); currentSession.defaultObjectViewId = storybookReactView.id },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.findByRole("button", { name: "Views", pressed: true })).resolves.toBeVisible()
+    await expect(canvas.findByRole("button", { name: "Answer view", pressed: true })).resolves.toBeVisible()
     await waitFor(() => expect(canvas.getByRole("combobox", { name: "Default trace view" })).toHaveTextContent("Answer view"))
     await expect(titleWrites).toHaveLength(0)
   },
@@ -711,6 +725,82 @@ export const NarrowPlayer: Story = {
 
 export const CompactPlayerPreview: Story = {
   render: () => <ReviewStoryRoute initialTraceId={traceRow.id} />,
+}
+
+export const ViewTabs: Story = {
+  ...CompactPlayerPreview,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = within(document.body)
+    await userEvent.click(await canvas.findByRole("button", { name: "Views" }))
+    await userEvent.click(await canvas.findByRole("button", { name: "Open Answer view" }))
+    await expect(canvas.findByRole("button", { name: "Answer view", pressed: true })).resolves.toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "Views" }))
+    await userEvent.click(await canvas.findByRole("button", { name: "Open Evidence review" }))
+    await expect(canvas.getByRole("button", { name: "Evidence review", pressed: true })).toBeVisible()
+    const picker = canvas.getByRole("combobox", { name: "Open view" })
+    await waitFor(() => expect(picker).toBeEnabled())
+    await userEvent.click(picker)
+    await userEvent.click(await body.findByRole("option", { name: /Answer view/ }))
+    await expect(canvas.getAllByRole("button", { name: "Answer view" })).toHaveLength(1)
+    await expect(canvas.getByRole("button", { name: "Answer view", pressed: true })).toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "Close Evidence review" }))
+    await expect(canvas.getByRole("button", { name: "Answer view", pressed: true })).toBeVisible()
+    await userEvent.click(picker)
+    await userEvent.click(await body.findByRole("button", { name: "Create new view" }))
+    await expect(canvas.findByRole("button", { name: "New view", pressed: true })).resolves.toBeVisible()
+    await userEvent.type(await canvas.findByRole("textbox", { name: "View name" }), "Draft summary")
+    await userEvent.click(canvas.getByRole("button", { name: "Trace" }))
+    await userEvent.click(canvas.getByRole("button", { name: "New view" }))
+    await expect(canvas.getByRole("textbox", { name: "View name" })).toHaveValue("Draft summary")
+    await userEvent.click(canvas.getByRole("button", { name: "Save view" }))
+    await expect(canvas.findByRole("button", { name: "Draft summary", pressed: true }, { timeout: 10000 })).resolves.toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "Close Draft summary" }))
+    await expect(canvas.getByRole("button", { name: "Answer view", pressed: true })).toBeVisible()
+    await userEvent.click(canvas.getByRole("button", { name: "Close Answer view" }))
+    await expect(canvas.getByRole("button", { name: "Trace", pressed: true })).toBeVisible()
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Trace" })).toHaveFocus())
+    await expect(canvas.queryByRole("button", { name: /Close (Trace|Evaluators|Timeline|Views)$/ })).not.toBeInTheDocument()
+  },
+}
+
+export const NarrowViewTabs: Story = {
+  render: () => <div className="w-[375px] max-w-full"><ReviewStoryRoute initialTraceId={traceRow.id} /></div>,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole("button", { name: "Views" }))
+    await userEvent.click(await canvas.findByRole("button", { name: "Open Evidence review" }))
+    await expect(canvas.getByRole("button", { name: "Evidence review", pressed: true })).toBeVisible()
+    await waitFor(() => {
+      const tab = canvas.getByRole("button", { name: "Evidence review", pressed: true }).getBoundingClientRect()
+      const nav = canvas.getByRole("navigation", { name: "Trace inspector sections" }).getBoundingClientRect()
+      expect(tab.left).toBeGreaterThanOrEqual(nav.left)
+      expect(tab.right).toBeLessThanOrEqual(nav.right)
+      expect(canvas.getByRole("button", { name: "Close Evidence review" }).getBoundingClientRect().right).toBeLessThanOrEqual(nav.right + 1)
+    })
+    await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth)
+    await userEvent.click(canvas.getByRole("button", { name: "Close Evidence review" }))
+    await expect(canvas.getByRole("button", { name: "Views", pressed: true })).toBeVisible()
+  },
+}
+
+export const NotesPopover: Story = {
+  ...CompactPlayerPreview,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = within(document.body)
+    const trigger = await canvas.findByRole("button", { name: "Review notes" })
+    await expect(canvas.queryByRole("textbox", { name: "Review notes" })).not.toBeInTheDocument()
+    await userEvent.click(trigger)
+    await userEvent.type(await body.findByRole("textbox", { name: "Review notes" }), "Check the saved evidence.")
+    await waitFor(() => expect(writes.at(-1)?.notes).toBe("Check the saved evidence."))
+    await userEvent.keyboard("{Escape}")
+    await expect(trigger).toHaveFocus()
+    await expect(body.queryByRole("textbox", { name: "Review notes" })).not.toBeInTheDocument()
+    await userEvent.click(trigger)
+    await expect(body.findByRole("textbox", { name: "Review notes" })).resolves.toHaveValue("Check the saved evidence.")
+    await userEvent.keyboard("{Escape}")
+  },
 }
 
 export const EditorAvatars: Story = {
@@ -837,6 +927,7 @@ export const NavigationAndNotes: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    const body = within(document.body)
     await userEvent.click(
       await canvas.findByRole("button", { name: "Start" })
     )
@@ -847,11 +938,12 @@ export const NavigationAndNotes: Story = {
     await userEvent.click(
       await canvas.findByRole("checkbox", { name: "Wrong units" })
     )
+    await userEvent.click(canvas.getByRole("button", { name: "Review notes" }))
     await userEvent.type(
-      canvas.getByRole("textbox", { name: "Review notes" }),
+      await body.findByRole("textbox", { name: "Review notes" }),
       "First line\nSecond line\nThird line"
     )
-    const notes = canvas.getByRole("textbox", { name: "Review notes" })
+    const notes = body.getByRole("textbox", { name: "Review notes" })
     expect(notes.getBoundingClientRect().height).toBeGreaterThan(40)
     await userEvent.click(canvas.getByRole("button", { name: "Next trace" }))
     await expect(canvas.findByText("2/2")).resolves.toBeVisible()
@@ -859,17 +951,21 @@ export const NavigationAndNotes: Story = {
       `${storybookProject.prefix}/reviews/354/second-trace`,
       { scroll: false }
     )
+    await userEvent.click(canvas.getByRole("button", { name: "Review notes" }))
     await expect(
-      canvas.findByRole("textbox", { name: "Review notes" })
+      body.findByRole("textbox", { name: "Review notes" })
     ).resolves.toHaveValue("")
+    await userEvent.keyboard("{Escape}")
     await React.act(async () => getRouter().back())
     await expect(canvas.findByText("1/2")).resolves.toBeVisible()
     await expect(
       canvas.findByRole("checkbox", { name: "Wrong units" })
     ).resolves.toBeChecked()
+    await userEvent.click(canvas.getByRole("button", { name: "Review notes" }))
     await expect(
-      canvas.getByRole("textbox", { name: "Review notes" })
+      body.getByRole("textbox", { name: "Review notes" })
     ).toHaveValue("First line\nSecond line\nThird line")
+    await userEvent.keyboard("{Escape}")
     await expect(
       canvas.getByRole("separator", { name: "Resize review scores" })
     ).toBeVisible()
@@ -1749,7 +1845,9 @@ export const AiLabelledDetails: Story = {
     await expect(canvas.findByRole("cell", { name: "AI-labelled · Complete" })).resolves.toBeVisible()
     await userEvent.click(await canvas.findByRole("button", { name: "Resume review" }))
     await expect(canvas.findByText("AI-labelled. AI submissions are not human-verified dataset ground truth.")).resolves.toBeVisible()
-    await expect(canvas.getByText("Notes: AI-labelled · Review agent · Codex · test-model")).toBeVisible()
     await expect(canvas.getAllByText("AI-labelled · Review agent · Codex · test-model").length).toBeGreaterThan(0)
+    await userEvent.click(canvas.getByRole("button", { name: "Review notes" }))
+    await expect(within(document.body).findByText("Notes: AI-labelled · Review agent · Codex · test-model")).resolves.toBeVisible()
+    await userEvent.keyboard("{Escape}")
   },
 }

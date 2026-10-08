@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { reviewAttribution } from "@/src/lib/tracer/review-provenance"
 import { DEFAULT_REVIEW_NAME } from "@/src/lib/tracer/reviews"
 import { Textarea } from "@/components/ui/textarea"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ReviewerCombobox } from "@/components/ui/reviewer-combobox"
 import { Notice } from "@/components/ui/notice"
 import { toast } from "@/components/ui/toast"
@@ -1096,6 +1097,32 @@ function ReviewEditor({
                 <ReviewEditors scores={saved.scores} />
               </div>
               <div className="flex shrink-0 items-center gap-1">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant={notes ? "secondary" : "ghost"} size="icon-sm" aria-label="Review notes" title={notes ? "Edit review notes" : "Add review notes"}>
+                      <MessageSquare />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" aria-label="Review notes" className="space-y-3">
+                    <h3 className="font-medium">Review notes</h3>
+                    {saved.notesProvenance && <p className="text-xs text-foreground-muted">Notes: {reviewAttribution(saved.notesProvenance)}</p>}
+                    <Textarea
+                      form={formId}
+                      aria-label="Review notes"
+                      autoSize
+                      rows={5}
+                      className="max-h-80"
+                      maxLength={16000}
+                      value={notes}
+                      onChange={(event) => autosave.updateNotes(event.target.value)}
+                      placeholder="Add notes..."
+                      disabled={finishing || !options?.currentUserId}
+                    />
+                    <p className="text-xs text-foreground-muted" role="status">
+                      {status === "saving" ? "Saving…" : status === "error" ? "Changes not saved." : "Notes save automatically"}
+                    </p>
+                  </PopoverContent>
+                </Popover>
                 <Button type="button" variant="ghost" size="icon-sm" aria-label="Create Human Score" title="Create Human Score" disabled={finishing || !options?.currentUserId || drafts.length >= 30} onClick={() => setCreatingName("")}>
                   <Plus />
                 </Button>
@@ -1132,19 +1159,6 @@ function ReviewEditor({
                 else if (valid) void finish()
               }}
             >
-              {saved.notesProvenance && <p className="text-xs text-foreground-muted">Notes: {reviewAttribution(saved.notesProvenance)}</p>}
-              <Textarea
-                aria-label="Review notes"
-                icon={<MessageSquare />}
-                variant="plain"
-                autoSize
-                rows={1}
-                maxLength={16000}
-                value={notes}
-                onChange={(event) => autosave.updateNotes(event.target.value)}
-                placeholder="Add notes..."
-                disabled={finishing || !options?.currentUserId}
-              />
               <ReviewAnnotationComments saved={saved.annotations} onChange={autosave.updateAnnotations} />
               {drafts.length === 0 && (
                 <p className="text-xs text-foreground-muted">

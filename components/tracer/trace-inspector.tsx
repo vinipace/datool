@@ -12,6 +12,8 @@ import * as React from "react"
 import { useDefaultLayout } from "react-resizable-panels"
 import { ScorerIcon } from "./scorer-icon"
 import { ReactTraceViews } from "./react-trace-views"
+import { TraceViewPicker } from "./trace-view-picker"
+import type { ReactView, ReactViewSummary } from "@/src/lib/tracer/react-views"
 import { TraceTimeline, RunTraceTimeline } from "./trace-timeline"
 import { Combobox } from "@/components/ui/combobox"
 import { InspectorGroupMembership } from "./inspector-group-membership"
@@ -99,6 +101,11 @@ type DetailTab = "messages" | "details" | "metadata" | "raw"
 const DETAIL_TAB_STORAGE_KEY = "datool:trace-inspector:detail-tab"
 
 const CustomColumnDetailsContext = React.createContext<React.ReactNode>(null)
+const TraceViewLibraryContext = React.createContext<{
+  onOpenView: (view: ReactViewSummary) => void
+  onCreateView: () => void
+} | null>(null)
+type OpenTraceView = { key: string; viewId: string | null; name: string }
 
 export interface TraceInspectorProps {
   snapshot?: TraceDetail
@@ -146,7 +153,7 @@ export function RunTraceInspector({ traces, evalRunId }: { traces: TraceOverview
   const select = (traceId: string, spanId: string | null) => setSelection({ traceId, spanId })
   if (!trace) return <InspectorPlaceholder label="Waiting for captured traces…" />
   return <InspectorFrame mode="panel" title="Run result" hideTraceNavigation
-    activeTab={activeTab} onTabChange={selectTab} trace={trace} traceId={trace.id} selectedSpanId={selectedSpanId}
+    activeTab={activeTab} onTabChange={selectTab} trace={trace} traceId={trace.id} selectedSpanId={selectedSpanId} viewLoader={loader}
     summary={<>{traces.length} {traces.length === 1 ? "trace" : "traces"} · {spanCount} {spanCount === 1 ? "span" : "spans"}</>}
     action={evalRunId ? <Button asChild variant="ghost-muted" size="sm"><Link href={href(`/evals/${encodeURIComponent(evalRunId)}`)}>Experiment</Link></Button> : undefined}>
     {activeTab === "views" && traces.length > 1 && <div className="border-b border-border px-3 py-2">
@@ -216,7 +223,7 @@ export function SessionTraceInspector({ session, traces, initialTraceId, initial
   const overview = <SessionOverview key={session.id} session={session} traces={traces} />
 
   return <InspectorFrame mode="page" title="Session" hideTraceNavigation
-    activeTab={activeTab} onTabChange={selectTab} trace={trace ?? null} traceId={trace?.id ?? session.id} selectedSpanId={spanId}
+    activeTab={activeTab} onTabChange={selectTab} trace={trace ?? null} traceId={trace?.id ?? session.id} selectedSpanId={spanId} viewLoader={loader}
     fullPagePath={query.size ? `${path}?${query}` : path} backLink={{ href: "/sessions", label: "All sessions" }}
     summary={<>{traces.length} traces · {traces.reduce((count, item) => count + item.spans.length, 0)} spans</>}>
     {activeTab === "trace" || activeTab === "timeline" ? <TraceWorkspace navigation={activeTab} hideOverviewScores={false}
@@ -343,7 +350,6 @@ function TraceInspectorSession(props: TraceInspectorProps) {
   )
   const [annotationTab, selectAnnotationTab] = useReviewAnnotationTab(storedTab, selectStoredTab, "trace")
   const [requestedTab, setRequestedTab] = React.useState<InspectorTab | null>(props.initialObjectViewId ? "views" : props.initialTab ?? null)
-  const [selectedObjectViewId, setSelectedObjectViewId] = React.useState<string | null>(props.initialObjectViewId ?? null)
   const activeTab = requestedTab ?? annotationTab
   const selectTab = (tab: InspectorTab) => { setRequestedTab(null); selectAnnotationTab(tab) }
 
@@ -405,8 +411,6 @@ function TraceInspectorSession(props: TraceInspectorProps) {
         scorePage={scorePage}
         activeTab={activeTab}
         onTabChange={selectTab}
-        selectedObjectViewId={props.initialObjectViewId ? selectedObjectViewId : undefined}
-        onSelectedObjectViewChange={props.initialObjectViewId ? setSelectedObjectViewId : undefined}
         trace={{
           ...trace,
           scores: scorePage.items,
@@ -425,8 +429,6 @@ function LoadedInspector({
   initialSpanId,
   onSpanChange,
   onTabChange,
-  selectedObjectViewId,
-  onSelectedObjectViewChange,
   trace,
   ...props
 }: TraceInspectorProps & {
@@ -434,8 +436,6 @@ function LoadedInspector({
   scorePage: CollectionScrollState
   activeTab: InspectorTab
   onTabChange: (tab: InspectorTab) => void
-  selectedObjectViewId?: string | null
-  onSelectedObjectViewChange?: (id: string | null) => void
   trace: TraceOverview
 }) {
   const validInitialSpanId = trace.spans.some(
@@ -467,6 +467,7 @@ function LoadedInspector({
       selectedSpanId={selectedSpanId}
       trace={trace}
       {...props}
+      viewLoader={loader}
     >
       {activeTab === "trace" || activeTab === "timeline" ? (
         <TraceWorkspace
@@ -480,7 +481,7 @@ function LoadedInspector({
       ) : activeTab === "evaluators" ? (
         <EvaluatorWorkspace scores={trace.scores} pagination={scorePage} />
       ) : (
-        <FullTraceViews trace={trace} loader={loader} selectedViewId={selectedObjectViewId} onSelectedViewChange={onSelectedObjectViewChange} />
+        <FullTraceViews trace={trace} loader={loader} />
       )}
     </InspectorFrame>
   )
@@ -506,6 +507,8 @@ function InspectorFrame({
   title = "Trace",
   summary,
   action,
+  initialObjectViewId,
+  viewLoader,
   fullPagePath,
   backLink = { href: "/traces", label: "All traces" },
 }: React.PropsWithChildren<
@@ -519,8 +522,47 @@ function InspectorFrame({
     onTabChange: (tab: InspectorTab) => void
     selectedSpanId: string | null
     trace: TraceOverview | null
+    viewLoader?: TraceDetailLoader
   }
 >) {
+  const [viewTabs, setViewTabs] = React.useState<{ tabs: OpenTraceView[]; active: string | null }>(() => ({
+    tabs: initialObjectViewId ? [{ key: `view:${initialObjectViewId}`, viewId: initialObjectViewId, name: "View" }] : [],
+    active: initialObjectViewId ? `view:${initialObjectViewId}` : null,
+  }))
+  const newViewCount = React.useRef(0)
+  const annotationFocus = useReviewAnnotations()?.focus ?? null
+  const [viewFocus, setViewFocus] = React.useState(annotationFocus)
+  if (viewFocus !== annotationFocus) {
+    setViewFocus(annotationFocus)
+    setViewTabs(current => ({ ...current, active: null }))
+  }
+  const openView = React.useCallback((view: ReactViewSummary) => {
+    setViewTabs(current => {
+      const existing = current.tabs.find(tab => tab.viewId === view.id)
+      const key = existing?.key ?? `view:${view.id}`
+      return { tabs: existing ? current.tabs : [...current.tabs, { key, viewId: view.id, name: view.name }], active: key }
+    })
+  }, [])
+  const createView = React.useCallback(() => {
+    const key = `new:${++newViewCount.current}`
+    setViewTabs(current => ({ tabs: [...current.tabs, { key, viewId: null, name: "New view" }], active: key }))
+  }, [])
+  const closeView = React.useCallback((key: string) => {
+    setViewTabs(current => {
+      const index = current.tabs.findIndex(tab => tab.key === key)
+      const tabs = current.tabs.filter(tab => tab.key !== key)
+      return { tabs, active: current.active === key ? (tabs[index] ?? tabs[index - 1])?.key ?? null : current.active }
+    })
+  }, [])
+  const updateView = React.useCallback((key: string, view: ReactView | null) => {
+    if (!view) { closeView(key); return }
+    setViewTabs(current => {
+      const existing = current.tabs.find(tab => tab.key === key)
+      if (!existing || (existing.viewId === view.id && existing.name === view.name)) return current
+      return { ...current, tabs: current.tabs.map(tab => tab.key === key ? { ...tab, viewId: view.id, name: view.name } : tab) }
+    })
+  }, [closeView])
+  const libraryControls = React.useMemo(() => ({ onOpenView: openView, onCreateView: createView }), [openView, createView])
   const [copyState, setCopyState] = React.useState<
     "copied" | "idle" | "failed"
   >("idle")
@@ -665,23 +707,33 @@ function InspectorFrame({
           </div>
         </div>
 
-        <InspectorTabs<InspectorTab>
+        <InspectorTabs<string>
           label="Trace inspector sections"
-          value={activeTab}
-          onValueChange={onTabChange}
+          value={viewTabs.active ?? activeTab}
+          onValueChange={tab => {
+            if (viewTabs.tabs.some(view => view.key === tab)) setViewTabs(current => ({ ...current, active: tab }))
+            else { setViewTabs(current => ({ ...current, active: null })); onTabChange(tab as InspectorTab) }
+          }}
           tabs={[
             { value: "trace", label: "Trace", icon: ListTree },
             { value: "evaluators", label: "Evaluators", icon: ScorerIcon },
             { value: "timeline", label: "Timeline", icon: Clock3 },
             { value: "views", label: "Views", icon: Code2 },
+            ...viewTabs.tabs.map(tab => ({ value: tab.key, label: tab.name, icon: Code2, onClose: () => closeView(tab.key) })),
           ]}
+          afterTabs={<TraceViewPicker disabled={!trace || !viewLoader} onOpenView={openView} onCreateView={createView} />}
         >
           <div className="ml-auto hidden shrink-0 items-center gap-2 whitespace-nowrap text-[11px] text-foreground-muted sm:flex">
             {summary ?? (trace ? <span>{trace.spans.length} spans</span> : null)}
           </div>
         </InspectorTabs>
       </header>
-      {children}
+      <TraceViewLibraryContext.Provider value={libraryControls}>
+        <div className={viewTabs.active ? "hidden" : "flex min-h-0 flex-1 flex-col"}>{children}</div>
+        {trace && viewLoader && viewTabs.tabs.map(tab => <div key={tab.key} className={viewTabs.active === tab.key ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+          <TraceObjectViewPanel key={trace.id} trace={trace} loader={viewLoader} tab={tab} onUpdate={updateView} onClose={closeView} />
+        </div>)}
+      </TraceViewLibraryContext.Provider>
     </section>
   )
 }
@@ -1092,7 +1144,18 @@ function SelectedPayload({ loader, trace, span, full, detailTab, onDetailTabChan
     detailTab={detailTab} onDetailTabChange={onDetailTabChange} />
 }
 
-function FullTraceViews({ trace, loader, selectedViewId, onSelectedViewChange }: { trace: TraceOverview; loader: TraceDetailLoader; selectedViewId?: string | null; onSelectedViewChange?: (id: string | null) => void }) {
+function TraceObjectViewPanel({ trace, loader, tab, onUpdate, onClose }: {
+  trace: TraceOverview; loader: TraceDetailLoader; tab: OpenTraceView
+  onUpdate: (key: string, view: ReactView | null) => void
+  onClose: (key: string) => void
+}) {
+  const onViewChange = React.useCallback((view: ReactView | null) => onUpdate(tab.key, view), [tab.key, onUpdate])
+  const onCancelCreate = React.useCallback(() => onClose(tab.key), [tab.key, onClose])
+  return <FullTraceViews trace={trace} loader={loader} displayMode="view" selectedViewId={tab.viewId ?? undefined} createNew={!tab.viewId} onViewChange={onViewChange} onCancelCreate={onCancelCreate} />
+}
+
+function FullTraceViews({ trace, loader, ...viewProps }: { trace: TraceOverview; loader: TraceDetailLoader } & Pick<React.ComponentProps<typeof ReactTraceViews>, "selectedViewId" | "onSelectedViewChange" | "displayMode" | "createNew" | "onViewChange" | "onCancelCreate">) {
+  const libraryControls = React.useContext(TraceViewLibraryContext)
   const [mode, setMode] = React.useState<TraceViewDataMode>("summary")
   const load = React.useCallback((signal: AbortSignal) => mode === "summary" ? loader.payload(trace, signal) : loader.full(trace, signal),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1101,7 +1164,7 @@ function FullTraceViews({ trace, loader, selectedViewId, onSelectedViewChange }:
   if (!state.data) return <DetailRequestState {...state} label="Loading view data…" />
   return <>
     {state.error ? <DetailRequestState {...state} label="Loading view data…" /> : null}
-    <ReactTraceViews trace={state.data} selectedViewId={selectedViewId} onSelectedViewChange={onSelectedViewChange} onDataModeChange={setMode} dataLoading={mode === "full" && !("spans" in state.data)} />
+    <ReactTraceViews trace={state.data} {...(libraryControls && !viewProps.displayMode ? { displayMode: "library" as const, ...libraryControls } : {})} {...viewProps} onDataModeChange={setMode} dataLoading={mode === "full" && !("spans" in state.data)} />
   </>
 }
 

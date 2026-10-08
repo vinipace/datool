@@ -103,6 +103,8 @@ export function Combobox({
   onOpenChange,
   attentionRequest = 0,
   showSelectedDescription = false,
+  triggerContent,
+  open,
 }: {
   options: ComboboxOption[]
   value: string | null
@@ -111,7 +113,9 @@ export function Combobox({
   icon?: ReactNode
   placeholder?: string
   disabled?: boolean
-  variant?: "default" | "toolbar" | "row" | "title" | "title-sm"
+  variant?: "default" | "toolbar" | "row" | "title" | "title-sm" | "tab"
+  triggerContent?: ReactNode
+  open?: boolean
   className?: string
   /** Supply server-filtered options in response to this search text. */
   onSearchChange?: (value: string) => void
@@ -151,6 +155,7 @@ export function Combobox({
   const Icon = selected?.icon
   return (
     <ComboboxPrimitive.Root
+      open={open}
       items={orderedOptions}
       virtualized={virtualized}
       onItemHighlighted={(_, event) => {
@@ -186,6 +191,7 @@ export function Combobox({
         className={cn(
           "flex h-9 w-full items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-sm text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
           variant === "toolbar" && "h-8 w-auto gap-1.5 px-2 text-xs",
+          variant === "tab" && "h-6 w-auto shrink-0 border-0 bg-transparent px-2 text-xs text-foreground-muted hover:bg-muted hover:text-foreground-secondary focus-visible:ring-inset",
           (variant === "title" || variant === "title-sm") &&
             "h-auto w-auto max-w-full border-transparent bg-transparent px-2 py-1 text-2xl font-medium hover:bg-muted",
           variant === "title-sm" && "px-1 text-xl",
@@ -195,6 +201,7 @@ export function Combobox({
           attentionRequest > 0 && "border-destructive ring-2 ring-destructive"
         )}
       >
+        {triggerContent !== undefined ? triggerContent : <>
         {selected?.leading ?? (
           <span
             aria-hidden="true"
@@ -228,6 +235,7 @@ export function Combobox({
             variant === "toolbar" && "@max-[640px]/collection:hidden"
           )}
         />
+        </>}
       </ComboboxPrimitive.Trigger>
       <ComboboxContent
         label={label}
