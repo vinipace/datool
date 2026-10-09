@@ -1,9 +1,13 @@
 "use client"
 import * as React from "react"
+import { createPortal } from "react-dom"
+import { InspectorTabAction } from "@/components/ui/inspector-tabs"
 import { Combobox } from "@/components/ui/combobox"
-import { MoreHorizontal, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react"
+import { Code2, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardAction } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +59,10 @@ export default function View({ kind, object, context }: ViewProps) {
   return <Card className="m-4"><CardHeader><CardTitle>{kind === "trace" ? object.name : "Dataset item"}{context.unsaved ? " · Unsaved draft" : ""}</CardTitle></CardHeader><CardContent><pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify(output, null, 2)}</pre></CardContent></Card>;
 }`
 
+function newViewDraft(kind: "trace" | "dataset-item"): ReactViewInput {
+  return { name: "", description: "", code: starter, requirements: null, dataMode: "summary", objectTypes: [kind], inputContract: "object", customFields: [] }
+}
+
 export function ReactTraceViews(props: {
   trace: TraceViewData
   objectInput?: ObjectViewInput
@@ -64,6 +72,13 @@ export function ReactTraceViews(props: {
   selectedViewId?: string | null
   onSelectedViewChange?: (id: string | null, replace?: boolean) => void
   deferredData?: { onLoad?: () => void; loading: boolean; error?: string }
+  displayMode?: "library" | "view"
+  createNew?: boolean
+  onOpenView?: (view: ReactViewSummary) => void
+  onCreateView?: () => void
+  onViewChange?: (view: ReactView | null) => void
+  onCancelCreate?: () => void
+  tabActions?: { container: HTMLElement | null; label: string; onActivate: () => void }
 }) {
   const scope = useProjectScope()
   // Remount on project change so neither drafts nor late requests cross projects.
@@ -87,6 +102,13 @@ function ProjectViews({
   selectedViewId,
   onSelectedViewChange,
   deferredData,
+  displayMode,
+  createNew,
+  onOpenView,
+  onCreateView,
+  onViewChange,
+  onCancelCreate,
+  tabActions,
 }: {
   trace: TraceViewData
   objectInput?: ObjectViewInput
@@ -96,6 +118,13 @@ function ProjectViews({
   selectedViewId?: string | null
   onSelectedViewChange?: (id: string | null, replace?: boolean) => void
   deferredData?: { onLoad?: () => void; loading: boolean; error?: string }
+  displayMode?: "library" | "view"
+  createNew?: boolean
+  onOpenView?: (view: ReactViewSummary) => void
+  onCreateView?: () => void
+  onViewChange?: (view: ReactView | null) => void
+  onCancelCreate?: () => void
+  tabActions?: { container: HTMLElement | null; label: string; onActivate: () => void }
   projectId: string
 }) {
   const pathname = usePathname()
@@ -103,19 +132,21 @@ function ProjectViews({
   const kind = objectInput.kind
   const preferenceScope = "object-view:" + (pageResourceForPath(pathname) ?? "inspector") + ":" + kind
   const { preference, error: preferenceError, save: savePreference } = useViewPreference(projectId, preferenceScope)
-  const requestedViewId = selectedViewId ?? preference?.value.id
-  const selectionReady = Boolean(selectedViewId || preference || preferenceError)
+  const requestedViewId = displayMode === "library" || createNew ? null : selectedViewId ?? preference?.value.id
+  const selectionReady = Boolean(displayMode === "library" || createNew || selectedViewId || preference || preferenceError)
   const [views, setViews] = React.useState<ReactViewSummary[]>([])
+  const [viewFilter, setViewFilter] = React.useState("")
   const [selected, setSelected] = React.useState<ReactView | null>(null)
-  const [draft, setDraft] = React.useState<ReactViewInput | null>(null)
+  const [draft, setDraft] = React.useState<ReactViewInput | null>(() => createNew ? newViewDraft(kind) : null)
   const [previousViewId, setPreviousViewId] = React.useState(selectedViewId)
   if (previousViewId !== selectedViewId) {
     setPreviousViewId(selectedViewId)
     setDraft(null)
   }
   const resolvedFields = useObjectViewFields(projectId, deferredData ? [] : draft?.customFields ?? selected?.customFields ?? [], objectInput)
+  const currentSource = source === undefined ? { kind: "trace" as const, id: trace.id } : source
   const [draftSource, setDraftSource] = React.useState<ReactViewSource | null>(
-    null
+    createNew ? currentSource : null
   )
   const [preview, setPreview] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
@@ -125,16 +156,17 @@ function ProjectViews({
   const [deleting, setDeleting] = React.useState(false)
   const [refresh, setRefresh] = React.useState(0)
   const requestId = React.useRef(0)
-  const currentSource =
-    source === undefined ? { kind: "trace" as const, id: trace.id } : source
   const ranked = rankReactViews(views, trace, objectInput)
+  const availableViews = ranked.filter(({ view }) => (view.objectTypes ?? ["trace", "dataset-item"]).includes(kind))
+  const filteredViews = availableViews.filter(({ view }) => `${view.name} ${view.description}`.toLocaleLowerCase().includes(viewFilter.trim().toLocaleLowerCase()))
   const dataMode = draft?.dataMode ?? selected?.dataMode ?? "summary"
   React.useEffect(() => {
     onDataModeChange?.(dataMode)
   }, [dataMode, onDataModeChange])
-  const remember = (id: string) => {
-    savePreference({ id })
-    onSelectedViewChange?.(id || null)
+  const remember = (view: ReactView | null) => {
+    savePreference({ id: view?.id ?? "" })
+    onSelectedViewChange?.(view?.id ?? null)
+    onViewChange?.(view)
   }
   React.useEffect(() => {
     const controller = new AbortController()
@@ -164,6 +196,7 @@ function ProjectViews({
           const view = await reactViewsApi.get(projectId, viewId)
           if (!controller.signal.aborted && requestId.current === id) {
             setSelected(view)
+            onViewChange?.(view)
             if (!selectedViewId) onSelectedViewChange?.(view.id, true)
           }
         } else {
@@ -185,7 +218,7 @@ function ProjectViews({
     void load()
     const invalidate = () => { requestId.current++ }
     return () => { controller.abort(); invalidate() }
-  }, [projectId, refresh, selectionReady, requestedViewId, kind, selectedViewId, onSelectedViewChange])
+  }, [projectId, refresh, selectionReady, requestedViewId, kind, selectedViewId, onSelectedViewChange, onViewChange])
   React.useEffect(() => {
     const changed = (event: Event) => {
       if (event instanceof CustomEvent && event.detail?.projectId !== projectId)
@@ -222,6 +255,16 @@ function ProjectViews({
       setBusy(false)
     }
   }
+  function selectView(id: string) {
+    void perform(async () => {
+      const request = ++requestId.current
+      const loaded = await reactViewsApi.get(projectId, id)
+      if (requestId.current !== request) return
+      if (!(loaded.objectTypes ?? ["trace", "dataset-item"]).includes(kind)) throw new Error(`This view does not support ${kind}.`)
+      setSelected(loaded)
+      remember(loaded)
+    })
+  }
   function edit(view: ReactView | null) {
     setDraft(
       view
@@ -235,16 +278,7 @@ function ProjectViews({
             inputContract: view.inputContract,
             customFields: view.customFields,
           }
-        : {
-            name: "",
-            description: "",
-            code: starter,
-            requirements: null,
-            dataMode: "summary",
-            objectTypes: [kind],
-            inputContract: "object",
-            customFields: [],
-          }
+        : newViewDraft(kind)
     )
     setDraftSource(currentSource)
     setPreview(false)
@@ -275,13 +309,91 @@ function ProjectViews({
         ...current.filter((view) => view.id !== saved.id),
         saved,
       ])
-      remember(saved.id)
+      remember(saved)
       setDraft(null)
+      window.dispatchEvent(new CustomEvent(reactViewLibraryEvent, { detail: { projectId } }))
     })
   }
+  const ActionsButton = tabActions ? InspectorTabAction : Button
+  const actionsMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionsButton
+          aria-label={tabActions ? `Actions for ${tabActions.label}` : "View actions"}
+          variant="ghost"
+          size="icon-sm"
+          disabled={busy || (!draft && loading)}
+          onClick={tabActions?.onActivate}
+        >
+          <MoreHorizontal className={tabActions ? "size-3" : "size-4"} />
+        </ActionsButton>
+      </DropdownMenuTrigger>
+      {draft ? (
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Trace data</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={draft.dataMode}
+            onValueChange={(value) =>
+              setDraft({
+                ...draft,
+                dataMode: value as TraceViewDataMode,
+                requirements: null,
+              })
+            }
+          >
+            <DropdownMenuRadioItem value="summary">
+              Input and output only
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="full">
+              Complete trace with spans and scores
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => setPreview((value) => !value)}
+          >
+            {preview ? "Edit code" : "Preview"}
+          </DropdownMenuItem>
+          {selected && (
+            <DropdownMenuItem onSelect={() => void save(true)}>
+              Save as new view
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      ) : (
+        <DropdownMenuContent align="end">
+          {selected && (
+            <DropdownMenuItem onSelect={() => edit(selected)}>
+              <Pencil className="size-4" />
+              Edit view
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onSelect={() => setRefresh((value) => value + 1)}
+          >
+            <RefreshCw className="size-4" />
+            Refresh
+          </DropdownMenuItem>
+          {selected && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => setDeleting(true)}
+              >
+                <Trash2 className="size-4" />
+                Delete view
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      )}
+    </DropdownMenu>
+  )
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-0.5">
+      {tabActions?.container && createPortal(actionsMenu, tabActions.container)}
+      {displayMode !== "library" && (!tabActions || draft) && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-0.5">
         {draft ? (
           <>
             <Input
@@ -297,54 +409,13 @@ function ProjectViews({
               }
             />
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label="View actions"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={busy}
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Trace data</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={draft.dataMode}
-                    onValueChange={(value) =>
-                      setDraft({
-                        ...draft,
-                        dataMode: value as TraceViewDataMode,
-                        requirements: null,
-                      })
-                    }
-                  >
-                    <DropdownMenuRadioItem value="summary">
-                      Input and output only
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="full">
-                      Complete trace with spans and scores
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => setPreview((value) => !value)}
-                  >
-                    {preview ? "Edit code" : "Preview"}
-                  </DropdownMenuItem>
-                  {selected && (
-                    <DropdownMenuItem onSelect={() => void save(true)}>
-                      Save as new view
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {!tabActions && actionsMenu}
               <Button
                 size="sm"
                 variant="ghost"
                 disabled={busy}
                 onClick={() => {
+                  if (!selected && onCancelCreate) { onCancelCreate(); return }
                   setDraft(null)
                   setError("")
                   setNotice("")
@@ -363,7 +434,7 @@ function ProjectViews({
             </div>
           </>
         ) : (
-          <Combobox
+          displayMode === "view" ? <p className="min-w-0 truncate px-1 text-sm font-medium">{selected?.name ?? (loading ? "Loading view…" : "Unavailable view")}</p> : <Combobox
             label="View"
             variant="title-sm"
             className="min-w-0 shrink"
@@ -376,16 +447,7 @@ function ProjectViews({
               disabled: !(view.objectTypes ?? ["trace", "dataset-item"]).includes(kind),
               description: (view.objectTypes ?? ["trace", "dataset-item"]).includes(kind) ? undefined : `Supports ${(view.objectTypes ?? []).join(", ")}`,
             }))}
-            onValueChange={(id) =>
-              void perform(async () => {
-                const request = ++requestId.current
-                const loaded = await reactViewsApi.get(projectId, id)
-                if (requestId.current !== request) return
-                if (!(loaded.objectTypes ?? ["trace", "dataset-item"]).includes(kind)) throw new Error(`This view does not support ${kind}.`)
-                setSelected(loaded)
-                remember(loaded.id)
-              })
-            }
+            onValueChange={selectView}
             searchPlaceholder="Search project views…"
             popupClassName="w-80 max-w-[calc(100vw-2rem)]"
             popupFooter={
@@ -404,47 +466,8 @@ function ProjectViews({
             }
           />
         )}
-        {!draft && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label="View actions"
-                size="icon-sm"
-                variant="ghost"
-                disabled={busy || loading}
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {selected && (
-                <DropdownMenuItem onSelect={() => edit(selected)}>
-                  <Pencil className="size-4" />
-                  Edit view
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onSelect={() => setRefresh((value) => value + 1)}
-              >
-                <RefreshCw className="size-4" />
-                Refresh
-              </DropdownMenuItem>
-              {selected && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => setDeleting(true)}
-                  >
-                    <Trash2 className="size-4" />
-                    Delete view
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+        {!draft && !tabActions && actionsMenu}
+      </div>}
       {(error || preferenceError) && (
         <Notice variant="error" role="alert" className="m-3">
           {error || preferenceError}
@@ -502,23 +525,47 @@ function ProjectViews({
           dataLoading={dataLoading || resolvedFields.loading}
         />
       ) : (
-        !loading && (
-          <div className="space-y-3 p-4 text-sm text-foreground-muted">
-            <p>
-              {views.length
-                ? "Select a project view to preview this record."
-                : "Create a view from the view menu to get started."}
-            </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!!error || busy}
-              onClick={() => edit(null)}
-            >
-              Create new view
-            </Button>
+          <div className="flex min-h-0 flex-1 flex-col" aria-label="Project views">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-3">
+              <div className="min-w-0 flex-1">
+                <Input icon={<Search />} aria-label="Filter project views" placeholder="Search views…" value={viewFilter} disabled={loading || busy} onChange={(event) => setViewFilter(event.target.value)} />
+              </div>
+              <Button variant="secondary" size="sm" disabled={loading || !!error || busy} onClick={() => onCreateView ? onCreateView() : edit(null)}>
+                <Plus />
+                Create new view
+              </Button>
+            </div>
+            <div className="space-y-3 p-3">
+              {loading ? (
+                <div role="status" aria-label="Loading project views" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
+                  {[0, 1, 2].map((index) => <Skeleton key={index} className="h-32" />)}
+                </div>
+              ) : filteredViews.length ? (
+                <>
+                  <p className="text-sm text-foreground-muted">Select a project view to preview this record.</p>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
+                    {filteredViews.map(({ view, compatibility }) => (
+                      <Card key={view.id}>
+                        <CardAction className="h-full gap-3 p-4" disabled={busy} onClick={() => onOpenView ? onOpenView(view) : selectView(view.id)} aria-label={`Open ${view.name}`}>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Code2 className="size-4 shrink-0 text-foreground-muted" />
+                            <span className="min-w-0 break-words font-medium">{view.name}</span>
+                          </div>
+                          {view.description && <p className="line-clamp-3 break-words text-sm text-foreground-muted">{view.description}</p>}
+                          {compatibility.state === "missing" && <p className="text-xs text-foreground-muted">{compatibility.label}</p>}
+                        </CardAction>
+                      </Card>
+                    ))}
+                  </div>
+                </>
+              ) : !error && (
+                <div className="space-y-3 py-4 text-sm text-foreground-muted">
+                  <p>{viewFilter.trim() ? "No matching views." : views.length ? `No project views support ${kind === "trace" ? "traces" : "dataset items"} yet.` : "Create a view from the view menu to get started."}</p>
+                  {viewFilter.trim() && <Button variant="ghost" size="sm" onClick={() => setViewFilter("")}>Clear filter</Button>}
+                </div>
+              )}
+            </div>
           </div>
-        )
       )}
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent>
@@ -552,7 +599,8 @@ function ProjectViews({
                   )
                   setSelected(null)
                   setDeleting(false)
-                  remember("")
+                  remember(null)
+                  window.dispatchEvent(new CustomEvent(reactViewLibraryEvent, { detail: { projectId } }))
                 })
               }
             >

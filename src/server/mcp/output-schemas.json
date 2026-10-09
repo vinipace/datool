@@ -9474,6 +9474,9 @@
         "createdBy": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
+        "defaultObjectViewId": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+        },
         "humanReviewedCount": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
         },
@@ -9563,6 +9566,9 @@
         },
         "createdBy": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "defaultObjectViewId": {
+          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
         },
         "humanReviewedCount": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"

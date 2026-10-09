@@ -237,7 +237,7 @@ tool(
 )
 tool(
   "get_review_session",
-  "Read a review session, its review prompt, and up to 500 trace items in their fixed playback order.",
+  "Read a review session, its review prompt, shared defaultObjectViewId, current revision and up to 500 trace items in their fixed playback order.",
   "reviews:read",
   z.object({ id }),
   (s, p) => s.reviews.get(p.id)
@@ -251,21 +251,21 @@ tool(
 )
 tool(
   "create_review_session",
-  "Create an ordered collection of traces for review. Use list_traces to find traces for a prompt, then pass their IDs in the desired order. The prompt field supplies review instructions. Optional collectionId attaches a snapshot of a Human Score collection to every trace. Does not run a model or execute the traces.",
+  "Create an ordered collection of traces for review. Use list_traces to find traces for a prompt, then pass their IDs in the desired order. The prompt field supplies review instructions. Optional collectionId attaches a snapshot of a Human Score collection to every trace. Optional defaultObjectViewId sets a shared starting project Object View that supports traces; null uses the trace inspector. Discover IDs with list_object_views. Does not run a model or execute the traces.",
   ["reviews:write", "traces:read"],
   reviewSessionInputSchema,
   (s, p) => s.reviews.create(p)
 )
 tool(
   "update_review_session",
-  "Edit the review prompt, name, assigned project members, or collection using the current revision. Collection changes recalculate completion while retaining existing ratings and their provenance.",
+  "Edit the review prompt, name, assigned project members, collection or shared defaultObjectViewId using expectedRevision from get_review_session. The default view must belong to this project and support traces; null restores the trace inspector, while omission preserves it. Collection changes recalculate completion while retaining existing ratings, item-specific criteria overrides and their provenance.",
   "reviews:write",
-  z.object({ id, ...reviewSessionUpdateSchema.shape }),
+  reviewSessionUpdateSchema.safeExtend({ id }),
   (s, { id, ...p }) => s.reviews.update(id, p)
 )
 tool(
   "get_review_item",
-  "Read one review item's scores, notes, revision, trace ID and previous/next IDs. Use get_trace to inspect the actual prompt and output before reviewing.",
+  "Read one review item's effective criterion definitions, scores, notes, revision, trace ID and previous/next IDs. Definitions include this item's saved criteria overrides and may differ from the session collection. Use get_trace to inspect the actual prompt and output before reviewing.",
   "reviews:read",
   z.object({ sessionId: id, itemId: id }),
   (s, p) => s.reviews.item(p.sessionId, p.itemId)
@@ -283,9 +283,9 @@ tool(
 )
 tool(
   "record_review",
-  "Save AI-labelled scores, notes or annotations for one trace using an organization API key or user OAuth with reviews:write. Attribution is derived server-side from the authenticated principal; optional agent {name, model} is descriptive metadata only. Providing scores replaces the complete score set; include every required criterion to complete it. Omit scores for notes/annotations-only updates that preserve scores and completion. Use humanScoreId and humanScoreRevision from get_review_item or list_human_scores; null is an unanswered draft. Values must follow the rubric's numeric range, option values, multiple-choice array or text type. Requires expectedRevision from get_review_item; on conflict refetch before retrying. AI completion is separate from human verification and never updates dataset ground truth. Returns provenance, completionKind, humanVerified and nextItemId.",
+  "Save AI-labelled scores, notes or annotations for one trace using an organization API key or user OAuth with reviews:write. Attribution is derived server-side from the authenticated principal; optional agent {name, model} is descriptive metadata only. Providing scores replaces the complete score set; include every effective required criterion to complete it. To add or remove required criteria for only this item, send replaceCriteria=true with the complete desired scores selection, retaining existing values/comments for kept criteria. This persists an item override without changing the session collection or other traces; scores=[] clears the override selection and leaves the item incomplete. Omit replaceCriteria to preserve required criteria. Omit scores for notes/annotations-only updates that preserve scores and completion. Use humanScoreId and humanScoreRevision from get_review_item or list_human_scores; null is an unanswered draft. Values must follow the rubric's numeric range, option values, multiple-choice array or text type. Requires expectedRevision from get_review_item; on conflict refetch before retrying. AI completion is separate from human verification and never updates dataset ground truth. Returns effective definitions, provenance, completionKind, humanVerified and nextItemId.",
   "reviews:write",
-  z.object({ sessionId: id, itemId: id, ...recordReviewSchema.shape }).strict(),
+  recordReviewSchema.safeExtend({ sessionId: id, itemId: id }),
   (s, { sessionId, itemId, ...p }) => s.reviews.record(sessionId, itemId, p)
 )
 tool(

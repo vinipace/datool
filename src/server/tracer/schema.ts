@@ -732,6 +732,9 @@ export const reviewSessions = pgTable(
     prompt: text("prompt").notNull().default(""),
     collectionId: text("collection_id"),
     collectionSnapshotJson: jsonDocument("collection_snapshot_json"),
+    defaultObjectViewId: text("default_object_view_id").references(() => reactViews.id, {
+      onDelete: "set null",
+    }),
     assigneeUserId: text("assignee_user_id").references(() => reviewUsers.id, {
       onDelete: "set null",
     }),
@@ -782,6 +785,7 @@ export const reviewItems = pgTable(
     ordinal: integer("ordinal").notNull(),
     notes: text("notes").notNull().default(""),
     annotationsJson: jsonDocument("annotations_json").notNull().default("[]"),
+    criteriaSnapshotJson: jsonDocument("criteria_snapshot_json"),
     notesProvenanceJson: jsonDocument("notes_provenance_json"),
     lastSubmissionJson: jsonDocument("last_submission_json"),
     revision: integer("revision").notNull().default(0),

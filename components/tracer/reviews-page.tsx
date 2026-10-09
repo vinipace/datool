@@ -14,7 +14,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   MessageSquare,
-  ListChecks,
+  Pencil,
   Play,
   Plus,
   Trash2,
@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { reviewAttribution } from "@/src/lib/tracer/review-provenance"
 import { DEFAULT_REVIEW_NAME } from "@/src/lib/tracer/reviews"
 import { Textarea } from "@/components/ui/textarea"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ReviewerCombobox } from "@/components/ui/reviewer-combobox"
 import { Notice } from "@/components/ui/notice"
 import { toast } from "@/components/ui/toast"
@@ -77,6 +78,7 @@ import { formatDate } from "./format"
 import { TraceInspector } from "./trace-inspector"
 import { ReviewPanels } from "./review-panels"
 import { ReviewSessionTable } from "./review-session-table"
+import { ReviewDefaultView } from "./review-default-view"
 import {
   ReviewSessionTitle,
   ReviewSessionReviewers,
@@ -771,6 +773,9 @@ function ReviewSession({
                 <p className="px-3 pt-3 text-xs text-foreground-muted">
                   {session.humanReviewedCount ?? session.reviewedCount} human complete · {session.aiReviewedCount ?? 0} AI complete · {session.aiLabelledCount ?? 0} AI-labelled
                 </p>
+                <div className="shrink-0 px-3 pt-2">
+                  <ReviewDefaultView session={session} disabled={state.isRefreshing || sessionBusy} onSaved={state.refresh} />
+                </div>
                 {session.prompt && (
                   <div className="shrink-0 p-3">
                     <p className="max-h-40 overflow-auto text-sm break-words whitespace-pre-wrap">
@@ -1015,6 +1020,7 @@ function ReviewEditor({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <HeaderSlot name="actions">
+        <ReviewDefaultView session={session} disabled={finishing || !options?.currentUserId} onSaved={onPersisted} />
         <div
           className="flex shrink-0 items-center gap-2 text-xs text-foreground-muted tabular-nums"
           aria-live="polite"
@@ -1069,7 +1075,11 @@ function ReviewEditor({
         <ReviewPanels
           trace={
             <TraceInspector
+              key={`${item.traceId}:${session.defaultObjectViewId ?? ""}`}
               traceId={item.traceId}
+              initialObjectViewId={session.defaultObjectViewId ?? undefined}
+              initialTab={session.defaultObjectViewId ? "views" : "trace"}
+              compactHeader
               mode="panel"
               hideTraceNavigation
               hideOverviewScores
@@ -1081,16 +1091,59 @@ function ReviewEditor({
             className="h-full min-w-0 space-y-4 overflow-y-auto p-4"
             aria-label="Review scores"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <h2 className="text-sm font-semibold">Human Scores</h2>
-                <p className="mt-1 text-xs text-foreground-muted">
-                  {session.collection
-                    ? session.collection.name
-                    : "Choose criteria from your Human Score library."}
-                </p>
+                <ReviewEditors scores={saved.scores} />
               </div>
-              <ReviewEditors scores={saved.scores} />
+              <div className="flex shrink-0 items-center gap-1">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant={notes ? "secondary" : "ghost"} size="icon-sm" aria-label="Review notes" title={notes ? "Edit review notes" : "Add review notes"}>
+                      <MessageSquare />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" aria-label="Review notes" className="space-y-3">
+                    <h3 className="font-medium">Review notes</h3>
+                    {saved.notesProvenance && <p className="text-xs text-foreground-muted">Notes: {reviewAttribution(saved.notesProvenance)}</p>}
+                    <Textarea
+                      form={formId}
+                      aria-label="Review notes"
+                      autoSize
+                      rows={5}
+                      className="max-h-80"
+                      maxLength={16000}
+                      value={notes}
+                      onChange={(event) => autosave.updateNotes(event.target.value)}
+                      placeholder="Add notes..."
+                      disabled={finishing || !options?.currentUserId}
+                    />
+                    <p className="text-xs text-foreground-muted" role="status">
+                      {status === "saving" ? "Saving…" : status === "error" ? "Changes not saved." : "Notes save automatically"}
+                    </p>
+                  </PopoverContent>
+                </Popover>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label="Create Human Score" title="Create Human Score" disabled={finishing || !options?.currentUserId || drafts.length >= 30} onClick={() => setCreatingName("")}>
+                  <Plus />
+                </Button>
+                <ComboboxMultiple
+                  label="Human Scores"
+                  triggerContent={<Pencil aria-label="Edit Human Scores" />}
+                  className="size-8"
+                  popupClassName="w-80 max-w-[calc(100vw-2rem)]"
+                  options={scoreOptions}
+                  value={drafts.map(score => score.key)}
+                  maxSelected={30}
+                  inputMaxLength={120}
+                  disabled={finishing || !options?.currentUserId}
+                  createDescription="custom"
+                  onCreate={setCreatingName}
+                  onValueChange={keys => setDrafts(current => {
+                    const selected = new Set(keys)
+                    return [...selected].map(key => current.find(score => score.key === key) ?? emptyReviewDraft(definitions.get(key)!))
+                  })}
+                />
+              </div>
             </div>
             {saved.lastSubmission && <p className="text-xs text-foreground-muted">Last submission: {reviewAttribution(saved.lastSubmission)}</p>}
             {saved.label === "AI-labelled" && (
@@ -1106,47 +1159,6 @@ function ReviewEditor({
                 else if (valid) void finish()
               }}
             >
-              <ComboboxMultiple
-                label="Human Scores"
-                icon={<ListChecks />}
-                placeholder="Select or add Human Scores…"
-                options={scoreOptions}
-                value={drafts.map((score) => score.key)}
-                maxSelected={30}
-                inputMaxLength={120}
-                disabled={finishing || !options?.currentUserId}
-                disabledValues={item.definitions.map(
-                  (definition) => definition.id
-                )}
-                createDescription="custom"
-                onCreate={setCreatingName}
-                onValueChange={(keys) =>
-                  setDrafts((current) => {
-                    const selected = new Set([
-                      ...item.definitions.map((definition) => definition.id),
-                      ...keys,
-                    ])
-                    return [...selected].map(
-                      (key) =>
-                        current.find((score) => score.key === key) ??
-                        emptyReviewDraft(definitions.get(key)!)
-                    )
-                  })
-                }
-              />
-              {saved.notesProvenance && <p className="text-xs text-foreground-muted">Notes: {reviewAttribution(saved.notesProvenance)}</p>}
-              <Textarea
-                aria-label="Review notes"
-                icon={<MessageSquare />}
-                variant="plain"
-                autoSize
-                rows={1}
-                maxLength={16000}
-                value={notes}
-                onChange={(event) => autosave.updateNotes(event.target.value)}
-                placeholder="Add notes..."
-                disabled={finishing || !options?.currentUserId}
-              />
               <ReviewAnnotationComments saved={saved.annotations} onChange={autosave.updateAnnotations} />
               {drafts.length === 0 && (
                 <p className="text-xs text-foreground-muted">

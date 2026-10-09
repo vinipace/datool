@@ -1,7 +1,9 @@
 # Author Object Views and legacy trace views
 
-Use an Object View to render one trace or dataset item inside its inspector's
-**Views** tab. Several spans or messages inside that record do not make it a
+Use an Object View to render one trace or dataset item inside its inspector.
+Trace inspectors keep **Views** as a searchable card library: selecting a card
+or using the **+** picker opens the definition in a separate, closable view tab.
+Dataset item inspectors select a view inside **Views**. Several spans or messages inside that record do not make it a
 collection Page View. For a queue or overview of multiple records, follow
 [Page View authoring](page-views.md); see [choosing views](views.md) for examples.
 
@@ -28,8 +30,14 @@ operation's `definition` envelope.
 If CLI aliases are advertised by the installed client, use `datool object-views`;
 otherwise call the discovered operation with `datool agent call`. In the
 browser, use advertised selection tools or select the saved view from the
-inspector's Views menu. Saving through server operations does not itself select
+inspector's Views library. Saving through server operations does not itself select
 or open a browser view.
+
+For a review's shared starting trace view, set `defaultObjectViewId` through
+`create_review_session` or `update_review_session` with the session's current
+revision. The view must support traces and belong to the same project. `null`
+restores the standard inspector. This setting is separate from opening a local
+tab or editing the shared view definition; see [reviews](reviews.md).
 
 ## One-record contract
 
@@ -98,6 +106,10 @@ React definitions, not a separate browser-local collection. Inspect their live
 schemas: legacy create/update tools take their fields directly, unlike canonical
 Object View operations. Current list responses omit source code; get the
 individual definition for code. Updates/deletes need the current revision.
+`select_trace_view` opens or activates a trace view tab when a trace inspector
+is open. Browser create/update tools also select the resulting trace-compatible
+view; canonical server create/update operations only persist definitions.
+These browser selections do not change a review session's default view.
 Legacy components receiving `{ trace }` remain supported through
 `inputContract: "legacy-trace"`; dataset previews adapt current form input,
 expected output, and metadata to that compatibility payload.

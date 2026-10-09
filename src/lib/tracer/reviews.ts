@@ -30,6 +30,9 @@ export const reviewSessionInputSchema = z
     assigneeUserId: id.nullable().default(null),
     reviewerUserIds: reviewerIds.optional(),
     collectionId: id.nullable().default(null),
+    defaultObjectViewId: id.nullable().default(null).describe(
+      "Shared starting trace Object View ID from this project's library. Must support traces. Null uses the standard trace inspector."
+    ),
     traceIds: z
       .array(id)
       .min(1)
@@ -48,6 +51,9 @@ export const reviewSessionUpdateSchema = z
   .object({
     expectedRevision: z.number().int().positive(),
     collectionId: id.nullable().optional(),
+    defaultObjectViewId: id.nullable().optional().describe(
+      "Set the shared starting Object View for traces in this review session. Must belong to this project and support traces. Null restores the trace inspector; omission preserves the setting."
+    ),
     name: z.string().trim().max(200).optional(),
     prompt: z.string().trim().max(16000).optional(),
     assigneeUserId: id.nullable().optional(),
@@ -73,6 +79,10 @@ export const recordReviewSchema = z
   .object({
     expectedRevision: z.number().int().nonnegative(),
     scores: z.array(reviewScoreInputSchema).max(30).optional(),
+    /** Explicitly replace only this item's collection-derived criteria. */
+    replaceCriteria: z.literal(true).optional().describe(
+      "Replace required criteria for this review item only with the complete supplied scores selection. Requires scores; removed criteria stay removed on reopening. Does not change the session collection or other items. Omit to preserve the item's required criteria."
+    ),
     notes: z.string().max(16000).optional(),
     annotations: reviewAnnotationsSchema.optional(),
     agent: z.object({
@@ -81,6 +91,8 @@ export const recordReviewSchema = z
     }).strict().optional(),
   })
   .strict()
+  .refine(value => !value.replaceCriteria || value.scores !== undefined,
+    "Provide scores when replacing criteria.")
   .refine(
     (value) => value.scores !== undefined || value.notes !== undefined || value.annotations !== undefined,
     "Provide scores, notes or annotations to save."
@@ -132,6 +144,8 @@ export type ReviewSession = {
   revision: number
   collectionId: string | null
   collection: HumanScoreCollectionSnapshot | null
+  /** Shared starting Object View for traces in this review session. */
+  defaultObjectViewId?: string | null
   traceCount: number
   /** Total score-complete items, including AI; not a human verification count. */
   reviewedCount: number

@@ -49,10 +49,13 @@ export function useReactViewWebMcp(projectId: string) {
     }
     const idSchema = z.object({ id: z.string().min(1) }).strict()
     const updateSchema = reactViewInputSchema
-      .omit({ dataMode: true })
+      .omit({ dataMode: true, objectTypes: true, inputContract: true, customFields: true })
       .partial()
       .extend({
         dataMode: z.enum(["full", "summary"]).optional(),
+        objectTypes: reactViewInputSchema.shape.objectTypes.unwrap().optional(),
+        inputContract: reactViewInputSchema.shape.inputContract.unwrap().optional(),
+        customFields: reactViewInputSchema.shape.customFields.unwrap().optional(),
         id: z.string().min(1),
         expectedRevision: z.number().int().positive(),
       })
@@ -75,19 +78,19 @@ export function useReactViewWebMcp(projectId: string) {
       ),
       tool(
         "create_trace_view",
-        "Save and select a project-wide React view. Source is optional origin context, never a restriction. Requirements null means unknown; [] means explicitly no required fields. Code exports a default component receiving ViewProps { trace }; Imports from react, @datool/ui and @datool/charts are supported. Static Tailwind uses the Datool theme. dataMode summary excludes child spans and scores.",
+        "Save a project-wide Object View and open or activate its own closable tab in an open trace inspector when it supports traces. Source is optional origin context, never a restriction. Requirements null means unknown; [] means explicitly no required fields. New components use inputContract=object and ViewProps { kind, object, context, fields }; legacy-trace components receive { trace }. Imports from react, @datool/ui and @datool/charts are supported. Static Tailwind uses the Datool theme. dataMode summary excludes child spans and scores. This does not change a review session's shared defaultObjectViewId.",
         createReactViewSchema,
         async (input) => {
           const settings = createReactViewSchema.parse(input)
           await prepareTraceView(settings.code)
           const view = await reactViewsApi.create(projectId, settings)
-          selectProjectReactView(projectId, view.id)
+          selectProjectReactView(projectId, view)
           return view
         }
       ),
       tool(
         "update_trace_view",
-        "Update a shared project view with its expectedRevision. A code change without reviewed requirements resets compatibility to unknown.",
+        "Update a shared project view with its expectedRevision and open or activate its trace tab when a trace inspector is open. A code change without reviewed requirements resets compatibility to unknown. Editing the definition affects the project library; it does not change a review session's default view setting.",
         updateSchema,
         async (input) => {
           const { id, expectedRevision, ...patch } = updateSchema.parse(input)
@@ -97,12 +100,17 @@ export function useReactViewWebMcp(projectId: string) {
             description: patch.description ?? existing.description,
             code: patch.code ?? existing.code,
             dataMode: patch.dataMode ?? existing.dataMode,
+            objectTypes: patch.objectTypes ?? existing.objectTypes,
+            inputContract: patch.inputContract ?? existing.inputContract,
+            customFields: patch.customFields ?? existing.customFields,
             requirements:
               patch.requirements !== undefined
                 ? patch.requirements
                 : (patch.code !== undefined && patch.code !== existing.code) ||
                     (patch.dataMode !== undefined &&
-                      patch.dataMode !== existing.dataMode)
+                      patch.dataMode !== existing.dataMode) ||
+                    (patch.inputContract !== undefined &&
+                      patch.inputContract !== existing.inputContract)
                   ? null
                   : existing.requirements,
           })
@@ -111,20 +119,22 @@ export function useReactViewWebMcp(projectId: string) {
             ...settings,
             expectedRevision,
           })
-          selectProjectReactView(projectId, view.id)
+          selectProjectReactView(projectId, view)
           return view
         }
       ),
       tool(
         "select_trace_view",
-        "Select a project view for this browser and preview the current record when Views is open.",
+        "Open or activate a saved trace-compatible Object View as its own closable tab in an open trace inspector. The fixed Views tab remains the card library; selecting an already open view reuses its tab. This browser selection does not set the review session's shared defaultObjectViewId; use update_review_session for that setting.",
         idSchema,
         async (input) => {
           const view = await reactViewsApi.get(
             projectId,
             (input as { id: string }).id
           )
-          selectProjectReactView(projectId, view.id)
+          if (!(view.objectTypes ?? ["trace", "dataset-item"]).includes("trace"))
+            throw new Error("This Object View does not support traces.")
+          selectProjectReactView(projectId, view)
           return { selected: view.id }
         }
       ),
@@ -142,7 +152,7 @@ export function useReactViewWebMcp(projectId: string) {
             id,
             expectedRevision
           )
-          selectProjectReactView(projectId, "")
+          selectProjectReactView(projectId, null)
           return result
         }
       ),
