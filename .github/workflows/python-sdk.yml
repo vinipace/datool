@@ -41,3 +41,5 @@ jobs:
         with:
           name: python-sdk-3.12
           path: packages/python-sdk/dist/*
+          # Only needed for publishing and verifying this release.
+          retention-days: 1
