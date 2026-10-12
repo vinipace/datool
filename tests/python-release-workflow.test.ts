@@ -57,7 +57,7 @@ test("persistence and publishing consume the same wheel and registry verificatio
   expect(upload).toBeGreaterThan(verify)
   expect(script).toContain('DATOOL_TEST_PYTHON_WHEEL="${wheels[0]}" bun run test:python:integration')
   expect(script).toContain('packages/python-sdk/dist/*.whl pytest -r "$consumer_root/requirements.txt"')
-  expect(steps[upload].with).toEqual({ name: "python-sdk-3.12", path: "packages/python-sdk/dist/*" })
+  expect(steps[upload].with).toEqual({ name: "python-sdk-3.12", path: "packages/python-sdk/dist/*", "retention-days": 1 })
   expect(artifact(release.jobs.publish.steps)).toBe("python-sdk-3.12")
   expect(artifact(release.jobs["verify-published"].steps)).toBe("python-sdk-3.12")
   expect(release.jobs["verify-published"].needs).toBe("publish")
