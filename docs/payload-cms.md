@@ -4,7 +4,7 @@ The CMS is disabled by default. Set `DATOOL_CMS_ENABLED=true` explicitly to enab
 CMS routes, marketing pages, and release migrations. Existing CMS installations
 must set this before upgrading. Application-only self-hosting needs no CMS setup.
 
-The integration uses Payload 3.88, Postgres, Lexical, drafts and versions, reusable FAQ relationships, and an isolated `/cms` admin layout. Datool retains Better Auth for authentication.
+The integration uses Payload 3.90.2, Postgres, Lexical, drafts and versions, reusable FAQ relationships, and an isolated `/cms` admin layout. Datool retains Better Auth for authentication.
 
 ## Content and routes
 
