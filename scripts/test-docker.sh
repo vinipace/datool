@@ -61,9 +61,10 @@ done
 [ "$ready" = 1 ]
 # Check rendered content: streamed Next errors can still have HTTP status 200.
 docker exec "$prefix-web" node -e '
- for (const [path,text] of [["/","See what your AI is doing."],["/faq","What is Datool?"],["/faq/what-is-datool","What is Datool?"],["/landing-page.md","See what your AI is doing."]]) {
+ for (const [path,text] of [["/","See what your AI is doing."],["/faq","What is Datool?"],["/faq/what-is-datool","What is Datool?"],["/landing-page.md","See what your AI is doing."],["/cms/login","<title>Login"]]) {
    const response=await fetch("http://127.0.0.1:3000"+path);
-   if(!response.ok || !(await response.text()).includes(text)) throw new Error("CMS rendering failed: "+path);
+   const body=await response.text();
+   if(!response.ok || !body.includes(text) || /[0-9a-f]+:E\{/.test(body)) throw new Error("CMS rendering failed: "+path);
  }
  const session=await fetch("http://127.0.0.1:3000/cms/api/cms-users/me");
  if(!session.ok || (await session.json()).user!==null) throw new Error("Anonymous CMS session endpoint failed");'
