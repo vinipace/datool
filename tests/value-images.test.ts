@@ -35,6 +35,7 @@ test("explicit images preview safely without changing their stored value", () =>
 
 test("adding the first scorer span keeps the invocation output reachable as the root", () => {
   const trace = {
+    attributes: {},
     spans: [{ id: "score", parentId: null, kind: "score", startedAt: null }],
   } as unknown as TraceOverview
   expect(buildInspectorTree(trace).id).toBeNull()

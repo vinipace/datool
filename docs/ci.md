@@ -112,8 +112,10 @@ to cancel superseded non-default-branch runs. Main, scheduled workflows, and rer
 are excluded from this setting. Keep **Pass secrets to builds from forked pull requests**
 disabled. Verify both settings in your project before enabling public contributions.
 
-The package job installs dependencies and starts PostgreSQL/Redis once. Backend
-tests run with Bun; sandbox tests also exercise real JavaScript/Python Docker
+The package job uses a large machine for the Build browser fixture, installs
+dependencies, and starts PostgreSQL/Redis once. It runs the complete Bun suite
+with those services and the scorer images available. Backend tests run with Bun;
+sandbox tests also exercise real JavaScript/Python Docker
 containers and database-backed provider permissions, credentials, and project
 isolation. Switching Node versions repeats only packed-package consumer checks
 (including TypeScript declarations and Node CLI connect/watch) and CLI

@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test"
-import { NextRequest } from "next/server"
-import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server"
-import { proxy, config } from "../proxy"
 import { billingPath, billingPlanFromPath } from "../src/lib/billing"
 import { workspaceReturnPath } from "../lib/workspace-routing"
+
+// Next captures AsyncLocalStorage during module initialization. Bootstrap its
+// server environment before loading the request utilities or the app proxy.
+await import("next/dist/server/node-environment")
+const { NextRequest } = await import("next/server")
+const { unstable_doesMiddlewareMatch } = await import("next/experimental/testing/server")
+const { proxy, config } = await import("../proxy")
 
 test("billing return path survives the shared settings layout and ignores a spoofed header", () => {
   expect(unstable_doesMiddlewareMatch({ config, url: "/billing?plan=pro" })).toBe(true)

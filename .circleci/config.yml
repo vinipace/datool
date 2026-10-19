@@ -197,6 +197,7 @@ jobs:
           command: bash scripts/publish-hermes-plugin.sh
   verify:
     executor: linux
+    resource_class: large
     steps:
       - checkout
       - install-dependencies
@@ -309,6 +310,9 @@ jobs:
           name: Verify managed prompt caching and authorization
           command: bun test tests/prompt-cache.test.ts tests/prompts.test.ts tests/prompts-integration.test.ts tests/prompt-publishing-migration.test.ts tests/redis-swr.test.ts tests/stale-while-revalidate.test.ts
       - run:
+          name: Verify the complete Bun suite with PostgreSQL, Redis, and scorer containers
+          command: bun --no-env-file test tests --timeout 30000
+      - run:
           name: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
           command: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
       - node/install:
@@ -332,6 +336,9 @@ jobs:
       - store_artifacts:
           path: artifacts/npm
           destination: npm-packages
+      - store_artifacts:
+          path: artifacts/build-e2e
+          destination: build-browser-checks
   production-image:
     machine:
       image: ubuntu-2404:2026.05.1
