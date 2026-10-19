@@ -160,6 +160,11 @@ describe("semantic models", () => {
       semanticCatalog.metadata().models.map((model) => model.name)
     ).toEqual([
       "agents",
+      "buildCsat",
+      "buildEvents",
+      "buildTickets",
+      "evalClassification",
+      "evalComparison",
       "evalQuality",
       "evalResults",
       "evalRuns",

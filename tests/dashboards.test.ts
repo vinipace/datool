@@ -53,7 +53,7 @@ test("an unsupported saved dashboard stays visible without breaking other dashbo
     const older = await run(service.create(input))
     const unsupported = JSON.stringify({
       ...input,
-      widgets: [{ ...widget, type: "matrix" }],
+      widgets: [{ ...widget, type: "unsupported-future-chart" }],
     })
     await db
       .update(dashboards)
@@ -69,7 +69,7 @@ test("an unsupported saved dashboard stays visible without breaking other dashbo
       name: input.name,
       unavailable: true,
     })
-    await rejected(run(service.get(older.id)), "Invalid option")
+    await rejected(run(service.get(older.id)), "Invalid input")
     const [stored] = await db
       .select()
       .from(dashboards)

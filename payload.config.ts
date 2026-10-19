@@ -1,4 +1,4 @@
-import { loadEnvConfig } from "@next/env"
+import nextEnv from "@next/env"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { postgresAdapter } from "@payloadcms/db-postgres"
@@ -7,7 +7,7 @@ import { buildConfig } from "payload"
 import { FAQPage, FAQs, LandingPage, Pages, Users } from "./cms/models"
 import { internalDocToHref } from "./cms/rich-text-links"
 
-loadEnvConfig(process.cwd())
+nextEnv.loadEnvConfig(process.cwd())
 const baseDir = path.dirname(fileURLToPath(import.meta.url))
 const origin = process.env.BETTER_AUTH_URL || "http://localhost:3000"
 

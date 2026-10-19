@@ -801,8 +801,11 @@ try {
   )
   await page
     .getByRole("switch", { name: "Enable chat bubble", exact: true })
-    .check()
+    .click()
   assert((await connected).ok())
+  await page
+    .getByRole("switch", { name: "Enable chat bubble", exact: true, checked: true })
+    .waitFor()
   const connections = await call("build_list_channels", { agentId })
   const connection = connections.find(
     (item: { label: string }) => item.label === "Website validation"
