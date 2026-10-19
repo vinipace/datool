@@ -33,6 +33,17 @@ export async function routeScopes(request: Request): Promise<WorkspaceScope[]> {
       throw new TracerError("UNAUTHORIZED", "Unknown agent operation or method.", { status: 403 })
     return [...operation.scopes]
   }
+  if (resource === "build") {
+    // Load the Build registry only for Build requests. The auth classifier is
+    // imported by every API route and must not eagerly initialize parsers or
+    // worker-only Build dependencies during application startup.
+    const { findBuildOperation } = await import("@/src/server/build/bootstrap")
+    const operation = findBuildOperation(url.pathname.split("/")[3])
+    if (!operation || request.method !== "POST")
+      throw new TracerError("UNAUTHORIZED", "Unknown Build operation or method.", { status: 403 })
+    if (operation.name === "build_describe_operations") return []
+    return [...operation.scopes]
+  }
   const domains: Record<string, string> = {
     ingest: "traces",
     traces: "traces",
@@ -56,6 +67,7 @@ export async function routeScopes(request: Request): Promise<WorkspaceScope[]> {
     "custom-fields": "views",
     dashboards: "dashboards",
     reports: "dashboards",
+    "project-home": "dashboards",
     evals: "evals",
     "imported-scores": "evals",
     apps: "apps",

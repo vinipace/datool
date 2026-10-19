@@ -113,12 +113,20 @@ export function useMonacoEditor({
           (language === "javascript" ? "js" : language)
         const model = monaco.editor.createModel(
           latest.current.value,
-          language,
+          language === "jsx" ? "javascript" : language,
           monaco.Uri.parse(
             `file:///datool-editors/${crypto.randomUUID()}.${extension}`
           )
         )
         disposables.push(model)
+        if (language === "jsx") {
+          const defaults = runtime.typescript.javascriptDefaults
+          defaults.setCompilerOptions({
+            ...defaults.getCompilerOptions(),
+            jsx: runtime.typescript.JsxEmit.React,
+            allowJs: true,
+          })
+        }
         const editor = monaco.editor.create(container.current, {
           automaticLayout: true,
           quickSuggestions: { other: true, comments: false, strings: true },

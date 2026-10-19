@@ -11,6 +11,12 @@ x-app: &app
     REDIS_URL: redis://redis:6379
     BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set the public HTTPS origin in .env}
     BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Generate BETTER_AUTH_SECRET in .env}
+    DATOOL_PUBLIC_URL: ${DATOOL_PUBLIC_URL:-}
+    DATOOL_META_APP_ID: ${DATOOL_META_APP_ID:-}
+    DATOOL_META_APP_SECRET: ${DATOOL_META_APP_SECRET:-}
+    DATOOL_META_WHATSAPP_CONFIG_ID: ${DATOOL_META_WHATSAPP_CONFIG_ID:-}
+    DATOOL_META_WEBHOOK_VERIFY_TOKEN: ${DATOOL_META_WEBHOOK_VERIFY_TOKEN:-}
+    DATOOL_META_GRAPH_VERSION: ${DATOOL_META_GRAPH_VERSION:-v23.0}
     DATOOL_PROVIDER_ENCRYPTION_KEY: ${DATOOL_PROVIDER_ENCRYPTION_KEY:-}
     AUTH_ALLOWED_DOMAINS: ${AUTH_ALLOWED_DOMAINS:-}
     AUTH_ALLOW_PUBLIC_SIGNUP: ${AUTH_ALLOW_PUBLIC_SIGNUP:-false}
@@ -96,6 +102,17 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  build-worker:
+    <<: *app
+    command: ["bun", "run", "worker:build"]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    volumes:
+      - datool-files:/app/.data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   datool-postgres:

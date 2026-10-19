@@ -72,7 +72,7 @@ export function CollectionHistogramSkeleton() {
 }
 
 /** Matches the shared table's 48px header, 40px rows and 2px row gaps. */
-export function CollectionTableSkeleton({ label }: { label: string }) {
+export function CollectionTableSkeleton({ label, rows = 24 }: { label: string; rows?: number }) {
   return (
     <div
       role="status"
@@ -95,7 +95,7 @@ export function CollectionTableSkeleton({ label }: { label: string }) {
           ))}
         </div>
         <div className="mt-0.5 space-y-0.5">
-          {Array.from({ length: 24 }, (_, row) => (
+          {Array.from({ length: rows }, (_, row) => (
             <div
               key={row}
               className={`${columns} h-10 items-center rounded-md bg-surface-row`}

@@ -43,11 +43,13 @@ def test_nesting_usage_groups_and_durable_order(recording):
     assert all("group" not in s for s in starts)
     root_start = next(e["body"] for e in events if e["path"] == "/api/traces")
     assert root_start["group"] == {"type": "workflow", "name": "answer"}
+    assert "datool.trace.root_span_id" not in root_start["attributes"]
     final = final_traces(events)[0]
     assert final["status"] == "completed" and final["output"] == {"ok": True}
     assert final["attributes"]["usage.total_tokens"] == 13
     assert final["attributes"]["cost.usd"] == 0.002
     assert final["attributes"]["user.id"] == "user-1"
+    assert "datool.trace.root_span_id" not in final["attributes"]
     assert not trace.get_current_span().get_span_context().is_valid
 
 

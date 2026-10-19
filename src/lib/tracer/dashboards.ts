@@ -264,6 +264,13 @@ export type Dashboard = DashboardInput & {
   createdAt: string
   updatedAt: string
 }
+/** One incompatible saved configuration must not hide the rest of the catalog. */
+export type DashboardListEntry =
+  | Dashboard
+  | (Pick<
+      Dashboard,
+      "id" | "name" | "description" | "revision" | "createdAt" | "updatedAt"
+    > & { unavailable: true })
 export const dashboardUpdateSchema = z
   .object({
     config: dashboardInputSchema,

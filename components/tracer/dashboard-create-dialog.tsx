@@ -8,6 +8,7 @@ import {
   Coins,
   Gauge,
   LayoutDashboard,
+  MessagesSquare,
   Plus,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -33,6 +34,7 @@ import { dashboardRequest } from "./dashboard-utils"
 import { useWorkspaceHref } from "./workspace-path"
 
 const templateIcons: Record<string, typeof Activity> = {
+  "customer-experience": MessagesSquare,
   "weekly-health": Activity,
   "llm-overview": LayoutDashboard,
   "cost-and-usage": Coins,

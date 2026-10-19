@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useState, type PropsWithChildren } from "react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/toast"
+import { NextNavigationProvider } from "@/components/navigation/next-navigation"
 
 export function StorybookProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -16,7 +17,9 @@ export function StorybookProviders({ children }: PropsWithChildren) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>{children}</TooltipProvider>
+      <NextNavigationProvider>
+        <TooltipProvider>{children}</TooltipProvider>
+      </NextNavigationProvider>
       <Toaster />
     </QueryClientProvider>
   )

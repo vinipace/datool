@@ -1,0 +1,123 @@
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-foreground);
+  /* Host webfont faces are not inherited by the sandbox. Own the font stack
+     here so an incomplete local installation cannot substitute a bold face. */
+  font:
+    400 14px/1.5 system-ui,
+    sans-serif;
+}
+#root {
+  display: flow-root;
+  overflow-wrap: anywhere;
+}
+p,
+h3 {
+  margin: 0;
+}
+h3 {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.widget-muted {
+  color: var(--color-foreground-muted);
+}
+.widget-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.widget-list {
+  display: grid;
+  gap: 8px;
+}
+.widget-list > div {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  cursor: pointer;
+  white-space: normal;
+}
+button[data-variant="secondary"] {
+  background: var(--color-background);
+  border-color: var(--color-border);
+  color: var(--color-foreground);
+}
+button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+button:disabled,
+fieldset:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+.widget-form {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.widget-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-muted);
+  color: var(--color-foreground);
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+pre[role="alert"] {
+  margin: 0;
+  padding: 12px;
+  color: var(--color-destructive);
+  font: 12px/1.5 monospace;
+  white-space: pre-wrap;
+}

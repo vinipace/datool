@@ -60,9 +60,9 @@ export function listWorkspaceProjects(
 export function projectHref(
   organization: WorkspaceOrganization,
   project: Pick<WorkspaceProject, "slug">,
-  page: "traces" | "projects" = "traces"
+  page: "traces" | "projects" | "home" = "home"
 ) {
-  return `${projectWorkspaceHref(organization, project)}/${page}`
+  return `${projectWorkspaceHref(organization, project)}${page === "home" ? "" : `/${page}`}`
 }
 
 export function projectWorkspaceHref(

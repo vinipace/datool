@@ -84,6 +84,7 @@ type OptionHoverHandlers = {
 
 export function Combobox({
   options,
+  selectedOption,
   value,
   onValueChange,
   label,
@@ -107,6 +108,8 @@ export function Combobox({
   open,
 }: {
   options: ComboboxOption[]
+  /** Preserve the selected identity when remotely filtered options exclude it. */
+  selectedOption?: ComboboxOption
   value: string | null
   onValueChange: (value: string) => void
   label: string
@@ -151,7 +154,9 @@ export function Combobox({
     () => groupOptions(options).flatMap((group) => group.items),
     [options]
   )
-  const selected = options.find((option) => option.value === value) ?? null
+  const selected =
+    options.find((option) => option.value === value) ??
+    (selectedOption?.value === value ? selectedOption : null)
   const Icon = selected?.icon
   return (
     <ComboboxPrimitive.Root
@@ -287,7 +292,7 @@ function ComboboxContent({
 } & OptionHoverHandlers) {
   const container = useOverlayContainer()
   return (
-    <ComboboxPrimitive.Portal container={container?.current ?? undefined}>
+    <ComboboxPrimitive.Portal container={container ?? undefined}>
       <ComboboxPrimitive.Positioner
         anchor={anchor}
         sideOffset={4}
@@ -739,7 +744,7 @@ export function ComboboxMultiple({
             {selected.map((option) => (
               <ComboboxPrimitive.Chip
                 key={option.value}
-                className="flex min-w-0 max-w-full items-center gap-1 rounded bg-selection px-2 py-1 text-xs text-selection-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex max-w-full min-w-0 items-center gap-1 rounded bg-selection px-2 py-1 text-xs text-selection-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {option.icon && (
                   <option.icon aria-hidden className="size-3 shrink-0" />

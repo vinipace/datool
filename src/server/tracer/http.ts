@@ -162,7 +162,10 @@ export function assertTracerMutationOrigin(request: Request) {
   }
 }
 
-export async function readJson(request: Request, maxBytes = MAX_TRACER_REQUEST_BYTES): Promise<unknown> {
+export async function readJson(
+  request: Request,
+  maxBytes = MAX_TRACER_REQUEST_BYTES
+): Promise<unknown> {
   const body = await readBoundedJson(request, maxBytes)
   if (body.kind === "too-large") {
     throw new TracerError("VALIDATION_ERROR", `Request body exceeds the ${maxBytes / (1024 * 1024)} MiB limit.`, { status: 413, details: { maxBytes } })

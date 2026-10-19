@@ -1,5 +1,6 @@
 import type { ApiList, Span, SpanOverview, TraceDetail, TraceOverview, TraceSummary } from "@/src/lib/tracer/contracts"
 import { tracerApi, type CollectionListOptions } from "./api"
+import type { TraceReadApi } from "./trace-data-context"
 
 /** Payload consumers must finish every page before presenting complete evidence. */
 export async function readAllTracePages<T>(
@@ -22,7 +23,7 @@ export async function readAllTracePages<T>(
 }
 
 /** A cache belongs to one inspector session, never to another project or trace. */
-export function createTraceDetailLoader(traceId: string, snapshot?: TraceDetail) {
+export function createTraceDetailLoader(traceId: string, snapshot?: TraceDetail, api: TraceReadApi = tracerApi.traces, initial?: TraceOverview) {
   const spans = new Map<string, Span>()
   let payload: TraceSummary | undefined
   let opened = false
@@ -34,7 +35,7 @@ export function createTraceDetailLoader(traceId: string, snapshot?: TraceDetail)
   return {
     async overview(signal: AbortSignal): Promise<TraceOverview> {
       if (snapshot) return snapshot
-      const trace = await tracerApi.traces.overview(traceId, signal, !opened)
+      const trace = !opened && initial ? initial : await api.overview(traceId, signal, !opened)
       signal.throwIfAborted()
       if (trace.rootDetail) {
         if ("kind" in trace.rootDetail) spans.set(trace.rootDetail.id, trace.rootDetail)
@@ -56,7 +57,7 @@ export function createTraceDetailLoader(traceId: string, snapshot?: TraceDetail)
       }
       const cached = spans.get(summary.id)
       if (trace.status !== "running" && current(cached, summary)) return cached!
-      const value = await tracerApi.traces.span(traceId, summary.id, signal)
+      const value = await api.span(traceId, summary.id, signal)
       signal.throwIfAborted()
       spans.set(summary.id, value)
       return value
@@ -64,7 +65,7 @@ export function createTraceDetailLoader(traceId: string, snapshot?: TraceDetail)
     async payload(trace: TraceOverview, signal: AbortSignal): Promise<TraceSummary> {
       if (snapshot) return snapshot
       if (current(payload, trace)) return payload!
-      const value = await tracerApi.traces.payload(traceId, signal)
+      const value = await api.payload(traceId, signal)
       signal.throwIfAborted()
       payload = value
       return value
@@ -73,8 +74,8 @@ export function createTraceDetailLoader(traceId: string, snapshot?: TraceDetail)
       if (snapshot) return snapshot
       const [root, allSpans, scores] = await Promise.all([
         this.payload(trace, signal),
-        readAllTracePages(options => tracerApi.traces.spans(traceId, options), signal),
-        readAllTracePages(options => tracerApi.traces.scores(traceId, options), signal),
+        readAllTracePages(options => api.spans(traceId, options), signal),
+        readAllTracePages(options => api.scores(traceId, options), signal),
       ])
       for (const span of allSpans) spans.set(span.id, span)
       return { ...root, spans: allSpans, scores, spanStats: trace.spanStats, nextSpanCursor: null, nextScoreCursor: null }

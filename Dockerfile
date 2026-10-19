@@ -24,12 +24,15 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build /app/package.json /app/tsconfig.json /app/next.config.ts /app/Procfile /app/app.json ./
+COPY --from=build /app/LICENSE /app/LICENSING.md ./
+COPY --from=build /app/LICENSES ./LICENSES
 COPY --from=build /app/src ./src
 COPY --from=build /app/lib ./lib
 COPY --from=build /app/components ./components
 # Ship only release, worker, and operator commands. Test harnesses are injected
 # into disposable acceptance containers by the host-side test runner.
 COPY --from=build /app/scripts/alerts-worker.ts \
+    /app/scripts/build-worker.ts \
     /app/scripts/backfill-eval-attribution.ts \
     /app/scripts/backfill-missing-costs.ts \
     /app/scripts/check-self-hosting.mjs \

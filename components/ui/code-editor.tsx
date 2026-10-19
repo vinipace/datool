@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { WandSparkles } from "lucide-react"
 import type { JsonObject } from "@/src/lib/tracer/contracts"
 import { cn } from "@/lib/utils"
@@ -22,11 +22,14 @@ export function CodeEditor({
   lineNumbers = true,
   variant = "default",
   tone = "default",
+  insertRequest,
+  onInsertHandled,
 }: {
   value: string
   onChange: (value: string) => void
   language:
     | "javascript"
+    | "jsx"
     | "python"
     | "json"
     | "yaml"
@@ -44,6 +47,8 @@ export function CodeEditor({
   lineNumbers?: boolean
   variant?: "default" | "embedded" | "snippet"
   tone?: "default" | "success" | "error"
+  insertRequest?: { id: string; text: string }
+  onInsertHandled?: () => void
 }) {
   const [formatting, setFormatting] = useState(false)
   const [formatError, setFormatError] = useState<string | null>(null)
@@ -81,6 +86,28 @@ export function CodeEditor({
     options,
   })
 
+  const inserted = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const editor = editorRef.current
+    if (
+      !ready ||
+      !editor ||
+      !insertRequest ||
+      inserted.current === insertRequest.id
+    )
+      return
+    const selection = editor.getSelection()
+    if (!selection) return
+    inserted.current = insertRequest.id
+    editor.pushUndoStop()
+    editor.executeEdits("insert-snippet", [
+      { range: selection, text: insertRequest.text },
+    ])
+    editor.pushUndoStop()
+    editor.focus()
+    onInsertHandled?.()
+  }, [editorRef, ready, insertRequest, onInsertHandled])
+
   return (
     <div
       className={cn(
@@ -94,7 +121,9 @@ export function CodeEditor({
     >
       {showPrettify &&
         !readOnly &&
-        (language === "javascript" || language === "json") && (
+        (language === "javascript" ||
+          language === "jsx" ||
+          language === "json") && (
           <div
             className={cn(
               "flex shrink-0 justify-end",
@@ -124,7 +153,7 @@ export function CodeEditor({
                     import("prettier/plugins/estree"),
                   ])
                   const formatted = await format(source, {
-                    parser: language === "javascript" ? "babel" : "json",
+                    parser: language === "json" ? "json" : "babel",
                     plugins: [babel.default, estree.default],
                     tabWidth: 2,
                   })

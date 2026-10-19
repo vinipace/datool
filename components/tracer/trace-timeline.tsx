@@ -35,10 +35,12 @@ function TimelineSpanIcon({ kind }: { kind: TraceIconKind }) {
 
 export function TraceTimeline({
   trace,
+  eagerRender = false,
   selectedSpanId,
   onSelectSpan,
 }: {
   trace: TraceOverview
+  eagerRender?: boolean
   selectedSpanId: string | null
   onSelectSpan: (spanId: string | null) => void
 }) {
@@ -63,6 +65,7 @@ export function TraceTimeline({
       <div className="min-h-0 flex-1">
         {viewerTrace.spans.length ? (
           <TraceViewer
+            eagerRender={eagerRender}
             hideMiniMap
             hideSearchBar
             withPanel={false}

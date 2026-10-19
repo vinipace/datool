@@ -197,6 +197,7 @@ export function dashboardDetailHandlers(
 ) {
   return [
     ...(scenario === "populated" ? [] : [dashboardDetailHandler(scenario)]),
+    http.get("/api/project-home", () => envelope({ revision: 0, pins: [], widgets: [] })),
     dashboardCatalogHandler(),
     metricsBatchHandler(),
     ...dashboardMutationHandlers(),

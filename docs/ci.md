@@ -22,6 +22,8 @@ GitHub OAuth integration and this config path. Branch pushes run verification;
 main additionally builds and deploys the production image. No production secrets
 are needed for verification or image builds.
 
+The `verify` job checks source lint, product styles, types, Build authorization and durable queues, team migrations, project home, and the read-only Trace Explorer. Its browser tests cover agent authoring and customer-facing UI; the WhatsApp fixture simulates Meta and model responses without sending live messages. The production image check starts the separate Build worker and waits for it to index a queued knowledge source. Deployment requires web, ingestion, and Build processes to be running.
+
 The `verify` job also runs `bun run check:skills` and checks skill discovery
 from the repository root with the pinned skills installer. The installer runs
 from a temporary directory so npm does not interpret the Bun monorepo's

@@ -29,7 +29,7 @@ test("complete lightweight trace survives large payloads, preserves depth, and s
   databases.push(database)
   const service = new TracerService(database)
   const run = runTracerEffect
-  const root = await run(service.createTrace({ name: "Large trace", operation: "workflow", status: "running" }))
+  const root = await run(service.createTrace({ name: "Large trace", operation: "workflow", status: "running", attributes: { "datool.trace.root_span_id": "span-0" } }))
   const startedAt = "2026-09-11T12:00:00.000Z"
   const endedAt = "2026-09-11T12:00:01.000Z"
   const payload = { secretPayload: "x".repeat(10_000) }
@@ -121,8 +121,8 @@ test("trace navigation and lazy payload reads work before the independent span g
     expect(overview.spans.find(span => span.id === "legacy-74")?.group).toBe(null)
     expect(JSON.stringify(overview).includes("selected payload")).toBe(false)
     const opening = await runTracerEffect(service.getTraceOverview("legacy-trace", true))
-    expect(opening.rootDetail?.id).toBe("legacy-0")
-    expect(opening.rootDetail?.output).toEqual({ result: "selected payload" })
+    expect(opening.rootDetail?.id).toBe("legacy-trace")
+    expect(opening.rootDetail?.input).toEqual({ prompt: "trace payload" })
     const selected = await runTracerEffect(service.getTraceSpan("legacy-trace", "legacy-74"))
     expect(selected.input).toEqual({ index: 74 })
     expect(selected.output).toEqual({ result: "selected payload" })

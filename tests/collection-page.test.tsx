@@ -80,10 +80,12 @@ describe("shared collection lifecycle", () => {
     )
   })
 
-  test("a successful empty response uses the resource empty state", () => {
+  test("a successful empty response uses the resource empty state and retains child controls", () => {
     const html = render({ ...loaded, data: [] }, true)
     expect(html).toContain("No matching examples")
-    expect(html).not.toContain("Saved row content")
+    // Table children stay mounted so their display controls remain available.
+    // The Empty browser story verifies that their collection stays hidden.
+    expect(html).toContain("Saved row content")
     expect(html).not.toContain("Retry")
   })
 

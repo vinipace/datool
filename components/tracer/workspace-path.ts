@@ -2,7 +2,7 @@
 
 import { workspacePrefix } from "@/lib/workspace-routing"
 import { useProjectScope } from "./project-scope-context"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/components/navigation/navigation"
 
 export function useWorkspaceHref() {
   const pathname = usePathname()

@@ -3,10 +3,12 @@ import { Fragment } from "react"
 import type { SemanticDataRow } from "@/src/lib/semantic/result"
 import { SpanKindIcon } from "./span-kind-icon"
 import type { TraceIconKind } from "./trace-icon-kind"
+import { ChannelIcon } from "@/components/build/shared/channel-identity"
 import {
   dashboardDimensionText,
   dashboardDimensionIcon,
   dashboardGroupText,
+  dashboardChannelId,
 } from "./dashboard-dimension-icon"
 
 const kinds: Record<string, TraceIconKind> = {
@@ -57,10 +59,13 @@ export function DashboardDimensionLabel({
   wrap?: boolean
 }) {
   const kind = kinds[dimension]
+  const channel = dashboardChannelId(dimension, value)
   const label = dashboardDimensionText(dimension, value)
   return (
     <span className="flex min-w-0 items-center gap-2" title={label}>
-      {kind ? (
+      {channel ? (
+        <ChannelIcon channel={channel} size="sm" />
+      ) : kind ? (
         <SpanKindIcon kind={kind} />
       ) : dashboardDimensionIcon(dimension) ? (
         <Layers className="size-4 shrink-0" aria-hidden="true" />

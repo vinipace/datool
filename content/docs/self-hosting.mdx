@@ -6,6 +6,11 @@ icon: hosting
 
 ## Services
 
+Observe, Test, and the SDKs use Apache 2.0. Build uses Elastic License 2.0,
+which restricts offering its substantial functionality as a hosted or managed
+service to third parties. See [Licensing](/docs/licensing) before offering a
+hosted deployment to customers.
+
 Datool's web application handles the UI and API. PostgreSQL stores accounts and project data. Redis queues trace lifecycle events, and a separate ingestion worker persists those events to PostgreSQL.
 
 Queued SDK delivery requires all four services. Starting only the web server does not start the ingestion worker.

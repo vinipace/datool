@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { NavigationLink as Link } from "@/components/navigation/navigation"
 import { Layers } from "lucide-react"
 import type { InvocationGroup } from "@/src/lib/tracer/groups"
 import { SpanKindIcon } from "./span-kind-icon"

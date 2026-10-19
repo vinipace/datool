@@ -40,6 +40,9 @@ describe("TracerService semantic adapters", () => {
     const metadata = await runTracerEffect(service.getSemanticMetricsMetadata())
     expect(metadata.models.map((model) => model.name)).toEqual([
       "agents",
+      "buildCsat",
+      "buildEvents",
+      "buildTickets",
       "evalClassification",
       "evalComparison",
       "evalQuality",

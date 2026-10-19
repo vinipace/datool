@@ -20,6 +20,8 @@ const buttonVariants = cva(
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
           "border border-border bg-background text-foreground hover:bg-muted",
+        dashed:
+          "border border-dashed border-border bg-transparent text-foreground-muted hover:bg-muted hover:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         "scorer-llm":

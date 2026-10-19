@@ -16,8 +16,26 @@ export const mcpScopes = [
   "evals:read",
   "evals:write",
 ] as const
+
+/**
+ * Build scopes are kept separate from the legacy tracer MCP default list so
+ * existing MCP clients keep their current tool inventory. The resource
+ * metadata advertises both lists, and a client can request the Build scopes
+ * explicitly when it needs agent-authoring or runtime access.
+ */
+export const buildScopes = [
+  "build:read",
+  "build:write",
+  "build:run",
+] as const
+export type BuildScope = (typeof buildScopes)[number]
+
+/** All scopes accepted by the primary MCP resource. */
+export const mcpResourceScopes = [...mcpScopes, ...buildScopes] as const
+
 export const workspaceScopes = [
   ...mcpScopes,
+  ...buildScopes,
   "prompts:read",
   "prompts:write",
   "traces:write",

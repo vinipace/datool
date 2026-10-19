@@ -14,16 +14,20 @@ export type DashboardScope = {
   to: string
   timezone: string
 }
+
+export function supportsSharedTraceFilters(model: string) {
+  return ["logs", "spans", "traces", "evalQuality", "evalResults"].includes(
+    model
+  )
+}
+
 export function scopedWidget<T extends DashboardContentWidget>(
   widget: T,
   scope: DashboardScope
 ): T {
   if (widget.type === "text") return widget
   const model = widget.query.measures[0].split(".")[0]
-  if (
-    scope.filter &&
-    !["logs", "spans", "traces", "evalQuality", "evalResults"].includes(model)
-  )
+  if (scope.filter && !supportsSharedTraceFilters(model))
     throw new Error(
       `Shared trace filters are not supported by ${model} widgets.`
     )

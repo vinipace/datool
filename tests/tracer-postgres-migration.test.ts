@@ -161,6 +161,7 @@ describe("PostgreSQL migrations", () => {
         span_id: null,
         session_id: null,
         eval_run_id: null,
+        feedback_key: null,
         event_at_ms: Date.parse(oldScore.created_at),
       })
       const traces = await pool.query(
@@ -200,6 +201,42 @@ describe("PostgreSQL migrations", () => {
       await pool.end()
     }
   }, 15_000)
+
+  test("public-main installations gain Build without losing existing traces or reports", async () => {
+    target = await createIsolatedPostgres()
+    const pool = new Pool({ connectionString: target.databaseUrl })
+    try {
+      const files = (await readdir("migrations")).filter(file => file.endsWith(".sql")).sort()
+      // Public main shipped the view/report migrations before Build existed.
+      // Several Build migrations share their numeric prefixes with those files.
+      const baseline = files.filter(file => file <= "0046_review_default_object_view.sql" && !file.includes("_build_"))
+      await pool.query("create table schema_migration(name text primary key, applied_at timestamptz not null default now())")
+      for (const file of baseline) {
+        await pool.query(await readFile(`migrations/${file}`, "utf8"))
+        await pool.query("insert into schema_migration(name) values ($1)", [file])
+      }
+      await seedTestWorkspace(target)
+      await pool.query(`insert into traces(project_id,id,name,operation,status,started_at,attributes_json)
+        values($1,'release-history','Saved trace','upgrade','completed','2026-10-01T00:00:00Z','{"customer":"fixture"}')`, [target.projectId])
+      await pool.query(`insert into reports(id,project_id,number,name,description,template_id,widget_count,config_json,snapshot_json,creation_key,input_hash,created_at,frozen_at)
+        values('release-report',$1,1,'Saved report','Retained evidence','fixture',0,'{}','{"saved":true}','release-fixture','fixture','2026-10-01','2026-10-01')`, [target.projectId])
+      const history = (await pool.query("select * from traces where id='release-history'")).rows
+      const reports = (await pool.query("select * from reports where id='release-report'")).rows
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await promisify(execFile)(process.execPath, ["--no-env-file", "scripts/migrate.ts"], {
+          env: { ...process.env, DATABASE_URL: target.databaseUrl }, timeout: 15000,
+        })
+      }
+      expect((await pool.query("select * from traces where id='release-history'")).rows).toEqual(history)
+      expect((await pool.query("select * from reports where id='release-report'")).rows).toEqual(reports)
+      expect((await pool.query("select name from schema_migration order by name")).rows.map(row => row.name)).toEqual(files)
+      await pool.query("select id from build_agents limit 1")
+      await pool.query("select id from build_channel_connection limit 1")
+      await pool.query("select url from build_knowledge_crawl_pages limit 1")
+    } finally {
+      await pool.end()
+    }
+  }, 45000)
 
   test("the migration runner records applied files and safely runs twice", async () => {
     target = await createIsolatedPostgres()

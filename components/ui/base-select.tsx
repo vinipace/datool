@@ -72,6 +72,7 @@ function SelectContent({
         sideOffset={sideOffset}
         align={align}
         alignItemWithTrigger={alignItemWithTrigger}
+        positionMethod={overlayContainer ? "fixed" : undefined}
         className="isolate z-50"
       >
         <SelectPrimitive.Popup

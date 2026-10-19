@@ -5,6 +5,15 @@ import { InspectorPanels } from "./inspector-panels"
 import { traceDetail } from "../../.storybook/scenarios/traces/fixtures"
 import { TraceInspectorOverlay } from "./trace-list-overlay"
 import { Button } from "@/components/ui/button"
+import { StorybookProjectFrame } from "../../.storybook/component-frame"
+import { TraceListTable } from "./trace-list-table"
+import { DEFAULT_TRACE_LIST_COLUMNS } from "./trace-list-utils"
+import type { TraceDetail } from "@/src/lib/tracer/contracts"
+
+function urlState(href: string) {
+  const url = new URL(href)
+  return [url.origin, url.pathname, [...url.searchParams.entries()], url.hash]
+}
 
 function OverlayExample() {
   const [open, setOpen] = React.useState(true)
@@ -87,7 +96,7 @@ export const MaximizeAndRestore: Story = {
     await expect(canvas.getByRole("button", { name: "Restore trace panel" })).toBeVisible()
     canvas.getByRole("button", { name: "Restore trace panel" }).focus()
     await userEvent.keyboard("{Escape}")
-    await waitFor(() => expect(window.location.href).toBe(originalUrl))
+    await waitFor(() => expect(urlState(window.location.href)).toEqual(urlState(originalUrl)))
     await expect(workspace).toBeVisible()
     await expect(input).toHaveValue("Existing selection")
     await expect(canvas.getByRole("button", { name: "Maximize trace" })).toHaveFocus()
@@ -119,7 +128,7 @@ export const MobileFullscreen: Story = {
       await expect(canvas.queryByRole("separator", { name: "Resize inspector" })).not.toBeInTheDocument()
       await expect(canvas.queryByRole("button", { name: /Maximize trace|Restore trace panel/ })).not.toBeInTheDocument()
       await expect(canvas.queryByRole("link", { name: "Open trace full page" })).not.toBeInTheDocument()
-      await expect(window.location.href).toBe(originalUrl)
+      await expect(urlState(window.location.href)).toEqual(urlState(originalUrl))
       await expect(window.history.length).toBe(originalHistoryLength)
       if (closeWith === "button") await userEvent.click(close)
       else {
@@ -201,7 +210,7 @@ export const CloseWhileMaximized: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Close trace inspector" }))
     await expect(canvas.getByText("Inspector closed")).toBeVisible()
     await expect(canvas.queryByRole("button", { name: "Maximize trace" })).not.toBeInTheDocument()
-    await expect(window.location.href).toBe(originalUrl)
+    await expect(urlState(window.location.href)).toEqual(urlState(originalUrl))
     await expect(canvas.getByText("Trace list workspace")).toBeVisible()
     await waitFor(() => expect(canvas.getByRole("textbox", { name: "Preserved list state" })).toHaveFocus())
   },
@@ -216,5 +225,134 @@ export const CloseMaximizedLink: Story = {
     await expect(canvas.getByText("Inspector closed")).toBeVisible()
     await expect(new URL(window.location.href).searchParams.has("inspector")).toBe(false)
     await expect(canvas.getByText("Trace list workspace")).toBeVisible()
+  },
+}
+
+const agentTurn: TraceDetail = {
+  ...traceDetail,
+  id: "agent-turn-storybook",
+  name: "Chat Bubble QA",
+  operation: "support.respond",
+  group: { type: "agent", name: "chat-bubble-qa" },
+  attributes: { "datool.span.kind": "agent" },
+  input: "test now",
+  output: "Test received! How can I help with your local UI test?",
+  scores: [],
+  spanStats: {
+    errorCount: 0,
+    llmCalls: 1,
+    llmDurationMs: 1410,
+    spanCount: 1,
+    toolCalls: 0,
+  },
+  spans: [
+    {
+      ...traceDetail.spans[0],
+      id: "model-storybook",
+      traceId: "agent-turn-storybook",
+      name: "chat test-model",
+      kind: "llm",
+      group: null,
+      attributes: {},
+      input: {
+        messages: [
+          {
+            role: "system",
+            parts: [{ type: "text", content: "Answer the user's UI test." }],
+          },
+          { role: "user", parts: [{ type: "text", content: "test now" }] },
+        ],
+      },
+      output: [
+        {
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              content: "Test received! How can I help with your local UI test?",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
+function AgentTurnExample() {
+  const [open, setOpen] = React.useState(true)
+  return (
+    <StorybookProjectFrame title="Traces">
+      <InspectorPanels>
+        <TraceListTable
+          columns={DEFAULT_TRACE_LIST_COLUMNS}
+          traces={[agentTurn]}
+          selectedTraceId={open ? agentTurn.id : null}
+          onOpenTrace={() => setOpen(true)}
+        />
+        {open && (
+          <TraceInspectorOverlay
+            onClose={() => setOpen(false)}
+            snapshot={agentTurn}
+            traceId={agentTurn.id}
+          />
+        )}
+      </InspectorPanels>
+    </StorybookProjectFrame>
+  )
+}
+
+export const AgentTurnPayload: Story = {
+  render: () => <AgentTurnExample />,
+  beforeEach: () => {
+    const keys = [
+      "datool:trace-inspector:tab",
+      "datool:trace-inspector:detail-tab",
+      "datool:trace-inspector:section:input",
+      "datool:trace-inspector:section:output",
+    ]
+    const saved = keys.map((key) => localStorage.getItem(key))
+    keys.forEach((key) => localStorage.removeItem(key))
+    return () =>
+      keys.forEach((key, index) => {
+        const value = saved[index]
+        if (value === null) localStorage.removeItem(key)
+        else localStorage.setItem(key, value)
+      })
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const page = within(canvasElement.ownerDocument.body)
+    const row = await canvas.findByRole("row", { name: /Open Chat Bubble QA/ })
+    await expect(within(row).getByRole("img", { name: "agent" })).toBeVisible()
+    await expect(within(row).getByText("test now")).toBeVisible()
+    await expect(
+      canvas.findByRole("heading", { name: "Chat Bubble QA" })
+    ).resolves.toBeVisible()
+    const input = () =>
+      canvas
+        .getByText("Input", { selector: "summary span", exact: true })
+        .closest("details")!
+    await expect(within(input()).getByText("test now")).toBeVisible()
+    const browse = canvas.queryByRole("button", { name: "Browse traces" })
+    if (browse) await userEvent.click(browse)
+    const root = page.getByRole("button", { name: /^agent Chat Bubble QA/ })
+    await expect(within(root).getByRole("img", { name: "agent" })).toBeVisible()
+
+    // Selecting the model must keep its own type and captured payload.
+    await userEvent.click(page.getByRole("button", { name: /chat test-model/ }))
+    await expect(
+      canvas.findByRole("heading", { name: "chat test-model" })
+    ).resolves.toBeVisible()
+    await expect(
+      within(input()).getByText("Answer the user's UI test.")
+    ).toBeVisible()
+    await expect(within(input()).getByText("test now")).toBeVisible()
+    if (browse) await userEvent.click(browse)
+    page.getByRole("button", { name: /^agent Chat Bubble QA/ }).focus()
+    await userEvent.keyboard("{Enter}")
+    await expect(
+      canvas.findByRole("heading", { name: "Chat Bubble QA" })
+    ).resolves.toBeVisible()
+    await expect(within(input()).getByText("test now")).toBeVisible()
   },
 }

@@ -218,6 +218,21 @@ jobs:
           name: Verify session hierarchy and complete trace loading
           command: bun test tests/session-detail-loader.test.ts tests/session-conversation.test.ts tests/trace-inspector-data.test.ts tests/trace-detail-loader.test.ts
       - run:
+          name: Verify lint, product styles, and types
+          command: bun run lint && bun run check:styles && bun run typecheck
+      - run:
+          name: Verify Build, channels, teams, and project home
+          command: |
+            bun run build:chatgpt
+            bun test tests/build-*.test.ts tests/build-*.test.tsx tests/project-home.test.ts tests/organization-teams.test.ts tests/chatgpt-trace-explorer.test.ts
+      - run:
+          name: Verify agent authoring and WhatsApp through HTTP and browser boundaries
+          command: |
+            bunx playwright install --with-deps chromium
+            bun run build:monaco
+            bun --no-env-file scripts/test-build-e2e.ts
+            bun run test:whatsapp:e2e
+      - run:
           name: Verify public agent discovery contracts
           command: |
             bun run check:docs
@@ -408,13 +423,14 @@ jobs:
               -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
               "datool-deploy@$DOKKU_SSH_HOST" disk:load-image datool "$image" "$image_bytes" < image.tar.gz
       - run:
-          name: Verify web and worker processes
+          name: Verify web, ingestion, and Build processes
           command: |
             ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               "datool-deploy@$DOKKU_SSH_HOST" ps:report datool > process-report.txt
             cat process-report.txt
             grep -Eq 'Status web 1:[[:space:]]+running' process-report.txt
             grep -Eq 'Status worker 1:[[:space:]]+running' process-report.txt
+            grep -Eq 'Status buildworker 1:[[:space:]]+running' process-report.txt
             test "$(ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               "datool-deploy@$DOKKU_SSH_HOST" ps:report datool --running)" = true
       - run:

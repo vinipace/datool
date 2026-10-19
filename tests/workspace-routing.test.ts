@@ -41,6 +41,7 @@ test("View all projects retains the active project in its route", () => {
   const organization = { id: "org-id", slug: "acme", name: "Acme" }
   const project = { slug: "selected-project" }
   const projectsUrl = projectHref(organization, project, "projects")
+  expect(projectHref(organization, project)).toBe("/p/selected-project")
   expect(projectsUrl).toBe("/p/selected-project/projects")
   expect(workspacePrefix(projectsUrl)).toBe(
     workspacePrefix(projectHref(organization, project))

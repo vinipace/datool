@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation"
+import { ProjectHomePage } from "@/components/tracer/project-home-page"
 import { pageMetadata } from "@/lib/page-metadata"
 
-export const metadata = pageMetadata("traces")
-export default async function Page({ params }: { params: Promise<{ projectSlug: string }> }) {
- const { projectSlug } = await params
- redirect(`/p/${encodeURIComponent(projectSlug)}/traces`)
+export const metadata = pageMetadata("projectHome")
+export default function Page() {
+ return <ProjectHomePage />
 }

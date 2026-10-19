@@ -142,3 +142,24 @@ test("an unconfigured deployment host fails before SSH setup", () => {
   expect(result.stderr).toContain("Configure DOKKU_SSH_HOST in the restricted CircleCI context")
   expect(() => readFileSync(join(directory, ".ssh/datool_deploy"))).toThrow()
 })
+
+for (const [status, expected] of [
+  ["running", 0],
+  ["crashed", 1],
+  ["missing", 1],
+] as const) test(`deployment requires a running Build worker (${status})`, () => {
+  const { directory } = fixture()
+  writeFileSync(join(directory, "process-fixture.txt"), [
+    "Status web 1: running",
+    "Status worker 1: running",
+    ...(status === "missing" ? [] : [`Status buildworker 1: ${status}`]),
+  ].join("\n") + "\n")
+  writeFileSync(join(directory, "bin/ssh"), '#!/bin/sh\ncase "$*" in *--running) echo true ;; *) cat process-fixture.txt ;; esac\n', { mode: 0o755 })
+  const command = steps.find(step => step.name === "Verify web, ingestion, and Build processes")!.command
+  const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", command], {
+    cwd: directory,
+    env: { ...process.env, PATH: `${join(directory, "bin")}:${process.env.PATH}`, DOKKU_SSH_HOST: "dokku.example.invalid" },
+    encoding: "utf8",
+  })
+  expect(result.status).toBe(expected)
+})

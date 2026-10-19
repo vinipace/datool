@@ -48,6 +48,10 @@ __pycache__/
 
 # Generated local Monaco worker bundles
 public/monaco/
+public/widget-runtime.js
+public/widget-runtime.css
+public/licenses/
+public/mcp-apps/
 
 # Generated reports, screenshots, recordings, traces, and npm release artifacts.
 # Keep real execution evidence outside the public source repository.

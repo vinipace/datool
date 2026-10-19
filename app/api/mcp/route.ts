@@ -5,4 +5,4 @@ export const dynamic = "force-dynamic"
 export const POST = (request: Request) => handleMcp(request)
 export const GET = POST
 export const DELETE = POST
-export const OPTIONS = mcpOptions
+export const OPTIONS = (request: Request) => mcpOptions(request)

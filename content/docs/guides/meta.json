@@ -6,7 +6,8 @@
     "dashboards",
     "reviews",
     "alerts",
-    "providers"
+    "providers",
+    "whatsapp"
   ],
   "icon": "documentation"
 }

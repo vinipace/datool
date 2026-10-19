@@ -51,7 +51,9 @@ const nextConfig: NextConfig = {
     : {}),
   serverExternalPackages: ["autoevals", "esbuild"],
   outputFileTracingIncludes: {
+    "/api/mcp/trace-explorer": ["./public/mcp-apps/trace-explorer.html"],
     "/api/**": [
+      "./src/server/build/knowledge/document-worker.mjs",
       "./src/server/sandbox/evaluator-worker.mjs",
       "./src/server/sandbox/python-evaluator-worker.py",
       "./src/server/sandbox/library-evaluator-worker.mjs",
@@ -65,12 +67,11 @@ export default (phase: string) => {
   const config = withPayload(
     phase === PHASE_PRODUCTION_SERVER ? nextConfig : createMDX()(nextConfig)
   )
-  // Payload's bare package include can match Bun directory symlinks. Next 16.3
-  // hashes includes as files; trace package contents instead (Next.js #96626).
+  // This installation uses Payload's PostgreSQL adapter. Its unconditional
+  // SQLite include is unnecessary, and recursively searching Bun's linked
+  // dependency tree for it can exhaust the build's tracing heap.
   for (const [route, patterns] of Object.entries(config.outputFileTracingIncludes ?? {})) {
-    config.outputFileTracingIncludes![route] = patterns.map((pattern) =>
-      pattern === "@libsql/client" ? "./node_modules/**/@libsql/client/**/*.*" : pattern
-    )
+    config.outputFileTracingIncludes![route] = patterns.filter((pattern) => pattern !== "@libsql/client")
   }
   return config
 }

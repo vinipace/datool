@@ -68,8 +68,8 @@ export function HeaderDisplay({ settings = [], rowHeight, onRowHeightChange, col
   </DropdownMenu></HeaderSlot>
 }
 
-export function CollectionHeaderControls({ children, actions, displayActions, onRefresh, isRefreshing, onExportJson, onExportCsv, exportRows, exportName = "rows", menuActions, showExport = true, menuTriggerRef, onMenuCloseAutoFocus }: React.PropsWithChildren<{
-  actions?: React.ReactNode; displayActions?: React.ReactNode; onRefresh: () => void; isRefreshing?: boolean; onExportJson?: () => void; onExportCsv?: () => void; exportRows?: unknown[]; exportName?: string; menuActions?: React.ReactNode; showExport?: boolean; menuTriggerRef?: React.Ref<HTMLButtonElement>; onMenuCloseAutoFocus?: React.ComponentProps<typeof DropdownMenuContent>["onCloseAutoFocus"]
+export function CollectionHeaderControls({ children, actions, displayActions, onRefresh, isRefreshing, onExportJson, onExportCsv, exportRows, exportName = "rows", menuActions, showExport = true, showRefresh = true, menuTriggerRef, onMenuCloseAutoFocus }: React.PropsWithChildren<{
+  actions?: React.ReactNode; displayActions?: React.ReactNode; onRefresh: () => void; isRefreshing?: boolean; onExportJson?: () => void; onExportCsv?: () => void; exportRows?: unknown[]; exportName?: string; menuActions?: React.ReactNode; showExport?: boolean; showRefresh?: boolean; menuTriggerRef?: React.Ref<HTMLButtonElement>; onMenuCloseAutoFocus?: React.ComponentProps<typeof DropdownMenuContent>["onCloseAutoFocus"]
 }>) {
   const { refreshInMenu } = React.useContext(CollectionHeaderContext)
   const exportJson = onExportJson ?? (exportRows ? () => downloadTraceExport({ content: JSON.stringify(exportRows, null, 2), filename: `datool-${exportName}.json`, type: "application/json" }) : undefined)
@@ -77,15 +77,15 @@ export function CollectionHeaderControls({ children, actions, displayActions, on
     <HeaderSlot name="filter">{children}</HeaderSlot>
     <HeaderSlot name="actions">{actions}</HeaderSlot>
     <HeaderSlot name="display">{displayActions}</HeaderSlot>
-    {!refreshInMenu && <HeaderSlot name="refresh"><Button variant="ghost" className={headerButtonClass} aria-label="Refresh" onClick={onRefresh}><RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} /></Button></HeaderSlot>}
-    <HeaderSlot name="menu"><DropdownMenu>
+    {showRefresh && !refreshInMenu && <HeaderSlot name="refresh"><Button variant="ghost" className={headerButtonClass} aria-label="Refresh" onClick={onRefresh}><RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} /></Button></HeaderSlot>}
+    {(menuActions || showExport || (showRefresh && refreshInMenu)) && <HeaderSlot name="menu"><DropdownMenu>
       <DropdownMenuTrigger asChild><Button variant="ghost" className={headerButtonClass} aria-label="More actions" ref={menuTriggerRef}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" onCloseAutoFocus={onMenuCloseAutoFocus}>
-        {refreshInMenu && <><DropdownMenuItem onSelect={onRefresh}><RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />Refresh</DropdownMenuItem>{(menuActions || showExport) && <DropdownMenuSeparator />}</>}
+        {showRefresh && refreshInMenu && <><DropdownMenuItem onSelect={onRefresh}><RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />Refresh</DropdownMenuItem>{(menuActions || showExport) && <DropdownMenuSeparator />}</>}
         {menuActions}{showExport && <><DropdownMenuLabel>Export loaded rows</DropdownMenuLabel>
         <DropdownMenuItem disabled={!exportJson} onSelect={exportJson}><Download className="size-3.5" />Export JSON</DropdownMenuItem>
         {onExportCsv ? <DropdownMenuItem onSelect={onExportCsv}><Download className="size-3.5" />Export CSV</DropdownMenuItem> : null}</>}
       </DropdownMenuContent>
-    </DropdownMenu></HeaderSlot>
+    </DropdownMenu></HeaderSlot>}
   </>
 }

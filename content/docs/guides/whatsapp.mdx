@@ -1,0 +1,205 @@
+---
+title: WhatsApp
+description: Connect a customer experience agent with Meta Embedded Signup, including WhatsApp Business App coexistence.
+icon: documentation
+---
+
+WhatsApp connects an agent to a business phone number through Meta's Cloud API.
+Customers authorize their own business using Embedded Signup. With coexistence,
+they can keep the WhatsApp Business App on the same number.
+
+## Configure Meta
+
+The Datool operator configures one Meta application for the installation. Each
+customer then authorizes their own WhatsApp Business Account (WABA) and number.
+
+1. Create a **Business** app in [Meta for Developers](https://developers.facebook.com/apps/),
+   associate your business portfolio, and add WhatsApp and Facebook Login for
+   Business. Complete business verification and the Tech Provider onboarding
+   requirements shown in your Meta dashboard, including access verification
+   where requested.
+2. Add your production app domain, public privacy policy, and user-data deletion
+   URL/instructions. Configure Facebook Login for Business's allowed JavaScript
+   SDK domains and OAuth redirects for the Datool origin. Enable HTTPS and the
+   JavaScript SDK login flow. A local HTTP URL cannot receive Meta webhooks;
+   use a separate public HTTPS staging domain or tunnel for development.
+3. Create a WhatsApp **Embedded Signup** configuration in Facebook Login for
+   Business. Use the current supported signup version (v4 for new configurations)
+   and enable WhatsApp Business App onboarding/coexistence. Copy its configuration
+   ID. Datool requests `response_type=code` and uses the
+   `whatsapp_business_app_onboarding` feature for coexistence.
+4. Request Advanced Access through App Review for
+   `whatsapp_business_management` and `whatsapp_business_messaging`. Provide a
+   reviewer test account and recording of signup, messaging, and disconnection.
+   Add `business_management` if Meta requires it for the selected configuration
+   or business-asset access; Datool's adapter does not enumerate portfolios.
+   Finish any additional requirements in the dashboard and switch to Live mode
+   before onboarding unrelated customer businesses. Development mode is for
+   authorized app roles/test assets.
+5. Set the WhatsApp webhook callback to
+   `https://YOUR-DATOOL-HOST/api/build-webhooks/whatsapp`. Enter the same verify
+   token configured on your server. Subscribe to `messages`, `account_update`,
+   `history`, `smb_app_state_sync`, and `smb_message_echoes`. Datool subscribes
+   the authorized WABA to the app when the customer activates the channel.
+6. Configure the customer's payment method in WhatsApp Manager as required by
+   Meta. This integration does not provide a BSP credit line or take over the
+   customer's Meta billing.
+
+Meta controls app approval, number eligibility, and coexistence availability;
+configuring these fields does not itself approve the app. Refer to
+[Meta's Embedded Signup documentation](https://developers.facebook.com/docs/whatsapp/embedded-signup/),
+[Meta's onboarding API collection](https://www.postman.com/meta/whatsapp-business-platform/documentation/du6gzjv/embedded-signup),
+and the [Tech Provider review guide](https://www.twilio.com/docs/whatsapp/isv/tech-provider-program/integration-guide)
+for the current dashboard requirements. The Twilio guide explains Meta's review
+process; this Datool integration calls Meta directly and needs no Twilio account.
+
+## Configure Datool
+
+Set these **server-side** environment variables on both the web process and the
+Build worker. Never put the app secret, customer tokens, or verification token
+in `NEXT_PUBLIC_*` variables or agent instructions.
+
+```dotenv
+DATOOL_PUBLIC_URL=https://YOUR-DATOOL-HOST
+DATOOL_META_APP_ID=YOUR_META_APP_ID
+DATOOL_META_APP_SECRET=YOUR_META_APP_SECRET
+DATOOL_META_WHATSAPP_CONFIG_ID=YOUR_EMBEDDED_SIGNUP_CONFIG_ID
+DATOOL_META_WEBHOOK_VERIFY_TOKEN=YOUR_RANDOM_VERIFICATION_TOKEN
+DATOOL_META_GRAPH_VERSION=v23.0
+```
+
+The Graph version is pinned and configurable. Use a version supported by your
+Meta app and validate changes in staging before upgrading. Generate the verify
+token with `openssl rand -hex 32` and paste it into Meta's webhook configuration.
+
+Apply the database migrations, including `0055_whatsapp_channel.sql`, restart
+the web process, and run a persistent worker:
+
+```sh
+bun run db:migrate
+bun run worker:build
+```
+
+Both processes must share the same database and encryption key
+(`DATOOL_PROVIDER_ENCRYPTION_KEY`, or its `BETTER_AUTH_SECRET` fallback). Keep
+that key stable and backed up. Docker Compose passes the WhatsApp settings to
+both services. Configure a model-provider key in each customer project.
+
+## Connect a customer's number
+
+1. Create and publish the agent. Add its knowledge, guardrails, and actions, then
+   verify them in Playground.
+2. Open the agent's **Channels**, choose **WhatsApp**, and choose either
+   **Keep using the WhatsApp Business App** or **Connect a number for the Cloud API**.
+3. Select **Set up connection**, then **Continue with Meta**. The customer signs
+   in to Meta, authorizes their business, and completes number verification.
+   A coexistence flow may ask them to confirm from their Business App.
+4. Review the number returned by Meta and select **Connect number**. For a Cloud
+   API number, supply its existing six-digit two-step verification PIN if one
+   exists; otherwise Datool generates and encrypts a PIN for registration.
+   Coexistence never calls the register/deregister endpoints.
+5. Send a message from a separate test phone. Verify the reply, Inbox transcript,
+   agent trace, and delivery receipt before using the number with customers.
+
+Signup attempts expire after 30 minutes. If authorization is interrupted,
+restart from the channel page. One phone number can belong to only one Datool
+channel across the installation. To move it, disconnect it first.
+
+## Coexistence and human replies
+
+Messages sent from the Business App arrive as `smb_message_echoes`. Datool adds
+them to the conversation and gives it human ownership, fencing queued AI
+responses. Return the conversation to AI from Inbox when the team is finished.
+A provider request already in flight cannot be recalled.
+
+The connection page can request the customer's shared contacts and history
+during Meta's initial onboarding window. Only request data the customer has
+agreed to share. Imports are deduplicated, never trigger an agent reply, and
+never open a new 24-hour reply window. Imported history is available in the
+conversation ledger; it does not create active inbox tickets. Meta determines
+how much history is available and may decline a sync request. See the
+[coexistence event reference](https://docs.360dialog.com/partner/onboarding/whatsapp-coexistence/coexistence-webhooks).
+
+**Pause** stops automated channel delivery. **Disconnect** removes the local
+credentials, cancels queued work and stops routing. It does not deregister the
+number, delete customer history, or unsubscribe other numbers on the same WABA.
+A customer can separately revoke the app's access in Meta Business settings.
+
+## Reply windows, consent, and templates
+
+A new customer message opens/resets the 24-hour service window. Free-form
+replies are allowed only while it is open. Outside it, send an approved Meta
+template. Datool checks the window immediately before delivery, records
+explicit permission for template messages, and suppresses opted-out or blocked
+contacts. Incoming `STOP`, `unsubscribe`, `cancelar`, `parar`, or `sair` opts out
+that recipient until an operator records new permission.
+
+Create simple text templates on the channel page; use MCP for full template
+components and template sends. Meta reviews templates and determines approval,
+category, limits, and charges. Permission is not implied by having a phone
+number or importing history. Follow the
+[WhatsApp Business Messaging Policy](https://business.whatsapp.com/policy).
+
+The adapter accepts text, interactive replies and media references. Outbound
+text is limited to 4,096 characters per message; longer replies fail visibly
+instead of being silently truncated. Keep agent responses concise. Each media
+message contains one attachment with a caption of up to 1,024 characters, using
+a public HTTPS URL or a Meta media ID. MCP can download received media up to
+5 MiB while Meta retains it. Audio transcription, voice calls, and bulk WhatsApp
+campaign scheduling are not implemented.
+
+## MCP and API
+
+All operations use the existing authenticated Build registry, so the same
+capabilities are available through MCP, the CLI, and
+`POST /api/build/OPERATION`. Writes require a stable `idempotencyKey`.
+
+| Task                            | Operations                                                                                                                          |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Read installation/number status | `build_get_whatsapp_setup`, `build_get_whatsapp_connection`, `build_refresh_whatsapp_connection`                                    |
+| Start/resume signup             | `build_create_channel` with `channel: "whatsapp"`, `build_begin_whatsapp_signup`, `build_get_whatsapp_signup`                       |
+| Complete signup                 | `build_authorize_whatsapp_signup`, `build_activate_whatsapp_signup`                                                                 |
+| Pause/disconnect                | `build_update_channel_status`, `build_disconnect_whatsapp`                                                                          |
+| Templates                       | `build_list_whatsapp_templates`, `build_create_whatsapp_template`, `build_delete_whatsapp_template`, `build_send_whatsapp_template` |
+| Recipient permissions/window    | `build_get_whatsapp_recipient`, `build_set_whatsapp_consent`                                                                        |
+| Business App import             | `build_sync_whatsapp_app` with `consent: true`                                                                                      |
+| Delivery/media                  | `build_get_whatsapp_delivery`, `build_get_whatsapp_media`, `build_list_delivery_failures`                                           |
+| Inbox/handoff                   | `build_list_tickets`, `build_get_ticket`, `build_send_human_reply`, and the existing conversation ownership operations              |
+
+Signup returns a `connectUrl` for the human to authorize Meta in the browser.
+MCP cannot bypass that authorization. The browser sends the one-use code to the
+server; the server verifies the app, granted WABA and phone before saving the
+encrypted token. The token is never returned through MCP or the browser.
+
+Read operations require `build:read`. Configuration requires `build:write`;
+operations that authorize or call Meta to mutate external state also require
+`build:run`. Template sends and human replies require `build:run`.
+
+## Verification and failures
+
+Run the repeatable integration check against an explicitly disposable local
+PostgreSQL database:
+
+```sh
+DATOOL_TEST_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/TEST_DATABASE \
+  bun --no-env-file scripts/test-whatsapp-e2e.ts
+```
+
+It creates and removes an isolated schema, exercises HTTP webhooks and MCP,
+creates an agent with indexed knowledge and guardrails, calls an HTTP action
+using synthetic data against Postman's echo service, and checks the durable
+reply and coexistence flows. Meta and model responses are simulated. This does
+not prove your app approval, live Embedded Signup, public TLS, number
+eligibility, or real phone delivery.
+
+Before customer launch, complete a live test: signup in both modes you will
+support, customer inbound/reply, read receipt, Business App manual reply and AI
+handoff, return to AI, opted-in template outside the reply window, and disconnect.
+Use a dedicated test number and verify the worker is running.
+
+Provider timeouts after sending are marked **uncertain**, never automatically
+retried, because Meta offers no client message idempotency key. Check delivery
+before deciding to send a new message. Rate limits retry with backoff; expired
+credentials require reconnecting. Keep proxy request logs free of OAuth codes,
+webhook verify tokens and request bodies. Datool's webhook logs contain only a
+sanitized failure code.

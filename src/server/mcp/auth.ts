@@ -3,8 +3,12 @@ import { getAuth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { assertBillingAccess } from "@/src/server/billing/store"
 import { TracerError } from "@/src/server/tracer/errors"
-import { roleScopes, mcpScopes, workspaceScopes } from "@/src/lib/auth/permissions"
-export { mcpScopes } from "@/src/lib/auth/permissions"
+import {
+  roleScopes,
+  mcpResourceScopes,
+  workspaceScopes,
+} from "@/src/lib/auth/permissions"
+export { mcpScopes, mcpResourceScopes } from "@/src/lib/auth/permissions"
 export type McpConfig = {
   resource: string
   issuer: string
@@ -72,7 +76,7 @@ export function resourceMetadata(config: McpConfig) {
   return {
     resource: config.resource,
     authorization_servers: [config.issuer],
-    scopes_supported: [...mcpScopes],
+    scopes_supported: [...(config.scopes ?? mcpResourceScopes)],
     bearer_methods_supported: ["header"],
     resource_name: "Datool MCP",
   }
@@ -110,7 +114,7 @@ export async function verifyMcpToken(
     typeof payload.scope === "string"
       ? payload.scope
           .split(/\s+/)
-          .filter((scope) => ((config.scopes ?? mcpScopes) as readonly string[]).includes(scope))
+          .filter((scope) => ((config.scopes ?? mcpResourceScopes) as readonly string[]).includes(scope))
       : []
   if (!scopes.length)
     throw new McpAuthError("A Datool resource scope is required.", 403)

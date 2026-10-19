@@ -255,6 +255,7 @@ export function DashboardRenderer({
   onLayoutChange,
   onWidgetChange,
   onWidgetRemove,
+  widgetActions,
 }: {
   widgets: DashboardContentWidget[]
   revision?: number
@@ -265,6 +266,7 @@ export function DashboardRenderer({
   onLayoutChange?: (layout: CanvasLayoutChange[]) => void
   onWidgetChange?: (widget: DashboardContentWidget) => void
   onWidgetRemove?: (id: string) => void
+  widgetActions?: (widget: DashboardContentWidget) => ReactNode
 }) {
   const projectId = useProjectScope()?.projectId
   const { filter, from, to, timezone } = scope ?? {}
@@ -392,7 +394,7 @@ export function DashboardRenderer({
       return { key: dataKey, results, revalidating: stale && attempts < 7 }
     }
   }, [key])
-  const state = useRemote(load, [], {
+  const state = useRemote(load, [key], {
     enabled: requests.batches.length > 0,
     intervalMs: 5_000,
     shouldPoll: (data) => data?.revalidating ?? false,
@@ -476,6 +478,11 @@ export function DashboardRenderer({
               }
               getWidgetInlineEditing={({ type }) => type === "text"}
               getWidgetFrameless={({ type }) => type === "text"}
+              renderWidgetActions={
+                widgetActions
+                  ? ({ props }) => widgetActions(props.widget)
+                  : undefined
+              }
               onLayoutChange={onLayoutChange}
               onWidgetPropsChange={
                 onWidgetChange

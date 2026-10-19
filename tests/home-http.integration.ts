@@ -101,7 +101,7 @@ try {
   assert.equal(active.response.status, 307)
   assert.equal(
     active.response.headers.get("location"),
-    `/p/${projectSlug}/traces`
+    `/p/${projectSlug}`
   )
   const empty = await request("/", await sessionCookie(organizationIDs[1]))
   assert.equal(empty.response.status, 307)

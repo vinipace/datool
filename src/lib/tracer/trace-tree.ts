@@ -105,8 +105,12 @@ export function buildInspectorTree(trace: TraceOverview, preserveTraceRoot = fal
   }
 
   const onlyChild = root.children.length === 1 ? root.children[0] : null
-  // A scorer added to an otherwise span-free invocation must not hide its output.
-  const visibleRoot = preserveTraceRoot || onlyChild?.span?.kind === "score" ? root : onlyChild ?? root
+  // Only an explicitly mirrored span can replace the trace container. A lone
+  // child may have different I/O; legacy traces without this link stay visible.
+  const mirroredRootId = trace.attributes["datool.trace.root_span_id"]
+  const visibleRoot = !preserveTraceRoot && onlyChild && onlyChild.id === mirroredRootId
+    ? onlyChild
+    : root
   const stack = [{ node: visibleRoot, depth: 0 }]
   while (stack.length) {
     const { node, depth } = stack.pop()!

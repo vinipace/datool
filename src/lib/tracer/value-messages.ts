@@ -1,4 +1,5 @@
 import type { JsonObject } from "./contracts"
+import type { AgentAppearance } from "../build/contracts"
 
 export type InspectorToolCall = {
   arguments: unknown
@@ -7,6 +8,24 @@ export type InspectorToolCall = {
 }
 
 export type InspectorMessage = {
+  id?: string
+  createdAt?: string
+  status?: string
+  metadata?: Record<string, unknown>
+  author?: {
+    name: string
+    image: string | null
+    agentAvatar?: Pick<
+      AgentAppearance,
+      "avatarUrl" | "avatarStyle" | "avatarColor"
+    >
+  } | null
+  attachments?: Array<{
+    type?: string
+    url?: string
+    name?: string
+    caption?: string
+  }>
   content: unknown
   role: string
   toolCalls: InspectorToolCall[]
@@ -21,11 +40,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function sameCapturedValue(left: unknown, right: unknown): boolean {
   if (left === right) return true
   if (Array.isArray(left) && Array.isArray(right))
-    return left.length === right.length && left.every((value, index) => sameCapturedValue(value, right[index]))
+    return (
+      left.length === right.length &&
+      left.every((value, index) => sameCapturedValue(value, right[index]))
+    )
   if (!isRecord(left) || !isRecord(right)) return false
   const keys = Object.keys(left)
-  return keys.length === Object.keys(right).length && keys.every(key =>
-    Object.hasOwn(right, key) && sameCapturedValue(left[key], right[key])
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every(
+      (key) =>
+        Object.hasOwn(right, key) && sameCapturedValue(left[key], right[key])
+    )
   )
 }
 
@@ -99,12 +125,31 @@ function normaliseMessage(value: unknown): InspectorMessage | null {
     .map((part) => asToolCall(part, true))
     .filter((toolCall): toolCall is InspectorToolCall => toolCall !== null)
   const directToolCalls = collectToolCalls(record.tool_calls)
-  const toolCallId = typeof record.tool_call_id === "string" ? record.tool_call_id
-    : typeof record.toolCallId === "string" ? record.toolCallId : undefined
+  const toolCallId =
+    typeof record.tool_call_id === "string"
+      ? record.tool_call_id
+      : typeof record.toolCallId === "string"
+        ? record.toolCallId
+        : undefined
 
   return {
-    content: record.content ?? record.parts ?? null,
+    content:
+      Array.isArray(record.parts) && record.content === undefined
+        ? record.parts.map((part) =>
+            isRecord(part) &&
+            part.type === "text" &&
+            typeof part.content === "string"
+              ? { ...part, text: part.content }
+              : part
+          )
+        : (record.content ?? record.parts ?? null),
     role: typeof record.role === "string" ? record.role : "unknown",
+    ...(typeof record.id === "string" ? { id: record.id } : {}),
+    ...(typeof record.createdAt === "string"
+      ? { createdAt: record.createdAt }
+      : {}),
+    ...(typeof record.status === "string" ? { status: record.status } : {}),
+    ...(isRecord(record.metadata) ? { metadata: record.metadata } : {}),
     toolCalls: [...directToolCalls, ...partToolCalls],
     ...(toolCallId ? { toolCallId } : {}),
     ...(typeof record.isError === "boolean" ? { isError: record.isError } : {}),
@@ -114,11 +159,18 @@ function normaliseMessage(value: unknown): InspectorMessage | null {
 /** Match results only to their preceding call ID; names and arrival order are
  * ambiguous for parallel calls. Unmatched results remain visible messages. */
 export function groupToolResults(messages: InspectorMessage[]) {
-  const grouped: { message: InspectorMessage; toolResults: InspectorMessage[][] }[] = []
+  const grouped: {
+    message: InspectorMessage
+    toolResults: InspectorMessage[][]
+  }[] = []
   const calls = new Map<string, InspectorMessage[]>()
   for (const message of messages) {
-    const results = message.role.toLowerCase() === "tool" && !message.toolCalls.length && message.toolCallId
-      ? calls.get(message.toolCallId) : undefined
+    const results =
+      message.role.toLowerCase() === "tool" &&
+      !message.toolCalls.length &&
+      message.toolCallId
+        ? calls.get(message.toolCallId)
+        : undefined
     if (results) {
       results.push(message)
       continue
@@ -136,14 +188,22 @@ export function toolResultFailed(message: InspectorMessage): boolean {
   if (message.isError) return true
   let result = message.content
   if (typeof result === "string") {
-    try { result = JSON.parse(result) } catch { return false }
+    try {
+      result = JSON.parse(result)
+    } catch {
+      return false
+    }
   }
   if (!isRecord(result)) return false
   const exitCode = result.exit_code ?? result.exitCode
-  return result.isError === true || result.is_error === true || result.success === false ||
+  return (
+    result.isError === true ||
+    result.is_error === true ||
+    result.success === false ||
     (typeof exitCode === "number" && exitCode !== 0) ||
     (result.error != null && result.error !== false && result.error !== "") ||
     ["error", "errored", "failed"].includes(String(result.status).toLowerCase())
+  )
 }
 
 /**
@@ -198,14 +258,21 @@ export function normaliseOutputMessages(
     // an exact prefix of explicit state envelopes; never deduplicate by content
     // throughout a conversation or mutate the captured value used by raw views.
     if (
-      isRecord(value) && Array.isArray(value.messages) &&
-      isRecord(inputValue) && Array.isArray(inputValue.messages) &&
+      isRecord(value) &&
+      Array.isArray(value.messages) &&
+      isRecord(inputValue) &&
+      Array.isArray(inputValue.messages) &&
       inputValue.messages.length > 0 &&
-      inputValue.messages.every(isMessageRecord) && value.messages.every(isMessageRecord) &&
+      inputValue.messages.every(isMessageRecord) &&
+      value.messages.every(isMessageRecord) &&
       inputValue.messages.length <= value.messages.length
     ) {
       const output = value.messages
-      if (inputValue.messages.every((message, index) => sameCapturedValue(message, output[index])))
+      if (
+        inputValue.messages.every((message, index) =>
+          sameCapturedValue(message, output[index])
+        )
+      )
         return messages.slice(inputValue.messages.length)
     }
     return messages

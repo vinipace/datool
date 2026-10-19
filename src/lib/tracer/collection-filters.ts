@@ -58,6 +58,7 @@ export const collectionFilterFields = {
   datasetItems: [text("id"), json("input"), json("expectedOutput"), json("metadata"), text("sourceTraceId"), date("createdAt"), date("updatedAt")],
   agents: [text("name"), text("version"), date("startedAt")],
   workflows: [text("name"), text("version"), date("startedAt")],
+  dashboard: [{ ...date("startedAt"), label: "Date" }],
   evalQuality: [
     date("startedAt"),
     text("workflow"),

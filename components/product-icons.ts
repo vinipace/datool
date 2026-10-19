@@ -18,12 +18,17 @@ import {
   Settings,
   Workflow,
   Users,
+  Inbox,
+  Megaphone,
+  Lightbulb,
+  House,
 } from "lucide-react"
 import { ScorerIcon } from "@/components/tracer/scorer-icon"
 import { SessionIcon } from "@/components/tracer/session-icon"
 
 /** Shared by the workspace and public docs navigation. */
 export const productIcons = {
+  home: House,
   traces: Activity,
   playground: Play,
   dashboards: LayoutDashboard,
@@ -45,4 +50,11 @@ export const productIcons = {
   members: Users,
   mcpConnections: Plug,
   documentation: BookOpenCheck,
+  buildAgents: Bot,
+  buildInbox: Inbox,
+  buildContacts: Users,
+  buildCampaigns: Megaphone,
+  buildIntegrations: Plug,
+  buildSuggestions: Lightbulb,
+  buildTests: FlaskConical,
 } as const

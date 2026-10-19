@@ -5,6 +5,15 @@ declare module "bun:test" {
     fn: () => void | Promise<void>,
     timeout?: number
   ): void
+  export namespace test {
+    function each<T>(
+      cases: readonly T[]
+    ): (
+      name: string,
+      fn: (value: T) => void | Promise<void>,
+      timeout?: number
+    ) => void
+  }
   export function it(name: string, fn: () => void | Promise<void>): void
   export function expect<T>(value: T): {
     toBe(expected: T): void
@@ -42,6 +51,13 @@ declare module "bun:test" {
   export function afterEach(fn: () => void | Promise<void>): void
   export function beforeAll(fn: () => void | Promise<void>): void
   export function afterAll(fn: () => void | Promise<void>): void
+  export function spyOn<T, K extends keyof T>(
+    object: T,
+    key: K
+  ): {
+    mockImplementation(fn: T[K]): { mockRestore(): void }
+    mockRestore(): void
+  }
   export function mock<T extends (...args: unknown[]) => unknown>(
     fn?: T
   ): T & { mock: { calls: unknown[][]; results: unknown[] } }

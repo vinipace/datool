@@ -16,6 +16,32 @@
 }
 
 @theme {
+  /* Agent portrait palette. The character artwork stays legible in either theme. */
+  --color-avatar-orange: #f93300;
+  --color-avatar-violet: #9b7af5;
+  --color-avatar-blue: #61a8f5;
+  --color-avatar-green: #6bc68d;
+  --color-avatar-rose: #ef8fb5;
+  --color-avatar-yellow: #f2cb59;
+  --color-avatar-paper: #ffffff;
+  --color-avatar-ink: #000000;
+  /* Channel identity colors live here; channel-identity.tsx owns their UI mapping. */
+  --color-channel-web: #a78bfa;
+  --color-channel-help-page: #d946b0;
+  --color-channel-telegram: #38bdf8;
+  --color-channel-whatsapp: #25d366;
+  --color-channel-messenger: #4b9bff;
+  --color-channel-instagram: #f472b6;
+  --color-channel-email: #fb923c;
+  --color-channel-slack: #36c5f0;
+  --color-channel-api: #c084fc;
+  --color-channel-helpdesk: #2dd4bf;
+  /* Action categories share their identity across the catalog, table and editor. */
+  --color-action-api: #a78bfa;
+  --color-action-handoff: #2dd4bf;
+  --color-action-leads: #61a8f5;
+  --color-action-form: #fb923c;
+  --color-action-widget: #ef8fb5;
   --color-marketing-primary: var(--marketing-primary);
   --color-marketing-primary-foreground: var(--marketing-primary-foreground);
   --color-marketing-primary-hover: var(--marketing-primary-hover);
@@ -78,6 +104,7 @@
   --color-success-background: var(--success-background);
   --color-success-border: var(--success-border);
   --color-status-info: var(--status-info);
+  --color-status-snoozed: var(--status-snoozed);
   --color-status-info-background: var(--status-info-background);
   --color-status-info-border: var(--status-info-border);
   --color-status-warning: var(--status-warning);
@@ -242,6 +269,7 @@
     --success-background: #dcfce7;
     --success-border: #86efac;
     --status-info: var(--info);
+    --status-snoozed: #7c3aed;
     --status-info-background: var(--info-background);
     --status-info-border: var(--info-border);
     --status-warning: var(--warning);
@@ -339,6 +367,7 @@
     --success-background: rgb(20 83 45 / 0.3);
     --success-border: rgb(74 222 128 / 0.35);
     --status-info: var(--info);
+    --status-snoozed: #a78bfa;
     --status-info-background: var(--info-background);
     --status-info-border: var(--info);
     --status-warning: var(--warning);
@@ -856,4 +885,147 @@
 
 .datool-docs .prose pre {
   font-size: 0.8125rem;
+}
+
+/* Public Chat Bubble themes are scoped to the embed and its editor preview.
+   --bubble-accent is validated customer branding supplied by the channel. */
+.datool-chat-surface {
+  color-scheme: light;
+  --bubble-light-ink: #ffffff;
+  --bubble-dark-ink: #151518;
+  --background: #ffffff;
+  --foreground: #18181b;
+  --surface-canvas: #ffffff;
+  --muted: #f4f4f5;
+  --foreground-muted: #71717a;
+  --border: #e4e4e7;
+  --input-background: #f4f4f5;
+  --primary: #18181b;
+  --primary-foreground: #ffffff;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --destructive-background: #fee2e2;
+  --destructive-border: #fecaca;
+  --success: #15803d;
+  /* Rebind Tailwind aliases here: inherited aliases resolve at the dashboard
+     root, before this independently themed surface overrides their inputs. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-row: var(--muted);
+  --color-surface-row-hover: var(--border);
+  --color-muted: var(--muted);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-muted-foreground: var(--foreground-muted);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-input-background: var(--input-background);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--bubble-accent);
+  --color-accent: var(--muted);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-background: var(--destructive-background);
+  --color-destructive-border: var(--destructive-border);
+  --color-success: var(--success);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--bubble-font);
+  font-size: var(--bubble-font-size);
+}
+.datool-chat-surface[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #111113;
+  --foreground: #f4f4f5;
+  --surface-canvas: #111113;
+  --muted: #242427;
+  --foreground-muted: #a1a1aa;
+  --border: #333337;
+  --input-background: #242427;
+  --primary: #f4f4f5;
+  --primary-foreground: #18181b;
+  --destructive: #f87171;
+  --destructive-foreground: #450a0a;
+  --destructive-background: rgb(127 29 29 / 0.3);
+  --destructive-border: rgb(248 113 113 / 0.3);
+  --success: #86efac;
+}
+.datool-chat-surface [data-bubble-header="accent"],
+.datool-chat-surface [data-bubble-send="accent"] {
+  background: var(--bubble-accent);
+  color: var(--bubble-accent-text);
+}
+.datool-chat-surface [data-bubble-launcher] {
+  background: var(--bubble-launcher-color);
+  color: var(--bubble-launcher-text);
+}
+.datool-chat-surface [data-bubble-header="accent"] button {
+  color: inherit;
+}
+.datool-chat-surface [data-bubble-message] { font-size: var(--bubble-font-size); }
+.datool-chat-surface [data-bubble-user] {
+  background: var(--bubble-accent);
+  color: var(--bubble-accent-text);
+}
+@keyframes bubble-typing {
+  0%, 60%, 100% { opacity: .4; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+@keyframes chat-feedback-pop {
+  0% { transform: scale(.8) rotate(-12deg); }
+  55% { transform: scale(1.18) rotate(6deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="chat-feedback"] [aria-pressed="true"] svg {
+    animation: chat-feedback-pop 260ms ease-out;
+  }
+  .datool-chat-surface [data-bubble-typing-dot] { animation: bubble-typing 1.2s infinite; }
+  .datool-chat-surface [data-bubble-typing-dot]:nth-of-type(3) { animation-delay: .15s; }
+  .datool-chat-surface [data-bubble-typing-dot]:nth-of-type(4) { animation-delay: .3s; }
+}
+.datool-chat-surface [data-bubble-message],
+.datool-chat-surface [data-bubble-composer] { border-radius: var(--bubble-radius); }
+.datool-chat-surface [data-bubble-window] { border-radius: var(--bubble-radius); }
+.datool-chat-surface [data-bubble-composer] textarea { font-size: var(--bubble-font-size); }
+
+.datool-chat-preview {
+  background: transparent;
+}
+.datool-chat-preview-canvas {
+  background-color: var(--surface-row);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.datool-help-page {
+  container-name: help-page help;
+  container-type: inline-size;
+}
+.datool-help-sidebar { display: flex; }
+.datool-help-toolbar { display: none; }
+@container help-page (max-width: 640px) {
+  .datool-help-sidebar { display: none; }
+  .datool-help-toolbar { display: flex; }
+}
+.datool-chat-surface [data-help-primary] {
+  background: var(--bubble-accent);
+  color: var(--bubble-accent-text);
+}
+.datool-chat-surface [data-help-glow] {
+  position: relative;
+  isolation: isolate;
+}
+.datool-chat-surface [data-help-glow]::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 20% 4% -8px;
+  border-radius: var(--bubble-radius);
+  background: linear-gradient(110deg, var(--color-channel-web), var(--color-channel-help-page), var(--color-avatar-yellow), var(--color-avatar-green), var(--color-channel-telegram));
+  opacity: .2;
+  filter: blur(16px);
+  pointer-events: none;
 }

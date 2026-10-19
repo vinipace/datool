@@ -58,6 +58,8 @@ export type CanvasProps<T extends WidgetPropsMap> = {
   getWidgetInlineEditing?: (widget: CanvasWidget<T>) => boolean
   /** Hide the title and frame, with compact controls revealed on hover or focus. */
   getWidgetFrameless?: (widget: CanvasWidget<T>) => boolean
+  /** Resource actions remain available when the grid is not being edited. */
+  renderWidgetActions?: (widget: CanvasWidget<T>) => ReactNode
   /** False hides Edit/Remove and configuration, disables arranging, and blocks prop changes. */
   editable?: boolean
   /** Borderless cards retain their raised background and editor selection ring. */

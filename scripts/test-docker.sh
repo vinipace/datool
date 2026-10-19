@@ -10,8 +10,9 @@ cleanup() {
   if [ "$result" -ne 0 ]; then
     docker logs "$prefix-web" 2>/dev/null || true
     docker logs "$prefix-worker" 2>/dev/null || true
+    docker logs "$prefix-buildworker" 2>/dev/null || true
   fi
-  docker rm -fv "$prefix-web" "$prefix-worker" "$prefix-db" "$prefix-redis" >/dev/null 2>&1 || true
+  docker rm -fv "$prefix-web" "$prefix-worker" "$prefix-buildworker" "$prefix-db" "$prefix-redis" >/dev/null 2>&1 || true
   docker network rm "$prefix" >/dev/null 2>&1 || true
   docker volume rm "$prefix-data" >/dev/null 2>&1 || true
   rm -rf "$temporary"
@@ -53,6 +54,7 @@ docker run --rm "${environment[@]}" "$image" bun run db:alerts-reader
 docker run --rm "${environment[@]}" "$image" bun run db:alerts-reader
 docker run -d --name "$prefix-web" "${environment[@]}" -v "$prefix-data:/app/.data" "$image" >/dev/null
 docker run -d --name "$prefix-worker" "${environment[@]}" "$image" bun run worker:ingestion >/dev/null
+docker run -d --name "$prefix-buildworker" "${environment[@]}" "$image" bun run worker:build >/dev/null
 ready=0
 for ((i=0; i<60; i++)); do
   if docker exec "$prefix-web" node -e 'fetch("http://127.0.0.1:3000/sign-in").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))' >/dev/null 2>&1; then ready=1; break; fi
@@ -61,14 +63,16 @@ done
 [ "$ready" = 1 ]
 # Check rendered content: streamed Next errors can still have HTTP status 200.
 docker exec "$prefix-web" node -e '
- for (const [path,text] of [["/","See what your AI is doing."],["/faq","What is Datool?"],["/faq/what-is-datool","What is Datool?"],["/landing-page.md","See what your AI is doing."]]) {
+ for (const [path,text] of [["/","See what your AI is doing."],["/faq","What is Datool?"],["/faq/what-is-datool","What is Datool?"],["/landing-page.md","See what your AI is doing."],["/cms/login","<title>Login"]]) {
    const response=await fetch("http://127.0.0.1:3000"+path);
-   if(!response.ok || !(await response.text()).includes(text)) throw new Error("CMS rendering failed: "+path);
+   const body=await response.text();
+   if(!response.ok || !body.includes(text) || /[0-9a-f]+:E\{/.test(body)) throw new Error("CMS rendering failed: "+path);
  }
  const session=await fetch("http://127.0.0.1:3000/cms/api/cms-users/me");
  if(!session.ok || (await session.json()).user!==null) throw new Error("Anonymous CMS session endpoint failed");'
 # TLS terminates in front of Next, as it does with Dokku nginx. Trust only this test CA.
 [ "$(docker inspect --format '{{.State.Running}}' "$prefix-worker")" = true ]
+[ "$(docker inspect --format '{{.State.Running}}' "$prefix-buildworker")" = true ]
 cat > "$temporary/openssl.cnf" <<'EOF'
 [req]
 distinguished_name=dn
@@ -105,7 +109,7 @@ docker exec -e NODE_EXTRA_CA_CERTS=/tmp/datool-tls/cert.pem "$prefix-web" node -
 # Development and acceptance scripts must not ship in the production image.
 docker exec "$prefix-web" node -e '
  const fs=require("node:fs");
- const expected=["alerts-worker.ts","backfill-eval-attribution.ts","backfill-missing-costs.ts","check-self-hosting.mjs","cms-local-database.ts","cms-seed-options.ts","execution-credits.ts","ingestion-jobs.ts","ingestion-worker.ts","langfuse-import.ts","migrate.ts","provision-alert-reader.ts","release.sh","seed-cms.ts"];
+ const expected=["alerts-worker.ts","backfill-eval-attribution.ts","backfill-missing-costs.ts","build-worker.ts","check-self-hosting.mjs","cms-local-database.ts","cms-seed-options.ts","execution-credits.ts","ingestion-jobs.ts","ingestion-worker.ts","langfuse-import.ts","migrate.ts","provision-alert-reader.ts","release.sh","seed-cms.ts"];
  if(JSON.stringify(fs.readdirSync("scripts").sort())!==JSON.stringify(expected.sort())) throw new Error("Unexpected runtime scripts");'
 # Seed a project only in the disposable database, then exercise the image's HTTP APIs.
 docker cp scripts/verify-v1.ts "$prefix-web:/app/scripts/verify-v1.ts"
@@ -113,6 +117,26 @@ docker cp tests/helpers/postgres.ts "$prefix-web:/app/scripts/docker-test-postgr
 docker exec "$prefix-web" bun -e '
  const {seedTestWorkspace}=await import("/app/scripts/docker-test-postgres-helper.ts");
  await seedTestWorkspace({databaseUrl:process.env.DATABASE_URL,ownerId:"docker-test-owner",organizationId:"docker-test-org",projectId:process.env.DATOOL_PROJECT_ID});'
+# The separate Build process must consume a durable job and publish its result.
+# Plain-text knowledge indexing needs no provider credential or external message.
+docker exec "$prefix-web" bun -e '
+ const {createTracerDatabase}=await import("./src/server/tracer/db.ts");
+ const {createAgent}=await import("./src/server/build/agents.ts");
+ const {createKnowledgeSource,getKnowledgeSource}=await import("./src/server/build/knowledge/service.ts");
+ const {db,analyticsDb}=await import("./lib/db.ts");
+ const context={database:createTracerDatabase(undefined,{projectId:process.env.DATOOL_PROJECT_ID}),projectId:process.env.DATOOL_PROJECT_ID};
+ try {
+   const agent=await createAgent(context,{name:"Image acceptance",slug:"image-acceptance"});
+   const source=await createKnowledgeSource(context,{agentId:agent.id,name:"Release canary",kind:"text",text:"The release fixture supports refunds within seven days."});
+   let ready=false;
+   for(let attempt=0;attempt<60;attempt++) {
+     const current=await getKnowledgeSource(context,{sourceId:source.id});
+     if(current.status==="ready" && current.activeRevision===1 && current.chunkCount>0){ready=true;break;}
+     if(current.status==="failed") throw new Error("Build worker failed to index the canary");
+     await Bun.sleep(1000);
+   }
+   if(!ready) throw new Error("Build worker did not consume the queued knowledge job");
+ } finally {await Promise.all([db.end(),analyticsDb.end()]);}'
 # The default image gets no Docker socket. Full real-container scoring is
 # covered by the shared package-verification job; this verifies the fail-closed image path.
 docker exec "$prefix-web" docker --version
@@ -140,4 +164,4 @@ docker exec "$prefix-web" node -e '
  fs.writeFileSync("/app/.data/docker-test-marker","persisted");'
 docker restart "$prefix-web" >/dev/null
 docker exec "$prefix-web" node -e 'if(require("node:fs").readFileSync("/app/.data/docker-test-marker","utf8")!=="persisted") process.exit(1)'
-echo "Production image passed: application and CMS migrations, repeatable CMS seed, public CMS content, HTTPS/auth rejection, v1 APIs, unconfigured sandbox fails closed, SDK -> worker -> PostgreSQL, non-root runtime, persistent files."
+echo "Production image passed: application and CMS migrations, repeatable CMS seed, public CMS content, HTTPS/auth rejection, v1 APIs, unconfigured sandbox fails closed, SDK -> worker -> PostgreSQL, Build worker knowledge indexing, non-root runtime, persistent files."

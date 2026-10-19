@@ -143,6 +143,9 @@ test("MCP discovers the current sources, capabilities and legacy meanings and ex
     ["scoreValues", "Scores"],
     ["evalClassification", "Classification"],
     ["evalComparison", "Paired evaluations"],
+    ["buildEvents", "Conversations"],
+    ["buildTickets", "Inbox tickets"],
+    ["buildCsat", "Customer satisfaction"],
   ])
   expect(catalog.models.find((m) => m.name === "scores")?.source).toMatchObject(
     { visibility: "legacy", replacement: "evalResults" }

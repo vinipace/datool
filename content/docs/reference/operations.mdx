@@ -2053,6 +2053,26 @@ Required scopes: `datasets:write`.
 | --- | --- | --- |
 | `id` | string | Yes |
 
+## list_dashboard_templates
+
+List editable dashboard templates with fresh query windows. Pass a template's config to create_dashboard to save an independent dashboard.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result** — array; each item has these fields
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `config` | object | Yes |
+| `description` | string | Yes |
+| `id` | string | Yes |
+| `name` | string | Yes |
+
 ## list_dashboards
 
 List saved dashboard configurations.
@@ -2066,16 +2086,87 @@ Required scopes: `dashboards:read`.
 
 **Result** — array; each item has these fields
 
+Type: **object**.
+
+## get_project_home
+
+Read the project's pinned widgets, current source definitions, unavailable sources and layout revision.
+
+Required scopes: `dashboards:read`.
+
+**Request fields**
+
 | Field | Type | Required |
 | --- | --- | --- |
-| `createdAt` | string | Yes |
-| `defaultWindowDays` | number | No |
-| `description` | string | Yes |
-| `id` | string | Yes |
-| `name` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `pins` | array of object | Yes |
 | `revision` | number | Yes |
-| `schemaVersion` | 1 | Yes |
-| `updatedAt` | string | Yes |
+| `widgets` | array of object | Yes |
+
+## pin_dashboard_widget
+
+Pin an existing dashboard widget to the shared project Home. Keeps a live reference; repeated pins are idempotent.
+
+Required scopes: `dashboards:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `dashboardId` | string | Yes |
+| `widgetId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `pins` | array of object | Yes |
+| `revision` | number | Yes |
+| `widgets` | array of object | Yes |
+
+## unpin_home_widget
+
+Remove a pin from project Home without changing its source dashboard.
+
+Required scopes: `dashboards:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `pins` | array of object | Yes |
+| `revision` | number | Yes |
+| `widgets` | array of object | Yes |
+
+## update_project_home_layout
+
+Arrange all pinned widgets using their pin IDs and the expected Home revision. Does not change source dashboards.
+
+Required scopes: `dashboards:write`.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `expectedRevision` | integer | Yes |
+| `layout` | array of object | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `pins` | array of object | Yes |
+| `revision` | number | Yes |
 | `widgets` | array of object | Yes |
 
 ## get_dashboard
@@ -3590,4 +3681,4 @@ Required scopes: no additional operation scopes (authentication and project acce
 | `description` | string | Yes |
 | `inputSchema` | object | Yes |
 | `name` | string | Yes |
-| `scopes` | array of "apps:read" or "apps:write" or "reviews:read" or "reviews:write" or "metrics:read" or "scorers:read" or "scorers:write" or "views:read" or "views:write" or "datasets:read" or "datasets:write" or "dashboards:read" or "dashboards:write" or "traces:read" or "evals:read" or "evals:write" or "prompts:read" or "prompts:write" or "traces:write" or "playgrounds:read" or "playgrounds:write" | Yes |
+| `scopes` | array of "apps:read" or "apps:write" or "reviews:read" or "reviews:write" or "metrics:read" or "scorers:read" or "scorers:write" or "views:read" or "views:write" or "datasets:read" or "datasets:write" or "dashboards:read" or "dashboards:write" or "traces:read" or "evals:read" or "evals:write" or "build:read" or "build:write" or "build:run" or "prompts:read" or "prompts:write" or "traces:write" or "playgrounds:read" or "playgrounds:write" | Yes |

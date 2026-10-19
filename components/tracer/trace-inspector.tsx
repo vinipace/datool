@@ -19,7 +19,7 @@ import { useProjectScope } from "./project-scope-context"
 import { TraceTimeline, RunTraceTimeline } from "./trace-timeline"
 import { Combobox } from "@/components/ui/combobox"
 import { InspectorGroupMembership } from "./inspector-group-membership"
-import Link from "next/link"
+import { NavigationLink as Link, useNavigation } from "@/components/navigation/navigation"
 import {
   ArrowLeft,
   ArrowUp,
@@ -40,7 +40,7 @@ import {
   ListTree,
   X,
 } from "lucide-react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "@/components/navigation/navigation"
 
 import { cn } from "@/lib/utils"
 import {
@@ -65,7 +65,7 @@ import type {
   TraceScore,
   TraceStatus,
 } from "@/src/lib/tracer/contracts"
-import { tracerApi } from "./api"
+import { useTraceReadApi } from "./trace-data-context"
 import { createTraceDetailLoader, type TraceDetailLoader } from "./trace-detail-loader"
 import { createSessionConversationLoader } from "./session-detail-loader"
 import { Notice } from "@/components/ui/notice"
@@ -111,6 +111,11 @@ type OpenTraceView = { key: string; viewId: string | null; name: string }
 
 export interface TraceInspectorProps {
   snapshot?: TraceDetail
+  loader?: TraceDetailLoader
+  refreshIntervalMs?: number
+  sections?: InspectorTab[]
+  eagerTimeline?: boolean
+  action?: React.ReactNode
   customColumnDetails?: React.ReactNode
   initialSpanId?: string
   initialObjectViewId?: string
@@ -150,7 +155,8 @@ export function RunTraceInspector({ traces, evalRunId }: { traces: TraceOverview
   const href = useWorkspaceHref()
   const trace = traces.find(trace => trace.id === selection?.traceId) ?? traces[0]
   const selectedSpanId = trace && selection?.traceId === trace.id ? selection.spanId : trace ? buildInspectorTree(trace).id : null
-  const loader = React.useMemo(() => createTraceDetailLoader(trace?.id ?? ""), [trace?.id])
+  const api = useTraceReadApi()
+  const loader = React.useMemo(() => createTraceDetailLoader(trace?.id ?? "", undefined, api), [trace?.id, api])
   const spanCount = traces.reduce((count, trace) => count + trace.spans.length, 0)
   const select = (traceId: string, spanId: string | null) => setSelection({ traceId, spanId })
   if (!trace) return <InspectorPlaceholder label="Waiting for captured traces…" />
@@ -213,7 +219,8 @@ export function SessionTraceInspector({ session, traces, initialTraceId, initial
   const [activeTab, selectTab] = useStoredChoice<InspectorTab>(
     "datool:session:inspector-tab", ["trace", "evaluators", "timeline", "views"], "trace"
   )
-  const loader = React.useMemo(() => createTraceDetailLoader(trace?.id ?? ""), [trace?.id])
+  const api = useTraceReadApi()
+  const loader = React.useMemo(() => createTraceDetailLoader(trace?.id ?? "", undefined, api), [trace?.id, api])
   const select = (traceId: string | null, spanId: string | null) => {
     setSelection({ queryKey, traceId: traceId ?? undefined, spanId })
     onSelect(traceId, spanId)
@@ -253,7 +260,7 @@ function SessionOverview({ session, traces }: { session: Session; traces: TraceO
   )
   const loader = React.useMemo(() => createSessionConversationLoader(), [])
   const load = React.useCallback((signal: AbortSignal) => loader(traces, signal), [loader, traces])
-  const { data: messages, error, isLoading, refresh } = useRemote(load, [], {
+  const { data: messages, error, isLoading, refresh } = useRemote(load, [traces], {
     enabled: detailTab === "messages", keepPreviousData: true,
   })
   return <div className="min-h-full px-3 pb-6">
@@ -315,7 +322,8 @@ function SessionNavigator({ session, traces, selectedTraceId, selectedSpanId, on
 }
 
 function TraceInspectorSession(props: TraceInspectorProps) {
-  const loader = React.useMemo(() => createTraceDetailLoader(props.traceId, props.snapshot), [props.traceId, props.snapshot])
+  const api = useTraceReadApi()
+  const loader = React.useMemo(() => props.loader ?? createTraceDetailLoader(props.traceId, props.snapshot, api), [props.traceId, props.snapshot, props.loader, api])
   const listScores = React.useCallback(
     (options: import("./api").CollectionListOptions) =>
       props.snapshot
@@ -327,13 +335,13 @@ function TraceInspectorSession(props: TraceInspectorProps) {
             total: props.snapshot.scores.length,
             nextCursor: null,
           })
-        : tracerApi.traces.scores(props.traceId, options),
-    [props.snapshot, props.traceId]
+        : api.scores(props.traceId, options),
+    [props.snapshot, props.traceId, api]
   )
   const scorePage = useCollectionPages(
     listScores,
     "",
-    props.snapshot ? 0 : 3000
+    props.snapshot ? 0 : props.refreshIntervalMs ?? 3000
   )
   const load = React.useCallback(
     (signal: AbortSignal) => loader.overview(signal),
@@ -344,15 +352,16 @@ function TraceInspectorSession(props: TraceInspectorProps) {
     error,
     isLoading,
     refresh,
-  } = useRemote(load, [props.traceId], { intervalMs: props.snapshot ? 0 : 3_000 })
+  } = useRemote(load, [loader], { intervalMs: props.snapshot ? 0 : props.refreshIntervalMs ?? 3_000 })
   const [storedTab, selectStoredTab] = useStoredChoice<InspectorTab>(
     "datool:trace-inspector:tab",
     ["trace", "evaluators", "timeline", "views"],
-    "trace"
+    props.initialTab ?? "trace"
   )
   const [annotationTab, selectAnnotationTab] = useReviewAnnotationTab(storedTab, selectStoredTab, "trace")
   const [requestedTab, setRequestedTab] = React.useState<InspectorTab | null>(props.initialObjectViewId ? "views" : props.initialTab ?? null)
-  const activeTab = requestedTab ?? annotationTab
+  const preferredTab = requestedTab ?? annotationTab
+  const activeTab = !props.sections || props.sections.includes(preferredTab) ? preferredTab : props.sections[0]
   const selectTab = (tab: InspectorTab) => { setRequestedTab(null); selectAnnotationTab(tab) }
 
   if (isLoading && !trace) {
@@ -429,6 +438,7 @@ function LoadedInspector({
   activeTab,
   hideOverviewScores = false,
   initialSpanId,
+  eagerTimeline,
   onSpanChange,
   onTabChange,
   trace,
@@ -474,6 +484,7 @@ function LoadedInspector({
       {activeTab === "trace" || activeTab === "timeline" ? (
         <TraceWorkspace
           navigation={activeTab}
+          eagerTimeline={eagerTimeline}
           hideOverviewScores={hideOverviewScores}
           loader={loader}
           onSelectSpan={selectSpan}
@@ -492,6 +503,7 @@ function LoadedInspector({
 function InspectorFrame({
   activeTab,
   children,
+  sections,
   mode = "overlay",
   hideTraceNavigation = false,
   compactHeader = false,
@@ -592,7 +604,11 @@ function InspectorFrame({
   >("idle")
   const resetCopyTimer = React.useRef<number | null>(null)
   const workspaceHref = useWorkspaceHref()
-  const fullPageHref = workspaceHref(fullPagePath ?? traceHref(traceId, selectedSpanId))
+  const navigation = useNavigation()
+  const fullPageUrl = new URL(workspaceHref(fullPagePath ?? traceHref(traceId, selectedSpanId)), "https://navigation.invalid")
+  const filter = navigation.searchParams.get("filter")
+  if (filter !== null) fullPageUrl.searchParams.set("filter", filter)
+  const fullPageHref = `${fullPageUrl.pathname}${fullPageUrl.search}${fullPageUrl.hash}`
   const resourceName = title === "Session" ? "session" : "trace"
 
   React.useEffect(
@@ -604,7 +620,7 @@ function InspectorFrame({
   )
 
   const copyLink = React.useCallback(async () => {
-    const url = new URL(fullPageHref, window.location.origin).toString()
+    const url = new URL(fullPageHref, navigation.origin ?? window.location.origin).toString()
     try {
       if (!navigator.clipboard?.writeText)
         throw new Error("Clipboard unavailable")
@@ -620,7 +636,7 @@ function InspectorFrame({
       () => setCopyState("idle"),
       1_800
     )
-  }, [fullPageHref])
+  }, [fullPageHref, navigation.origin])
 
   return (
     <section
@@ -745,8 +761,8 @@ function InspectorFrame({
             { value: "timeline", label: "Timeline", icon: Clock3 },
             { value: "views", label: "Views", icon: Code2 },
             ...viewTabs.tabs.map(tab => ({ value: tab.key, label: tab.name, icon: Code2, hasActions: true, onClose: () => closeView(tab.key) })),
-          ]}
-          afterTabs={<TraceViewPicker disabled={!trace || !viewLoader} onOpenView={openView} onCreateView={createView} />}
+          ].filter(tab => !sections || sections.includes(tab.value as InspectorTab) || (sections.includes("views") && viewTabs.tabs.some(view => view.key === tab.value)))}
+          afterTabs={(!sections || sections.includes("views")) && <TraceViewPicker disabled={!trace || !viewLoader} onOpenView={openView} onCreateView={createView} />}
         >
           <div className="ml-auto hidden shrink-0 items-center gap-2 whitespace-nowrap text-[11px] text-foreground-muted sm:flex">
             {summary ?? (trace ? <span>{trace.spans.length} spans</span> : null)}
@@ -842,6 +858,7 @@ function TraceInspectorSkeleton() {
 
 type TraceWorkspaceProps = {
   navigation: "trace" | "timeline"
+  eagerTimeline?: boolean
   hideOverviewScores: boolean
   loader: TraceDetailLoader
   onSelectSpan: (spanId: string | null) => void
@@ -874,6 +891,7 @@ function TraceWorkspace(props: TraceWorkspaceProps) {
 
 function TraceWorkspacePanels({
   navigation,
+  eagerTimeline,
   hideOverviewScores,
   loader,
   onSelectSpan,
@@ -906,6 +924,7 @@ function TraceWorkspacePanels({
     <aside className="flex h-full min-h-0 flex-col bg-background">
       {navigation === "timeline" ? (
         timeline?.(closeNavigator) ?? (trace ? <TraceTimeline
+          eagerRender={eagerTimeline}
           trace={trace}
           selectedSpanId={selectedSpanId}
           onSelectSpan={selectSpan}
@@ -1159,7 +1178,7 @@ function SelectedPayload({ loader, trace, span, full, detailTab, onDetailTabChan
     // transition does refresh the selected record, including its final output.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [loader, full, trace.status, trace.endedAt, full ? trace.spans.length : 0, span?.id, span?.status, span?.endedAt])
-  const state = useRemote<Span | TraceSummary | TraceDetail>(load, [], {
+  const state = useRemote<Span | TraceSummary | TraceDetail>(load, [loader, full, trace.status, trace.endedAt, full ? trace.spans.length : 0, span?.id, span?.status, span?.endedAt], {
     intervalMs: 3_000,
     shouldPoll: data => trace.status === "running" || data?.status === "running",
   })
@@ -1187,7 +1206,7 @@ function FullTraceViews({ trace, loader, ...viewProps }: { trace: TraceOverview;
   const load = React.useCallback((signal: AbortSignal) => mode === "summary" ? loader.payload(trace, signal) : loader.full(trace, signal),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [loader, mode, trace.status, trace.endedAt, trace.spans.length])
-  const state = useRemote(load, [], { intervalMs: 3_000, keepPreviousData: true, shouldPoll: () => trace.status === "running" })
+  const state = useRemote(load, [loader, mode, trace.status, trace.endedAt, trace.spans.length], { intervalMs: 3_000, keepPreviousData: true, shouldPoll: () => trace.status === "running" })
   if (!state.data) return <DetailRequestState {...state} label="Loading view data…" />
   return <>
     {state.error ? <DetailRequestState {...state} label="Loading view data…" /> : null}

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { usePathname, useSearchParams } from "next/navigation"
+import { useNavigation } from "@/components/navigation/navigation"
 import {
   compileCollectionFilter,
   type FilterResource,
@@ -15,8 +15,8 @@ export function useCollectionFilter(
     normalize = (value: string) => value,
   }: { persist?: boolean; normalize?: (value: string) => string } = {}
 ) {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const navigation = useNavigation()
+  const { pathname, searchParams } = navigation
   const urlFilter = persist ? searchParams.get("filter") : null
   const source = JSON.stringify([pathname, urlFilter])
   const initial = normalize(urlFilter ?? initialValue)
@@ -43,11 +43,11 @@ export function useCollectionFilter(
 
   React.useEffect(() => {
     if (error || !state.pending) return
-    const scheduledUrl = new URL(window.location.href)
+    const scheduledUrl = new URL(navigation.currentUrl(), "https://navigation.invalid")
     const timer = window.setTimeout(
       () => {
         if (persist) {
-          const url = new URL(window.location.href)
+          const url = new URL(navigation.currentUrl(), "https://navigation.invalid")
           // Read the latest URL so inspector selections and other params survive.
           if (
             url.pathname !== scheduledUrl.pathname ||
@@ -57,11 +57,7 @@ export function useCollectionFilter(
             return
           // An explicit empty value overrides defaults such as the dashboard date.
           url.searchParams.set("filter", value.trim())
-          window.history.replaceState(
-            null,
-            "",
-            `${url.pathname}${url.search}${url.hash}`
-          )
+          navigation.router.replaceQuery(`${url.pathname}${url.search}${url.hash}`)
         }
         setState((current) => ({
           ...current,
@@ -72,7 +68,7 @@ export function useCollectionFilter(
       value ? 350 : 0
     )
     return () => window.clearTimeout(timer)
-  }, [error, value, state.pending, pathname, persist, urlFilter])
+  }, [error, value, state.pending, pathname, persist, urlFilter, navigation])
 
   const onChange = (next: string) => {
     setState((current) => ({
