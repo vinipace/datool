@@ -47,6 +47,12 @@ export const agentBuildTabs: BuildTab[] = [
     group: "Build",
   },
   {
+    id: "integrations",
+    label: "Integrations",
+    description: "Connect apps your agent can use",
+    group: "Build",
+  },
+  {
     id: "actions",
     label: "Actions",
     description: "Things the agent can do",

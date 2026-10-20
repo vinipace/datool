@@ -87,6 +87,7 @@ import { AgentOverview } from "./agent-overview"
 import { WidgetsTab } from "./widgets-tab"
 import { AgentPlayground } from "./agent-playground"
 import { IntegrationActionFields } from "./integration-action-fields"
+import { IntegrationsTab } from "./integrations-tab"
 import { ActionCatalog, ActionIcon, ActionTypeLabel } from "./action-catalog"
 import {
   newActionDraft,
@@ -619,6 +620,14 @@ function BuildAgentEditorContent({
               <KnowledgeTab agentId={saved.id} />
             </div>
           ) : null}
+          {visitedTabs.has("integrations") && saved ? (
+            <div
+              hidden={active !== "integrations"}
+              aria-hidden={active !== "integrations"}
+            >
+              <IntegrationsTab active={active === "integrations"} />
+            </div>
+          ) : null}
           {visitedTabs.has("actions") && saved ? (
             <div
               hidden={active !== "actions"}
@@ -626,6 +635,8 @@ function BuildAgentEditorContent({
             >
               <ActionsTab
                 agentId={saved.id}
+                active={active === "actions"}
+                onManageIntegrations={() => selectTab("integrations")}
                 onViewChange={setActionsView}
                 onDefinitionDirty={() => setDefinitionDirty(true)}
               />
@@ -2349,11 +2360,15 @@ function ResourceEditorPrompt({
 
 function ActionsTab({
   agentId,
+  active,
+  onManageIntegrations,
   onViewChange,
   onDefinitionDirty,
 }: {
   agentId: string
   onViewChange: (value: string) => void
+  active: boolean
+  onManageIntegrations: () => void
   onDefinitionDirty?: () => void
 }) {
   const load = React.useCallback(
@@ -2583,7 +2598,7 @@ function ActionsTab({
         ) : null}
       </TabsContent>
       <Sheet
-        open={Boolean(selected || isCreating)}
+        open={active && Boolean(selected || isCreating)}
         onOpenChange={(open) => {
           if (!open && !pending) clearAction()
         }}
@@ -2691,7 +2706,13 @@ function ActionsTab({
                   </SelectContent>
                 </CustomSelect>
               </FormRow>
-              {draft.type === "integration" ? <IntegrationActionFields draft={draft} onChange={setDraft} /> : null}
+              {draft.type === "integration" ? (
+                <IntegrationActionFields
+                  draft={draft}
+                  onChange={setDraft}
+                  onManageIntegrations={onManageIntegrations}
+                />
+              ) : null}
               {draft.type === "http" ? (
                 <HttpActionFields
                   draft={draft}

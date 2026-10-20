@@ -1,9 +1,12 @@
 # Connected apps and agent usage
 
 Build uses Composio sessions for project-owned app connections and execution.
-Customers connect an account in **Agent → Actions → Create action → Connected
-app**, authorize in a new tab, refresh the connection, and select a tool. Save the
-action and apply the agent revision to make it available to live conversations.
+Customers connect and manage accounts in **Agent → Integrations**. Authorize in
+a new tab, then return to Integrations and refresh the connection. In
+**Agent → Actions → Create action → Connected app**, choose that account and a
+tool. Save the action and apply the agent revision to make it available to live
+conversations. The action editor links to Integrations and keeps its draft while
+you manage accounts.
 Google Calendar is an example; the installation controls which apps and tools
 are offered. Existing human-approval guardrails, channel restrictions, procedures,
 and simulation mocks apply to these actions too.
