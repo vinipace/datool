@@ -695,6 +695,12 @@ credentials stay with the action editor. Saves use the same versioned Build/MCP
 operations; the agent editor automatically applies saved definition changes for
 customer use.
 
+Create Actions includes **Show Widget** under Custom actions. Its editor uses
+`action-widget-picker.tsx` to search this agent’s widgets by name; disabled
+widgets remain visible but cannot be selected. A widget must be chosen before
+the action can be saved. The Actions collection uses the same `px-3 py-1`
+content spacing as the Widgets collection.
+
 `components/ui/chat-rich-content.tsx` owns widget rendering in both chats and the
 editor preview. Default state data is merged with named preview state and pinned
 action inputs; template values are rendered as escaped text, never executed.

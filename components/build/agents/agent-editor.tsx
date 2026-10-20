@@ -88,6 +88,7 @@ import { AgentOverview } from "./agent-overview"
 import { KnowledgePages } from "./knowledge-pages"
 import { KnowledgeSourceRow } from "./knowledge-source-row"
 import { WidgetsTab } from "./widgets-tab"
+import { ActionWidgetPicker } from "./action-widget-picker"
 import { AgentPlayground } from "./agent-playground"
 import { IntegrationActionFields } from "./integration-action-fields"
 import { IntegrationsTab } from "./integrations-tab"
@@ -2270,6 +2271,10 @@ function ActionsTab({
   async function saveAction(event: React.FormEvent) {
     event.preventDefault()
     if (pending || !draft.id.trim() || !draft.name.trim()) return
+    if (draft.type === "widget" && !draft.widgetId.trim()) {
+      setError("Choose a widget to show.")
+      return
+    }
     setPending(true)
     setError(null)
     setMessage(null)
@@ -2318,7 +2323,7 @@ function ActionsTab({
     }
   }
   return (
-    <div className="w-full min-w-0 space-y-8 px-4 py-6 sm:px-6">
+    <div className="w-full min-w-0 space-y-3 px-3 py-1">
       {error && !selected && !isCreating ? (
         <Notice role="alert" variant="error">
           {error}
@@ -2580,18 +2585,18 @@ function ActionsTab({
               {draft.type === "widget" ? (
                 <>
                   <FormRow
-                    label="Widget ID"
-                    htmlFor="action-widget"
+                    label="Widget"
                     layout="vertical"
                     variant="plain"
                   >
-                    <Input
-                      id="action-widget"
-                      required
+                    <ActionWidgetPicker
+                      key={agentId}
+                      agentId={agentId}
                       value={draft.widgetId}
-                      onChange={(event) =>
-                        update("widgetId", event.target.value)
-                      }
+                      onValueChange={(value) => {
+                        update("widgetId", value)
+                        setError(null)
+                      }}
                     />
                   </FormRow>
                   <FormRow

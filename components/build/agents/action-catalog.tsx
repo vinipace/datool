@@ -41,7 +41,7 @@ const identities: Record<
     tone: "text-action-form",
   },
   form: { label: "Form", icon: FileInput, tone: "text-action-form" },
-  widget: { label: "Widget", icon: PanelsTopLeft, tone: "text-action-widget" },
+  widget: { label: "Show Widget", icon: PanelsTopLeft, tone: "text-action-widget" },
 }
 
 const catalog: {
@@ -62,10 +62,11 @@ const catalog: {
     id: "http",
     title: "Custom actions",
     description:
-      "Connect your API or trigger events on your website to help customers get things done.",
+      "Call your API, run client-side code, or show an interactive widget in the conversation.",
     actions: [
       { preset: "http", label: "Call API" },
       { preset: "client", label: "Run client-side code" },
+      { preset: "widget", label: "Show Widget" },
     ],
   },
   {
@@ -88,13 +89,6 @@ const catalog: {
     description:
       "Build a form with your own fields, required answers and a follow-up action.",
     actions: [{ preset: "form", label: "Create form" }],
-  },
-  {
-    id: "widget",
-    title: "Interactive widgets",
-    description:
-      "Show one of your agent’s widgets inside the conversation and respond to customer interactions.",
-    actions: [{ preset: "widget", label: "Show widget" }],
   },
 ]
 
