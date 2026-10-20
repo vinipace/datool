@@ -116,6 +116,19 @@ export function createAgentAutosave(
     pending,
     flush,
     update(draft: AgentDraft) {
+      // The editor has one name; retain the appearance field for channel consumers.
+      if (draft.name !== state.draft.name) {
+        draft = {
+          ...draft,
+          configuration: {
+            ...draft.configuration,
+            appearance: {
+              ...draft.configuration.appearance,
+              displayName: draft.name,
+            },
+          },
+        }
+      }
       if (JSON.stringify(draft) === JSON.stringify(state.draft)) return
       publish({ draft, error: null })
       schedule()

@@ -711,9 +711,10 @@ action. Theme controls reuse the scoped `datool-chat-surface` tokens.
 
 ## Agent editing
 
-Settings combines identity and appearance in the shared, single-column form
-layout, using `InspectorSection` and `FormRow`. Revision history and the setup
-checklist stay in disclosures below the appearance fields.
+Settings uses one flat, single-column form with `FormRow` fields for display name,
+slug, description and avatar, without Identity or Appearance sections. The
+display name edits the agent name and its legacy appearance name together.
+Revision history and the setup checklist stay in disclosures below the fields.
 Welcome message, input placeholder and suggested replies are configured in the
 chat widget's channel editor, outside agent Settings.
 The former `section=appearance` URL opens Settings for existing bookmarks.

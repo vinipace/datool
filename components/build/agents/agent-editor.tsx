@@ -724,41 +724,40 @@ function SettingsTab({
         </p>
       </div>
       <div className="max-w-3xl">
-        <InspectorSection
-          label="Identity"
-          icon={<FileText className="size-3.5" />}
+        <FormRow label="Display name" htmlFor="agent-name">
+          <Input
+            id="agent-name"
+            required
+            maxLength={160}
+            value={draft.name}
+            onChange={(event) => onChange("name", event.target.value)}
+          />
+        </FormRow>
+        <FormRow label="Slug" htmlFor="agent-slug">
+          <Input
+            id="agent-slug"
+            required
+            maxLength={160}
+            pattern="[a-zA-Z0-9_.-]+"
+            value={draft.slug}
+            disabled={!!agent}
+            onChange={(event) => onChange("slug", event.target.value)}
+          />
+        </FormRow>
+        <FormRow
+          label="Description"
+          htmlFor="agent-description"
+          layout="vertical"
         >
-          <FormRow label="Workspace name" htmlFor="agent-name">
-            <Input
-              id="agent-name"
-              required
-              maxLength={160}
-              value={draft.name}
-              onChange={(event) => onChange("name", event.target.value)}
-            />
-          </FormRow>
-          <FormRow label="Slug" htmlFor="agent-slug">
-            <Input
-              id="agent-slug"
-              required
-              maxLength={160}
-              pattern="[a-zA-Z0-9_.-]+"
-              value={draft.slug}
-              disabled={!!agent}
-              onChange={(event) => onChange("slug", event.target.value)}
-            />
-          </FormRow>
-          <InspectorSection label="Description" variant="form">
-            <Textarea
-              aria-label="Agent description"
-              rows={3}
-              autoSize
-              maxLength={2000}
-              value={draft.description}
-              onChange={(event) => onChange("description", event.target.value)}
-            />
-          </InspectorSection>
-        </InspectorSection>
+          <Textarea
+            id="agent-description"
+            rows={3}
+            autoSize
+            maxLength={2000}
+            value={draft.description}
+            onChange={(event) => onChange("description", event.target.value)}
+          />
+        </FormRow>
         <AppearanceAndGuardrails
           section="appearance"
           config={draft.configuration}
@@ -1076,26 +1075,7 @@ function AppearanceAndGuardrails({
       className={section === "both" ? "grid gap-4 xl:grid-cols-2" : "max-w-3xl"}
     >
       {section !== "guardrails" ? (
-        <InspectorSection
-          label="Appearance"
-          icon={<Globe className="size-3.5" />}
-          defaultOpen={section !== "both"}
-        >
-          <FormRow label="Display name" htmlFor="appearance-name">
-            <Input
-              id="appearance-name"
-              value={appearance.displayName}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    displayName: event.target.value,
-                  },
-                })
-              }
-            />
-          </FormRow>
+        <>
           <FormRow label="Avatar" layout="vertical">
             <AgentAvatarPicker
               value={appearance}
@@ -1119,7 +1099,7 @@ function AppearanceAndGuardrails({
               }
             />
           </FormRow>
-        </InspectorSection>
+        </>
       ) : null}
       {section !== "appearance" ? (
         <InspectorSection
