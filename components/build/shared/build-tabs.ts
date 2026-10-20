@@ -6,6 +6,7 @@ import {
   Database,
   UserRoundCheck,
   ListChecks,
+  MessagesSquare,
   PanelsTopLeft,
   Play,
   Plug,
@@ -85,6 +86,13 @@ export const agentBuildTabs: BuildTab[] = [
     icon: PanelsTopLeft,
     description: "Interactive responses",
     group: "Build",
+  },
+  {
+    id: "conversations",
+    label: "Conversations",
+    icon: MessagesSquare,
+    description: "Conversations with this agent",
+    group: "Activity",
   },
   {
     id: "leads",

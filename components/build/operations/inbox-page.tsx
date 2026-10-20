@@ -411,8 +411,10 @@ function surveyList(value: unknown) {
 
 export function InboxPage({
   view = "inbox",
+  fixedAgentId,
 }: {
   view?: "inbox" | "conversations"
+  fixedAgentId?: string
 }) {
   const isInbox = view === "inbox"
   const ItemIcon = isInbox
@@ -426,7 +428,7 @@ export function InboxPage({
     settingsStorageKey: `datool:build-${view}:${scope}:settings`,
     orderStorageKey: `datool.build-${view}.columns`,
   })
-  const agentId = navigation.params.get("agentId") || undefined
+  const agentId = fixedAgentId || navigation.params.get("agentId") || undefined
   const agent = useRemote(
     (signal) =>
       agentId
@@ -437,7 +439,7 @@ export function InboxPage({
           )
         : Promise.resolve(null),
     [scope, agentId],
-    { enabled: Boolean(agentId) }
+    { enabled: Boolean(agentId) && !fixedAgentId }
   )
   const search = navigation.params.get("q") ?? ""
   const setSearch = (value: string) =>
@@ -579,7 +581,7 @@ export function InboxPage({
           pagination={tickets}
           toolbar={
             <>
-              {agentId ? (
+              {agentId && !fixedAgentId ? (
                 <div className="flex min-w-0 items-center gap-2 px-3 py-2">
                   <Button
                     size="sm"
@@ -674,7 +676,9 @@ export function InboxPage({
                 search
                   ? "Try another subject, customer name, email or conversation ID."
                   : !isInbox
-                    ? "All customer conversations appear here, including chats that never need human help."
+                    ? fixedAgentId
+                      ? "This agent’s customer conversations appear here, including chats that never need human help."
+                      : "All customer conversations appear here, including chats that never need human help."
                     : navigation.view === "mentions"
                       ? "Tickets appear here when a teammate mentions your @email in an internal note."
                       : navigation.view === "mine"

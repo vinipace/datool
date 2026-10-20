@@ -735,8 +735,9 @@ The workspace sidebar switches to the agent's navigation while its editor or a
 channel opened from that agent owns `AgentSidebarTarget`. The agent avatar/name
 returns to the agent list. Analytics comes first, Build and Activity are
 collapsible groups, and Activity contains Conversations, Leads and Collected data.
-Conversations opens the shared all-chats collection filtered to the current
-agent before pagination. Its filter can be removed to browse the whole project. The
+Conversations opens inside the agent editor at `section=conversations`, retaining
+the agent sidebar. It reuses the shared all-chats collection with a fixed agent
+scope applied before pagination; URL filters cannot override or remove it. The
 current agent's Integrations page remains reachable from this navigation.
 The Conversations table includes an Agent column with the current agent name,
 including archived agents, using the shared column visibility and ordering controls.

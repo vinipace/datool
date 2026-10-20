@@ -99,6 +99,7 @@ import {
   type ActionPreset,
 } from "./action-presets"
 import { ChannelsManager } from "@/components/build/operations/integrations-page"
+import { InboxPage } from "@/components/build/operations/inbox-page"
 import {
   buildCall,
   buildOperations,
@@ -280,7 +281,10 @@ function BuildAgentEditorContent({
       url.pathname = saved ? workspaceHref(`/build/agents/${encodeURIComponent(saved.id)}${next === "test" ? "/test" : ""}`) : url.pathname
       url.searchParams.set("section", next)
       if (next !== "test") {
-        for (const key of ["datasetId", "item", "itemTab", "objectView", "filter", "inspector"])
+        for (const key of [
+          "datasetId", "item", "itemTab", "objectView", "filter", "inspector",
+          "conversation", "ticket", "q", "status", "agentId", "view",
+        ])
           url.searchParams.delete(key)
       }
       if (url.href !== window.location.href)
@@ -509,7 +513,7 @@ function BuildAgentEditorContent({
           ref={mainRef}
           role="region"
           aria-label="Agent editor"
-          className={`min-h-0 min-w-0 flex-1 ${active === "playground" ? "overflow-hidden" : "overflow-y-auto"}`}
+          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
           {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} /> : null}
           {active === "overview" && saved ? (
@@ -635,6 +639,13 @@ function BuildAgentEditorContent({
           ) : null}
           {saved && (active === "leads" || active === "collected-data") ? (
             <AgentActivity key={`${saved.id}:${active}`} agentId={saved.id} section={active} />
+          ) : null}
+          {active === "conversations" && saved ? (
+            <InboxPage
+              key={saved.id}
+              view="conversations"
+              fixedAgentId={saved.id}
+            />
           ) : null}
           {active === "playground" && saved ? (
             <div className="h-full">
