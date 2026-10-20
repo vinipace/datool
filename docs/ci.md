@@ -69,9 +69,9 @@ shorter verification job.
   checksummed and handed off. The archive format,
   checksum verification, commit/pipeline identity, restricted SSH command, and
   serialized production release remain unchanged.
-- After handoff, loaded `datool-release` images are removed from the disposable
-  runner so DLC retains the builder cache without accumulating duplicate runtime
-  images for every commit.
+- After handoff, the disposable runner retains the latest accepted
+  `datool-release` image and removes older tags. DLC keeps installed shared
+  layers and the builder cache without accumulating every released image.
 
 [CircleCI Docker layer caching](https://circleci.com/docs/guides/optimize/docker-layer-caching/)
 costs 200 credits per image job, in addition to runner usage. It is enabled for

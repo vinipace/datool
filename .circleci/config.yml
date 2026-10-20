@@ -339,18 +339,23 @@ jobs:
           name: Test deployment access and disk import safety
           command: python3 -m unittest discover -s tests -p 'dokku_*_test.py'
       - run:
-          name: Build the production image on the CI runner
+          name: Restore the named BuildKit builder
           command: |
             # A stable container builder keeps BuildKit state and cache mounts
             # in a named volume that CircleCI DLC preserves between jobs.
             docker buildx create --name datool-release --driver docker-container
+      - run:
+          name: Build the production image on the CI runner
+          command: |
             # Build one archive and load that exact image for acceptance.
             docker buildx build --builder datool-release --progress plain \
               --output "type=docker,compression=gzip,compression-level=1,dest=$DATOOL_DOCKER_ARCHIVE_PATH" \
               --build-arg DATOOL_CI_BUILD=true \
               --label "org.opencontainers.image.revision=$CIRCLE_SHA1" \
               --tag "$DATOOL_DOCKER_TEST_IMAGE" .
-            docker image load --input "$DATOOL_DOCKER_ARCHIVE_PATH"
+      - run:
+          name: Load the archive for image acceptance
+          command: docker image load --input "$DATOOL_DOCKER_ARCHIVE_PATH"
       - run:
           name: Test release command, image handoff, and CMS seed guards
           command: |
@@ -391,12 +396,12 @@ jobs:
             - ops/notify-deployment.py
             - notification.sha256
       - run:
-          name: Keep the build cache without duplicate runtime images
-          when: always
+          name: Retain only the latest accepted runtime image
           command: |
-            # The verified archive is already in the workspace. Preserve the
-            # named builder's cache, not another copy of every released image.
+            # Keep shared installed layers for the next acceptance run without
+            # accumulating another tagged runtime image for every commit.
             docker image ls 'datool-release:*' --format '{{.Repository}}:{{.Tag}}' |
+              awk -v current="$DATOOL_DOCKER_TEST_IMAGE" '$0 != current' |
               xargs --no-run-if-empty docker image rm ||
               echo "Some cached runtime images are still in use; retaining them."
   deploy:
