@@ -409,7 +409,7 @@ jobs:
           command: |
             # DLC discards the entire snapshot when it grows too large.
             # Leave room for the accepted runtime image and service images.
-            docker buildx prune --builder datool-release --force --max-used-space 8gb
+            docker buildx prune --builder datool-release --force --max-used-space 9gb
             docker buildx du --builder datool-release
   deploy:
     executor: ssh

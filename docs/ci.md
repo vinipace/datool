@@ -58,8 +58,9 @@ shorter verification job.
   Dependencies are installed before copying application source; workspaces and
   postinstall generation still run in the final build. A named `datool-release`
   BuildKit container keeps its state and cache mounts in a persistent volume.
-- BuildKit cache mounts retain Bun downloads and Next's build cache without
-  copying either into the runtime image.
+- BuildKit retains Next's build cache without copying it into the runtime image.
+  Bun downloads use temporary memory-backed storage: the installed dependency
+  layer is already cached, and keeping both displaced useful build layers.
 - CI supplies `DATOOL_CI_BUILD=true` to the image build to avoid a second
   TypeScript pass. The required `verify` job runs the full typecheck in parallel.
   Local and self-hosted Docker builds default to checking types inside Next.
@@ -72,7 +73,7 @@ shorter verification job.
 - After handoff, the disposable runner retains the latest accepted
   `datool-release` image and removes older tags. DLC keeps installed shared
   layers without accumulating every released image. The named BuildKit cache
-  is capped at 8 GB by removing its least recently used entries. This leaves
+  is capped at 9 GB by removing its least recently used entries. This leaves
   room for runtime and service images: an oversized DLC snapshot was observed
   being discarded entirely, making the following build cold.
 

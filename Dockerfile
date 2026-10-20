@@ -13,7 +13,9 @@ COPY packages/cli/package.json ./packages/cli/
 COPY packages/chatgpt-trace-explorer/package.json ./packages/chatgpt-trace-explorer/
 # Keep dependency installation reusable when only application source changes.
 # Run project generation after the source is present in the build stage.
-RUN --mount=type=cache,target=/root/.bun/install/cache \
+# The installed dependency layer is reusable. Persisting Bun's download cache
+# as well duplicates gigabytes and crowds useful layers out of CircleCI DLC.
+RUN --mount=type=tmpfs,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --ignore-scripts
 
 FROM dependencies AS build
@@ -23,7 +25,7 @@ ARG DATOOL_CI_BUILD=false
 # Next's TypeScript worker exceeds Node 22's default heap on CI. Give only the
 # build a 4 GiB heap; the runtime stage keeps Node's default memory settings.
 # The cache mount survives source changes without entering the runtime image.
-RUN --mount=type=cache,target=/root/.bun/install/cache \
+RUN --mount=type=tmpfs,target=/root/.bun/install/cache \
     --mount=type=cache,target=/app/.next/cache \
     bun install --frozen-lockfile && \
     DATOOL_CI_BUILD=$DATOOL_CI_BUILD NODE_OPTIONS=--max-old-space-size=4096 bun run build
