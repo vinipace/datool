@@ -498,7 +498,7 @@ function ChatWidgetForm({
   component: Extract<WidgetComponent, { type: "form" }>
   onInteraction?: (interaction: Record<string, unknown>, label: string) => void
 }) {
-  const [values, setValues] = React.useState<Record<string, string>>({})
+  const [values, setValues] = React.useState<Record<string, string | boolean>>({})
   // Keep widget validation separate from a surrounding chat composer form.
   const formScope = React.useId()
   const fieldsRef = React.useRef<HTMLFieldSetElement>(null)
@@ -516,7 +516,12 @@ function ChatWidgetForm({
           ? { continuationId: widget.continuationId }
           : {}),
         actionId: component.submitActionId,
-        input: values,
+        input: {
+          ...Object.fromEntries(component.fields
+            .filter((field): field is FormField => typeof field !== "string" && field.type === "checkbox")
+            .map(field => [field.name, false])),
+          ...values,
+        },
       },
       widget.submitLabel ?? "Submit form"
     )
@@ -555,6 +560,21 @@ function ChatWidgetForm({
                 required: field.required ?? false,
                 options: field.options ?? [],
               }
+        if (config.type === "checkbox") {
+          return (
+            <label key={`${messageId}-${config.name}`} className="flex cursor-pointer items-start gap-2.5 text-xs leading-5">
+              <Checkbox
+                form={formScope}
+                name={config.name}
+                required={config.required}
+                checked={values[config.name] === true}
+                className="mt-0.5"
+                onChange={event => setValues(current => ({ ...current, [config.name]: event.target.checked }))}
+              />
+              <span>{config.label}{config.required ? " *" : ""}</span>
+            </label>
+          )
+        }
         // A single selectable value is an opt-in, not a menu of choices.
         // Keep its exact configured string as the submitted value.
         if (config.type === "select" && config.options.length === 1) {
@@ -602,7 +622,7 @@ function ChatWidgetForm({
                 form={formScope}
                 name={config.name}
                 required={config.required}
-                value={values[config.name] ?? ""}
+                value={String(values[config.name] ?? "")}
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
@@ -619,7 +639,7 @@ function ChatWidgetForm({
                 name={config.name}
                 className="h-10 rounded-lg bg-muted/40"
                 required={config.required}
-                value={values[config.name] ?? ""}
+                value={String(values[config.name] ?? "")}
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
@@ -649,7 +669,7 @@ function ChatWidgetForm({
                     : "text"
                 }
                 required={config.required}
-                value={values[config.name] ?? ""}
+                value={String(values[config.name] ?? "")}
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,

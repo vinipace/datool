@@ -193,6 +193,12 @@ describe("Build agent runtime", () => {
           resolveProcedures: async () => [],
           retrieveKnowledge: async () => ({
             text: "Orders ship within two days.",
+            snapshotId: "knowledge:shipping-v1",
+            documents: [{
+              chunkId: "shipping-1", sourceName: "Shipping policy", revision: 1,
+              content: "Orders ship within two days.",
+              metadata: { url: "https://example.test/shipping" }, score: 0.9,
+            }],
           }),
           executeAction: async () => ({
             output: {
@@ -231,6 +237,21 @@ describe("Build agent runtime", () => {
     expect(trace.attributes["datool.span.kind"]).toBe("agent")
     expect(trace.attributes["build.agent.id"]).toBe("agent-a")
     expect(trace.input).toBe("Where is my order?")
+    const retrieval = trace.spans.find(span => span.name === "Knowledge retrieval")
+    expect(retrieval).toMatchObject({
+      status: "completed",
+      input: { query: "Where is my order?", limit: 8 },
+      output: {
+        chunkCount: 1,
+        snapshotId: "knowledge:shipping-v1",
+        context: "Orders ship within two days.",
+        chunks: [{
+          chunkId: "shipping-1", content: "Orders ship within two days.",
+          metadata: { url: "https://example.test/shipping" }, score: 0.9,
+        }],
+      },
+    })
+    expect(retrieval?.endedAt).toBeTruthy()
     expect(JSON.stringify(trace)).not.toContain("private-action-secret")
   }, 30_000)
 

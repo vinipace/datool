@@ -57,7 +57,7 @@ try {
     "POSTGRES_PASSWORD=package-fixture",
     "-p",
     "127.0.0.1::5432",
-    "postgres:18-alpine",
+    "pgvector/pgvector:pg18",
   ])
   owned.push(pgName)
   const redisName = `datool-package-redis-${id}`

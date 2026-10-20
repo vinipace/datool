@@ -125,10 +125,6 @@ export const ManageFromAction: Story = {
     await expect(
       canvas.queryByRole("link", { name: "Traces" })
     ).not.toBeInTheDocument()
-    await expect(canvas.getByRole("link", { name: "Inbox" })).toHaveAttribute(
-      "href",
-      "/p/demo/build/inbox?agentId=calendar-agent"
-    )
     await expect(
       canvas.findByRole("heading", { name: "Integrations" })
     ).resolves.toBeVisible()

@@ -416,6 +416,8 @@ describe("Build customer form continuations", () => {
               type: "email",
               required: true,
             },
+            { name: "isAgency", label: "Agency", type: "checkbox" },
+            { name: "consent", label: "Contact consent", type: "checkbox", required: true },
           ],
         },
       })
@@ -492,7 +494,7 @@ describe("Build customer form continuations", () => {
             widgetInteraction: {
               actionId: form.id,
               continuationId,
-              input: { email: "customer@example.test" },
+              input: { email: "customer@example.test", isAgency: false, consent: true },
             },
           } as never,
         },
@@ -512,7 +514,7 @@ describe("Build customer form continuations", () => {
             widgetInteraction: {
               actionId: form.id,
               continuationId,
-              input: { email: "customer@example.test" },
+              input: { email: "customer@example.test", isAgency: false, consent: true },
             },
           } as never,
         },
@@ -532,12 +534,14 @@ describe("Build customer form continuations", () => {
       WHERE project_id = ${context.projectId}
         AND conversation_id = ${pending.conversation.id}
     `)
-      expect(rows.rows).toEqual([
+      expect(rows.rows.sort((a, b) => a.field_key.localeCompare(b.field_key))).toEqual([
+        { field_key: "consent", value_json: true, source: "form" },
         {
           field_key: "email",
           value_json: "customer@example.test",
           source: "form",
         },
+        { field_key: "isAgency", value_json: false, source: "form" },
       ])
       const leads = await context.database.execute<{ data_json: unknown }>(sql`
       SELECT data_json FROM build_leads
@@ -545,7 +549,7 @@ describe("Build customer form continuations", () => {
         AND conversation_id = ${pending.conversation.id}
     `)
       expect(leads.rows).toEqual([
-        { data_json: { email: "customer@example.test" } },
+        { data_json: { email: "customer@example.test", isAgency: false, consent: true } },
       ])
     }
   )

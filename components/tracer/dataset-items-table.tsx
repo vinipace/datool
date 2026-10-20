@@ -1,12 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { ArrowDownRight, Braces, Calendar, Equal, Link2 } from "lucide-react"
-import type { DatasetItemPreview, DatasetField, JsonValue } from "@/src/lib/tracer/contracts"
+import { ArrowDownRight, Braces, Calendar, Equal, Link2, FlaskConical } from "lucide-react"
+import type { DatasetItemPreview, DatasetField, JsonValue, DatasetEvaluation } from "@/src/lib/tracer/contracts"
 import type { CollectionTableSettings } from "@/src/lib/tracer/custom-views"
 import { datasetFields, datasetFieldLabels } from "@/src/lib/tracer/dataset-schemas"
 import { availableValueViews, isValueView, valueViews, valueViewLabels, type ValueView } from "@/src/lib/tracer/value-views"
 import { StructuredValueView } from "@/components/ui/structured-value-view"
+import { Button } from "@/components/ui/button"
+import { ExecutionStatus } from "@/components/ui/execution-status"
 import { Notice } from "@/components/ui/notice"
 import {
   CollectionRow,
@@ -28,8 +30,18 @@ const columns = [
   { id: "sourceTraceId", label: "Source trace", icon: Link2, width: 160 },
 ]
 
+function ResultStatus({ result }: { result: DatasetEvaluation }) {
+  if (result.outcome === "passed") return <ExecutionStatus status="completed" label="Passed" />
+  if (result.outcome === "failed") return <ExecutionStatus status="error" label={result.error ? "Error" : "Failed"} />
+  if (result.outcome === "unscored") return <ExecutionStatus status="skipped" label="Unscored" />
+  if (result.outcome === "cancelled") return <ExecutionStatus status="skipped" label="Cancelled" />
+  return <ExecutionStatus status={result.status === "queued" ? "queued" : "running"} />
+}
+
 export function DatasetItemsTable({
   items,
+  showResults = false,
+  onOpenResult,
   computed,
   checked,
   onCheck,
@@ -43,6 +55,8 @@ export function DatasetItemsTable({
   onSettingsChange,
   onFieldViewChange,
 }: {
+  showResults?: boolean
+  onOpenResult?: (result: DatasetEvaluation, target: HTMLElement) => void
   items: DatasetItemPreview[]
   computed: ReturnType<typeof useComputedColumns>
   checked: Set<string>
@@ -57,6 +71,12 @@ export function DatasetItemsTable({
   onSettingsChange: React.Dispatch<React.SetStateAction<CollectionTableSettings>>
   onFieldViewChange: (field: string, view: ValueView) => void
 }) {
+  const displayedColumns = showResults
+    ? [
+        ...columns.slice(0, 3),
+        { id: "results", label: "Results", icon: FlaskConical, width: 320 },
+      ]
+    : columns
   const tall = settings.view === "cards" || settings.rowHeight === "tall"
   const contentClass = tall ? collectionTable.tallContent : collectionTable.compactContent
   const renderValue = (value: JsonValue, field: string) => (
@@ -87,7 +107,7 @@ export function DatasetItemsTable({
         onSettingsChange={onSettingsChange}
         displaySettings={[{
           label: "Field views",
-          items: datasetFields.map(field => ({
+          items: datasetFields.filter(field => displayedColumns.some(column => column.id === field)).map(field => ({
             id: field,
             label: datasetFieldLabels[field],
             value: settings.fieldViews?.[field] ?? "json",
@@ -100,12 +120,12 @@ export function DatasetItemsTable({
         computedColumnStore={computed.store}
         actionColumnIds={["add-column"]}
         columnIds={[
-          ...columns.map((column) => column.id),
+          ...displayedColumns.map((column) => column.id),
           ...computed.columns.map((column) => `computed:${column.id}`),
           "add-column",
         ]}
         widths={[
-          ...columns.map((column) => column.width),
+          ...displayedColumns.map((column) => column.width),
           ...computed.columns.map(() => 240),
           160,
         ]}
@@ -129,7 +149,7 @@ export function DatasetItemsTable({
                 }
               />
             </th>
-            {columns.map(({ id, label, icon: Icon }) => (
+            {displayedColumns.map(({ id, label, icon: Icon }) => (
               <th
                 key={id}
                 scope="col"
@@ -194,7 +214,7 @@ export function DatasetItemsTable({
           empty={
             <tr>
               <td
-                colSpan={7 + computed.columns.length}
+                colSpan={displayedColumns.length + computed.columns.length + 2}
                 className="py-12 text-center text-sm text-foreground-muted"
               >
                 {filtered
@@ -249,14 +269,29 @@ export function DatasetItemsTable({
               <td className={collectionTable.cell}>
                 {renderField(item, "expectedOutput")}
               </td>
-              <td className={collectionTable.cell}>{renderField(item, "metadata")}</td>
-              <td className={collectionTable.cell}>
+              {showResults && <td className={collectionTable.cell}>
+                {item.latestEvaluation ? <Button
+                  variant="ghost" size="sm" className="h-auto w-full min-w-0 justify-start py-2 text-left"
+                  aria-label={`Open result trace for row ${index + 1}`}
+                  onClick={event => onOpenResult?.(item.latestEvaluation!, event.currentTarget)}
+                >
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="flex items-center gap-2">
+                      <ResultStatus result={item.latestEvaluation} />
+                      {item.latestEvaluation.score !== null && <span className="font-mono text-xs">{Number(item.latestEvaluation.score).toFixed(2)}</span>}
+                    </span>
+                    <span className="line-clamp-2 whitespace-normal text-xs text-foreground-muted">{item.latestEvaluation.error ?? item.latestEvaluation.output}</span>
+                  </span>
+                </Button> : <span className="text-xs text-foreground-muted">Not run</span>}
+              </td>}
+              {!showResults && <td className={collectionTable.cell}>{renderField(item, "metadata")}</td>}
+              {!showResults && <td className={collectionTable.cell}>
                 <span
                   className={`block font-mono text-xs text-foreground-muted ${contentClass}`}
                 >
                   {item.sourceTraceId ?? "—"}
                 </span>
-              </td>
+              </td>}
               {computed.columns.map((column) => (
                 <td key={column.id} className={collectionTable.cell}>
                   <div className={contentClass}>

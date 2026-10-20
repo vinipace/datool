@@ -34,6 +34,7 @@ export async function GET(request: Request, context: RouteContext) {
       includeTotal: url.searchParams.get("includeTotal") === "true",
       limit: parseListLimit(url.searchParams.get("limit")),
       preview: url.searchParams.get("preview") === "true",
+      includeResults: url.searchParams.get("includeResults") === "true",
     })
   )
 }

@@ -162,7 +162,6 @@ saved; previously issued conversations retain their original definition.
 | Contacts                  | Identities, custom attributes, collected data, imports/exports, and leads                          |
 | Campaigns                 | Audience snapshots, suppression, scheduled admission, and channel delivery receipts                |
 | Dashboards                | Customer experience template with conversation activity, inbox, handoffs, and satisfaction metrics |
-| Suggestions               | Feedback and knowledge gaps                                                                        |
 | Simulations               | Frozen configurations, customer scenarios, mocked actions, transcripts, and explicit verdicts      |
 | Copilot                   | Proposed changes, review, approval, application, and audit history                                 |
 
@@ -195,8 +194,79 @@ metrics catalog for custom queries and widgets.
 Knowledge supports text-based PDF and DOCX plus plain text, Markdown, CSV, JSON,
 XML, and HTML. Scanned PDFs require text extraction/OCR before upload. Indexing
 publishes a new source revision atomically and retains the previous index when
-a refresh fails. Source deletion revokes retrieval. Retrieval reports source
-provenance; it must not be described as a vector index.
+a refresh fails. Source deletion revokes retrieval.
+
+Knowledge retrieval combines PostgreSQL keyword search with semantic search
+over pgvector embeddings. Indexing uses `openai/text-embedding-3-small` (1,536
+dimensions), through the project's AI Gateway credential, or its OpenAI
+credential when no Gateway credential is configured. These are provider-billed
+requests using the project's own key. Content and query embeddings use the same
+model and input version; changing the chat model does not invalidate the index.
+Unchanged chunks reuse their embeddings on refresh.
+
+The runtime combines up to 20 keyword and 20 semantic candidates with reciprocal
+rank fusion. It removes identical passages (including whitespace-only
+differences), prefers the existing HTML URL over an identical `.md` alternative,
+and keeps distinct passages from the same page.
+
+With a project AI Gateway credential, `cohere/rerank-v4-fast` reranks these
+deduplicated candidates against the question before selecting up to eight
+chunks with their original source URLs and revisions. This adds a provider-billed
+request containing the question and candidate passages. Reranking requests have
+a three-second deadline and no retries. Missing credentials, provider errors,
+timeouts, or malformed rankings retain the deduplicated hybrid order. Projects
+using only a direct OpenAI credential still get embeddings and deduplication.
+
+Semantic search computes exact cosine similarity inside the agent's active,
+project-scoped index and excludes similarities below 0.3. Query embedding
+requests have a five-second deadline and fall back to keyword search on failure.
+Projects without either credential remain on keyword search. A configured
+provider's indexing failure retains the previous source revision for retry.
+
+Apply migration `0058_build_knowledge_embeddings.sql` on PostgreSQL with pgvector
+installed (see [self-hosting](self-hosting.md)). New or refreshed sources embed
+automatically. To add embeddings to an existing agent without recrawling or
+changing its indexed content, run:
+
+```sh
+bun run scripts/backfill-knowledge-embeddings.ts --project <project-id> --agent <agent-id>
+```
+
+Backfill writes bounded batches and is safe to rerun after interruption; it skips
+chunks already embedded with the current model/input version. It only updates
+the specified agent's active revisions. Indexing and backfill send extracted
+content to the configured embedding provider; retrieval sends the current
+question. Sources and citations remain the original indexed text.
+
+## Test an agent
+
+Open **Test** in an agent’s sidebar to create or select a dataset linked to that
+agent. The page reuses the dataset editor: inputs, expected outputs, and the
+latest evaluation result stay in one table. Click a result to open its trace
+inspector with the frozen evidence from that evaluation.
+The inspector includes linked agent traces and their model/tool calls. New agent
+runs also record a **Knowledge retrieval** span with the query, duration, selected
+chunk text, source URLs, rank/score, and the context injected into the model.
+These are captured for the run; opening an old evaluation does not retrieve
+today's chunks or rewrite its evidence.
+
+The success rate uses the latest result for every current dataset case, including
+cases outside the visible page or filter: passed / (passed + failed). All selected
+scorers must pass, using their configured thresholds or explicit verdicts.
+Execution and scoring errors count as failures; pending, cancelled, unscored and
+unrun cases are shown separately and excluded from the rate.
+
+**Run dataset** invokes the applied agent for each case using its current
+knowledge and the selected scorers. Inputs can be a message string or an object
+with `message` and an optional `channel` (defaults to `web`). Each case starts a
+separate conversation. External actions are disabled during these runs.
+Apply configuration changes before testing them; an unapplied draft is not used.
+
+Agent datasets and runs also appear in the existing project **Datasets** and
+**Evals** pages. The APIs accept an `agentId` filter, and creating an evaluation
+with `agentId` requires a dataset linked to that agent. Re-runs retain the
+association and frozen cases. Apply migration `0060_agent_evaluations.sql` before
+using agent tests.
 
 ## Connected apps and usage
 

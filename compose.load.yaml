@@ -22,7 +22,7 @@ x-load: &load
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     labels:
       io.datool.fixture: ingestion-load
     environment:

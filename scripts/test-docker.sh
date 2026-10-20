@@ -23,7 +23,7 @@ if [ "${DATOOL_DOCKER_SKIP_BUILD:-0}" != 1 ]; then docker build -t "$image" .; f
 docker network create "$prefix" >/dev/null
 docker volume create "$prefix-data" >/dev/null
 docker run -d --name "$prefix-db" --network "$prefix" --network-alias database \
-  -e POSTGRES_USER=datool -e POSTGRES_PASSWORD=isolated-test -e POSTGRES_DB=datool postgres:17-alpine >/dev/null
+  -e POSTGRES_USER=datool -e POSTGRES_PASSWORD=isolated-test -e POSTGRES_DB=datool pgvector/pgvector:pg17 >/dev/null
 docker run -d --name "$prefix-redis" --network "$prefix" --network-alias redis \
   redis:7-alpine redis-server --appendonly yes --appendfsync always --maxmemory-policy noeviction >/dev/null
 ready=0

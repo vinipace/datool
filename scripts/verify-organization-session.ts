@@ -125,7 +125,7 @@ async function seedFixture(baseUrl: string): Promise<Fixture> {
     "POSTGRES_PASSWORD=org-session-fixture",
     "-p",
     "127.0.0.1::5432",
-    "postgres:17-alpine"
+    "pgvector/pgvector:pg17"
   )
   for (let attempt = 0; attempt < 60; attempt++) {
     try {

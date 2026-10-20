@@ -969,7 +969,8 @@ function validateFormSubmission(
       const value = input[field.name]
       return (
         field.required &&
-        (value === undefined || value === null || value === "")
+        (value === undefined || value === null || value === "" ||
+          (field.type === "checkbox" && value !== true))
       )
     })
   )
@@ -980,6 +981,11 @@ function validateFormSubmission(
 
   for (const field of action.fields) {
     const value = input[field.name]
+    if (field.type === "checkbox" && value !== undefined && typeof value !== "boolean")
+      throw new BuildRuntimeError(
+        "INVALID_FORM_INPUT",
+        "The submitted form data is invalid."
+      )
     if (value === undefined || value === null || value === "") continue
     if (
       ["text", "email", "phone", "select", "textarea"].includes(field.type) &&
@@ -2941,35 +2947,86 @@ export async function runAgentTurn(
     }
 
     let knowledge: RuntimeKnowledgeResult | null = null
-    if (dependencies.retrieveKnowledge) {
-      knowledge = await dependencies.retrieveKnowledge({
-        context,
-        agent,
-        conversation,
-        query: inputText,
-        signal: options.signal,
-      })
-    } else {
-      // Customer runtime uses the indexed, tenant-scoped retrieval service by
-      // default. It is deterministic FTS/literal/prefix retrieval; model
-      // query expansion remains an explicit dependency so a live turn never
-      // incurs an unbudgeted second model call.
-      try {
-        const grounded = await retrieveGroundedKnowledge(context, {
-          agentId: agent.id,
+    const retrievalSpan = trace
+      ? await runTracerEffect(
+          trace.service.createSpan(trace.trace.id, {
+            name: "Knowledge retrieval",
+            kind: "function",
+            status: "running",
+            input: persistedRuntimeValue(
+              { query: inputText, limit: 8 },
+              runtimeSecretValues
+            ) as JsonValue,
+            attributes: {
+              "build.agent.id": agent.id,
+              "build.knowledge.retrieval": true,
+            },
+          })
+        ).catch(() => null)
+      : null
+    let retrievalFailed = false
+    try {
+      if (dependencies.retrieveKnowledge) {
+        knowledge = await dependencies.retrieveKnowledge({
+          context,
+          agent,
+          conversation,
           query: inputText,
-          limit: 8,
+          signal: options.signal,
         })
-        knowledge = {
-          text: grounded.text,
-          documents: grounded.documents,
-          snapshotId: grounded.snapshotId,
+      } else {
+        // The production retriever retains keyword matches on provider failure.
+        try {
+          const grounded = await retrieveGroundedKnowledge(context, {
+            agentId: agent.id,
+            query: inputText,
+            limit: 8,
+            signal: options.signal,
+          })
+          knowledge = {
+            text: grounded.text,
+            documents: grounded.documents,
+            snapshotId: grounded.snapshotId,
+          }
+        } catch {
+          // Keep the customer fallback, but expose the failed retrieval in its trace.
+          retrievalFailed = true
         }
-      } catch {
-        // An unavailable or empty knowledge index must not fabricate context
-        // or prevent the configured agent model from answering generally.
-        knowledge = null
       }
+    } catch (error) {
+      retrievalFailed = true
+      throw error
+    } finally {
+      if (trace && retrievalSpan)
+        await runTracerEffect(
+          trace.service.patchSpan(retrievalSpan.id, {
+            endedAt: new Date().toISOString(),
+            status: options.signal?.aborted
+              ? "cancelled"
+              : retrievalFailed
+                ? "errored"
+                : "completed",
+            output: persistedRuntimeValue(
+              {
+                chunkCount: knowledge?.documents?.length ?? 0,
+                chunks: knowledge?.documents ?? [],
+                context: knowledge?.text ?? "",
+                snapshotId: knowledge?.snapshotId ?? null,
+              },
+              runtimeSecretValues
+            ) as JsonValue,
+            attributes: {
+              ...retrievalSpan.attributes,
+              "build.knowledge.chunk_count": knowledge?.documents?.length ?? 0,
+              ...(retrievalFailed
+                ? {
+                    "error.message":
+                      "Knowledge retrieval failed; no context was injected.",
+                  }
+                : {}),
+            },
+          })
+        ).catch(() => undefined)
     }
     if (knowledge?.snapshotId) {
       const snapshot = await service.setSnapshot(

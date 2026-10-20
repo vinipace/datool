@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  FlaskConical,
   ChartNoAxesCombined,
   FileText,
   Database,
@@ -28,6 +29,7 @@ export type BuildTab = {
  * in a smaller, task-oriented hierarchy.
  */
 export const agentBuildTabs: BuildTab[] = [
+  { id: "test", label: "Test", icon: FlaskConical, description: "Datasets and evaluations for this agent", group: "Manage" },
   {
     id: "overview",
     label: "Analytics",

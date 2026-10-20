@@ -46,13 +46,21 @@ import { Braces, FileText, Play, Plug, RotateCcw, Trash2 } from "lucide-react"
 const overridesSchema: JsonObject = { type: "object" }
 
 export function ConnectedEvalButton({
+  onStarted,
+  agentId,
+  agentName,
   appId: initialApp = "",
   datasetId: initialDataset = "",
   compact = false,
+  disabled = false,
 }: {
+  onStarted?: (runId: string) => void
+  agentId?: string
+  agentName?: string
   appId?: string
   datasetId?: string
   compact?: boolean
+  disabled?: boolean
 }) {
   const workspaceHref = useWorkspaceHref()
   const router = useRouter()
@@ -93,6 +101,16 @@ export function ConnectedEvalButton({
     setError("")
     setLoading(true)
     try {
+      if (agentId) {
+        const ds = initialDataset
+          ? [await tracerApi.datasets.get(initialDataset, { includeItems: false })]
+          : (await tracerApi.datasets.list({ agentId, limit: 200 })).items
+        setDatasets(ds)
+        if (initialDataset) setDataset(initialDataset)
+        setApps([{ id: `build-agent.${agentId}`, name: agentName ?? "Agent" }])
+        setApp(`build-agent.${agentId}`)
+        return
+      }
       const [catalog, connections, ds, ps] = await Promise.all([
         projectFetch("/api/apps/config").then((r) => r.json()),
         projectFetch("/api/apps").then((r) => r.json()),
@@ -126,6 +144,7 @@ export function ConnectedEvalButton({
     try {
       const result = await tracerApi.evals.create({
         mode: "connected",
+        ...(agentId ? { agentId } : {}),
         appId,
         datasetId,
         evaluatorIds: selected,
@@ -134,7 +153,8 @@ export function ConnectedEvalButton({
         name: `${apps.find((a) => a.id === appId)?.name ?? "App"} · ${datasets.find((d) => d.id === datasetId)?.name ?? "Dataset"}`,
       })
       setOpen(false)
-      router.push(workspaceHref(`/evals/${result.id}`))
+      if (onStarted) onStarted(result.id)
+      else router.push(workspaceHref(`/evals/${result.id}`))
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -149,6 +169,7 @@ export function ConnectedEvalButton({
           size={compact ? "responsive-sm" : "sm"}
           aria-label="Run dataset"
           title="Run dataset"
+          disabled={disabled}
         >
           <Play aria-hidden="true" className="size-3.5" />
           <PanelActionLabel
@@ -160,13 +181,13 @@ export function ConnectedEvalButton({
       </DialogTrigger>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Run dataset against an app</DialogTitle>
+          <DialogTitle>{agentId ? `Test ${agentName ?? "agent"}` : "Run dataset against an app"}</DialogTitle>
           <DialogDescription>
-            Choose an app, dataset, and scorers.
+            {agentId ? "Run the applied agent with current knowledge. External actions are disabled. Each input should be a message string or an object with message and optional channel." : "Choose an app, dataset, and scorers."}
           </DialogDescription>
         </DialogHeader>
         <div className="-mx-3 min-w-0">
-          <FormRow label="App" controlWidth="wide">
+          {!agentId && <FormRow label="App" controlWidth="wide">
             <Select
               disabled={loading || busy}
               value={appId || null}
@@ -196,10 +217,10 @@ export function ConnectedEvalButton({
                 ))}
               </SelectContent>
             </Select>
-          </FormRow>
+          </FormRow>}
           <FormRow label="Dataset" controlWidth="wide">
             <Select
-              disabled={loading || busy}
+              disabled={loading || busy || !!(agentId && initialDataset)}
               value={datasetId || null}
               items={datasets.map((dataset) => ({
                 value: dataset.id,
@@ -229,7 +250,7 @@ export function ConnectedEvalButton({
             <LoadingState compact label="Loading apps and datasets…" />
           )}
           {!loading && !error && (!apps.length || !datasets.length) && (
-            <Notice>Add an app and dataset to run an evaluation.</Notice>
+            <Notice>{agentId ? "Create a dataset for this agent to run an evaluation." : "Add an app and dataset to run an evaluation."}</Notice>
           )}
           <FormRow label="Scorers" controlWidth="wide">
             <ScorerPicker
@@ -238,7 +259,7 @@ export function ConnectedEvalButton({
               disabled={loading || busy}
             />
           </FormRow>
-          <fieldset disabled={loading || busy} className="min-w-0">
+          {!agentId && <fieldset disabled={loading || busy} className="min-w-0">
             <legend className="sr-only">Managed prompts</legend>
             <FormRow label="Prompt override" controlWidth="wide">
               <Select
@@ -372,7 +393,7 @@ export function ConnectedEvalButton({
                 </div>
               )
             })}
-          </fieldset>
+          </fieldset>}
           <InspectorSection
             label="Input overrides"
             icon={<Braces aria-hidden className="size-3.5" />}
@@ -423,7 +444,7 @@ export function ConnectedEvalButton({
             onClick={() => void run()}
           >
             <Play aria-hidden className="size-3.5" />
-            {busy ? "Starting…" : "Run app and score traces"}
+            {busy ? "Starting…" : agentId ? "Run agent and score" : "Run app and score traces"}
           </Button>
         </DialogFooter>
       </DialogContent>

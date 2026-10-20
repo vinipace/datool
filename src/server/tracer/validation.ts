@@ -129,6 +129,7 @@ const createSession = z
 
 export const createDataset = z
   .object({
+    agentId: id.optional(),
     description: description.optional(),
     id: id.optional(),
     name: datasetPath,
@@ -190,6 +191,7 @@ const patchEvaluator = z
 
 export const createEvalRun = z
   .object({
+    agentId: id.optional(),
     parentRunId: id.optional(),
     useRecordedVersions: z.boolean().optional(),
     promptOverrides: promptOverridesSchema.optional(),

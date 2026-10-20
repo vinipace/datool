@@ -65,7 +65,7 @@ try {
   for (const [name, image, internal, args] of [
     [
       `datool-python-pg-${id}`,
-      "postgres:18-alpine",
+      "pgvector/pgvector:pg18",
       "5432",
       ["-e", "POSTGRES_PASSWORD=python-fixture"],
     ],

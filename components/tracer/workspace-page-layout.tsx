@@ -31,7 +31,6 @@ const buildTitles: Record<string, string> = {
   contacts: pageTitles.buildContacts,
   campaigns: pageTitles.buildCampaigns,
   integrations: pageTitles.buildIntegrations,
-  suggestions: pageTitles.buildSuggestions,
   tests: pageTitles.buildTests,
 }
 

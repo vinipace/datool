@@ -763,6 +763,9 @@
     "Output_Dataset": {
       "type": "object",
       "properties": {
+        "agentId": {
+          "$ref": "#/components/schemas/Output_run_app_agentId"
+        },
         "createdAt": {
           "type": "string"
         },
@@ -806,6 +809,9 @@
     "Output_DatasetDetail": {
       "type": "object",
       "properties": {
+        "agentId": {
+          "$ref": "#/components/schemas/Output_run_app_agentId"
+        },
         "createdAt": {
           "type": "string"
         },
@@ -834,7 +840,7 @@
           "type": "string"
         },
         "nextCursor": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "revision": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
@@ -854,6 +860,49 @@
         "items",
         "name",
         "updatedAt"
+      ]
+    },
+    "Output_DatasetEvaluation": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "outcome": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_outcome"
+        },
+        "output": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "status": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "error",
+        "outcome",
+        "output",
+        "runId",
+        "score",
+        "status",
+        "targetId",
+        "traceId"
       ]
     },
     "Output_DatasetItem": {
@@ -890,7 +939,7 @@
           "$ref": "#/components/schemas/Output_get_dataset_items_item_sourceSpanEvidence"
         },
         "sourceSpanId": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "sourceTraceId": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
@@ -937,6 +986,9 @@
         "input": {
           "$ref": "#/components/schemas/Output_JsonValue"
         },
+        "latestEvaluation": {
+          "$ref": "#/components/schemas/Output_get_dataset_item_latestEvaluation"
+        },
         "metadata": {
           "$ref": "#/components/schemas/Output_JsonObject"
         },
@@ -950,7 +1002,7 @@
           "$ref": "#/components/schemas/Output_get_dataset_items_item_sourceSpanEvidence"
         },
         "sourceSpanId": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "sourceTraceId": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
@@ -1207,6 +1259,9 @@
     "Output_EvalRunDetail": {
       "type": "object",
       "properties": {
+        "agentId": {
+          "$ref": "#/components/schemas/Output_run_app_agentId"
+        },
         "completedAt": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
@@ -1232,7 +1287,7 @@
           "$ref": "#/components/schemas/Output_run_app_groups"
         },
         "groupsResolvedAt": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "id": {
           "type": "string"
@@ -1244,7 +1299,7 @@
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
         "nextCursor": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "resultCount": {
           "type": "number"
@@ -1305,6 +1360,9 @@
     "Output_EvalRunSummary": {
       "type": "object",
       "properties": {
+        "agentId": {
+          "$ref": "#/components/schemas/Output_run_app_agentId"
+        },
         "completedAt": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
@@ -1324,7 +1382,7 @@
           "$ref": "#/components/schemas/Output_run_app_groups"
         },
         "groupsResolvedAt": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "id": {
           "type": "string"
@@ -1849,6 +1907,16 @@
         "minScore"
       ]
     },
+    "Output_get_dataset_item_latestEvaluation": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_DatasetEvaluation"
+        }
+      ]
+    },
     "Output_get_dataset_items_item_sourceSpanEvidence": {
       "anyOf": [
         {
@@ -1862,6 +1930,9 @@
     "Output_get_dataset_snapshot": {
       "type": "object",
       "properties": {
+        "agentId": {
+          "$ref": "#/components/schemas/Output_run_app_agentId"
+        },
         "createdAt": {
           "type": "string"
         },
@@ -6291,6 +6362,9 @@
     "Output_list_dataset_items": {
       "type": "object",
       "properties": {
+        "evaluationSummary": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_evaluationSummary"
+        },
         "items": {
           "type": "array",
           "items": {
@@ -6307,6 +6381,48 @@
       "required": [
         "items",
         "nextCursor"
+      ]
+    },
+    "Output_list_dataset_items_evaluationSummary": {
+      "$ref": "#/components/schemas/Output_list_dataset_items_evaluationSummary_2"
+    },
+    "Output_list_dataset_items_evaluationSummary_2": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "notRun": {
+          "type": "number"
+        },
+        "passed": {
+          "type": "number"
+        },
+        "pending": {
+          "type": "number"
+        },
+        "successRate": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "total": {
+          "type": "number"
+        },
+        "unscored": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "cancelled",
+        "failed",
+        "notRun",
+        "passed",
+        "pending",
+        "successRate",
+        "total",
+        "unscored"
       ]
     },
     "Output_list_dataset_items_items_item": {
@@ -6333,6 +6449,9 @@
         "input": {
           "$ref": "#/components/schemas/Output_JsonValue"
         },
+        "latestEvaluation": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation"
+        },
         "metadata": {
           "$ref": "#/components/schemas/Output_JsonObject"
         },
@@ -6346,7 +6465,7 @@
           "$ref": "#/components/schemas/Output_get_dataset_items_item_sourceSpanEvidence"
         },
         "sourceSpanId": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "sourceTraceId": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
@@ -6367,6 +6486,25 @@
         "metadata",
         "sourceTraceId",
         "updatedAt"
+      ]
+    },
+    "Output_list_dataset_items_items_item_latestEvaluation": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_value"
+        }
+      ]
+    },
+    "Output_list_dataset_items_items_item_latestEvaluation_outcome": {
+      "enum": [
+        "cancelled",
+        "failed",
+        "passed",
+        "pending",
+        "unscored"
       ]
     },
     "Output_list_dataset_items_items_item_omittedFields": {
@@ -7239,7 +7377,7 @@
           "$ref": "#/components/schemas/Output_run_app_results_item_definition"
         },
         "error": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "evalResultId": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
@@ -7272,7 +7410,7 @@
           "$ref": "#/components/schemas/Output_get_trace_scores_item_passed"
         },
         "reasoning": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "score": {
           "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
@@ -8940,13 +9078,13 @@
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
         },
         "publicPath": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "publicUrl": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "publishedAt": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "revision": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
@@ -8961,7 +9099,7 @@
           "type": "string"
         },
         "updatedAt": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "widgetCount": {
           "type": "number"
@@ -9128,7 +9266,7 @@
           "type": "number"
         },
         "publishedAt": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "revision": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
@@ -9140,7 +9278,7 @@
           "type": "string"
         },
         "updatedAt": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "widgetCount": {
           "type": "number"
@@ -9654,7 +9792,7 @@
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
         "defaultObjectViewId": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "humanReviewedCount": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
@@ -9747,7 +9885,7 @@
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
         "defaultObjectViewId": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "humanReviewedCount": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
@@ -9822,6 +9960,9 @@
     "Output_run_app": {
       "type": "object",
       "properties": {
+        "agentId": {
+          "$ref": "#/components/schemas/Output_run_app_agentId"
+        },
         "completedAt": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
@@ -9847,7 +9988,7 @@
           "$ref": "#/components/schemas/Output_run_app_groups"
         },
         "groupsResolvedAt": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "id": {
           "type": "string"
@@ -9859,7 +10000,7 @@
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
         "nextCursor": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "resultCount": {
           "type": "number"
@@ -9910,6 +10051,16 @@
         "targetCount",
         "traceCount",
         "url"
+      ]
+    },
+    "Output_run_app_agentId": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        }
       ]
     },
     "Output_run_app_completedAt": {
@@ -9967,7 +10118,7 @@
           "$ref": "#/components/schemas/Output_run_app_groups_item_type"
         },
         "version": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         }
       },
       "required": [
@@ -9979,16 +10130,6 @@
       "enum": [
         "agent",
         "workflow"
-      ]
-    },
-    "Output_run_app_groups_item_version": {
-      "anyOf": [
-        {
-          "type": "null"
-        },
-        {
-          "type": "string"
-        }
       ]
     },
     "Output_run_app_metadata_value": {
@@ -10276,13 +10417,13 @@
       "type": "object",
       "properties": {
         "datasetCaseId": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "datasetItemId": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
         "executionError": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "expectedOutput": {
           "$ref": "#/components/schemas/Output_JsonValue"
@@ -10303,7 +10444,7 @@
           "$ref": "#/components/schemas/Output_run_app_rows_item_scoringTrace"
         },
         "sourceSpanId": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "stage": {
           "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
@@ -11122,7 +11263,7 @@
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
         "nextCursor": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "traceCount": {
           "type": "number"
@@ -11363,10 +11504,10 @@
           "type": "string"
         },
         "nextScoreCursor": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "nextSpanCursor": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "operation": {
           "type": "string"
@@ -11488,7 +11629,7 @@
           "$ref": "#/components/schemas/Output_run_app_results_item_definition"
         },
         "error": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "evalResultId": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
@@ -11518,7 +11659,7 @@
           "$ref": "#/components/schemas/Output_get_trace_scores_item_passed"
         },
         "reasoning": {
-          "$ref": "#/components/schemas/Output_run_app_groups_item_version"
+          "$ref": "#/components/schemas/Output_run_app_agentId"
         },
         "score": {
           "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
@@ -11750,6 +11891,49 @@
       "enum": [
         "error",
         "warning"
+      ]
+    },
+    "Output_value": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "outcome": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_outcome"
+        },
+        "output": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "score": {
+          "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
+        },
+        "status": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "error",
+        "outcome",
+        "output",
+        "runId",
+        "score",
+        "status",
+        "targetId",
+        "traceId"
       ]
     },
     "Output_ViewColumnFormat": {

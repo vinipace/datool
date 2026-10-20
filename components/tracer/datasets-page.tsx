@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 import { Notice } from "@/components/ui/notice"
 import type {
   Dataset,
+  DatasetEvaluation,
+  TraceDetail,
   DatasetDetail,
   DatasetItem,
   DatasetItemPreview,
@@ -36,7 +38,9 @@ import { DatasetDetailsInspector } from "./dataset-details-inspector"
 import { DatasetImportDialog } from "./dataset-import-dialog"
 import { DatasetItemInspector } from "./dataset-item-inspector"
 import { useDatasetItemLocation } from "./use-dataset-item-location"
+import { TraceInspectorOverlay } from "./trace-list-overlay"
 import { DatasetItemsTable } from "./dataset-items-table"
+import { DatasetEvaluationSummary } from "./dataset-evaluation-summary"
 import { DatasetSchemaDialog } from "./dataset-schema-dialog"
 import { DockedInspector } from "./docked-inspector"
 import { DatasetKindIcon } from "./dataset-kind-icon"
@@ -50,12 +54,15 @@ import { useWorkspaceStorageScope } from "./workspace-path"
 
 export { DatasetsPage } from "./dataset-library-page"
 
-export function DatasetDetailPage({ datasetId }: { datasetId: string }) {
-  return <DatasetDetailSession key={datasetId} datasetId={datasetId} />
+type DatasetDetailProps = { datasetId: string; testAgent?: { id: string; name: string } }
+
+export function DatasetDetailPage(props: DatasetDetailProps) {
+  return <DatasetDetailSession key={props.datasetId} {...props} />
 }
 
-function DatasetDetailSession({ datasetId }: { datasetId: string }) {
+function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
   const storageScope = useWorkspaceStorageScope()
+  const includeResults = !!testAgent
   const changeFieldView = (field: string, view: ValueView) => {
     tableView.onSettingsChange(current => ({
       ...current,
@@ -70,10 +77,10 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const filter = useCollectionFilter("datasetItems")
   const list = React.useCallback(
     (options: import("./api").CollectionListOptions) =>
-      tracerApi.datasets.items(datasetId, { ...options, preview: true }),
-    [datasetId]
+      tracerApi.datasets.items(datasetId, { ...options, preview: true, includeResults }),
+    [datasetId, includeResults]
   )
-  const page = useCollectionPages(list, filter.filter, 0)
+  const page = useCollectionPages(list, filter.filter, testAgent ? 3_000 : 0, { refreshLoadedPages: !!testAgent })
   const [datasetOverride, setDatasetOverride] = React.useState<Dataset | null>(
     null
   )
@@ -89,7 +96,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const [deleted, setDeleted] = React.useState<Set<string>>(() => new Set())
   const [newIds, setNewIds] = React.useState<Set<string>>(() => new Set())
   const [drafts, setDrafts] = React.useState<Record<string, ItemDraft>>({})
-  const itemLocation = useDatasetItemLocation(datasetId)
+  const itemLocation = useDatasetItemLocation(datasetId, !!testAgent)
   const { itemId: selectedId, update: updateItemLocation } = itemLocation
   const [itemLoadError, setItemLoadError] = React.useState<Error | null>(null)
   const [itemLoadAttempt, setItemLoadAttempt] = React.useState(0)
@@ -105,6 +112,13 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
   const [importOpen, setImportOpen] = React.useState(false)
   const [mobileDetails, setMobileDetails] = React.useState(false)
   const returnFocus = React.useRef<HTMLElement | null>(null)
+  const [result, setResult] = React.useState<DatasetEvaluation | null>(null)
+  const resultFocus = React.useRef<HTMLElement | null>(null)
+  const loadResult = React.useCallback(async (signal: AbortSignal) => {
+    if (!result) return undefined
+    const target = await tracerApi.evals.target(result.runId, result.targetId, signal)
+    return target.scoringTrace as TraceDetail | undefined
+  }, [result])
   const selectionRequest = React.useRef<AbortController | null>(null)
   const [loadingField, setLoadingField] = React.useState<DatasetItemField | null>(null)
   const [fieldErrors, setFieldErrors] = React.useState<Partial<Record<DatasetItemField, string>>>({})
@@ -149,7 +163,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
 
   const allItems = React.useMemo(() => {
     const map = new Map<string, DatasetItemPreview>(page.items.map((item) => [item.id, item]))
-    for (const item of Object.values(overrides)) map.set(item.id, item)
+    for (const item of Object.values(overrides)) map.set(item.id, { ...item, latestEvaluation: map.get(item.id)?.latestEvaluation })
     return [...map.values()].filter((item) => !deleted.has(item.id))
   }, [page.items, overrides, deleted])
   const computed = useComputedColumns(
@@ -276,8 +290,8 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     const row: DatasetItem = {
       id,
       datasetId,
-      input: {},
-      expectedOutput: {},
+      input: testAgent ? "" : {},
+      expectedOutput: testAgent ? "" : {},
       metadata: {},
       sourceTraceId: null,
       createdAt: timestamp,
@@ -335,7 +349,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
     )
   return (
     <>
-      <HeaderSlot name="title">
+      {!testAgent && <HeaderSlot name="title">
         <div className="flex min-w-0 items-center gap-2 text-sm">
           <ChevronRight className="size-3.5 shrink-0 text-foreground-muted" />
           <span aria-hidden="true" className="shrink-0 [&>svg]:size-4">
@@ -345,7 +359,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
             {dataset.name.split("/").at(-1)}
           </h1>
         </div>
-      </HeaderSlot>
+      </HeaderSlot>}
       <HeaderSlot name="display">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 text-xs text-foreground-muted">
@@ -369,9 +383,10 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
             <Braces className="size-3.5" />
             <span className="hidden xl:inline">Field schemas</span>
           </Button>
-          <ConnectedEvalButton datasetId={datasetId} compact />
+          <ConnectedEvalButton agentId={dataset.agentId ?? undefined} agentName={testAgent?.name} datasetId={datasetId} compact disabled={isSaving || hasSaveError} onStarted={testAgent ? () => page.refresh() : undefined} />
         </div>
       </HeaderSlot>
+      {testAgent && <DatasetEvaluationSummary summary={page.data?.evaluationSummary} />}
       <CollectionPanel label="Dataset rows">
         <HeaderSlot name="actions">
           <Button
@@ -449,6 +464,12 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
         >
           <DatasetItemsTable
             items={tableItems}
+            showResults={!!testAgent}
+            onOpenResult={(value, target) => {
+              resultFocus.current = target
+              updateItemLocation({ itemId: null })
+              setResult(value)
+            }}
             computed={computed}
             checked={checked}
             onCheck={setChecked}
@@ -464,7 +485,7 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
           />
         </CollectionPage>
       </CollectionPanel>
-      <DockedInspector
+      {!result && (!testAgent || !!selectedId || mobileDetails) && <DockedInspector
         title={selectedId ? "Dataset row" : "Dataset details"}
         mobileOpen={!!selectedId || mobileDetails}
         onMobileClose={close}
@@ -556,7 +577,8 @@ function DatasetDetailSession({ datasetId }: { datasetId: string }) {
             />
           ) : null}
         </div>
-      </DockedInspector>
+      </DockedInspector>}
+      {result && <TraceInspectorOverlay traceId={result.traceId} loadSnapshot={loadResult} onClose={() => setResult(null)} returnFocusRef={resultFocus} />}
       {historyOpen && <DatasetVersionHistory datasetId={datasetId} onClose={() => setHistoryOpen(false)} />}
       {schemaOpen && (
         <DatasetSchemaDialog
