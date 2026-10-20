@@ -1,6 +1,6 @@
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises'
 import { compile } from 'tailwindcss'
 import ts from 'typescript'
 import { traceViewTypes } from './build-trace-view-types.mjs'
@@ -35,3 +35,20 @@ await build({ ...options, conditions: ['worker'], entryPoints: ['src/browser/tra
 await writeFile(`${outdir}/manifest.json`, JSON.stringify({ buildId }))
 await writeFile(`${outdir}/types.json`, JSON.stringify(traceViewTypes()))
 console.log(`Built trace view runtime ${buildId}`)
+
+// Browser recipients receive the terms alongside the bundled Build code.
+await mkdir("public/licenses", { recursive: true })
+for (const license of ["Apache-2.0", "Elastic-2.0"]) {
+  await copyFile(`LICENSES/${license}.txt`, `public/licenses/${license}.txt`)
+}
+const buildLicenseNotice =
+  "/*! Datool Build portions: SPDX-License-Identifier: Elastic-2.0. See /licenses/Elastic-2.0.txt. Third-party code retains its own licenses. */"
+await build({
+  entryPoints: ["src/browser/widget-runtime.tsx"],
+  outfile: "public/widget-runtime.js",
+  bundle: true,
+  minify: true,
+  platform: "browser",
+  banner: { js: buildLicenseNotice, css: buildLicenseNotice },
+  define: { "process.env.NODE_ENV": '"production"' },
+})

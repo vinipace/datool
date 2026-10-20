@@ -1,9 +1,14 @@
 # Self-hosting Datool
 
-Datool runs as a production Next.js app plus an ingestion worker, PostgreSQL, and
-Redis. Docker Compose persists the database, Redis queue, and uploaded files.
+Datool runs as a production Next.js app plus ingestion and Build workers,
+PostgreSQL, and Redis. Docker Compose persists the database, Redis queue, and uploaded files.
 The application image runs as a non-root user. The CMS, Cloud billing, and
 Datool-funded execution are off by default.
+
+Observe, Test, and the SDKs are Apache 2.0. Build is covered by Elastic License
+2.0, including its hosted-service restriction; self-hosting does not remove that
+restriction. See [Licensing](../LICENSING.md) for allowed use and the commercial
+licensing option for hosted offerings.
 
 ## Configure the first login
 
@@ -57,7 +62,7 @@ Resend too.
 
 ```sh
 docker compose up --build -d
-docker compose logs -f migrate app worker
+docker compose logs -f migrate app worker build-worker
 ```
 
 Compose validates the login settings, runs application migrations and provisions
@@ -74,6 +79,9 @@ presence here; the real login verifies that they work.
 4. Send a trace, wait for the worker to persist it, and open it in Observe.
 5. Configure a sandbox as described below before running a JavaScript or Python
    scorer. LLM scorers also need a project model-provider key.
+6. To deploy customer-facing agents, follow the [Build setup guide](build.md).
+   The `build-worker` service processes hosted conversations, Telegram messages,
+   knowledge indexing, simulations, and campaigns.
 
 The application has no pre-created admin, sample account, or default password.
 A `/sign-in` health response proves the web process is responding; it does not

@@ -108,7 +108,7 @@ export function DashboardWidgetFilters({
     },
     [source]
   )
-  const state = useRemote(load, [], {
+  const state = useRemote(load, [source], {
     enabled: supported && visibleGroups.size > 0,
   })
   const groupsLoading =

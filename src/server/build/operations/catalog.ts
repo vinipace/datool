@@ -1,0 +1,155 @@
+import type { BuildContext } from "../context"
+import {
+  acknowledgeCampaignDelivery,
+  claimCampaignDeliveries,
+  createCampaign,
+  getCampaign,
+  listCampaignDeliveries,
+  processNextCampaignDelivery,
+  runCampaign,
+  queueCampaignDeliveries,
+  setCampaignStatus,
+  snapshotCampaignAudience,
+  suppressCampaignContact,
+  updateCampaign,
+} from "./campaigns"
+import {
+  collectData,
+  createContact,
+  exportContacts,
+  getContact,
+  importContacts,
+  listCollectedData,
+  listContactAttributes,
+  listContactIdentities,
+  listContacts,
+  listLeads,
+  setContactAttribute,
+  updateContact,
+  upsertContactIdentity,
+  upsertLead,
+} from "./contacts"
+import {
+  addTicketNote,
+  assignTicket,
+  createTicket,
+  getConversationOwnership,
+  getTicket,
+  listCsat,
+  listTicketEvents,
+  listTicketNotes,
+  listTickets,
+  requestCsat,
+  resumeConversation,
+  sendHumanReply,
+  submitCsat,
+  takeoverConversation,
+  updateTicket,
+} from "./inbox"
+import {
+  createMacro,
+  createRoutingRule,
+  createTeam,
+  listMacros,
+  listRoutingRules,
+  listTeams,
+  listOrganizationMembers,
+  resolveRouting,
+  setAgentAvailability,
+  setTeamMember,
+  updateMacro,
+  updateTeam,
+} from "./teams"
+import {
+  getOperationalAnalytics,
+  listKnowledgeGapSuggestions,
+  recordFeedback,
+  recordOperationEvent,
+  refreshKnowledgeGapSuggestions,
+  updateKnowledgeGapStatus,
+} from "./analytics"
+import {
+  getBuildHealth,
+  listDeliveryFailures,
+  retryDelivery,
+} from "./health"
+
+export type BuildOperation = {
+  name: string
+  description: string
+  scopes: readonly ["build:read" | "build:write" | "build:run"]
+  destructive: boolean
+  execute: (context: BuildContext, input?: unknown) => Promise<unknown>
+}
+
+const read = ["build:read"] as const
+const write = ["build:write"] as const
+const run = ["build:run"] as const
+
+export const buildOperations: readonly BuildOperation[] = [
+  { name: "create_contact", description: "Create or merge a project contact by externalId.", scopes: write, destructive: false, execute: createContact },
+  { name: "get_contact", description: "Read one contact.", scopes: read, destructive: false, execute: (ctx, input) => getContact(ctx, String(input)) },
+  { name: "update_contact", description: "Update contact identity and metadata.", scopes: write, destructive: false, execute: (ctx, input) => { const value = input as { id: string; [key: string]: unknown }; return updateContact(ctx, value.id, value) } },
+  { name: "list_contacts", description: "List bounded contacts with status/search filters and a cursor.", scopes: read, destructive: false, execute: listContacts },
+  { name: "upsert_contact_identity", description: "Bind a channel identity to a contact.", scopes: write, destructive: false, execute: upsertContactIdentity },
+  { name: "list_contact_identities", description: "List linked channel identities with external IDs and connection names and statuses.", scopes: read, destructive: false, execute: (ctx, input) => listContactIdentities(ctx, String(input)) },
+  { name: "set_contact_attribute", description: "Set one typed contact attribute.", scopes: write, destructive: false, execute: (ctx, input) => setContactAttribute(ctx, input as never) },
+  { name: "list_contact_attributes", description: "Read typed contact attributes.", scopes: read, destructive: false, execute: (ctx, input) => listContactAttributes(ctx, String(input)) },
+  { name: "import_contacts", description: "Import up to 1,000 contacts with per-row outcomes.", scopes: write, destructive: false, execute: importContacts },
+  { name: "request_contact_export", description: "Create a reviewable contact export request.", scopes: write, destructive: false, execute: async (ctx, input) => { const { requestContactExport } = await import("./contacts"); return requestContactExport(ctx, input) } },
+  { name: "export_contacts", description: "Export a bounded page of contacts as JSON or CSV.", scopes: read, destructive: false, execute: exportContacts },
+  { name: "collect_data", description: "Persist a collected customer field from a form/action/conversation.", scopes: write, destructive: false, execute: collectData },
+  { name: "list_collected_data", description: "List collected customer fields.", scopes: read, destructive: false, execute: listCollectedData },
+  { name: "upsert_lead", description: "Create or update a lead lifecycle record.", scopes: write, destructive: false, execute: upsertLead },
+  { name: "list_leads", description: "List bounded lead records.", scopes: read, destructive: false, execute: listLeads },
+  { name: "create_ticket", description: "Create or reuse an inbox ticket for a runtime conversation.", scopes: write, destructive: false, execute: createTicket },
+  { name: "get_ticket", description: "Read one inbox ticket.", scopes: read, destructive: false, execute: (ctx, input) => getTicket(ctx, String(input)) },
+  { name: "list_tickets", description: "List bounded inbox tickets by queue status, assignee, team, priority or channel.", scopes: read, destructive: false, execute: listTickets },
+  { name: "update_ticket", description: "Update ticket state with optional optimistic version protection.", scopes: write, destructive: false, execute: (ctx, input) => { const value = input as { id: string; [key: string]: unknown }; return updateTicket(ctx, value.id, value) } },
+  { name: "add_ticket_note", description: "Add an internal note to a ticket.", scopes: write, destructive: false, execute: addTicketNote },
+  { name: "list_ticket_notes", description: "Read internal ticket notes.", scopes: read, destructive: false, execute: (ctx, input) => listTicketNotes(ctx, String(input)) },
+  { name: "assign_ticket", description: "Assign ticket ownership with mandatory expectedVersion conflict protection.", scopes: write, destructive: false, execute: assignTicket },
+  { name: "takeover_conversation", description: "Acquire a human conversation lease, rejecting a live lease held by another agent.", scopes: write, destructive: false, execute: takeoverConversation },
+  { name: "resume_conversation", description: "Release the actor's human lease and return control to the AI runtime.", scopes: write, destructive: false, execute: resumeConversation },
+  { name: "get_conversation_ownership", description: "Read AI/human conversation ownership and lease state.", scopes: read, destructive: false, execute: (ctx, input) => getConversationOwnership(ctx, String(input)) },
+  { name: "send_human_reply", description: "Send a human reply and automatically assign the ticket to the authenticated sender. Requires an active human lease and organization membership.", scopes: run, destructive: false, execute: sendHumanReply },
+  { name: "list_ticket_events", description: "Read the immutable ticket event timeline.", scopes: read, destructive: false, execute: (ctx, input) => listTicketEvents(ctx, String(input)) },
+  { name: "request_csat", description: "Issue a pending CSAT survey for a ticket or conversation.", scopes: write, destructive: false, execute: requestCsat },
+  { name: "submit_csat", description: "Record a one-to-five CSAT rating and optional comment.", scopes: write, destructive: false, execute: submitCsat },
+  { name: "list_csat", description: "List CSAT survey requests and responses.", scopes: read, destructive: false, execute: listCsat },
+  { name: "create_team", description: "Create an organization-wide support team with optional members.", scopes: write, destructive: false, execute: createTeam },
+  { name: "update_team", description: "Update an organization-wide support team and its members.", scopes: write, destructive: false, execute: (ctx, input) => { const value = input as { id: string; [key: string]: unknown }; const { id, ...changes } = value; return updateTeam(ctx, id, changes) } },
+  { name: "list_teams", description: "List organization teams and their members.", scopes: read, destructive: false, execute: listTeams },
+  { name: "list_organization_members", description: "List organization members with names and avatars for assignment.", scopes: read, destructive: false, execute: listOrganizationMembers },
+  { name: "set_team_member", description: "Add or update team membership and capacity.", scopes: write, destructive: false, execute: setTeamMember },
+  { name: "set_agent_availability", description: "Set availability for all organization team memberships of a user.", scopes: write, destructive: false, execute: setAgentAvailability },
+  { name: "create_routing_rule", description: "Create a priority-ordered inbox routing rule.", scopes: write, destructive: false, execute: createRoutingRule },
+  { name: "list_routing_rules", description: "List routing rules.", scopes: read, destructive: false, execute: listRoutingRules },
+  { name: "resolve_routing", description: "Resolve the first matching routing rule for a ticket context.", scopes: read, destructive: false, execute: resolveRouting },
+  { name: "create_macro", description: "Create an inbox response macro.", scopes: write, destructive: false, execute: createMacro },
+  { name: "update_macro", description: "Update an inbox response macro.", scopes: write, destructive: false, execute: (ctx, input) => { const value = input as { id: string; [key: string]: unknown }; return updateMacro(ctx, value.id, value) } },
+  { name: "list_macros", description: "List enabled and disabled inbox macros.", scopes: read, destructive: false, execute: listMacros },
+  { name: "create_campaign", description: "Create a channel-aware campaign; Telegram is enabled first.", scopes: write, destructive: false, execute: createCampaign },
+  { name: "get_campaign", description: "Read campaign configuration and audience filters.", scopes: read, destructive: false, execute: (ctx, input) => getCampaign(ctx, String(input)) },
+  { name: "update_campaign", description: "Update campaign configuration before delivery.", scopes: write, destructive: false, execute: (ctx, input) => { const value = input as { id: string; [key: string]: unknown }; return updateCampaign(ctx, value.id, value) } },
+  { name: "set_campaign_status", description: "Transition a campaign through draft, scheduled, running, paused, completed or failed.", scopes: write, destructive: false, execute: setCampaignStatus },
+  { name: "snapshot_campaign_audience", description: "Freeze eligible and suppressed contacts for a campaign.", scopes: write, destructive: false, execute: (ctx, input) => snapshotCampaignAudience(ctx, String(input)) },
+  { name: "suppress_campaign_contact", description: "Add a contact suppression and stop eligible/queued deliveries.", scopes: write, destructive: false, execute: suppressCampaignContact },
+  { name: "queue_campaign_deliveries", description: "Create idempotent Telegram delivery jobs from a frozen audience.", scopes: write, destructive: false, execute: (ctx, input) => queueCampaignDeliveries(ctx, String(input)) },
+  { name: "claim_campaign_deliveries", description: "Atomically claim pending deliveries for a channel worker.", scopes: write, destructive: false, execute: claimCampaignDeliveries },
+  { name: "process_next_campaign_delivery", description: "Claim one audience delivery and enqueue it for the channel worker.", scopes: run, destructive: false, execute: processNextCampaignDelivery },
+  { name: "acknowledge_campaign_delivery", description: "Record provider delivery state and update audience/event metrics.", scopes: write, destructive: false, execute: acknowledgeCampaignDelivery },
+  { name: "list_campaign_deliveries", description: "List bounded delivery receipts and failures.", scopes: read, destructive: false, execute: listCampaignDeliveries },
+  { name: "get_health", description: "Read bounded Build worker queue health and uncertain delivery counts.", scopes: read, destructive: false, execute: getBuildHealth },
+  { name: "list_delivery_failures", description: "List sanitized failed or uncertain channel delivery metadata.", scopes: read, destructive: false, execute: listDeliveryFailures },
+  { name: "retry_delivery", description: "Explicitly requeue one known pre-send channel failure; uncertain outcomes are never retried.", scopes: run, destructive: false, execute: retryDelivery },
+  { name: "run_campaign", description: "Snapshot the audience and queue a campaign for the channel worker.", scopes: run, destructive: false, execute: runCampaign },
+  { name: "record_operation_event", description: "Record a channel/runtime/customer-operation event used by analytics.", scopes: write, destructive: false, execute: recordOperationEvent },
+  { name: "record_feedback", description: "Record customer feedback on a response and its trace.", scopes: write, destructive: false, execute: recordFeedback },
+  { name: "get_operational_analytics", description: "Read actual event, ticket, conversation, channel and CSAT aggregates for a bounded period.", scopes: read, destructive: false, execute: getOperationalAnalytics },
+  { name: "refresh_knowledge_gap_suggestions", description: "Derive knowledge gaps from runtime failures and negative feedback.", scopes: write, destructive: false, execute: refreshKnowledgeGapSuggestions },
+  { name: "list_knowledge_gap_suggestions", description: "List evidence-backed knowledge-gap suggestions.", scopes: read, destructive: false, execute: listKnowledgeGapSuggestions },
+  { name: "update_knowledge_gap_status", description: "Mark a knowledge-gap suggestion open, ignored or resolved.", scopes: write, destructive: false, execute: updateKnowledgeGapStatus },
+]
+
+export const buildOperationMap = new Map(buildOperations.map((operation) => [operation.name, operation]))

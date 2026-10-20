@@ -35,6 +35,10 @@ export function useRemote<T>(
   const scheduler = React.useRef<ReturnType<
     typeof createReadScheduler<T>
   > | null>(null)
+  // Build screens often pass an inline loader. Keep the scheduler alive across
+  // state updates so a failed read cannot turn its own error render into a
+  // fresh request loop. Callers still list resource identity in dependencies.
+  const loadEvent = React.useEffectEvent(load)
   const shouldPoll = React.useEffectEvent(
     (data: T | null) => options.shouldPoll?.(data) ?? true
   )
@@ -43,7 +47,7 @@ export function useRemote<T>(
     let latest: T | null = null
     let first = true
     const current = createReadScheduler<T>({
-      load,
+      load: loadEvent,
       intervalMs,
       visible: () => document.visibilityState !== "hidden",
       shouldPoll: () => shouldPoll(latest),
@@ -81,9 +85,9 @@ export function useRemote<T>(
       current.stop()
       document.removeEventListener("visibilitychange", current.resume)
     }
-    // Callers declare the resource identity and stable loader.
+    // Callers declare the resource identity; loadEvent tracks inline loaders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, load, intervalMs, keepPreviousData, ...dependencies])
+  }, [enabled, intervalMs, keepPreviousData, ...dependencies])
   return {
     ...state,
     isLoading: enabled && state.isLoading,

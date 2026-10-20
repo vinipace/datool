@@ -45,7 +45,7 @@ export function ProjectsPage({
       }),
     [organization.id, search, page]
   )
-  const state = useRemote(load, [organization.id])
+  const state = useRemote(load, [organization.id, search, page])
   const projects = state.data?.projects ?? []
   const selected = projects.filter((project) => checkedIds.has(project.id))
   const allChecked = projects.length > 0 && selected.length === projects.length

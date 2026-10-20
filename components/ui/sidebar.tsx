@@ -89,7 +89,9 @@ export function SidebarProvider({
 }>) {
   const isMobile = useIsMobile()
   const mobileWidth = style?.["--sidebar-width-mobile"] ?? SIDEBAR_WIDTH_MOBILE
-  const [uncontrolledOpen, setUncontrolledOpen] = React.useState<boolean | null>(null)
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState<
+    boolean | null
+  >(null)
   const storedOpen = React.useSyncExternalStore(
     subscribeSidebarStorage,
     readSidebarStorage,
@@ -111,7 +113,6 @@ export function SidebarProvider({
     },
     [controlledOpen, onOpenChange, open]
   )
-
 
   const toggleSidebar = React.useCallback(() => {
     setOpen((current) => !current)
@@ -169,7 +170,8 @@ export function Sidebar({
 }: React.ComponentPropsWithoutRef<"aside"> & {
   collapsible?: "icon" | "offcanvas" | "none"
 }) {
-  const { isMobile, mobileWidth, openMobile, setOpenMobile, state } = useSidebar()
+  const { isMobile, mobileWidth, openMobile, setOpenMobile, state } =
+    useSidebar()
   const content = (
     <div className="flex size-full min-h-0 flex-col">{children}</div>
   )
@@ -358,7 +360,8 @@ export function SidebarMenuButton({
         className: cn(
           "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md px-2 text-left text-sm text-sidebar-foreground transition-colors outline-none group-data-[collapsible=icon]/sidebar:size-9 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
           size === "default" ? "h-9" : "h-11",
-          isActive && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+          isActive &&
+            "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
           className
         ),
       },
@@ -367,6 +370,34 @@ export function SidebarMenuButton({
     render,
     state: { active: isActive },
   })
+}
+
+export function SidebarMenuSub({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<"ul">) {
+  return (
+    <ul
+      className={cn(
+        "mx-3.5 mt-1 mb-2 flex min-w-0 flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]/sidebar:hidden",
+        className
+      )}
+      data-slot="sidebar-menu-sub"
+      {...props}
+    />
+  )
+}
+
+export function SidebarMenuSubButton({
+  className,
+  ...props
+}: SidebarMenuButtonProps) {
+  return (
+    <SidebarMenuButton
+      className={cn("h-7 text-xs text-foreground-muted", className)}
+      {...props}
+    />
+  )
 }
 
 export function SidebarMenuBadge({

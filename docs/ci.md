@@ -22,6 +22,8 @@ GitHub OAuth integration and this config path. Branch pushes run verification;
 main additionally builds and deploys the production image. No production secrets
 are needed for verification or image builds.
 
+The `verify` job checks source lint, product styles, types, Build authorization and durable queues, team migrations, project home, and the read-only Trace Explorer. Its browser tests cover agent authoring and customer-facing UI; the WhatsApp fixture simulates Meta and model responses without sending live messages. The production image check starts the separate Build worker and waits for it to index a queued knowledge source. Deployment requires web, ingestion, and Build processes to be running.
+
 The `verify` job also runs `bun run check:skills` and checks skill discovery
 from the repository root with the pinned skills installer. The installer runs
 from a temporary directory so npm does not interpret the Bun monorepo's
@@ -110,8 +112,12 @@ to cancel superseded non-default-branch runs. Main, scheduled workflows, and rer
 are excluded from this setting. Keep **Pass secrets to builds from forked pull requests**
 disabled. Verify both settings in your project before enabling public contributions.
 
-The package job installs dependencies and starts PostgreSQL/Redis once. Backend
-tests run with Bun; sandbox tests also exercise real JavaScript/Python Docker
+The package job uses a large machine for the Build browser fixture, installs
+dependencies, and starts PostgreSQL/Redis once. The browser fixture compiles the
+application and runs `next start` behind its disposable HTTPS proxy, avoiding
+development-server memory restarts during navigation. It runs the complete Bun suite
+with those services and the scorer images available. Backend tests run with Bun;
+sandbox tests also exercise real JavaScript/Python Docker
 containers and database-backed provider permissions, credentials, and project
 isolation. Switching Node versions repeats only packed-package consumer checks
 (including TypeScript declarations and Node CLI connect/watch) and CLI

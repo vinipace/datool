@@ -4,7 +4,7 @@ import { reviewAttribution } from "@/src/lib/tracer/review-provenance"
 
 import * as React from "react"
 import { Copy, MessageSquare, Trash2 } from "lucide-react"
-import { useSearchParams } from "next/navigation"
+import { useNavigation, useSearchParams } from "@/components/navigation/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { StructuredValueViewer } from "@/components/ui/structured-value-viewer"
@@ -196,6 +196,7 @@ export function ReviewAnnotationComments({
   ) => void
 }) {
   const context = useReviewAnnotations()!
+  const navigation = useNavigation()
   const [comment, setComment] = React.useState("")
   const input = React.useRef<HTMLTextAreaElement>(null)
   const activeComment = React.useRef<HTMLElement>(null)
@@ -299,7 +300,7 @@ export function ReviewAnnotationComments({
                 size="icon-sm"
                 aria-label={`Copy link to annotation comment ${index + 1}`}
                 onClick={async () => {
-                  const url = new URL(window.location.href)
+                  const url = new URL(navigation.currentUrl(), navigation.origin ?? window.location.origin)
                   url.searchParams.set("annotation", annotation.id)
                   try {
                     await navigator.clipboard.writeText(url.toString())

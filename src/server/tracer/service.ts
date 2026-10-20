@@ -131,6 +131,7 @@ import {
 import { tracerEffect, type TracerEffect } from "@/src/server/tracer/effect"
 import { notFound, TracerError, validation } from "@/src/server/tracer/errors"
 import { semanticCatalog } from "@/src/server/metrics/registry"
+import { createProjectHomeService } from "./project-home"
 import {
   createSemanticQueryService,
   semanticErrorToTracerError,
@@ -558,6 +559,7 @@ export class TracerService {
   readonly reactViews: ReturnType<typeof createReactViewService>
   readonly reports: ReturnType<typeof createReportService>
   readonly dashboards: ReturnType<typeof createDashboardService>
+  readonly projectHome: ReturnType<typeof createProjectHomeService>
   readonly humanScores: ReturnType<typeof createHumanScoreService>
   readonly reviews: ReturnType<typeof createReviewService>
   readonly importedScores: ReturnType<typeof createImportedScoreService>
@@ -577,6 +579,7 @@ export class TracerService {
     this.reactViews = createReactViewService(database)
     this.reports = createReportService(database)
     this.dashboards = createDashboardService(database)
+    this.projectHome = createProjectHomeService(database)
     this.humanScores = createHumanScoreService(database)
     this.reviews = createReviewService(database, async (tx, ids) => {
       if (!ids.length) return []
@@ -664,6 +667,23 @@ export class TracerService {
     )
   }
 
+  /** Identity of the project already bound to this service; no caller-selected workspace. */
+  getProjectInfo(): TracerEffect<{ id: string; name: string; slug: string }> {
+    return tracerEffect(() =>
+      this.read(async (service) => {
+        const { rows } = await service.database.execute<{
+          id: string
+          name: string
+          slug: string
+        }>(
+          sql`select id, name, slug from project where id=${service.projectId}`
+        )
+        if (!rows[0]) throw notFound("Project", service.projectId)
+        return rows[0]
+      })
+    )
+  }
+
   getTraceArtifact(id: string): TracerEffect<TraceDetail> {
     return tracerEffect(() =>
       this.read((service) => service.getTraceUnsafe(id))
@@ -722,6 +742,7 @@ export class TracerService {
         status,started_at as "startedAt",ended_at as "endedAt",duration_ms as "durationMs",
         ${metrics} || jsonb_strip_nulls(jsonb_build_object(
           'datool.span.kind',attributes_json->>'datool.span.kind',
+          'datool.trace.root_span_id',attributes_json->>'datool.trace.root_span_id',
           'kind',attributes_json->>'kind','type',attributes_json->>'type',
           'otel.name',attributes_json->>'otel.name')) as attributes
         from traces where project_id=${service.projectId} and id=${id}`

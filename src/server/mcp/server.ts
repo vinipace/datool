@@ -9,6 +9,7 @@ import type { TracerService } from "../tracer/service"
 import { runTracerEffect } from "../tracer/effect"
 import { asTracerError } from "../tracer/errors"
 import { agentOperations } from "./operations"
+import { registerBuildMcpTools } from "../build/mcp"
 
 export function createMcpServer(
   service: TracerService,
@@ -71,11 +72,12 @@ export function createMcpServer(
       }
     )
   }
+  const describeBuildTools = registerBuildMcpTools(server, scopes)
   // The SDK defaults to draft-07, whose tuple `items: [...]` makes Codex omit
   // semantic-query tools. Match the 2020-12 catalog/CLI contract (`prefixItems`)
   // while retaining the SDK's Zod validation and tools/call dispatch.
   server.server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: describeTools.map((describe) => describe()),
+    tools: [...describeTools, ...describeBuildTools].map((describe) => describe()),
   }))
   if (scopes.includes("reviews:read")) {
     server.registerPrompt("review_session", {

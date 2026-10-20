@@ -30,14 +30,21 @@ function widgetBuilder(now: Date) {
     const time =
       model === "scores" || model === "evalQuality" || model === "evalResults"
         ? "completedAt"
-        : model === "evalRuns"
-          ? "createdAt"
-          : "startedAt"
+        : model === "buildEvents"
+          ? "occurredAt"
+          : model === "buildCsat"
+            ? "requestedAt"
+            : model === "evalRuns" || model === "buildTickets"
+              ? "createdAt"
+              : "startedAt"
     return {
       id,
       title,
       type,
       width: 2,
+      showGroupIcons: dimensions.some((dimension) =>
+        dimension.endsWith(".channel")
+      ),
       query: semanticQuerySchema.parse({
         measures,
         dimensions,
@@ -142,8 +149,95 @@ const positiveCost: QueryOptions = {
   filters: [{ member: "spans.spanCostUsd", operator: "gt", values: [0] }],
 }
 
+const customerExperienceTemplate = template(
+  "customer-experience",
+  "Customer experience",
+  "Track customer conversations, messages, human handoffs, inbox tickets and satisfaction.",
+  ({ metric, chart }) => [
+    metric(
+      "conversations",
+      "Active conversations",
+      "buildEvents.conversationCount"
+    ),
+    metric("contacts", "Active contacts", "buildEvents.contactCount"),
+    metric("messages", "Messages", "buildEvents.messageCount"),
+    metric("handoffs", "Human handoffs", "buildEvents.handoffCount"),
+    metric("resolved", "Resolved tickets", "buildTickets.resolvedCount"),
+    metric("csat", "Average CSAT (1–5)", "buildCsat.meanRating"),
+    metric("csat-responses", "CSAT responses", "buildCsat.responseCount"),
+    metric(
+      "first-response",
+      "Average first response",
+      "buildTickets.meanFirstResponseMs"
+    ),
+    chart("message-trend", "Messages by day", "line", [
+      "buildEvents.messageCount",
+    ]),
+    chart(
+      "chats-by-channel",
+      "Chats by channel",
+      "bar",
+      ["buildEvents.conversationCount"],
+      ["buildEvents.channel"]
+    ),
+    chart(
+      "channel-activity",
+      "Channel activity",
+      "bar",
+      ["buildEvents.count"],
+      ["buildEvents.channel"]
+    ),
+    chart(
+      "event-volume",
+      "Event volume",
+      "table",
+      [
+        "buildEvents.count",
+        "buildEvents.conversationCount",
+        "buildEvents.contactCount",
+      ],
+      ["buildEvents.eventType"]
+    ),
+    chart(
+      "ticket-status",
+      "Ticket status",
+      "table",
+      ["buildTickets.count", "buildTickets.meanFirstResponseMs"],
+      ["buildTickets.status"]
+    ),
+    chart("csat-trend", "Customer satisfaction by day", "line", [
+      "buildCsat.meanRating",
+    ]),
+    chart("handoff-trend", "Human handoffs by day", "line", [
+      "buildEvents.handoffCount",
+    ]),
+  ]
+)
+
+/** Fixed agent overview, using the same widgets and metrics as customer dashboards. */
+export function agentOverviewWidgets(
+  agentId: string,
+  now = new Date()
+): DashboardWidget[] {
+  return customerExperienceTemplate.create(now).widgets.map((widget) => ({
+    ...widget,
+    query: {
+      ...widget.query,
+      filters: [
+        ...widget.query.filters,
+        {
+          member: `${widget.query.measures[0].split(".")[0]}.agentId`,
+          operator: "equals",
+          values: [agentId],
+        },
+      ],
+    },
+  }))
+}
+
 /** Independent, editable queries against the project's registered semantic models. */
 export const dashboardTemplates: readonly DashboardTemplate[] = [
+  customerExperienceTemplate,
   template(
     "weekly-health",
     "Weekly health",

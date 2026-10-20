@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { NextNavigationProvider } from "@/components/navigation/next-navigation"
 import {
   BookOpenCheck,
   LoaderCircle,
@@ -37,7 +38,10 @@ import {
   type WorkspaceProject,
 } from "@/lib/workspace-api"
 import { WorkspaceSelectors } from "@/components/workspace/workspace-selectors"
-import { AccountMenu, type AccountMenuUser } from "@/components/workspace/account-menu"
+import {
+  AccountMenu,
+  type AccountMenuUser,
+} from "@/components/workspace/account-menu"
 import { tracerApi } from "./api"
 import { useMutation } from "./hooks"
 import { WorkspacePageLayout } from "./workspace-page-layout"
@@ -47,31 +51,140 @@ import { useViewLibraryWebMcp } from "./use-view-library-webmcp"
 import { productIcons } from "@/components/product-icons"
 import { InspectorPanels } from "./inspector-panels"
 import { useOrganizationSessionSync } from "@/lib/workspace-selection"
+import {
+  AgentSidebarProvider,
+  AgentSidebarTarget,
+} from "@/components/build/shared/agent-sidebar"
 
-const routes = [
-  { href: "/traces", icon: productIcons.traces, label: pageTitles.traces },
-  { href: "/playground", icon: productIcons.playground, label: pageTitles.playground },
-  { href: "/dashboards", icon: productIcons.dashboards, label: pageTitles.dashboards },
-  { href: "/agents", icon: productIcons.agents, label: pageTitles.agents },
-  { href: "/workflows", icon: productIcons.workflows, label: pageTitles.workflows },
-  { href: "/sessions", icon: productIcons.sessions, label: pageTitles.sessions },
-  { href: "/reviews", icon: productIcons.reviews, label: pageTitles.reviews },
-  { href: "/human-scores", icon: productIcons.humanScores, label: pageTitles.humanScores },
-  { href: "/evals", icon: productIcons.evals, label: pageTitles.evals },
-  { href: "/prompts", icon: productIcons.prompts, label: pageTitles.prompts },
-  { href: "/scorers", icon: productIcons.scorers, label: pageTitles.scorers },
-  { href: "/datasets", icon: productIcons.datasets, label: pageTitles.datasets },
-  { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
-  { href: "/alerts", icon: productIcons.alerts, label: pageTitles.alerts },
+const routeGroups = [
+  {
+    label: "Build",
+    routes: [
+      {
+        href: "/build/agents",
+        icon: productIcons.buildAgents,
+        label: pageTitles.buildAgents,
+      },
+      {
+        href: "/build/inbox",
+        icon: productIcons.buildInbox,
+        label: pageTitles.buildInbox,
+      },
+      {
+        href: "/build/contacts",
+        icon: productIcons.buildContacts,
+        label: pageTitles.buildContacts,
+      },
+      {
+        href: "/build/campaigns",
+        icon: productIcons.buildCampaigns,
+        label: pageTitles.buildCampaigns,
+      },
+      {
+        href: "/build/suggestions",
+        icon: productIcons.buildSuggestions,
+        label: pageTitles.buildSuggestions,
+      },
+    ],
+  },
+  {
+    label: "Observe",
+    routes: [
+      { href: "/traces", icon: productIcons.traces, label: pageTitles.traces },
+      {
+        href: "/dashboards",
+        icon: productIcons.dashboards,
+        label: pageTitles.dashboards,
+      },
+      {
+        href: "/agents",
+        icon: productIcons.agents,
+        label: "Agent performance",
+      },
+      {
+        href: "/workflows",
+        icon: productIcons.workflows,
+        label: pageTitles.workflows,
+      },
+      {
+        href: "/sessions",
+        icon: productIcons.sessions,
+        label: pageTitles.sessions,
+      },
+      { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
+      { href: "/alerts", icon: productIcons.alerts, label: pageTitles.alerts },
+    ],
+  },
+  {
+    label: "Test",
+    routes: [
+      {
+        href: "/playground",
+        icon: productIcons.playground,
+        label: pageTitles.playground,
+      },
+      {
+        href: "/build/tests",
+        icon: productIcons.buildTests,
+        label: pageTitles.buildTests,
+      },
+      { href: "/evals", icon: productIcons.evals, label: pageTitles.evals },
+      {
+        href: "/datasets",
+        icon: productIcons.datasets,
+        label: pageTitles.datasets,
+      },
+      {
+        href: "/scorers",
+        icon: productIcons.scorers,
+        label: pageTitles.scorers,
+      },
+      {
+        href: "/reviews",
+        icon: productIcons.reviews,
+        label: pageTitles.reviews,
+      },
+      {
+        href: "/human-scores",
+        icon: productIcons.humanScores,
+        label: pageTitles.humanScores,
+      },
+      {
+        href: "/prompts",
+        icon: productIcons.prompts,
+        label: pageTitles.prompts,
+      },
+    ],
+  },
 ] as const
 
 const settingsRoutes = [
   { href: "/settings", icon: productIcons.settings, label: "General" },
-  { href: "/settings/members", icon: productIcons.members, label: pageTitles.members },
-  { href: "/settings/ai-providers", icon: productIcons.aiProviders, label: pageTitles.aiProviders },
-  { href: "/settings/sandbox-providers", icon: productIcons.sandboxProviders, label: pageTitles.sandboxProviders },
-  { href: "/settings/api-keys", icon: productIcons.apiKeys, label: pageTitles.apiKeys },
-  { href: "/settings/mcp", icon: productIcons.mcpConnections, label: pageTitles.mcpConnections },
+  {
+    href: "/settings/members",
+    icon: productIcons.members,
+    label: pageTitles.members,
+  },
+  {
+    href: "/settings/ai-providers",
+    icon: productIcons.aiProviders,
+    label: pageTitles.aiProviders,
+  },
+  {
+    href: "/settings/sandbox-providers",
+    icon: productIcons.sandboxProviders,
+    label: pageTitles.sandboxProviders,
+  },
+  {
+    href: "/settings/api-keys",
+    icon: productIcons.apiKeys,
+    label: pageTitles.apiKeys,
+  },
+  {
+    href: "/settings/mcp",
+    icon: productIcons.mcpConnections,
+    label: pageTitles.mcpConnections,
+  },
 ] as const
 
 function DemoWorkflowButton({ compact = false }: { compact?: boolean }) {
@@ -160,19 +273,40 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          {inSettings && (
-            <SidebarGroupLabel>Project settings</SidebarGroupLabel>
-          )}
-          <SidebarMenu>
-            {(inSettings ? settingsRoutes : routes).map((route) => {
-              const href = `${prefix}${route.href}`
-              const active =
-                pathname === href ||
-                (route.href !== "/settings" && pathname.startsWith(`${href}/`)) ||
-                (route.href === "/playground" && pathname.startsWith(`${prefix}/apps/`))
-              return (
-                <SidebarMenuItem key={route.href}>
+        {!inSettings && (
+          <SidebarGroup>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  className="h-7 text-xs"
+                  isActive={pathname === prefix || pathname === `${prefix}/`}
+                  aria-current={pathname === prefix || pathname === `${prefix}/` ? "page" : undefined}
+                  onClick={closeMobileNavigation}
+                  render={<Link href={prefix || "/"} prefetch={true} />}
+                >
+                  <productIcons.home />
+                  <span>Home</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+        {(inSettings
+          ? [{ label: "Project settings", routes: settingsRoutes }]
+          : routeGroups
+        ).map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarMenu>
+              {group.routes.map((route) => {
+                const href = `${prefix}${route.href}`
+                const active =
+                  pathname === href ||
+                  (route.href !== "/settings" &&
+                    pathname.startsWith(`${href}/`)) ||
+                  (route.href === "/playground" &&
+                    pathname.startsWith(`${prefix}/apps/`))
+                const link = (
                   <SidebarMenuButton
                     className="h-7 text-xs group-data-[collapsible=icon]/sidebar:size-7"
                     isActive={active}
@@ -183,11 +317,20 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
                     <route.icon />
                     <span>{route.label}</span>
                   </SidebarMenuButton>
-                </SidebarMenuItem>
-              )
-            })}
-          </SidebarMenu>
-        </SidebarGroup>
+                )
+                return (
+                  <SidebarMenuItem key={route.href}>
+                    {route.href === "/build/agents" ? (
+                      <AgentSidebarTarget>{link}</AgentSidebarTarget>
+                    ) : (
+                      link
+                    )}
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter className="p-2">
@@ -227,7 +370,17 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
   )
 }
 
-export function TracerAppShell({
+export function TracerAppShell(
+  props: React.PropsWithChildren<WorkspaceShellProps>
+) {
+  return (
+    <NextNavigationProvider>
+      <TracerAppShellContent {...props} />
+    </NextNavigationProvider>
+  )
+}
+
+function TracerAppShellContent({
   children,
   organization,
   project,
@@ -238,14 +391,16 @@ export function TracerAppShell({
   useOrganizationSessionSync(organization.id)
   return (
     <SidebarProvider>
-      <AppSidebar organization={organization} project={project} user={user} />
-      <SidebarInset>
-        <WorkspacePageLayout
-          leading={<SidebarTrigger className="-ml-0.5 shrink-0" />}
-        >
-          <InspectorPanels>{children}</InspectorPanels>
-        </WorkspacePageLayout>
-      </SidebarInset>
+      <AgentSidebarProvider key={project.id}>
+        <AppSidebar organization={organization} project={project} user={user} />
+        <SidebarInset>
+          <WorkspacePageLayout
+            leading={<SidebarTrigger className="-ml-0.5 shrink-0" />}
+          >
+            <InspectorPanels>{children}</InspectorPanels>
+          </WorkspacePageLayout>
+        </SidebarInset>
+      </AgentSidebarProvider>
     </SidebarProvider>
   )
 }

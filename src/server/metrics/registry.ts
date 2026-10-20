@@ -15,6 +15,11 @@ import {
   workflowsSemanticModel,
 } from "@/src/server/metrics/performance"
 import { tracesSemanticModel } from "@/src/server/metrics/traces"
+import {
+  buildEventsSemanticModel,
+  buildTicketsSemanticModel,
+  buildCsatSemanticModel,
+} from "./build"
 
 /**
  * The single explicit registration point for Datool's persisted analytics.
@@ -37,6 +42,30 @@ const sourcePresentation: Record<string, SemanticSourcePresentation> = {
     grain: "One paired dataset case",
     visibility: "primary",
     order: 6,
+  },
+  buildEvents: {
+    title: "Conversations",
+    description:
+      "Customer activity: messages, active conversations, contacts and human handoffs.",
+    grain: "One recorded customer-operation event",
+    visibility: "primary",
+    order: 7,
+  },
+  buildTickets: {
+    title: "Inbox tickets",
+    description:
+      "Ticket status and first-response time for tickets created in the selected period.",
+    grain: "One ticket",
+    visibility: "primary",
+    order: 8,
+  },
+  buildCsat: {
+    title: "Customer satisfaction",
+    description:
+      "Responses and ratings for surveys requested in the selected period.",
+    grain: "One CSAT survey",
+    visibility: "primary",
+    order: 9,
   },
   traces: {
     title: "Traces",
@@ -159,6 +188,9 @@ export const metricModels = Object.freeze(
     evalRunsSemanticModel,
     scoresSemanticModel,
     evalQualitySemanticModel,
+    buildEventsSemanticModel,
+    buildTicketsSemanticModel,
+    buildCsatSemanticModel,
   ].map((model) => ({ ...model, source: sourcePresentation[model.name] }))
 )
 

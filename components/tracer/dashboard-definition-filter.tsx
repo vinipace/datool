@@ -71,7 +71,7 @@ export function DashboardDefinitionFilter({
     },
     [source]
   )
-  const state = useRemote(load, [])
+  const state = useRemote(load, [source])
   const selected = widget.query.filters.find(
     (f) => "member" in f && f.member === member && f.operator === "equals"
   )

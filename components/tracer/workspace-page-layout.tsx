@@ -24,7 +24,26 @@ const collectionTitles: Record<string, string> = {
   datasets: pageTitles.datasets,
 }
 
+const buildTitles: Record<string, string> = {
+  agents: pageTitles.buildAgents,
+  inbox: pageTitles.buildInbox,
+  contacts: pageTitles.buildContacts,
+  campaigns: pageTitles.buildCampaigns,
+  integrations: pageTitles.buildIntegrations,
+  suggestions: pageTitles.buildSuggestions,
+  tests: pageTitles.buildTests,
+}
+
 function routeTitle(routePath: string) {
+  if (routePath === "/") return pageTitles.projectHome
+  if (routePath === "/build/integrations/new") return pageTitles.newBuildChannel
+  if (routePath.startsWith("/build/integrations/"))
+    return pageTitles.buildChannel
+  if (routePath === "/build") return pageTitles.build
+  if (routePath === "/build/agents/new") return pageTitles.newBuildAgent
+  if (routePath.startsWith("/build/agents/")) return pageTitles.buildAgent
+  if (routePath.startsWith("/build/"))
+    return buildTitles[routePath.split("/")[2]] ?? pageTitles.build
   if (routePath === "/settings") return "General"
   if (routePath === "/settings/members") return pageTitles.members
   if (routePath === "/settings/ai-providers") return pageTitles.aiProviders
@@ -78,6 +97,18 @@ export function WorkspacePageLayout({
   const breadcrumbs = parent
     ? [{ label: collectionTitles[parent], href: `${prefix}/${parent}` }]
     : []
+  if (routePath.startsWith("/build/")) {
+    breadcrumbs.push({
+      label: pageTitles.build,
+      href: `${prefix}/build`,
+    })
+    if (segments.length > 2 && buildTitles[segments[1]]) {
+      breadcrumbs.push({
+        label: buildTitles[segments[1]],
+        href: `${prefix}/build/${segments[1]}`,
+      })
+    }
+  }
   if (routePath.startsWith("/apps/")) {
     breadcrumbs.push({
       label: pageTitles.playground,

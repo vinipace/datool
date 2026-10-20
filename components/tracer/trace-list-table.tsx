@@ -54,6 +54,7 @@ type TraceListTableProps = {
   onSettingsChange?: React.Dispatch<React.SetStateAction<CollectionTableSettings>>
   columnOrderStore?: ColumnOrderStore
   enableCardView?: boolean
+  defaultView?: "table" | "cards"
   animateRows?: boolean
   highlightedCallId?: string
   fillHeight?: boolean
@@ -221,6 +222,7 @@ export function TraceListTable({
   onSettingsChange,
   columnOrderStore,
   enableCardView = true,
+  defaultView = "table",
   animateRows = false,
   columnTools,
   checkedIds: controlledCheckedIds,
@@ -266,7 +268,7 @@ export function TraceListTable({
   enabledColumns.push(...additionalColumns.filter((column) => !enabledColumns.includes(column)))
   return (
     <div className="overflow-x-auto" style={fillHeight ? { height: "100%", overflow: "hidden" } : undefined}>
-      <CollectionTable pagination={pagination} persistenceKey={persistenceKey} computedColumnStore={columnTools?.store} settings={settings} onSettingsChange={onSettingsChange} columnOrderStore={columnOrderStore} enableCardView={enableCardView} animateRows={animateRows} fillHeight={fillHeight} orderStorageKey={orderStorageKey ?? columnTools?.orderStorageKey} actionColumnIds={columnTools ? ["add-column"] : []} columnIds={[...enabledColumns.map((column) => column.id), ...(scores?.columns.map(column => `score:${column.id}`) ?? []), ...(columnTools?.columns.map(column => `computed:${column.id}`) ?? []), ...(columnTools ? ["add-column"] : [])]} widths={[...enabledColumns.map((column) => column.width), ...(scores?.columns.map(() => 140) ?? []), ...(columnTools?.columns.map(() => 180) ?? []), ...(columnTools ? [160] : [])]}>
+      <CollectionTable pagination={pagination} persistenceKey={persistenceKey} computedColumnStore={columnTools?.store} settings={settings} onSettingsChange={onSettingsChange} columnOrderStore={columnOrderStore} enableCardView={enableCardView} defaultView={defaultView} animateRows={animateRows} fillHeight={fillHeight} orderStorageKey={orderStorageKey ?? columnTools?.orderStorageKey} actionColumnIds={columnTools ? ["add-column"] : []} columnIds={[...enabledColumns.map((column) => column.id), ...(scores?.columns.map(column => `score:${column.id}`) ?? []), ...(columnTools?.columns.map(column => `computed:${column.id}`) ?? []), ...(columnTools ? ["add-column"] : [])]} widths={[...enabledColumns.map((column) => column.width), ...(scores?.columns.map(() => 140) ?? []), ...(columnTools?.columns.map(() => 180) ?? []), ...(columnTools ? [160] : [])]}>
         <caption className="sr-only">
           Trace log rows. Press Enter or Space on a focused row to open its
           inspector.

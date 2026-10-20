@@ -203,6 +203,11 @@ class DatoolSpanProcessor(SpanProcessor):
                     "startedAt": _timestamp(span.start_time),
                     "status": "running",
                     **initial,
+                    "attributes": {
+                        **initial["attributes"],
+                        "datool.span.kind": _kind(a),
+                        **({} if hidden else {"datool.trace.root_span_id": span_id}),
+                    },
                     **(group_fields if hidden else {}),
                     **({"sessionId": session_id} if session_id else {}),
                 },
@@ -298,6 +303,12 @@ class DatoolSpanProcessor(SpanProcessor):
                 **root,
                 "attributes": {
                     **root["attributes"],
+                    "datool.span.kind": state.records[state.root_id].kind,
+                    **(
+                        {}
+                        if state.records[state.root_id].hidden
+                        else {"datool.trace.root_span_id": state.root_id}
+                    ),
                     **_aggregate([(r.final or {})["attributes"] for _, r in llms]),
                 },
                 "endedAt": state.ended_at,

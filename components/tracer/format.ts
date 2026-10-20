@@ -26,13 +26,16 @@ export function formatDate(
   }).format(date)
 }
 
-export function formatRelative(value: string | null | undefined) {
+export function formatRelative(
+  value: string | null | undefined,
+  locale?: string
+) {
   if (!value) return "—"
 
   const timestamp = new Date(value).getTime()
   if (Number.isNaN(timestamp)) return value
   const seconds = Math.round((timestamp - Date.now()) / 1000)
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })
 
   if (Math.abs(seconds) < 60) return formatter.format(seconds, "second")
   const minutes = Math.round(seconds / 60)

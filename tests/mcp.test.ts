@@ -392,11 +392,19 @@ test("MCP client performs CRUD and write tools are unavailable to read-only toke
     const dashboardReader = await connect(["dashboards:read"])
     expect(
       (await dashboardReader.listTools()).tools.map((t) => t.name)
-    ).toEqual([
-      "list_dashboards", "get_dashboard", "list_report_templates",
-      "get_report_template", "get_report_recipe", "get_report_authoring_guide",
-      "get_report_components", "resolve_dashboard", "describe_agent_operations",
-    ])
+    ).toEqual(["list_dashboard_templates", "list_dashboards", "get_project_home", "get_dashboard", "list_report_templates", "get_report_template", "get_report_recipe", "get_report_authoring_guide", "get_report_components", "resolve_dashboard", "describe_agent_operations"])
+    const pinnedHome = await call("pin_dashboard_widget", { dashboardId: dashboard.id, widgetId: dashboardConfig.widgets[0].id })
+    const pin = (pinnedHome.pins as { id: string }[])[0]
+    expect((await call("get_project_home", {})).pins).toHaveLength(1)
+    expect((await dashboardReader.callTool({ name: "get_project_home", arguments: {} })).isError).toBeFalsy()
+    for (const [name, args] of [
+      ["pin_dashboard_widget", { dashboardId: dashboard.id, widgetId: dashboardConfig.widgets[0].id }],
+      ["unpin_home_widget", { id: pin.id }],
+      ["update_project_home_layout", { expectedRevision: pinnedHome.revision, layout: [{ id: pin.id, layout: { x: 0, y: 0, w: 12, h: 4 } }] }],
+    ] as const) expect((await dashboardReader.callTool({ name, arguments: args })).isError).toBe(true)
+    const updatedHome = await call("update_project_home_layout", { expectedRevision: pinnedHome.revision, layout: [{ id: pin.id, layout: { x: 0, y: 0, w: 12, h: 4 } }] })
+    expect((updatedHome.widgets as { layout: { w: number } }[])[0].layout.w).toBe(12)
+    expect((await call("unpin_home_widget", { id: pin.id })).pins).toHaveLength(0)
     expect(
       (
         await dashboardReader.callTool({
@@ -423,9 +431,14 @@ test("MCP client performs CRUD and write tools are unavailable to read-only toke
       arguments: { name: "Denied" },
     })
     expect(denied.isError).toBe(true)
+    const templates = await dashboardReader.callTool({ name: "list_dashboard_templates", arguments: {} })
+    const customer = (templates.structuredContent as { data: { id: string; config: unknown }[] }).data.find((template) => template.id === "customer-experience")!
+    const customerDashboard = await call("create_dashboard", { config: customer.config })
+    expect((await call("get_dashboard", { id: customerDashboard.id })).widgets).toHaveLength(15)
+    expect((await readonly.callTool({ name: "list_dashboard_templates", arguments: {} })).isError).toBe(true)
   } finally {
     await Promise.all(clients.map((c) => c.close()))
     await closeTracerDatabase(db)
     await target.close()
   }
-})
+}, 30000)

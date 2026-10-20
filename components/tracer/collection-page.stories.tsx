@@ -155,6 +155,7 @@ export const Empty: Story = {
     await expect(
       within(canvasElement).findByText("No traces yet")
     ).resolves.toBeVisible()
+    await expect(within(canvasElement).getByRole("list", { name: "Traces", hidden: true })).not.toBeVisible()
   },
 }
 
@@ -205,8 +206,10 @@ export const NarrowLoading: Story = {
     const canvas = within(context.canvasElement)
     const controls = canvas.getByRole("group", { name: "Traces controls" })
     await expect(controls.scrollWidth).toBe(controls.clientWidth)
-    await expect(controls.getBoundingClientRect().height).toBe(53)
     const menu = canvas.getByRole("button", { name: "More actions" })
+    const filter = canvas.getByRole("combobox", { name: "Filter expression" })
+    await expect(filter.getBoundingClientRect().top).toBeGreaterThanOrEqual(menu.getBoundingClientRect().bottom)
+    await expect(filter.getBoundingClientRect().bottom).toBeLessThanOrEqual(controls.getBoundingClientRect().bottom)
     await userEvent.click(menu)
     await expect(
       within(context.canvasElement.ownerDocument.body).getByRole("menuitem", {

@@ -10,7 +10,7 @@ const valid = {
 }
 function check(overrides: Record<string, string | undefined> = {}) {
   return spawnSync(
-    process.execPath.replace(/bun$/, "node"),
+    "node",
     ["scripts/check-self-hosting.mjs"],
     {
       encoding: "utf8",

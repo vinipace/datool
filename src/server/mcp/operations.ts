@@ -19,11 +19,9 @@ import {
   dashboardInputSchema,
   dashboardUpdateSchema,
 } from "@/src/lib/tracer/dashboards"
-import {
-  reviewSessionInputSchema,
-  reviewSessionUpdateSchema,
-  recordReviewSchema,
-} from "@/src/lib/tracer/reviews"
+import { dashboardTemplates } from "@/src/lib/tracer/dashboard-templates"
+import { homeLayoutSchema, pinHomeWidgetSchema } from "@/src/lib/tracer/project-home"
+import { reviewSessionInputSchema, reviewSessionUpdateSchema, recordReviewSchema } from "@/src/lib/tracer/reviews"
 import { scorerInputSchema } from "@/src/lib/tracer/scorers"
 import {
   scorerLibraries,
@@ -510,12 +508,28 @@ tool(
   true
 )
 tool(
+  "list_dashboard_templates",
+  "List editable dashboard templates with fresh query windows. Pass a template's config to create_dashboard to save an independent dashboard.",
+  "dashboards:read",
+  z.object({}),
+  () => tracerEffect(async () => dashboardTemplates.map((template) => ({
+    id: template.id,
+    name: template.name,
+    description: template.description,
+    config: template.create(),
+  })))
+)
+tool(
   "list_dashboards",
   "List saved dashboard configurations.",
   "dashboards:read",
   z.object({}),
   (service) => service.dashboards.list()
 )
+tool("get_project_home", "Read the project's pinned widgets, current source definitions, unavailable sources and layout revision.", "dashboards:read", z.object({}), (service) => service.projectHome.get())
+tool("pin_dashboard_widget", "Pin an existing dashboard widget to the shared project Home. Keeps a live reference; repeated pins are idempotent.", "dashboards:write", pinHomeWidgetSchema, (service, input) => service.projectHome.pin(input))
+tool("unpin_home_widget", "Remove a pin from project Home without changing its source dashboard.", "dashboards:write", z.object({ id }), (service, input) => service.projectHome.unpin(input.id))
+tool("update_project_home_layout", "Arrange all pinned widgets using their pin IDs and the expected Home revision. Does not change source dashboards.", "dashboards:write", homeLayoutSchema, (service, input) => service.projectHome.layout(input))
 tool(
   "get_dashboard",
   "Read a dashboard, its widgets and current revision.",

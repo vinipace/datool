@@ -174,6 +174,9 @@
     "get_page_view_history": {
       "$ref": "#/components/schemas/Output_get_page_view_history"
     },
+    "get_project_home": {
+      "$ref": "#/components/schemas/Output_ProjectHome"
+    },
     "get_report": {
       "$ref": "#/components/schemas/Output_Report"
     },
@@ -240,10 +243,16 @@
     "list_custom_fields": {
       "$ref": "#/components/schemas/Output_list_custom_fields"
     },
+    "list_dashboard_templates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/components/schemas/Output_list_dashboard_templates_item"
+      }
+    },
     "list_dashboards": {
       "type": "array",
       "items": {
-        "$ref": "#/components/schemas/Output_Dashboard"
+        "$ref": "#/components/schemas/Output_DashboardListEntry"
       }
     },
     "list_dataset_items": {
@@ -317,6 +326,9 @@
       "items": {
         "$ref": "#/components/schemas/Output_CustomView"
       }
+    },
+    "pin_dashboard_widget": {
+      "$ref": "#/components/schemas/Output_ProjectHome"
     },
     "preview_dashboard": {
       "$ref": "#/components/schemas/Output_preview_dashboard"
@@ -396,6 +408,9 @@
     "test_scorer": {
       "$ref": "#/components/schemas/Output_test_scorer"
     },
+    "unpin_home_widget": {
+      "$ref": "#/components/schemas/Output_ProjectHome"
+    },
     "update_custom_field": {
       "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
     },
@@ -419,6 +434,9 @@
     },
     "update_page_view": {
       "$ref": "#/components/schemas/Output_list_custom_fields_items_item"
+    },
+    "update_project_home_layout": {
+      "$ref": "#/components/schemas/Output_ProjectHome"
     },
     "update_report": {
       "$ref": "#/components/schemas/Output_Report"
@@ -700,6 +718,46 @@
         "schemaVersion",
         "updatedAt",
         "widgets"
+      ]
+    },
+    "Output_DashboardDataInput": {
+      "type": "object",
+      "properties": {
+        "defaultWindowDays": {
+          "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item"
+          }
+        }
+      },
+      "required": [
+        "description",
+        "name",
+        "schemaVersion",
+        "widgets"
+      ]
+    },
+    "Output_DashboardListEntry": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_Dashboard"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_dashboards_item"
+        }
       ]
     },
     "Output_Dataset": {
@@ -1036,6 +1094,9 @@
         "traces:read",
         "evals:read",
         "evals:write",
+        "build:read",
+        "build:write",
+        "build:run",
         "prompts:read",
         "prompts:write",
         "traces:write",
@@ -2096,6 +2157,40 @@
         "definition",
         "recordedAt",
         "revision"
+      ]
+    },
+    "Output_get_project_home_pins_item": {
+      "type": "object",
+      "properties": {
+        "dashboardId": {
+          "type": "string"
+        },
+        "dashboardName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_layout_2"
+        },
+        "title": {
+          "type": "string"
+        },
+        "unavailable": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dashboardId",
+        "dashboardName",
+        "id",
+        "layout",
+        "title",
+        "widgetId"
       ]
     },
     "Output_get_report_authoring_guide": {
@@ -3761,7 +3856,7 @@
       "type": "object",
       "properties": {
         "presentation": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_presentation"
         },
         "query": {
           "$ref": "#/components/schemas/Output_query_metrics_query"
@@ -5901,33 +5996,46 @@
         "array"
       ]
     },
-    "Output_list_dashboards_item_widgets_item": {
-      "anyOf": [
-        {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_2"
+    "Output_list_dashboard_templates_item": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/components/schemas/Output_DashboardDataInput"
         },
-        {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_3"
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
         }
+      },
+      "required": [
+        "config",
+        "description",
+        "id",
+        "name"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_2": {
+    "Output_list_dashboard_templates_item_config_widgets_item": {
       "type": "object",
       "properties": {
         "compare": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_compare"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_compare"
         },
         "groups": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_groups"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_groups"
         },
         "id": {
           "type": "string"
         },
         "layout": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_layout"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_layout"
         },
         "presentation": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_presentation"
         },
         "query": {
           "$ref": "#/components/schemas/Output_query_metrics_query"
@@ -5942,13 +6050,13 @@
           "type": "string"
         },
         "trendDirection": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_trendDirection"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_trendDirection"
         },
         "type": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_type"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_type"
         },
         "width": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_width"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_width"
         }
       },
       "required": [
@@ -5959,41 +6067,10 @@
         "width"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_3": {
-      "type": "object",
-      "properties": {
-        "content": {
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        },
-        "layout": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_layout"
-        },
-        "title": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string",
-          "const": "text"
-        },
-        "width": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_width"
-        }
-      },
-      "required": [
-        "content",
-        "id",
-        "title",
-        "type",
-        "width"
-      ]
+    "Output_list_dashboard_templates_item_config_widgets_item_compare": {
+      "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_compare_2"
     },
-    "Output_list_dashboards_item_widgets_item_compare": {
-      "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_compare_2"
-    },
-    "Output_list_dashboards_item_widgets_item_compare_2": {
+    "Output_list_dashboard_templates_item_config_widgets_item_compare_2": {
       "type": "object",
       "properties": {
         "name": {
@@ -6008,13 +6085,13 @@
         "type"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_groups": {
+    "Output_list_dashboard_templates_item_config_widgets_item_groups": {
       "type": "array",
       "items": {
-        "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_groups_item"
+        "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_groups_item"
       }
     },
-    "Output_list_dashboards_item_widgets_item_groups_item": {
+    "Output_list_dashboard_templates_item_config_widgets_item_groups_item": {
       "type": "object",
       "properties": {
         "name": {
@@ -6024,7 +6101,7 @@
           "$ref": "#/components/schemas/Output_run_app_groups_item_type"
         },
         "versions": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_groups_item_versions"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_groups_item_versions"
         }
       },
       "required": [
@@ -6032,16 +6109,16 @@
         "type"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_groups_item_versions": {
+    "Output_list_dashboard_templates_item_config_widgets_item_groups_item_versions": {
       "type": "array",
       "items": {
         "$ref": "#/components/schemas/Output_run_app_completedAt"
       }
     },
-    "Output_list_dashboards_item_widgets_item_layout": {
-      "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_layout_2"
+    "Output_list_dashboard_templates_item_config_widgets_item_layout": {
+      "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_layout_2"
     },
-    "Output_list_dashboards_item_widgets_item_layout_2": {
+    "Output_list_dashboard_templates_item_config_widgets_item_layout_2": {
       "type": "object",
       "properties": {
         "h": {
@@ -6064,41 +6141,41 @@
         "y"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_presentation": {
-      "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_2"
+    "Output_list_dashboard_templates_item_config_widgets_item_presentation": {
+      "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_presentation_2"
     },
-    "Output_list_dashboards_item_widgets_item_presentation_2": {
+    "Output_list_dashboard_templates_item_config_widgets_item_presentation_2": {
       "type": "object",
       "properties": {
         "labels": {
           "$ref": "#/components/schemas/Output_run_app_evaluatorVersionIds"
         },
         "members": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_members"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_presentation_members"
         },
         "showSummary": {
           "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_dirty"
         }
       }
     },
-    "Output_list_dashboards_item_widgets_item_presentation_members": {
+    "Output_list_dashboard_templates_item_config_widgets_item_presentation_members": {
       "$ref": "#/components/schemas/Output_Record_11"
     },
-    "Output_list_dashboards_item_widgets_item_presentation_members_value": {
+    "Output_list_dashboard_templates_item_config_widgets_item_presentation_members_value": {
       "type": "object",
       "properties": {
         "decimals": {
           "$ref": "#/components/schemas/Output_get_metrics_metadata_models_item_maxLimit"
         },
         "unit": {
-          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_members_value_unit"
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_presentation_members_value_unit"
         },
         "values": {
           "$ref": "#/components/schemas/Output_run_app_evaluatorVersionIds"
         }
       }
     },
-    "Output_list_dashboards_item_widgets_item_presentation_members_value_unit": {
+    "Output_list_dashboard_templates_item_config_widgets_item_presentation_members_value_unit": {
       "enum": [
         "number",
         "auto",
@@ -6108,14 +6185,14 @@
         "percent"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_trendDirection": {
+    "Output_list_dashboard_templates_item_config_widgets_item_trendDirection": {
       "enum": [
         "increase",
         "decrease",
         "neutral"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_type": {
+    "Output_list_dashboard_templates_item_config_widgets_item_type": {
       "enum": [
         "table",
         "metric",
@@ -6127,11 +6204,88 @@
         "scatter"
       ]
     },
-    "Output_list_dashboards_item_widgets_item_width": {
+    "Output_list_dashboard_templates_item_config_widgets_item_width": {
       "enum": [
+        3,
         1,
-        2,
-        3
+        2
+      ]
+    },
+    "Output_list_dashboards_item": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "number"
+        },
+        "unavailable": {
+          "type": "boolean",
+          "const": true
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "description",
+        "id",
+        "name",
+        "revision",
+        "unavailable",
+        "updatedAt"
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item": {
+      "anyOf": [
+        {
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_2"
+        }
+      ]
+    },
+    "Output_list_dashboards_item_widgets_item_2": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_layout"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "width": {
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_width"
+        }
+      },
+      "required": [
+        "content",
+        "id",
+        "title",
+        "type",
+        "width"
       ]
     },
     "Output_list_dataset_items": {
@@ -7916,6 +8070,31 @@
         "mode"
       ]
     },
+    "Output_ProjectHome": {
+      "type": "object",
+      "properties": {
+        "pins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_get_project_home_pins_item"
+          }
+        },
+        "revision": {
+          "type": "number"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item"
+          }
+        }
+      },
+      "required": [
+        "pins",
+        "revision",
+        "widgets"
+      ]
+    },
     "Output_promote_spans_cases_item": {
       "type": "object",
       "properties": {
@@ -8594,7 +8773,7 @@
     "Output_Record_11": {
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/components/schemas/Output_list_dashboards_item_widgets_item_presentation_members_value"
+        "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_presentation_members_value"
       }
     },
     "Output_Record_12": {

@@ -6,6 +6,7 @@ import {
   isDashboardDataWidget,
   dashboardUpdateSchema,
   type Dashboard,
+  type DashboardListEntry,
 } from "@/src/lib/tracer/dashboards"
 import { semanticCatalog } from "@/src/server/metrics/registry"
 import { validateSemanticQuery } from "@/src/server/semantic/executor"
@@ -22,6 +23,28 @@ function decode(row: typeof dashboards.$inferSelect): Dashboard {
     revision: row.revision,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  }
+}
+function decodeListEntry(
+  row: typeof dashboards.$inferSelect
+): DashboardListEntry {
+  try {
+    return decode(row)
+  } catch (error) {
+    if (
+      !(error instanceof SyntaxError) &&
+      !(error instanceof TracerError && error.code === "VALIDATION_ERROR")
+    )
+      throw error
+    return {
+      id: row.id,
+      name: row.name,
+      description: "Saved configuration is not supported by this version.",
+      revision: row.revision,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      unavailable: true,
+    }
   }
 }
 function config(value: unknown) {
@@ -69,7 +92,7 @@ export function createDashboardService(database: TracerDatabase) {
                 .where(eq(dashboards.projectId, projectId))
                 .orderBy(desc(dashboards.updatedAt), desc(dashboards.id))
                 .limit(CATALOG_LIMIT + 1)
-            ).map(decode)
+            ).map(decodeListEntry)
         )
       ),
     get: (id: string) => tracerEffect(() => get(id)),

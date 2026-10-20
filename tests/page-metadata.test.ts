@@ -31,7 +31,6 @@ const redirectPages = new Set([
   "(app)/scores/new/page.tsx",
   "(app)/scorers/new/page.tsx",
   "(app)/scorers/[scorerId]/page.tsx",
-  "(app)/p/[projectSlug]/page.tsx",
   "(app)/p/[projectSlug]/settings/alerts/page.tsx",
   "(app)/p/[projectSlug]/evals/compare/page.tsx",
   "(app)/p/[projectSlug]/scores/new/page.tsx",

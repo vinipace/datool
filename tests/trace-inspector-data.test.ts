@@ -31,9 +31,9 @@ function span(overrides: Partial<Span> & Pick<Span, "id" | "name">): Span {
   }
 }
 
-function trace(spans: Span[]): TraceDetail {
+function mirroredTrace(spans: Span[]): TraceDetail {
   return {
-    attributes: {},
+    attributes: spans[0] ? { "datool.trace.root_span_id": spans[0].id } : {},
     durationMs: 10,
     endedAt: "2026-09-07T12:00:00.010Z",
     id: "tr_test",
@@ -51,7 +51,7 @@ function trace(spans: Span[]): TraceDetail {
 
 describe("trace inspector data helpers", () => {
   test("orders Python callback siblings within the same millisecond", () => {
-    const root = buildInspectorTree(trace([
+    const root = buildInspectorTree(mirroredTrace([
       span({ id: "sequence", name: "RunnableSequence" }),
       span({ id: "model", name: "DemoAgentModel", parentId: "sequence", kind: "llm",
         startedAt: "2026-09-24T02:16:50.493951+00:00" }),
@@ -64,7 +64,7 @@ describe("trace inspector data helpers", () => {
   })
 
   test("compares precise instants across offsets and preserves equal-time ordering", () => {
-    const root = buildInspectorTree(trace([
+    const root = buildInspectorTree(mirroredTrace([
       span({ id: "later", name: "Later", startedAt: "2026-09-24T02:16:50.493553200Z" }),
       span({ id: "equal-first", name: "Equal first", startedAt: "2026-09-23T23:16:50.493553-03:00" }),
       span({ id: "equal-second", name: "Equal second", startedAt: "2026-09-24T02:16:50.493553000Z" }),
@@ -78,9 +78,9 @@ describe("trace inspector data helpers", () => {
   })
 
   test("session trees retain each trace boundary and scope span IDs, collapse and branch guides", () => {
-    const first = { ...trace([span({ id: "root", name: "First root" }), span({ id: "leaf", name: "Leaf", parentId: "root" })]), id: "first" }
-    const second = { ...trace([span({ id: "root", name: "Second root" })]), id: "second" }
-    const empty = { ...trace([]), id: "empty" }
+    const first = { ...mirroredTrace([span({ id: "root", name: "First root" }), span({ id: "leaf", name: "Leaf", parentId: "root" })]), id: "first" }
+    const second = { ...mirroredTrace([span({ id: "root", name: "Second root" })]), id: "second" }
+    const empty = { ...mirroredTrace([]), id: "empty" }
     const rows = flattenSessionTraces([first, second, empty], new Set())
     expect(rows.map(row => [row.trace.id, row.node.id, row.node.depth])).toEqual([
       ["first", null, 1], ["first", "root", 2], ["first", "leaf", 3],
@@ -96,9 +96,9 @@ describe("trace inspector data helpers", () => {
     expect(flattenSessionTraces([], new Set())).toEqual([])
   })
   test("run forests retain separate roots and scope duplicate span IDs and collapse to their trace", () => {
-    const first = { ...trace([span({ id: "root", name: "First root" }), span({ id: "child", name: "First child", parentId: "root" })]), id: "first" }
-    const second = { ...trace([span({ id: "root", name: "Second root" }), span({ id: "child", name: "Second child", parentId: "root" })]), id: "second" }
-    const empty = { ...trace([]), id: "empty" }
+    const first = { ...mirroredTrace([span({ id: "root", name: "First root" }), span({ id: "child", name: "First child", parentId: "root" })]), id: "first" }
+    const second = { ...mirroredTrace([span({ id: "root", name: "Second root" }), span({ id: "child", name: "Second child", parentId: "root" })]), id: "second" }
+    const empty = { ...mirroredTrace([]), id: "empty" }
     const rows = flattenInspectorForest([first, second, empty], new Set([inspectorNodeKey("first", "root")]))
     expect(rows.map(row => [row.trace.id, row.node.id, row.node.depth])).toEqual([
       ["first", "root", 0], ["second", "root", 0], ["second", "child", 1], ["empty", null, 0],
@@ -107,7 +107,7 @@ describe("trace inspector data helpers", () => {
     expect(rows.filter(row => row.node.depth === 0).every(row => row.continuingDepths.length === 0)).toBe(true)
   })
   test("flattens only expanded branches in preorder with guides for virtual rows", () => {
-    const root = buildInspectorTree(trace([
+    const root = buildInspectorTree(mirroredTrace([
       span({ id: "root", name: "Root" }),
       span({ id: "branch", name: "Branch", parentId: "root" }),
       span({ id: "leaf", name: "Leaf", parentId: "branch" }),
@@ -123,7 +123,7 @@ describe("trace inspector data helpers", () => {
 
   test("keeps every span visible when parents are cyclic or missing and derives depth after linking", () => {
     const root = buildInspectorTree(
-      trace([
+      mirroredTrace([
         span({
           id: "child",
           name: "Child",
@@ -150,7 +150,7 @@ describe("trace inspector data helpers", () => {
   })
 
   test("uses the actual function span as root without an extra trace wrapper", () => {
-    const root = buildInspectorTree(trace([
+    const root = buildInspectorTree(mirroredTrace([
       span({ id: "function", name: "ai.generateText", kind: "function" }),
       span({ id: "model", name: "ai.generateText.doGenerate", kind: "llm", parentId: "function" }),
       span({ id: "tool", name: "calculateBudget", kind: "tool", parentId: "model" }),
@@ -161,13 +161,13 @@ describe("trace inspector data helpers", () => {
     expect(root.children[0].depth).toBe(1)
     expect(root.children[0].children[0].id).toBe("tool")
     expect(root.children[0].children[0].depth).toBe(2)
-    expect(buildInspectorTree(trace([])).id).toBeNull()
+    expect(buildInspectorTree(mirroredTrace([])).id).toBeNull()
   })
 
   for (const type of ["agent", "workflow"] as const) {
     test(`preserves the function hierarchy when the trace belongs to a ${type} group`, () => {
       const invocation: TraceDetail = {
-        ...trace([
+        ...mirroredTrace([
           span({ id: "function", name: "ai.generateText", kind: "function" }),
           span({ id: "model", name: "Model", kind: "llm", parentId: "function" }),
           span({ id: "tool", name: "Search", kind: "tool", parentId: "model" }),
@@ -186,7 +186,7 @@ describe("trace inspector data helpers", () => {
     test(`reuses an actual ${type} root for the same invocation group`, () => {
       const group = { type, name: "Travel planner", version: "v1" }
       const invocation: TraceDetail = {
-        ...trace([
+        ...mirroredTrace([
           span({ id: "invocation", name: "Travel planner", kind: type, group }),
           span({ id: "function", name: "ai.generateText", kind: "function", parentId: "invocation" }),
         ]),
@@ -207,7 +207,7 @@ describe("trace inspector data helpers", () => {
     for (const kind of ["function", "llm", "task", "agent", "workflow"] as const) {
       const child = span({ id: "child", name: "Recorded operation", kind,
         group: { type: "agent", name: "Different group" } })
-      const root = buildInspectorTree({ ...trace([child]), group })
+      const root = buildInspectorTree({ ...mirroredTrace([child]), group })
       expect(root.id).toBe(child.id)
       expect(root.span).toBe(child)
       expect(root.span?.kind).toBe(kind)
@@ -216,7 +216,7 @@ describe("trace inspector data helpers", () => {
 
   test("keeps separately recorded agent and function spans even when their names match", () => {
     const group = { type: "agent", name: "Extractor" } as const
-    const invocation = trace([
+    const invocation = mirroredTrace([
       span({ id: "agent", name: group.name, kind: "agent", group }),
       span({ id: "function", name: group.name, kind: "function", parentId: "agent" }),
       span({ id: "model", name: "Model", kind: "llm", parentId: "function" }),
@@ -229,12 +229,12 @@ describe("trace inspector data helpers", () => {
 
   test("retains grouped roots with no spans or multiple roots", () => {
     const group = { type: "workflow", name: "Reconcile prompts" } as const
-    const empty = buildInspectorTree({ ...trace([]), group })
+    const empty = buildInspectorTree({ ...mirroredTrace([]), group })
     expect(empty.id).toBeNull()
     expect(empty.children).toEqual([])
 
     const multiple = buildInspectorTree({
-      ...trace([span({ id: "first", name: "First" }), span({ id: "second", name: "Second" })]),
+      ...mirroredTrace([span({ id: "first", name: "First" }), span({ id: "second", name: "Second" })]),
       group,
     })
     expect(multiple.id).toBeNull()

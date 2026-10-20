@@ -5,6 +5,8 @@ import { resolve } from "node:path"
 import { appRequest } from "./request"
 
 export const agentUsage = `Agent workflows (all commands return JSON):
+  datool build tools [operation]
+  datool build call <operation> --input <json|@file|->
   datool apps list|get|register|run [id]
   datool traces list|get|spans|scores|path|resolve [id] [--filter <expression>]
   datool sessions list|get|resolve [id]
@@ -358,6 +360,7 @@ export async function agentCommand(args: string[]): Promise<number | null> {
   const [group, action] = args
   if (!(
     group === "agent" ||
+    (group === "build" && ["tools", "call"].includes(action)) ||
     group === "metrics" ||
     (group === "apps" && ["list", "get", "register", "run"].includes(action)) ||
     [
@@ -465,9 +468,13 @@ export async function agentCommand(args: string[]): Promise<number | null> {
       "resolve_report",
     ])
     const call: Call = (operation, value, options) =>
-      appRequest(origin, `/api/agent/${encodeURIComponent(operation)}`, value, {
+      appRequest(
+        origin,
+        `/api/${group === "build" ? "build" : "agent"}/${encodeURIComponent(operation)}`,
+        value,
+        {
         signal: options?.signal,
-        retry: retryableReads.has(operation) ? "read" : undefined,
+        retry: retryableReads.has(operation) || operation === "build_describe_operations" ? "read" : undefined,
         // Preview may span several 15-second batches; single metric reads
         // need room for their server deadline plus transport overhead.
         timeoutMs: [
@@ -483,7 +490,8 @@ export async function agentCommand(args: string[]): Promise<number | null> {
           : ["query_metrics", "batch_metrics"].includes(operation)
             ? 20_000
             : 10_000,
-      })
+        }
+      )
     let operation = aliases[`${group}.${action}`]
     const viewFamily = ({ "page-views": "page_view", "custom-fields": "custom_field", "object-views": "object_view" } as Record<string, string>)[group]
     if (viewFamily) {
@@ -501,6 +509,17 @@ export async function agentCommand(args: string[]): Promise<number | null> {
         throw new Error(
           "Use datool agent tools [operation] or agent call <operation> --input <json|@file|->."
         )
+    } else if (group === "build") {
+      if (action === "tools") {
+        operation = "build_describe_operations"
+        if (positional[0]) input.name = positional[0]
+      } else if (action === "call" && positional[0]) {
+        operation = positional[0]
+      } else {
+        throw new Error(
+          "Use datool build tools [operation] or build call <operation> --input <json|@file|->."
+        )
+      }
     } else if (positional.length) {
       if (positional.length > 1)
         throw new Error(

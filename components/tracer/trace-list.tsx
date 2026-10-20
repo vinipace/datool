@@ -10,7 +10,7 @@ import {
   useRouter,
   useSearchParams,
   type ReadonlyURLSearchParams,
-} from "next/navigation"
+} from "@/components/navigation/navigation"
 
 import { useComputedColumns } from "./use-computed-columns"
 import { useTableView } from "./use-table-view"

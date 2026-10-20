@@ -207,6 +207,7 @@ describe("Datool OpenTelemetry ingestion", () => {
     await processor.forceFlush()
     const running = await runTracerEffect(service.getTrace(traceId))
     expect(running.status).toBe("running")
+    expect(running.attributes["datool.trace.root_span_id"]).toBe("0000000000000001")
     expect(running.spans).toHaveLength(3)
     tool.attributes["ai.toolCall.result"] =
       '{"temperatureCelsius":24,"mock":true}'
@@ -220,6 +221,8 @@ describe("Datool OpenTelemetry ingestion", () => {
     const saved = await runTracerEffect(service.getTrace(traceId))
     expect(saved.name).toBe("mock-weather")
     expect(saved.status).toBe("completed")
+    expect(saved.attributes["datool.trace.root_span_id"]).toBe("0000000000000001")
+    expect(saved.attributes["datool.span.kind"]).toBe("function")
     expect(saved.input).toEqual({ prompt: "weather?" })
     expect(saved.output).toBe("Mock weather: 24°C and sunny.")
     expect(

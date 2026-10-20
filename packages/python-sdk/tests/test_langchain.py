@@ -63,6 +63,14 @@ def test_chat_model_output_usage_and_masking(recording, mode):
     assert span["attributes"]["usage.total_tokens"] == 14
     assert span["attributes"]["model"] == "fixture-weather"
     assert "cost.usd" not in span["attributes"]
+    root_start = next(e["body"] for e in events if e["path"] == "/api/traces")
+    root_end = next(
+        e["body"]
+        for e in reversed(events)
+        if e["path"].startswith("/api/traces/") and e["method"] == "PATCH"
+    )
+    assert root_start["attributes"]["datool.trace.root_span_id"] == span["id"]
+    assert root_end["attributes"]["datool.trace.root_span_id"] == span["id"]
     assert not handler._runs and not client.processor.traces
 
 

@@ -101,6 +101,12 @@ Existing OpenTelemetry instrumentation can continue to use the processor alone.
 
 Declare named invocations in the span's **initial attributes**: `datool.group.type` (`agent` or `workflow`), `datool.group.name`, and optional `datool.group.version`. Set `datool.trace.root: true` when that span is the trace container. Metadata such as `agent.name` does not define grouping. Groups are not inherited by children.
 
+The processors set `datool.span.kind` on trace containers. When an external
+OTel root is also exported as a span, `datool.trace.root_span_id` identifies
+that mirrored span. The inspector only removes a duplicate trace container
+when its sole root child matches this ID. Independent invocations and legacy
+traces without the link retain their trace input and output.
+
 Group membership does not change an operation's kind. In OTel mode, any generic
 operation can specify a group while preserving its type:
 

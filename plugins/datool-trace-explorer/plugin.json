@@ -1,0 +1,31 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "datool-trace-explorer",
+  "version": "0.1.0",
+  "description": "Explore Datool traces and investigate selected span evidence in ChatGPT.",
+  "author": { "name": "Datool", "url": "https://www.trydatool.com" },
+  "homepage": "https://www.trydatool.com",
+  "repository": "https://github.com/vinpac/datool",
+  "license": "Apache-2.0",
+  "keywords": ["traces", "observability", "AI", "debugging"],
+  "extensions": {
+    "com.openai": {
+      "apps": "./.app.json",
+      "interface": {
+        "displayName": "Datool",
+        "shortDescription": "Explore traces and investigate span evidence",
+        "longDescription": "Connect one Datool project with read-only access. Filter and page traces, inspect their timeline, and select captured span evidence to discuss with ChatGPT.",
+        "developerName": "Datool",
+        "category": "Developer Tools",
+        "capabilities": ["Read"],
+        "websiteURL": "https://www.trydatool.com",
+        "defaultPrompt": [
+          "Open Datool Trace Explorer",
+          "Investigate failed traces in my Datool project"
+        ],
+        "composerIcon": "./assets/composer-icon.svg",
+        "logo": "./assets/logo.png"
+      }
+    }
+  }
+}

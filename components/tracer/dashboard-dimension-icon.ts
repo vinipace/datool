@@ -1,5 +1,23 @@
 import { Bot, Box, Layers, MessageCircle, Workflow } from "lucide-react"
 import type { SemanticDataRow } from "@/src/lib/semantic/result"
+import type { ChannelId } from "@/src/lib/build/channels"
+import { channelCatalog } from "@/components/build/shared/channel-catalog"
+
+export function dashboardChannelId(
+  dimension: string,
+  value: unknown
+): ChannelId | undefined {
+  if (
+    [
+      "buildEvents.channel",
+      "buildTickets.channel",
+      "buildCsat.channel",
+    ].includes(dimension) &&
+    typeof value === "string" &&
+    Object.hasOwn(channelCatalog, value)
+  )
+    return value as ChannelId
+}
 
 export function dashboardGroupText(dimensions: string[], row: SemanticDataRow) {
   return dimensions
@@ -8,6 +26,9 @@ export function dashboardGroupText(dimensions: string[], row: SemanticDataRow) {
 }
 
 export function dashboardDimensionText(dimension: string, value: unknown) {
+  const channel = dashboardChannelId(dimension, value)
+  if (channel)
+    return channel === "web" ? "Website" : channelCatalog[channel].label
   if (value !== null && value !== undefined) return String(value)
   return [
     "logs.agentName",

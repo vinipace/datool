@@ -15,6 +15,7 @@ import {
   TIMELINE_PADDING,
 } from './constants';
 import { adjustSpanVisibility } from './tree';
+import { matchingSpanIds, positionedSpanRows } from './span-layout';
 
 type UpdateFilter = (filter: string) => void;
 
@@ -62,13 +63,16 @@ export const useStreamingSpans = (
   useEffect(() => updateFilterRef.current?.(ctxFilter), [ctxFilter]);
 
   const rows = useMemo(() => {
-    if (!highlightedSpans?.length) return workerRows;
-    const highlighted = new Set(highlightedSpans);
-    return workerRows.map((row) => row.map((node) => ({
+    const base = eagerRender ? positionedSpanRows(root) : workerRows;
+    const highlighted = highlightedSpans?.length
+      ? new Set(highlightedSpans)
+      : eagerRender && ctxFilter.trim() ? matchingSpanIds(root, ctxFilter) : null;
+    if (!highlighted) return base;
+    return base.map((row) => row.map((node) => ({
       ...node,
       isHighlighted: highlighted.has(node.span.spanId),
     })));
-  }, [workerRows, highlightedSpans]);
+  }, [workerRows, highlightedSpans, eagerRender, root, ctxFilter]);
 
   const eagerSpans = useMemo(() => {
     if (!eagerRender) return null;
@@ -81,7 +85,7 @@ export const useStreamingSpans = (
   }, [eagerRender, rows, scale]);
 
   useEffect(() => {
-    if (!root.startTime) return;
+    if (!root.startTime || eagerRender) return;
 
     const worker = new Worker(new URL('../worker', import.meta.url), {
       type: 'module',
@@ -153,7 +157,7 @@ export const useStreamingSpans = (
     return () => {
       worker.terminate();
     };
-  }, [root, spanMap]);
+  }, [root, spanMap, eagerRender]);
 
   useEffect(() => {
     if (!rows.length || eagerRender) return;

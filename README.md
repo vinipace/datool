@@ -1,7 +1,11 @@
 # Datool
 
-Datool is licensed under the [Apache License 2.0](LICENSE). Third-party code and
-assets retain their respective licenses and notices.
+Datool Observe, Test, and the SDKs are open source under [Apache 2.0](LICENSES/Apache-2.0.txt).
+Datool Build is source-available under [Elastic License 2.0 (ELv2)](LICENSES/Elastic-2.0.txt),
+with a separate commercial licensing option for hosted offerings that ELv2 does
+not permit. See [LICENSE](LICENSE) for the exact code boundary and
+[Licensing](LICENSING.md) for usage examples and commercial inquiries.
+Third-party code and assets retain their respective licenses and notices.
 
 Public product documentation is served at `/docs`. Edit its Markdown/MDX in
 `content/docs/` and sidebar ordering in each folder's `meta.json`. Fumadocs generates

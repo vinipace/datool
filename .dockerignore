@@ -7,6 +7,12 @@
 **/.env.*
 node_modules
 **/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+.vitest-attachments
+storybook-static
 .next*
 .source
 **/.next*
@@ -17,3 +23,8 @@ plans
 *.tsbuildinfo
 public/monaco
 public/trace-view-runtime.js
+public/trace-views
+public/widget-runtime.js
+public/widget-runtime.css
+public/mcp-apps
+public/licenses

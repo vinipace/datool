@@ -3,7 +3,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useWorkspaceHref } from "./workspace-path"
-import type { Dashboard } from "@/src/lib/tracer/dashboards"
+import type { DashboardListEntry } from "@/src/lib/tracer/dashboards"
 import { dashboardRequest } from "./dashboard-utils"
 import { DashboardCreateDialog } from "./dashboard-create-dialog"
 import {
@@ -23,7 +23,7 @@ export function DashboardsPage() {
   const router = useRouter()
   const workspaceHref = useWorkspaceHref()
   const load = React.useCallback(
-    () => dashboardRequest<Dashboard[]>("/api/dashboards"),
+    () => dashboardRequest<DashboardListEntry[]>("/api/dashboards"),
     []
   )
   const state = useRemote(load, [])
@@ -151,17 +151,17 @@ export function DashboardsPage() {
                 >
                   {row.description || "—"}
                 </td>
-                <td className={collectionTable.cell}>{row.widgets.length}</td>
                 <td className={collectionTable.cell}>
-                  {[
-                    ...new Set(
-                      row.widgets.flatMap((w) =>
-                        w.type === "text"
-                          ? []
-                          : [w.query.measures[0].split(".")[0]]
-                      )
-                    ),
-                  ].join(", ")}
+                  {"unavailable" in row ? "—" : row.widgets.length}
+                </td>
+                <td className={collectionTable.cell}>
+                  {"unavailable" in row
+                    ? "—"
+                    : [
+                        ...new Set(
+                          row.widgets.flatMap((w) => w.type === "text" ? [] : [w.query.measures[0].split(".")[0]])
+                        ),
+                      ].join(", ")}
                 </td>
                 <td className={`${collectionTable.cell} text-foreground-muted`}>
                   {formatDate(row.updatedAt)}

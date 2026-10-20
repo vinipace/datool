@@ -124,6 +124,8 @@ For direct Bun execution, use bun --no-env-file <datool.js> to disable Bun prelo
 Local TypeScript handlers require Node 22.18+ and erasable TypeScript syntax.
 
 Agent workflows (all commands return JSON):
+  datool build tools [operation]
+  datool build call <operation> --input <json|@file|->
   datool apps list|get|register|run [id]
   datool traces list|get|spans|scores|path|resolve [id] [--filter <expression>]
   datool sessions list|get|resolve [id]

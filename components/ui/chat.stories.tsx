@@ -84,3 +84,49 @@ export const Waiting: Story = {
     await expect(canvas.getByText("Hello")).toBeVisible()
   },
 }
+
+const longMessage = "https://example.test/" + "long-path-segment-".repeat(24)
+
+export const MessageWrapping: Story = {
+  args: {
+    messages: [
+      { role: "user", content: "hey", toolCalls: [] },
+      { role: "user", content: longMessage, toolCalls: [] },
+      { role: "assistant", content: "How can I help?", toolCalls: [] },
+    ],
+  },
+  render: (args) => (
+    <div className="flex flex-wrap gap-8">
+      {[320, 640].map((width) => (
+        <section
+          key={width}
+          aria-label={`Chat at ${width}px`}
+          className="h-[32rem] max-w-full"
+          style={{ width }}
+        >
+          <Chat {...args} />
+        </section>
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    for (const width of [320, 640]) {
+      const chat = within(
+        canvas.getByRole("region", { name: `Chat at ${width}px` })
+      )
+      const short = chat.getByText("hey", { exact: true })
+      const range = short.ownerDocument.createRange()
+      range.selectNodeContents(short)
+      await expect(range.getClientRects().length).toBe(1)
+
+      const long = chat.getByRole("link", { name: longMessage }).closest("p")!
+      await expect(long.scrollWidth).toBeLessThanOrEqual(long.clientWidth)
+      const log = chat.getByRole("log", { name: "Conversation" })
+      await expect(log.scrollWidth).toBeLessThanOrEqual(log.clientWidth)
+      await expect(short.getBoundingClientRect().right).toBeGreaterThan(
+        log.getBoundingClientRect().left + log.clientWidth / 2
+      )
+    }
+  },
+}

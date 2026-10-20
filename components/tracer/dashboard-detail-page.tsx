@@ -2,10 +2,16 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Check, Copy, Pencil, Plus, Trash2 } from "lucide-react"
+import { Check, Copy, Pencil, Pin, PinOff, Plus, Trash2 } from "lucide-react"
+import { toast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
 import { DashboardSkeleton } from "@/components/ui/dashboard-skeleton"
 import { Input } from "@/components/ui/input"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -32,7 +38,10 @@ import {
   type Dashboard,
 } from "@/src/lib/tracer/dashboards"
 import type { SemanticCatalogMetadata } from "@/src/lib/semantic/catalog"
-import { dashboardFilterScope } from "@/src/lib/tracer/dashboard-queries"
+import {
+  dashboardFilterScope,
+  supportsSharedTraceFilters,
+} from "@/src/lib/tracer/dashboard-queries"
 import { CollectionFilterBar } from "./collection-filter"
 import { CollectionHeaderControls, HeaderSlot } from "./collection-header"
 import { DashboardRenderer } from "./dashboard-renderer"
@@ -47,6 +56,7 @@ import { useRemote } from "./hooks"
 import { ErrorState } from "./primitives"
 import { useCollectionFilter } from "./use-collection-filter"
 import { useWorkspaceHref } from "./workspace-path"
+import { useProjectHome } from "./use-project-home"
 
 export function DashboardDetailPage({ dashboardId }: { dashboardId: string }) {
   const load = React.useCallback(
@@ -72,10 +82,12 @@ export function DashboardDetailPage({ dashboardId }: { dashboardId: string }) {
 
 function DashboardName({
   value,
+  description,
   onChange,
   readOnly,
 }: {
   value: string
+  description?: string
   onChange: (value: string) => void
   readOnly: boolean
 }) {
@@ -87,22 +99,36 @@ function DashboardName({
     })
   return (
     <div className="min-w-48 flex-1 space-y-1">
-      <Input
-        variant="title"
-        aria-label="Dashboard name"
-        readOnly={readOnly}
-        maxLength={160}
-        value={draft.text}
-        invalid={!draft.text.trim()}
-        onChange={(event) => {
-          const text = event.target.value
-          setDraft({ source: text.trim() ? text : value, text })
-          if (text.trim()) onChange(text)
-        }}
-        onBlur={() => {
-          if (!draft.text.trim()) setDraft({ source: value, text: value })
-        }}
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Input
+            variant="title"
+            aria-label="Dashboard name"
+            readOnly={readOnly}
+            maxLength={160}
+            value={draft.text}
+            invalid={!draft.text.trim()}
+            onChange={(event) => {
+              const text = event.target.value
+              setDraft({ source: text.trim() ? text : value, text })
+              if (text.trim()) onChange(text)
+            }}
+            onBlur={() => {
+              if (!draft.text.trim()) setDraft({ source: value, text: value })
+            }}
+          />
+        </TooltipTrigger>
+        {description && (
+          <TooltipContent
+            side="bottom"
+            align="start"
+            sideOffset={6}
+            className="max-w-xs"
+          >
+            {description}
+          </TooltipContent>
+        )}
+      </Tooltip>
       {!draft.text.trim() && (
         <p role="alert" className="text-xs text-destructive">
           A dashboard name is required.
@@ -113,6 +139,7 @@ function DashboardName({
 }
 
 function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
+  const home = useProjectHome()
   const router = useRouter()
   const workspaceHref = useWorkspaceHref()
   const save = useDashboardAutosave(dashboard)
@@ -129,8 +156,16 @@ function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
         )
       )
   const [editing, setEditing] = React.useState(dashboard.widgets.length === 0)
+  const filterResource = opened.widgets.some(
+    (widget) =>
+      isDashboardDataWidget(widget) && !supportsSharedTraceFilters(widget.query.measures[0].split(".")[0])
+  )
+    ? "dashboard"
+    : evalQuality
+      ? "evalQuality"
+      : "traces"
   const logFilter = useCollectionFilter(
-    evalQuality ? "evalQuality" : "traces",
+    filterResource,
     `startedAt >= -${dashboard.defaultWindowDays ?? 3}d`
   )
   const [rangeEnd, setRangeEnd] = React.useState(() => Date.now())
@@ -278,6 +313,7 @@ function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
       >
         <DashboardName
           value={opened.name}
+          description={opened.description}
           readOnly={!editing}
           onChange={(name) => save.update((current) => ({ ...current, name }))}
         />
@@ -309,8 +345,14 @@ function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
         ) : (
           <div className="min-w-0 flex-1 basis-80">
             <CollectionFilterBar
-              resource={evalQuality ? "evalQuality" : "traces"}
-              label={evalQuality ? "Filter evaluations" : undefined}
+              resource={filterResource}
+              label={
+                filterResource === "dashboard"
+                  ? "Filter dashboard dates"
+                  : evalQuality
+                    ? "Filter evaluations"
+                    : undefined
+              }
               value={logFilter.value}
               onChange={logFilter.onChange}
               error={logFilter.error}
@@ -427,7 +469,52 @@ function DashboardDetail({ dashboard }: { dashboard: Dashboard }) {
           {scoped.error}
         </Notice>
       )}
+      {(home.error || home.state.error) && (
+        <Notice variant="error" role="alert">
+          {home.error ||
+            `Home pins could not be loaded: ${home.state.error?.message}`}
+          <Button variant="outline" size="sm" onClick={home.refresh}>
+            Retry Home pins
+          </Button>
+        </Notice>
+      )}
       <DashboardRenderer
+        widgetActions={(widget) => {
+          const pin = home.home?.pins.find(
+            (pin) =>
+              pin.dashboardId === dashboard.id && pin.widgetId === widget.id
+          )
+          const label = pin
+            ? `Unpin ${widget.title} from Home`
+            : `Pin ${widget.title} to Home`
+          return (
+            <Button
+              variant="ghost-muted"
+              size="icon-sm"
+              title={label}
+              aria-label={label}
+              aria-pressed={!!pin}
+              disabled={
+                !home.home ||
+                home.pending ||
+                save.pending ||
+                !dashboard.widgets.some((saved) => saved.id === widget.id)
+              }
+              onClick={async () => {
+                const result = pin
+                  ? await home.unpin(pin.id)
+                  : await home.pin(dashboard.id, widget.id)
+                if (result)
+                  toast.add({
+                    title: pin ? "Unpinned from Home" : "Pinned to Home",
+                    type: "success",
+                  })
+              }}
+            >
+              {pin ? <PinOff /> : <Pin />}
+            </Button>
+          )
+        }}
         widgets={opened.widgets}
         revision={revision}
         scope={scoped.scope}

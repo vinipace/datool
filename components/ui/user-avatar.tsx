@@ -32,9 +32,11 @@ export function UserAvatar({
 export function UserAvatarImage({
   name,
   image,
+  size = "default",
 }: {
   name: string
   image: string | null
+  size?: "sm" | "default"
 }) {
   const initials = name
     .trim()
@@ -46,7 +48,7 @@ export function UserAvatarImage({
   return (
     <AvatarPrimitive.Root
       data-slot="user-avatar"
-      className="flex size-7 shrink-0 overflow-hidden rounded-full border border-border bg-muted"
+      className={`flex shrink-0 overflow-hidden rounded-full border border-border bg-muted ${size === "sm" ? "size-5" : "size-7"}`}
     >
       <AvatarPrimitive.Image
         src={image ?? undefined}
@@ -54,7 +56,9 @@ export function UserAvatarImage({
         alt=""
         className="size-full object-cover"
       />
-      <AvatarPrimitive.Fallback className="flex size-full items-center justify-center text-xs font-medium text-foreground-muted">
+      <AvatarPrimitive.Fallback
+        className={`flex size-full items-center justify-center font-medium text-foreground-muted ${size === "sm" ? "text-[10px]" : "text-xs"}`}
+      >
         {initials || "?"}
       </AvatarPrimitive.Fallback>
     </AvatarPrimitive.Root>

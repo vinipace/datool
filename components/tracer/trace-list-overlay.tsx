@@ -23,7 +23,7 @@ function DeferredInspector({
 }: TraceInspectorProps & {
   loadSnapshot: (signal: AbortSignal) => Promise<TraceDetail | undefined>
 }) {
-  const state = useRemote(loadSnapshot, [props.traceId])
+  const state = useRemote(loadSnapshot, [props.traceId, loadSnapshot])
   if (state.isLoading || state.error)
     return (
       <div className="h-full overflow-auto p-4">

@@ -18,6 +18,7 @@ import {
   traceOverview,
 } from "../../.storybook/scenarios/traces/fixtures"
 import { InspectorPanels } from "./inspector-panels"
+import { NextNavigationProvider } from "@/components/navigation/next-navigation"
 import { TraceListWorkspace } from "./trace-list"
 
 const pathname = `${storybookProject.prefix}/traces`
@@ -75,12 +76,14 @@ function NavigationWorkspace({ initialHref }: { initialHref: string }) {
   return (
     <AppRouterContext.Provider value={router}>
       <SearchParamsContext.Provider value={searchParams}>
-        <StorybookProjectFrame title="Traces">
-          <InspectorPanels>
-            <TraceListWorkspace />
-          </InspectorPanels>
-        </StorybookProjectFrame>
-        <output aria-label="Current URL">{href}</output>
+        <NextNavigationProvider>
+          <StorybookProjectFrame title="Traces">
+            <InspectorPanels>
+              <TraceListWorkspace />
+            </InspectorPanels>
+          </StorybookProjectFrame>
+          <output aria-label="Current URL">{href}</output>
+        </NextNavigationProvider>
       </SearchParamsContext.Provider>
     </AppRouterContext.Provider>
   )
@@ -99,7 +102,12 @@ const meta = {
       handlers: [
         http.get(`/api/traces/${erroredTraceRow.id}/overview`, () =>
           HttpResponse.json(
-            envelope({ ...traceOverview, ...erroredTraceRow, spans: [], scores: [] })
+            envelope({
+              ...traceOverview,
+              ...erroredTraceRow,
+              spans: [],
+              scores: [],
+            })
           )
         ),
         http.get(`/api/traces/${erroredTraceRow.id}/payload`, () =>
@@ -163,7 +171,9 @@ export const CloseAfterSwitchingRows: Story = {
           canvas.queryByRole("button", { name: "Close trace inspector" })
         ).not.toBeInTheDocument()
       )
-      await expect(canvas.getByLabelText("Current URL")).toHaveTextContent(listHref)
+      await expect(canvas.getByLabelText("Current URL")).toHaveTextContent(
+        listHref
+      )
       await expect(second).toHaveFocus()
     }
   },
@@ -191,8 +201,12 @@ export const CloseAfterSwitchingFromDeepLink: Story = {
         canvas.queryByRole("button", { name: "Close trace inspector" })
       ).not.toBeInTheDocument()
     )
-    await expect(canvas.getByLabelText("Current URL")).toHaveTextContent(listHref)
-    await expect(canvas.getByLabelText("Current URL")).not.toHaveTextContent("span=")
+    await expect(canvas.getByLabelText("Current URL")).toHaveTextContent(
+      listHref
+    )
+    await expect(canvas.getByLabelText("Current URL")).not.toHaveTextContent(
+      "span="
+    )
     await expect(second).toHaveFocus()
   },
 }

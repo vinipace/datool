@@ -217,6 +217,7 @@ export function Canvas<T extends WidgetPropsMap>({
   getWidgetAutoHeight,
   getWidgetInlineEditing,
   getWidgetFrameless,
+  renderWidgetActions,
   editable = true,
   widgetVariant = "outlined",
   columns: requestedColumns = 12,
@@ -495,7 +496,7 @@ export function Canvas<T extends WidgetPropsMap>({
                                   : "ring-1 ring-selection-control ring-inset")
                             )}
                           >
-                            {(!frameless || editable) && (
+                            {(!frameless || editable || renderWidgetActions) && (
                               <div
                                 className={cn(
                                   "flex shrink-0 items-center gap-1",
@@ -558,6 +559,11 @@ export function Canvas<T extends WidgetPropsMap>({
                                       <Pencil className="size-3.5" />
                                     </Button>
                                   )}
+                                {renderWidgetActions && (
+                                  <div className="mr-2 flex shrink-0 items-center" data-canvas-no-drag>
+                                    {renderWidgetActions(widget)}
+                                  </div>
+                                )}
                                 {editable && onWidgetRemove && (
                                   <RemoveWidgetButton
                                     label={label}

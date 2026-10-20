@@ -25,7 +25,7 @@ import { selectedOAuthProject } from "./oauth-context"
 import type { Pool } from "pg"
 import { nextCookies } from "better-auth/next-js"
 import {
-  mcpScopes,
+  mcpResourceScopes,
   roleScopes,
   workspaceScopes,
 } from "@/src/lib/auth/permissions"
@@ -332,12 +332,23 @@ export function organizationAuthOptions(
           },
           {
             identifier: resource,
-            allowedScopes: [...mcpScopes, "offline_access"],
+            allowedScopes: [...mcpResourceScopes, "offline_access"],
+            accessTokenTtl: 300,
+          },
+          {
+            identifier: `${baseURL}/api/mcp/trace-explorer`,
+            allowedScopes: ["traces:read", "offline_access"],
             accessTokenTtl: 300,
           },
         ],
-        clientRegistrationDefaultResources: [resource],
-        clientRegistrationAllowedResources: [`${baseURL}/api/cli`],
+        clientRegistrationDefaultResources: [
+          resource,
+          `${baseURL}/api/mcp/trace-explorer`,
+        ],
+        clientRegistrationAllowedResources: [
+          `${baseURL}/api/cli`,
+          `${baseURL}/api/mcp/trace-explorer`,
+        ],
         accessTokenExpiresIn: 300,
         postLogin: {
           page: "/mcp/connect",

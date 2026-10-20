@@ -1,9 +1,11 @@
 import { isDashboardDataWidget } from "@/src/lib/tracer/dashboards"
 import { expect, test } from "bun:test"
+import { sql } from "drizzle-orm"
 import { semanticQuerySchema } from "@/src/lib/semantic/query"
 import {
   blankDashboard,
   dashboardTemplates,
+  agentOverviewWidgets,
 } from "@/src/lib/tracer/dashboard-templates"
 import { dashboardInputSchema } from "@/src/lib/tracer/dashboards"
 import { semanticCatalog } from "@/src/server/metrics/registry"
@@ -28,6 +30,7 @@ import {
 } from "@/src/server/tracer/schema"
 import { createDashboardService } from "@/src/server/tracer/dashboards"
 import { runTracerEffect } from "@/src/server/tracer/effect"
+import { getTracerProjectId } from "@/src/server/tracer/db"
 import {
   closeTracerFixture,
   createTracerFixture,
@@ -137,6 +140,202 @@ test("blank and template configurations persist through the existing dashboard s
         expect(results).toHaveLength(queries.length)
       }
     }
+  } finally {
+    await closeTracerFixture(db)
+  }
+})
+
+test("customer experience template scopes real facts, distinct activity, cohort averages and calendar buckets", async () => {
+  const db = await createTracerFixture()
+  const projectId = getTracerProjectId(db)
+  const from = "2026-09-06T12:00:00Z"
+  const to = now.toISOString()
+  try {
+    await db.execute(sql`insert into project(id, organization_id, name, slug, created_at, updated_at)
+      select 'other-project', organization_id, 'Other', 'other', created_at, updated_at
+      from project where id = ${projectId}`)
+    await db.execute(sql`insert into build_agents(id, project_id, slug, name, status, current_revision, applied_revision, current_config_json, applied_config_json, created_at, updated_at)
+      values ('agent', ${projectId}, 'support', 'Support', 'active', 1, 1, '{}', '{}', ${from}, ${from})`)
+    await db.execute(sql`insert into build_conversations(id, project_id, agent_id, channel, created_at)
+      values ('web', ${projectId}, 'agent', 'web', '2026-09-01'), ('telegram', ${projectId}, 'agent', 'telegram', '2026-09-01')`)
+    await db.execute(sql`insert into build_operation_events(id, project_id, event_type, conversation_id, contact_id, channel, occurred_at) values
+      ('received', ${projectId}, 'message_received', 'web', 'a', 'web', ${from}),
+      ('sent', ${projectId}, 'message_sent', 'web', 'a', 'web', '2026-09-07T01:00:00Z'),
+      ('handoff', ${projectId}, 'handoff', 'web', 'a', 'web', '2026-09-07T04:00:00Z'),
+      ('legacy-handoff', ${projectId}, 'human_handoff', 'telegram', 'a', 'telegram', '2026-09-07T05:00:00Z'),
+      ('telegram-message', ${projectId}, 'message_received', 'telegram', 'b', 'telegram', '2026-09-07T06:00:00Z'),
+      ('claim', ${projectId}, 'inbox_claimed', 'telegram', 'b', 'telegram', '2026-09-07T07:00:00Z'),
+      ('before', ${projectId}, 'message_received', null, 'excluded', 'web', '2026-09-06T11:59:59.999Z'),
+      ('end', ${projectId}, 'message_received', null, 'excluded', 'web', ${to}),
+      ('foreign', 'other-project', 'message_received', null, 'excluded', 'web', ${from})`)
+    await db.execute(sql`insert into build_inbox_tickets(id, project_id, conversation_id, channel, status, created_at, first_response_at) values
+      ('solved', ${projectId}, 'web', 'web', 'solved', ${from}, '2026-09-06T12:01:00Z'),
+      ('closed', ${projectId}, 'telegram', 'telegram', 'closed', ${from}, '2026-09-06T12:03:00Z'),
+      ('open', ${projectId}, 'pending', 'web', 'open', ${from}, null),
+      ('old-ticket', ${projectId}, 'old', 'web', 'solved', '2026-09-01', ${from}),
+      ('future-ticket', ${projectId}, 'future', 'web', 'solved', ${to}, null),
+      ('foreign-ticket', 'other-project', 'foreign', 'web', 'solved', ${from}, ${to})`)
+    await db.execute(sql`insert into build_csat_surveys(id, project_id, channel, status, rating, requested_at, responded_at) values
+      ('positive', ${projectId}, 'web', 'answered', 5, ${from}, ${from}),
+      ('neutral', ${projectId}, 'telegram', 'answered', 3, ${from}, ${from}),
+      ('pending', ${projectId}, 'web', 'pending', null, ${from}, null),
+      ('old-survey', ${projectId}, 'web', 'answered', 1, '2026-09-01', ${from}),
+      ('future-survey', ${projectId}, 'web', 'answered', 1, ${to}, ${to}),
+      ('foreign-survey', 'other-project', 'web', 'answered', 1, ${from}, ${from})`)
+    const config = dashboardTemplates
+      .find((item) => item.id === "customer-experience")!
+      .create(now)
+    const scope = dashboardFilterScope(
+      "startedAt >= -7d",
+      now.getTime(),
+      "America/Sao_Paulo"
+    )
+    const queries = config.widgets.map(
+      (widget) => scopedWidget(widget, scope).query
+    )
+    const execute = (queries: unknown[]) =>
+      executeSemanticBatch(
+        { queries },
+        {
+          catalog: semanticCatalog,
+          requestId: "customer-experience-template",
+          snapshotRunner: createSemanticSnapshotRunner(db),
+        }
+      )
+    const results = await execute(queries)
+    const result = (id: string) =>
+      results[config.widgets.findIndex((widget) => widget.id === id)].data
+    expect(result("conversations")[0]["buildEvents.conversationCount"]).toBe(2)
+    expect(result("contacts")[0]["buildEvents.contactCount"]).toBe(2)
+    expect(result("messages")[0]["buildEvents.messageCount"]).toBe(3)
+    expect(result("handoffs")[0]["buildEvents.handoffCount"]).toBe(2)
+    expect(result("resolved")[0]["buildTickets.resolvedCount"]).toBe(2)
+    expect(
+      result("first-response")[0]["buildTickets.meanFirstResponseMs"]
+    ).toBe(120000)
+    expect(result("csat")[0]["buildCsat.meanRating"]).toBe(4)
+    expect(result("csat-responses")[0]["buildCsat.responseCount"]).toBe(2)
+    expect(
+      result("chats-by-channel").map((row) => [
+        row["buildEvents.channel"],
+        row["buildEvents.conversationCount"],
+      ])
+    ).toEqual([
+      ["telegram", 1],
+      ["web", 1],
+    ])
+    expect(
+      result("channel-activity").map((row) => row["buildEvents.count"])
+    ).toEqual([3, 3])
+    expect(
+      result("message-trend")
+        .filter((row) => row["buildEvents.messageCount"])
+        .sort((a, b) =>
+          String(a["buildEvents.occurredAt"]).localeCompare(
+            String(b["buildEvents.occurredAt"])
+          )
+        )
+    ).toEqual([
+      { "buildEvents.occurredAt": "2026-09-06", "buildEvents.messageCount": 2 },
+      { "buildEvents.occurredAt": "2026-09-07", "buildEvents.messageCount": 1 },
+    ])
+    expect(
+      result("csat-trend").filter((row) => row["buildCsat.meanRating"] !== null)
+    ).toHaveLength(1)
+    const base = queries.find(
+      (query) => query.measures[0] === "buildEvents.contactCount"
+    )!
+    const [filtered, page, missingCsat] = await execute([
+      {
+        ...base,
+        filters: [
+          {
+            member: "buildEvents.channel",
+            operator: "equals",
+            values: ["web"],
+          },
+        ],
+      },
+      {
+        ...base,
+        dimensions: ["buildEvents.channel"],
+        order: [["buildEvents.channel", "asc"]],
+        limit: 1,
+        offset: 1,
+        total: true,
+      },
+      {
+        ...queries.find(
+          (query) => query.measures[0] === "buildCsat.meanRating"
+        )!,
+        filters: [
+          {
+            member: "buildCsat.status",
+            operator: "equals",
+            values: ["pending"],
+          },
+        ],
+      },
+    ])
+    expect(filtered.data[0]["buildEvents.contactCount"]).toBe(1)
+    expect(page.meta.page.total).toBe(2)
+    expect(page.data).toEqual([
+      {
+        "buildEvents.channel": "web",
+        "buildEvents.contactCount": 1,
+        "buildEvents.occurredAt": null,
+      },
+    ])
+    expect(missingCsat.data[0]["buildCsat.meanRating"]).toBeNull()
+
+    // An agent overview must keep sibling agents and unlinked project activity out
+    // of every metric family, while preserving the shared date window.
+    await db.execute(sql`insert into build_agents(id, project_id, slug, name, status, current_revision, applied_revision, current_config_json, applied_config_json, created_at, updated_at)
+      values ('sibling', ${projectId}, 'sibling', 'Sibling', 'active', 1, 1, '{}', '{}', ${from}, ${from})`)
+    await db.execute(sql`insert into build_conversations(id, project_id, agent_id, channel, created_at)
+      values ('sibling-conversation', ${projectId}, 'sibling', 'web', ${from})`)
+    await db.execute(sql`insert into build_operation_events(id, project_id, event_type, conversation_id, contact_id, channel, occurred_at) values
+      ('sibling-message', ${projectId}, 'message_received', 'sibling-conversation', 'sibling-contact', 'web', ${from}),
+      ('sibling-handoff', ${projectId}, 'handoff', 'sibling-conversation', 'sibling-contact', 'web', ${from}),
+      ('unlinked-message', ${projectId}, 'message_received', null, 'unlinked-contact', 'web', ${from})`)
+    await db.execute(sql`insert into build_inbox_tickets(id, project_id, conversation_id, channel, status, created_at, first_response_at)
+      values ('sibling-ticket', ${projectId}, 'sibling-conversation', 'web', 'solved', ${from}, '2026-09-06T12:30:00Z')`)
+    await db.execute(sql`update build_csat_surveys set conversation_id = case when channel = 'web' then 'web' else 'telegram' end
+      where project_id = ${projectId} and id in ('positive', 'neutral', 'old-survey', 'future-survey')`)
+    await db.execute(sql`insert into build_csat_surveys(id, project_id, conversation_id, channel, status, rating, requested_at, responded_at)
+      values ('sibling-survey', ${projectId}, 'sibling-conversation', 'web', 'answered', 1, ${from}, ${from})`)
+    const widgets = agentOverviewWidgets("agent", now)
+    const overview = await execute(
+      widgets.map((widget) => scopedWidget(widget, scope).query)
+    )
+    const value = (id: string, member: string) =>
+      overview[widgets.findIndex((widget) => widget.id === id)].data[0][member]
+    expect(value("conversations", "buildEvents.conversationCount")).toBe(2)
+    expect(value("contacts", "buildEvents.contactCount")).toBe(2)
+    expect(value("messages", "buildEvents.messageCount")).toBe(3)
+    expect(value("handoffs", "buildEvents.handoffCount")).toBe(2)
+    expect(value("resolved", "buildTickets.resolvedCount")).toBe(2)
+    expect(value("first-response", "buildTickets.meanFirstResponseMs")).toBe(
+      120000
+    )
+    expect(value("csat", "buildCsat.meanRating")).toBe(4)
+    expect(value("csat-responses", "buildCsat.responseCount")).toBe(2)
+    for (const [index, widget] of widgets.entries()) {
+      if (widget.type === "line" || widget.type === "bar") {
+        expect(overview[index].data).toEqual(result(widget.id))
+      }
+    }
+    const emptyWidgets = agentOverviewWidgets("no-conversations", now).filter(
+      (widget) => widget.type === "metric"
+    )
+    const emptyOverview = await execute(
+      emptyWidgets.map((widget) => scopedWidget(widget, scope).query)
+    )
+    expect(
+      emptyOverview.map(
+        (item, index) => item.data[0][emptyWidgets[index].query.measures[0]]
+      )
+    ).toEqual([0, 0, 0, 0, 0, null, 0, null])
   } finally {
     await closeTracerFixture(db)
   }

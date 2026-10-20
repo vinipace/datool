@@ -512,6 +512,7 @@ export const scores = pgTable(
     sessionId: text("session_id"),
     evalRunId: text("eval_run_id"),
     importId: text("import_id"),
+    feedbackKey: text("feedback_key"),
     external:
       jsonb("external_json").$type<
         import("@/src/lib/tracer/imported-scores").ImportedScore
@@ -561,9 +562,10 @@ export const scores = pgTable(
       name: "scores_project_run_fk",
     }).onDelete("cascade"),
     uniqueIndex("scores_project_import_idx").on(t.projectId, t.importId),
+    uniqueIndex("scores_project_feedback_idx").on(t.projectId, t.feedbackKey),
     check(
       "scores_origin_check",
-      sql`(${t.external} is null and ${t.importId} is null and ${t.traceId} is not null and ${t.evalResultId} is not null and ${t.evaluatorId} is not null and ${t.spanId} is null and ${t.sessionId} is null and ${t.evalRunId} is null) or (${t.external} is not null and ${t.importId} is not null and ${t.evalResultId} is null and ${t.evaluatorId} is null and num_nonnulls(${t.traceId},${t.sessionId},${t.evalRunId})=1 and (${t.spanId} is null or ${t.traceId} is not null))`
+      sql`(${t.external} is null and ${t.importId} is null and ${t.feedbackKey} is null and ${t.traceId} is not null and ${t.evalResultId} is not null and ${t.evaluatorId} is not null and ${t.spanId} is null and ${t.sessionId} is null and ${t.evalRunId} is null) or (${t.external} is not null and ${t.evalResultId} is null and ${t.evaluatorId} is null and ((${t.importId} is not null and ${t.feedbackKey} is null) or (${t.importId} is null and ${t.feedbackKey} is not null and ${t.traceId} is not null and ${t.spanId} is null)) and num_nonnulls(${t.traceId},${t.sessionId},${t.evalRunId})=1 and (${t.spanId} is null or ${t.traceId} is not null))`
     ),
     uniqueIndex("scores_project_result_idx").on(t.projectId, t.evalResultId),
   ]
@@ -678,6 +680,12 @@ export const dashboards = pgTable("dashboards", {
   revision: integer("revision").notNull().default(1),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+})
+
+export const projectHome = pgTable("project_home", {
+  projectId: text("project_id").primaryKey().references(() => projects.id, { onDelete: "cascade" }),
+  pinsJson: text("pins_json").notNull().default("[]"),
+  revision: integer("revision").notNull().default(0),
 })
 
 export const customFields = pgTable(

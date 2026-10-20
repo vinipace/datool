@@ -16,6 +16,7 @@ export const storybookStartedAt = "2026-09-10T14:30:00.000Z"
 export const traceRow: TraceSummary = {
   attributes: {
     "datool.span.kind": "workflow",
+    "datool.trace.root_span_id": "span-storybook-root",
     "deployment.environment": "storybook",
     "gen_ai.request.model": "gpt-5.6",
     "gen_ai.usage.input_tokens": 842,

@@ -2,7 +2,9 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { getTracerService } from "../tracer/service"
 import { withWorkspace } from "@/src/server/auth/context"
 import { createMcpServer } from "./server"
-import { agentRequestMaxBytes, DATASET_WRITE_MAX_BYTES } from "@/src/lib/tracer/dataset-payload"
+import { agentRequestMaxBytes } from "@/src/lib/tracer/dataset-payload"
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { TracerService } from "../tracer/service"
 import {
   authenticate,
   authFailure,
@@ -10,24 +12,55 @@ import {
   mcpConfig,
   McpAuthError,
   type McpConfig,
+  type McpIdentity,
 } from "./auth"
+
+type McpDependencies = {
+  config: () => McpConfig
+  authenticate: typeof authenticate
+  service: (projectId: string) => Promise<TracerService>
+  createServer?: typeof createMcpServer
+  publicServer?: (error: McpAuthError) => McpServer
+}
+
+// Build knowledge files use JSON-safe base64. Keep one bounded MCP envelope
+// limit large enough for the documented 20 MiB source limit plus encoding and
+// schema overhead, while retaining a hard cap for every other operation.
+const MAX_MCP_REQUEST_BYTES = 32 * 1024 * 1024
 
 export async function handleMcp(
   request: Request,
-  dependencies = { config: mcpConfig, authenticate, service: getTracerService }
+  dependencies: McpDependencies = {
+    config: mcpConfig,
+    authenticate,
+    service: getTracerService,
+  }
 ) {
   let config: McpConfig | undefined
   try {
     config = dependencies.config()
     checkOrigin(request, config)
-    const identity = await dependencies.authenticate(request, config)
+    let identity: McpIdentity | undefined
+    let authError: McpAuthError | undefined
+    try {
+      identity = await dependencies.authenticate(request, config)
+    } catch (error) {
+      if (
+        request.method !== "POST" ||
+        !dependencies.publicServer ||
+        !(error instanceof McpAuthError) ||
+        ![401, 403].includes(error.status)
+      )
+        throw error
+      authError = error
+    }
     if (request.method !== "POST")
       return new Response(null, {
         status: 405,
         headers: { Allow: "POST, OPTIONS" },
       })
-    if (Number(request.headers.get("content-length")) > DATASET_WRITE_MAX_BYTES)
-      throw new McpAuthError("Request exceeds 4 MiB.", 413)
+    if (Number(request.headers.get("content-length")) > MAX_MCP_REQUEST_BYTES)
+      throw new McpAuthError("Request exceeds 32 MiB.", 413)
     const reader = request.body?.getReader()
     if (!reader) throw new McpAuthError("JSON body required.", 400)
     const chunks: Uint8Array[] = []
@@ -36,9 +69,9 @@ export async function handleMcp(
       const { done, value } = await reader.read()
       if (done) break
       size += value.byteLength
-      if (size > DATASET_WRITE_MAX_BYTES) {
+      if (size > MAX_MCP_REQUEST_BYTES) {
         await reader.cancel()
-        throw new McpAuthError("Request exceeds 4 MiB.", 413)
+        throw new McpAuthError("Request exceeds 32 MiB.", 413)
       }
       chunks.push(value)
     }
@@ -55,34 +88,54 @@ export async function handleMcp(
       throw new McpAuthError("Invalid JSON body.", 400)
     }
     const message = parsedBody as { method?: unknown; params?: { name?: unknown } } | null
-    const maxBytes = agentRequestMaxBytes(message?.method === "tools/call" ? message.params?.name : undefined)
+    const maxBytes = message?.method === "tools/call" && typeof message.params?.name === "string" && message.params.name.startsWith("build_") ? MAX_MCP_REQUEST_BYTES : agentRequestMaxBytes(message?.method === "tools/call" ? message.params?.name : undefined)
     if (size > maxBytes) throw new McpAuthError(`Request exceeds ${maxBytes / (1024 * 1024)} MiB.`, 413)
-    return await withWorkspace({ organizationId: identity.organizationId, projectId: identity.projectId, userId: identity.kind === "api-key" ? undefined : identity.subject, apiKeyId: identity.apiKeyId, apiKeyName: identity.apiKeyName, clientId: identity.clientId, scopes: identity.scopes, kind: identity.kind ?? "oauth" }, async () => {
-    const server = createMcpServer(await dependencies.service(identity.projectId), identity.scopes)
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    })
-    try {
-      await server.connect(transport)
-      const response = await transport.handleRequest(request, { parsedBody })
-      // JSON-only stateless transport: finish response before disposing the request server.
-      const body = await response.arrayBuffer()
-      const headers = new Headers(response.headers)
-      headers.set("Cache-Control", "no-store")
-      const origin = request.headers.get("origin")
-      if (origin) {
-        headers.set("Access-Control-Allow-Origin", origin)
-        headers.set("Vary", "Origin")
-      }
-      return new Response(body.byteLength ? body : null, {
-        status: response.status,
-        headers,
+    const respond = async () => {
+      const server = authError
+        ? dependencies.publicServer!(authError)
+        : (dependencies.createServer ?? createMcpServer)(
+            await dependencies.service(identity!.projectId),
+            identity!.scopes
+          )
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
       })
-    } finally {
-      await server.close()
+      try {
+        await server.connect(transport)
+        const response = await transport.handleRequest(request, { parsedBody })
+        // JSON-only stateless transport: finish response before disposing the request server.
+        const body = await response.arrayBuffer()
+        const headers = new Headers(response.headers)
+        headers.set("Cache-Control", "no-store")
+        const origin = request.headers.get("origin")
+        if (origin) {
+          headers.set("Access-Control-Allow-Origin", origin)
+          headers.set("Vary", "Origin")
+        }
+        return new Response(body.byteLength ? body : null, {
+          status: response.status,
+          headers,
+        })
+      } finally {
+        await server.close()
+      }
     }
-    })
+    return identity
+      ? await withWorkspace(
+          {
+            organizationId: identity.organizationId,
+            projectId: identity.projectId,
+            userId: identity.kind === "api-key" ? undefined : identity.subject,
+            apiKeyId: identity.apiKeyId,
+            apiKeyName: identity.apiKeyName,
+            clientId: identity.clientId,
+            scopes: identity.scopes,
+            kind: identity.kind ?? "oauth",
+          },
+          respond
+        )
+      : await respond()
   } catch (error) {
     const response = authFailure(error, config)
     const origin = request.headers.get("origin")
@@ -99,9 +152,9 @@ export async function handleMcp(
     return response
   }
 }
-export function mcpOptions(request: Request) {
+export function mcpOptions(request: Request, configFactory = mcpConfig) {
   try {
-    const config = mcpConfig()
+    const config = configFactory()
     checkOrigin(request, config)
     const headers = new Headers({
       "Access-Control-Allow-Methods": "POST, OPTIONS",

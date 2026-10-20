@@ -3,7 +3,14 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ArrowLeft, CreditCard, Settings, Users, ChartPie } from "lucide-react"
+import {
+  ArrowLeft,
+  CreditCard,
+  Settings,
+  Users,
+  UsersRound,
+  ChartPie,
+} from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -27,6 +34,7 @@ import { WorkspaceSelectors } from "./workspace-selectors"
 const organizationSettingsRoutes = [
   { title: "General", href: "/settings/general", icon: Settings },
   { title: "Members", href: "/members", icon: Users },
+  { title: "Teams", href: "/teams", icon: UsersRound },
   { title: "Usage", href: "/usage", icon: ChartPie },
   { title: "Billing", href: "/billing", icon: CreditCard },
 ]

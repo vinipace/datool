@@ -7,6 +7,34 @@ import {
 } from "@/lib/markdown-negotiation"
 import { cmsEnabled } from "@/lib/cms/config"
 
+const publicChatPath = /^\/chat\/([^/]+)\/?$/
+
+function publicChatConnectionId(pathname: string) {
+  const match = publicChatPath.exec(pathname)
+  if (!match?.[1]) return null
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return null
+  }
+}
+
+async function applyPublicChatPolicy(request: NextRequest, response: NextResponse) {
+  const connectionId = publicChatConnectionId(request.nextUrl.pathname)
+  if (!connectionId) return response
+
+  try {
+    const { getPublicChatFramePolicy } = await import("@/src/server/build/channels/service")
+    const policy = await getPublicChatFramePolicy(connectionId)
+    response.headers.set("Content-Security-Policy", policy.contentSecurityPolicy)
+  } catch {
+    // A missing, disconnected, or unavailable connection must never become
+    // embeddable while the policy lookup is unavailable.
+    response.headers.set("Content-Security-Policy", "frame-ancestors 'none'")
+  }
+  return response
+}
+
 /** Preserve the requested deep link across authentication and organization selection. */
 export function proxy(request: NextRequest) {
   // Stop before streaming starts: a page/layout notFound() can otherwise retain
@@ -67,7 +95,9 @@ export function proxy(request: NextRequest) {
     // render, but prevent downstream caches from serving HTML to Markdown reads.
     response.headers.set("Cache-Control", "no-store")
   }
-  return response
+  return publicChatConnectionId(request.nextUrl.pathname)
+    ? (applyPublicChatPolicy(request, response) as unknown as NextResponse)
+    : response
 }
 
 export const config = {

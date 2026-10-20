@@ -23,6 +23,8 @@ import { semanticCatalog } from "@/src/server/metrics/registry"
 import { executeSemanticQuery } from "@/src/server/semantic/executor"
 import { createSemanticSnapshotRunner } from "@/src/server/semantic/snapshot"
 import { traces } from "@/src/server/tracer/schema"
+import { dashboards } from "@/src/server/tracer/schema"
+import { eq } from "drizzle-orm"
 
 const model = semanticCatalog
   .metadata()
@@ -44,6 +46,39 @@ async function rejected(promise: Promise<unknown>, message: string) {
   expect(caught).toBeInstanceOf(Error)
   expect((caught as Error).message).toContain(message)
 }
+test("an unsupported saved dashboard stays visible without breaking other dashboards or rewriting its configuration", async () => {
+  const db = await createTracerFixture()
+  try {
+    const service = createDashboardService(db)
+    const older = await run(service.create(input))
+    const unsupported = JSON.stringify({
+      ...input,
+      widgets: [{ ...widget, type: "unsupported-future-chart" }],
+    })
+    await db
+      .update(dashboards)
+      .set({ configJson: unsupported })
+      .where(eq(dashboards.id, older.id))
+    const current = await run(
+      service.create({ ...input, name: "Customer support" })
+    )
+    const entries = await run(service.list())
+    expect(entries.find((entry) => entry.id === current.id)).toEqual(current)
+    expect(entries.find((entry) => entry.id === older.id)).toMatchObject({
+      id: older.id,
+      name: input.name,
+      unavailable: true,
+    })
+    await rejected(run(service.get(older.id)), "Invalid input")
+    const [stored] = await db
+      .select()
+      .from(dashboards)
+      .where(eq(dashboards.id, older.id))
+    expect(stored.configJson).toBe(unsupported)
+  } finally {
+    await closeTracerFixture(db)
+  }
+})
 test("rejects incompatible visualizations and duplicate IDs", () => {
   expect(
     dashboardInputSchema.safeParse({

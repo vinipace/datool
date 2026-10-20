@@ -76,6 +76,105 @@
       "statementScope": "model statements excluding snapshot setup; complete-population count regression"
     },
     {
+      "resource": "buildCsat",
+      "surface": "semantic",
+      "entry": "src/server/metrics/build.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "buildEvents",
+      "surface": "semantic",
+      "entry": "src/server/metrics/build.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "buildTickets",
+      "surface": "semantic",
+      "entry": "src/server/metrics/build.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evalClassification",
+      "surface": "semantic",
+      "entry": "src/server/metrics/eval-classification.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evalComparison",
+      "surface": "semantic",
+      "entry": "src/server/metrics/eval-comparison.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evalQuality",
+      "surface": "semantic",
+      "entry": "src/server/metrics/eval-quality.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "evalResults",
+      "surface": "semantic",
+      "entry": "src/server/metrics/eval-results.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "scoreValues",
+      "surface": "semantic",
+      "entry": "src/server/metrics/score-values.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
+      "resource": "spans",
+      "surface": "semantic",
+      "entry": "src/server/metrics/spans.ts",
+      "scope": "project",
+      "projection": "SQL aggregates and scalar diagnostics",
+      "pageLimit": 5000,
+      "windowDays": 90,
+      "polling": "batch snapshot replacement",
+      "statementCeiling": null
+    },
+    {
       "resource": "traces",
       "surface": "HTTP collection",
       "entry": "app/api/traces/route.ts",

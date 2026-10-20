@@ -28,6 +28,17 @@ export type OtelSpan = {
 }
 
 export type DatoolSpanProcessorOptions = DatoolClientOptions & {
+  /** Use the same lifecycle pipeline in-process when a scoped server service is available. */
+  transport?: {
+    request(
+      path: string,
+      method: "POST" | "PATCH",
+      body: unknown
+    ): Promise<unknown>
+    forceFlush(): Promise<void>
+  }
+  /** Attach spans to an existing invocation without replacing its payload or lifecycle. */
+  invocationTraceId?: string
   /** Cached model pricing, refreshed independently of the Datool transport. */
   pricing?: PricingCatalogOptions
   /** Extra attributes are captured at span start, including async request context. */
@@ -93,6 +104,9 @@ function kind(span: OtelSpan): SpanKind {
     ].includes(explicit)
   )
     return explicit as SpanKind
+  if (span.attributes["gen_ai.operation.name"] === "invoke_agent")
+    return "agent"
+  if (span.attributes["gen_ai.operation.name"] === "agent_step") return "task"
   if (
     span.name === "ai.toolCall" ||
     span.attributes["gen_ai.operation.name"] === "execute_tool"
@@ -125,7 +139,7 @@ function fields(span: OtelSpan, extra: JsonObject) {
   if (span.events?.length) attributes["otel.events"] = json(span.events)
   if (span.status.message) attributes["error.message"] = span.status.message
   const tool = kind(span) === "tool"
-  const input = json(
+  let input = json(
     tool
       ? (a["ai.toolCall.args"] ??
           a["ai.toolCall.input"] ??
@@ -135,6 +149,29 @@ function fields(span: OtelSpan, extra: JsonObject) {
           a["ai.prompt"] ??
           a["gen_ai.input.messages"])
   )
+  // GenAI keeps instructions separate from messages. Preserve the complete
+  // request in the payload while retaining the original attributes for Raw.
+  if (
+    !tool &&
+    (a["gen_ai.input.messages"] !== undefined ||
+      a["gen_ai.system_instructions"] !== undefined ||
+      a["gen_ai.tool.definitions"] !== undefined) &&
+    a.input === undefined &&
+    a["ai.prompt.messages"] === undefined &&
+    a["ai.prompt"] === undefined
+  ) {
+    const instructions = json(a["gen_ai.system_instructions"])
+    const tools = json(a["gen_ai.tool.definitions"])
+    input = {
+      messages: [
+        ...(instructions === undefined
+          ? []
+          : [{ role: "system", parts: instructions }]),
+        ...(Array.isArray(input) ? input : []),
+      ],
+      ...(tools === undefined ? {} : { tools }),
+    }
+  }
   const text = a["ai.response.text"]
   const calls = a["ai.response.toolCalls"]
   const output = json(
@@ -158,7 +195,9 @@ function fields(span: OtelSpan, extra: JsonObject) {
  * This uses Datool's JSON lifecycle API; it is not an OTLP collector.
  */
 export class DatoolSpanProcessor {
-  private readonly client: DatoolClient
+  private readonly transport: NonNullable<
+    DatoolSpanProcessorOptions["transport"]
+  >
   private readonly options: DatoolSpanProcessorOptions
   private readonly pricing: PricingCatalog
   private readonly spans = new Map<string, SpanState>()
@@ -168,7 +207,7 @@ export class DatoolSpanProcessor {
   private closed = false
 
   constructor(options: DatoolSpanProcessorOptions = {}) {
-    this.client = new DatoolClient(options)
+    this.transport = options.transport ?? new DatoolClient(options)
     this.options = options
     this.pricing = options.pricing
       ? new PricingCatalog(options.pricing)
@@ -178,7 +217,9 @@ export class DatoolSpanProcessor {
   onStart(span: OtelSpan): void {
     if (this.closed || this.options.shouldExport?.(span) === false) return
     const { traceId: originalTraceId, spanId } = span.spanContext()
-    const externalTraceId = getDatoolCallContext()?.invocationTraceId
+    const externalTraceId =
+      this.options.invocationTraceId ??
+      getDatoolCallContext()?.invocationTraceId
     const traceId = externalTraceId ?? originalTraceId
     const parent = span.parentSpanContext?.spanId ?? span.parentSpanId
     const parentId =
@@ -217,6 +258,13 @@ export class DatoolSpanProcessor {
             startedAt,
             status: "running",
             ...initial,
+            attributes: {
+              ...initial.attributes,
+              "datool.span.kind": kind(span),
+              ...(span.attributes["datool.trace.root"] === true
+                ? {}
+                : { "datool.trace.root_span_id": spanId }),
+            },
           })
         )
     }
@@ -320,6 +368,10 @@ export class DatoolSpanProcessor {
         )
         const root = state.trace.rootFields
         const attributes = { ...root?.attributes, ...aggregateLlmUsage(llms) }
+        const rootRecord = state.trace.records.get(state.trace.rootId)!
+        attributes["datool.span.kind"] = rootRecord.kind
+        if (!rootRecord.hidden)
+          attributes["datool.trace.root_span_id"] = state.trace.rootId
         if ((attributes.models as unknown[])?.length !== 1)
           delete attributes.model
         if (!state.trace.external)
@@ -358,7 +410,7 @@ export class DatoolSpanProcessor {
       pending = this.queue
       await pending
     } while (pending !== this.queue)
-    await this.client.forceFlush()
+    await this.transport.forceFlush()
     if (this.failure) throw this.failure
   }
 
@@ -368,7 +420,7 @@ export class DatoolSpanProcessor {
   }
 
   private request(path: string, method: "POST" | "PATCH", body: unknown) {
-    return this.client.request(
+    return this.transport.request(
       path,
       method,
       this.options.transform ? this.options.transform(body) : body

@@ -51,7 +51,7 @@ type DialogContentProps = React.ComponentProps<
   typeof DialogPrimitive.Content
 > & {
   showCloseButton?: boolean
-  variant?: "default" | "sheet" | "sidebar" | "panel"
+  variant?: "default" | "sheet" | "sidebar" | "panel" | "side-sheet"
   /** Scope an embedded, non-modal dialog to a positioned app frame. */
   container?: HTMLElement | null
 }
@@ -84,13 +84,19 @@ function DialogContent({
           onEscapeKeyDown?.(event)
           // Radix handles Escape in capture, before nested Base UI popups.
           // Let the nested popup close before dismissing the dialog.
-          if (event.target instanceof Element && event.target.closest(
-            '[data-slot="select-content"], [data-slot="select-trigger"][aria-expanded="true"], [data-slot="combobox-content"], [data-slot="combobox-input"][aria-expanded="true"], [data-slot="combobox-trigger"][aria-expanded="true"], [data-slot="hover-card-content"], [data-slot="hover-card-trigger"][aria-expanded="true"]'
-          )) event.preventDefault()
+          if (
+            event.target instanceof Element &&
+            event.target.closest(
+              '[data-slot="select-content"], [data-slot="select-trigger"][aria-expanded="true"], [data-slot="combobox-content"], [data-slot="combobox-input"][aria-expanded="true"], [data-slot="combobox-trigger"][aria-expanded="true"], [data-slot="hover-card-content"], [data-slot="hover-card-trigger"][aria-expanded="true"]'
+            )
+          )
+            event.preventDefault()
         }}
         className={cn(
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed z-50 gap-4 border border-border bg-muted p-5 text-foreground shadow-xl outline-none",
-          variant === "panel"
+          variant === "side-sheet"
+            ? "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 flex h-dvh w-full flex-col gap-0 overflow-hidden border-y-0 border-r-0 bg-background p-0 sm:max-w-xl"
+            : variant === "panel"
             ? "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 flex h-dvh w-full max-w-4xl flex-col overflow-hidden border-y-0 border-r-0 bg-background pb-[max(1.25rem,env(safe-area-inset-bottom))]"
             : variant === "sidebar"
             ? "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 flex h-dvh w-[calc(100%-2rem)] max-w-sm flex-col overflow-hidden border-y-0 border-l-0 bg-background pb-[env(safe-area-inset-bottom)]"
@@ -103,7 +109,9 @@ function DialogContent({
         )}
         {...props}
       >
-        <OverlayContainer.Provider value={contentRef}>{children}</OverlayContainer.Provider>
+        <OverlayContainer.Provider value={contentRef}>
+          {children}
+        </OverlayContainer.Provider>
         {showCloseButton ? (
           <DialogPrimitive.Close
             data-slot="dialog-close"

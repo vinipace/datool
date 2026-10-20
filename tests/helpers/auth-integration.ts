@@ -12,8 +12,13 @@ import { authorizeOrganizationKey } from "../../src/server/auth/request"
 import { withOAuthProject } from "../../src/server/auth/oauth-context"
 import { authenticate, mcpConfig } from "../../src/server/mcp/auth"
 import { POST as agentPost } from "../../app/api/agent/[operation]/route"
+import { POST as explorerPost } from "../../app/api/mcp/trace-explorer/route"
+import { traceExplorerConfig } from "../../src/server/mcp/trace-explorer"
 import { POST as mcpPost } from "../../app/api/mcp/route"
-import { mcpScopes, workspaceScopes } from "../../src/lib/auth/permissions"
+import {
+  mcpResourceScopes,
+  workspaceScopes,
+} from "../../src/lib/auth/permissions"
 
 const base = process.env.BETTER_AUTH_URL!
 // Simulate an installation created before trace/review scopes were added.
@@ -300,8 +305,12 @@ try {
   assert.equal(identity.projectId, projectId)
   assert.equal(identity.organizationId, org.id)
   assert.deepEqual(identity.scopes, ["traces:read", "metrics:read", "reviews:read", "reviews:write"])
+  assert(
+    !identity.scopes.some((scope) => scope.startsWith("build:")),
+    "Unconsented Build scope became available",
+  )
   for (const [resource, scopes] of [
-    ["mcp", mcpScopes],
+    ["mcp", mcpResourceScopes],
     ["cli", workspaceScopes],
   ] as const) {
     const policy = await db.query<{
@@ -369,6 +378,129 @@ try {
   assert.equal(oauthSaved.notesProvenance.clientId, registration.client_id)
   assert.equal(oauthSaved.humanVerified, false)
   console.log("PASS real OAuth review attribution")
+  // Exercise the new resource through real DCR, PKCE, project consent and token validation.
+  const explorerRegistration = await call(
+    "/oauth2/register",
+    {
+      application_type: "native",
+      client_name: "Trace Explorer test",
+      redirect_uris: ["http://127.0.0.1:39871/callback"],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      scope: "traces:read offline_access",
+    },
+    { cookie: "" }
+  )
+  cookie = ownerCookie
+  const explorerQuery = new URLSearchParams(query)
+  explorerQuery.set("client_id", explorerRegistration.client_id)
+  explorerQuery.set("scope", "traces:read offline_access")
+  explorerQuery.set("resource", traceExplorerConfig().resource)
+  const explorerStart = await withOAuthProject(projectId, () =>
+    auth.handler(
+      new Request(`${base}/api/auth/oauth2/authorize?${explorerQuery}`, {
+        headers: headers(),
+      })
+    )
+  )
+  const explorerLocation =
+    explorerStart.headers.get("location") ?? (await explorerStart.json()).url
+  assert(
+    explorerLocation.includes("/mcp/consent"),
+    "Explorer did not request project consent"
+  )
+  const explorerGrant = await withOAuthProject(projectId, () =>
+    call("/oauth2/consent", {
+      accept: true,
+      oauth_query: new URL(explorerLocation, base).search.slice(1),
+    })
+  )
+  let explorerToken = await exchange({
+    ...tokenBody,
+    client_id: explorerRegistration.client_id,
+    code: new URL(explorerGrant.url).searchParams.get("code")!,
+    resource: traceExplorerConfig().resource,
+  })
+  assert(explorerToken.response.ok, JSON.stringify(explorerToken.data))
+  const explorerIdentity = await authenticate(
+    new Request(traceExplorerConfig().resource, {
+      headers: { authorization: `Bearer ${explorerToken.data.access_token}` },
+    }),
+    traceExplorerConfig()
+  )
+  assert.equal(explorerIdentity.projectId, projectId)
+  assert.deepEqual(explorerIdentity.scopes, ["traces:read"])
+  await assert.rejects(
+    () =>
+      authenticate(
+        new Request(traceExplorerConfig().resource, {
+          headers: { authorization: `Bearer ${token.data.access_token}` },
+        }),
+        traceExplorerConfig()
+      ),
+    "The general MCP audience was accepted by Trace Explorer"
+  )
+  const explorerRequest = () =>
+    new Request(traceExplorerConfig().resource, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${explorerToken.data.access_token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "open_trace_explorer", arguments: {} },
+      }),
+    })
+  const explorerResult = (await (await explorerPost(explorerRequest())).json())
+    .result
+  assert(!explorerResult.isError, JSON.stringify(explorerResult.content))
+  assert.equal(explorerResult.structuredContent.data.project.id, projectId)
+  assert.equal(
+    explorerResult.structuredContent.data.page.items[0].id,
+    "oauth-trace"
+  )
+  const explorerRefresh = await exchange({
+    grant_type: "refresh_token",
+    client_id: explorerRegistration.client_id,
+    refresh_token: explorerToken.data.refresh_token,
+    resource: traceExplorerConfig().resource,
+  })
+  assert(explorerRefresh.response.ok, JSON.stringify(explorerRefresh.data))
+  explorerToken = explorerRefresh
+  const explorerConsent = await db.query<{ id: string }>(
+    'SELECT id FROM "oauthConsent" WHERE "clientId"=$1 AND "referenceId"=$2',
+    [explorerRegistration.client_id, projectId]
+  )
+  await auth.api.deleteOAuthConsent({
+    headers: headers(),
+    body: { id: explorerConsent.rows[0].id },
+  })
+  const revokedExplorer = (await (await explorerPost(explorerRequest())).json())
+    .result
+  assert(revokedExplorer.isError)
+  assert(
+    revokedExplorer._meta["mcp/www_authenticate"][0].includes(
+      'error="insufficient_scope"'
+    )
+  )
+  assert(
+    !(
+      await exchange({
+        grant_type: "refresh_token",
+        client_id: explorerRegistration.client_id,
+        refresh_token: explorerToken.data.refresh_token,
+        resource: traceExplorerConfig().resource,
+      })
+    ).response.ok
+  )
+  console.log(
+    "PASS OAuth Trace Explorer audience, read-only project grant, refresh and runtime revocation challenge"
+  )
   const refresh = await exchange({
     grant_type: "refresh_token",
     client_id: registration.client_id,

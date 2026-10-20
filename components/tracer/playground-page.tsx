@@ -663,7 +663,7 @@ function AppRunResult({
     (signal: AbortSignal) => loadPlaygroundRun(traceId, appId, signal),
     [traceId, appId]
   )
-  const state = useRemote(load, [], { intervalMs: 2_000 })
+  const state = useRemote(load, [traceId, appId], { intervalMs: 2_000 })
   const [retained, setRetained] = React.useState(state.data)
   if (state.data && state.data !== retained) setRetained(state.data)
   const result = state.data ?? retained

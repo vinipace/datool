@@ -10,6 +10,20 @@ layout applies the `Page · Datool` format.
 
 ## Owners
 
+Project Home (`/p/[projectSlug]`) is the default project landing page. It reuses
+`DashboardRenderer` and the shared date filter. Users pin existing widgets from
+a dashboard card or Home's widget picker. Pins are shared within the project;
+the source dashboard owns each widget's definition, while Home owns placement.
+Unpinning never edits the source. Missing sources stay visible as removable
+notices. Arrangement uses the existing canvas keyboard and drag controls with
+an explicit Save layout action and revision conflict protection.
+
+`src/server/tracer/project-home.ts` owns persistence and project isolation.
+`/api/project-home` and the `get_project_home`, `pin_dashboard_widget`,
+`unpin_home_widget`, and `update_project_home_layout` MCP operations use the
+existing dashboard read/write permissions. Apply migration
+`0052_project_home.sql` before serving these routes.
+
 | Behavior | Canonical owner | Usage |
 | --- | --- | --- |
 | Page title/breadcrumbs, filter and action placement, flexible content | `components/tracer/page-layout.tsx` | Mounted once by the app shell; also used by Storybook frames. |
@@ -130,7 +144,21 @@ also supplies the dataset editor's picker, including dialog focus handling.
 Dataset tables use the same format registry in their existing Display menu and
 retain per-field view settings.
 
-`components/ui/chat.tsx` owns the playground conversation and message composer.
+The Build agent playground mounts `components/build/channels/chat-bubble-editor.tsx`
+with the existing web channel's settings. It uses the same `BubblePreview` and
+`PublicChat` as channel editing, including new conversations, widgets and forms.
+The agent shell omits its revision/save toolbar on this tab; the shared channel
+editor owns settings autosave. Agents without a chat bubble receive a draft
+connection, which is not enabled by opening the playground.
+
+`components/ui/chat-rich-content.tsx` owns widget cards and form controls across
+chat surfaces. Customer widgets sit outside text bubbles and use the available
+chat width. New cards scroll into view from the top, and spacing responds to
+the chat container rather than the surrounding page. Single-option selections
+render as explicit checkboxes while preserving their configured string values
+and required validation. Form continuations carry the action name as their title.
+
+`components/ui/chat.tsx` owns the model playground conversation and message composer.
 Managed Prompts also uses this chat surface, with variable controls in its composer toolbar.
 `components/tracer/project-model-field.tsx` owns project model discovery for both prompt and scorer editors.
 The Prompts collection and split editor live in `prompts-page.tsx` and `prompt-editor.tsx`; see [Managed prompts](./managed-prompts.md) for versions and agent access.
@@ -138,6 +166,16 @@ It shares `MessageTranscript` with the trace payload viewers, using its `chat`
 variant to align user messages to the right. The playground owns message history,
 connected-agent requests and trace selection; the shared chat surface owns
 scrolling, waiting feedback and Enter/Shift + Enter behavior.
+The inbox uses the shared chat's `operator` perspective: customer messages sit
+on the left, and AI or teammate replies sit on the right. This changes presentation
+and sender labels without changing message roles, history, or widget behavior.
+Human replies show the sender's profile avatar and display name; AI replies show
+the agent's configured avatar and name. The authenticated transcript operation
+resolves identities from stored sender IDs, scoped to the project organization.
+Sending a human reply automatically assigns the ticket to that authenticated
+sender. Reply persistence, assignment and delivery admission are atomic; retries
+do not overwrite a later assignment. An existing team is retained only when the
+sender belongs to it.
 
 Recognized message arrays and adapter output envelopes offer LLM (Markdown) and
 LLM Raw (literal message text), with role labels, tool arguments and a captured
@@ -644,3 +682,22 @@ with the current connection settings and generated key; Manual keeps the separat
 environment snippet and instrumentation instructions. Clipboard failure leaves
 the prompt available to select and copy. The prompt uses the public SDK entry
 points and the installation's documentation URLs.
+
+## Conversation widgets
+
+`components/build/agents/widgets-tab.tsx` owns the widget collection using
+`CollectionPanel`, `CollectionPage`, and `CollectionTable`. Creation and editing open
+`widget-editor.tsx` in a full-width shared Sheet with resizable Code and preview
+panels. Narrow screens switch between Editor and Preview without losing the draft.
+Monaco edits the declarative component JSON and named data states; invalid JSON
+blocks saving. Functions connect existing agent actions through the shared
+combobox, and can insert buttons or forms using those action IDs. API settings and
+credentials stay with the action editor. Saves use the same versioned Build/MCP
+operations and require applying the agent's changes before customer use.
+
+`components/ui/chat-rich-content.tsx` owns widget rendering in both chats and the
+editor preview. Default state data is merged with named preview state and pinned
+action inputs; template values are rendered as escaped text, never executed.
+`widget-preview.tsx` composes this renderer and the shared Chat for its layout
+previews. Preview interactions show their payload locally without executing an
+action. Theme controls reuse the scoped `datool-chat-surface` tokens.

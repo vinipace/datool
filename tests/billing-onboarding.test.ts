@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test"
 import { NextRequest } from "next/server"
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server"
 import { proxy, config } from "../proxy"
 import { billingPath, billingPlanFromPath } from "../src/lib/billing"
 import { workspaceReturnPath } from "../lib/workspace-routing"
 
 test("billing return path survives the shared settings layout and ignores a spoofed header", () => {
-  expect(config.matcher).toContain("/billing")
+  expect(unstable_doesMiddlewareMatch({ config, url: "/billing?plan=pro" })).toBe(true)
   for (const plan of ["core", "pro"] as const) {
     const path = billingPath(plan, "canceled")
     const request = new NextRequest(`http://localhost:3000${path}&_rsc=cache`, {

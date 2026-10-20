@@ -22,6 +22,8 @@ export function ProjectModelField({
   disabled,
   includeDatoolScorer = false,
   modelType = "language",
+  layout = "horizontal",
+  variant = "default",
 }: {
   model: string
   provider?: ModelProvider
@@ -34,6 +36,8 @@ export function ProjectModelField({
   disabled?: boolean
   includeDatoolScorer?: boolean
   modelType?: "language" | readonly ("language" | "evaluation")[]
+  layout?: "horizontal" | "vertical"
+  variant?: "default" | "plain"
 }) {
   const projectId = useProjectScope()?.projectId
   const load = useCallback(
@@ -56,7 +60,12 @@ export function ProjectModelField({
   const selected =
     model && !provider && !model.includes("/") ? `openai/${model}` : model
   return (
-    <FormRow label="Model" controlWidth="wide">
+    <FormRow
+      label="Model"
+      controlWidth="wide"
+      layout={layout}
+      variant={variant}
+    >
       <ModelCombobox
         attentionRequest={attentionRequest}
         className="w-full min-w-0"

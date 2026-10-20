@@ -70,14 +70,15 @@ describe("computed eval columns", () => {
         [`${model}.reportedCostUsd`]: null,
       }, model)
       const data = columnRow(group)
-      expect(data).toBe(group)
+      expect(data).toMatchObject(group)
+      expect((data as unknown as { object: unknown }).object).toBe(group)
       expect(await evaluate("row.metrics.versionCount", "expression", data))
-        .toEqual({ value: "3" })
+        .toEqual({ value: 3, missing: false })
       expect("trace" in data).toBe(false)
       expect(await evaluate("{{row.name}}: {{row.metrics.completedCount / row.metrics.count * 100}}%", "template", data))
-        .toEqual({ value: "Research: 80%" })
+        .toEqual({ value: "Research: 80%", missing: false })
       expect(await evaluate("row.metrics.reportedCostUsd === null ? 'Unavailable' : row.metrics.reportedCostUsd", "expression", data))
-        .toEqual({ value: "Unavailable" })
+        .toEqual({ value: "Unavailable", missing: false })
     }
   })
   test("evaluates dataset fields without changing the original item", async () => {
@@ -88,34 +89,37 @@ describe("computed eval columns", () => {
     }
     const original = structuredClone(item)
     expect(await evaluate("{{row.input.question}} {{row.expectedOutput.answer}} ({{row.metadata.locale}})", "template", columnRow(item)))
-      .toEqual({ value: "Where? Here. (en)" })
-    expect(await evaluate("row.metadata.reviewed", "expression", columnRow(item))).toEqual({ value: "false" })
+      .toEqual({ value: "Where? Here. (en)", missing: false })
+    expect(await evaluate("row.metadata.reviewed", "expression", columnRow(item))).toEqual({ value: false, missing: false })
     await evaluate("(row.input.question = 'Changed')", "expression", columnRow(item))
     expect(item).toEqual(original)
   })
   test("supports the requested currency template with actual trace cost", async () => {
     expect(await evaluate("R${{row.metrics.cost*5.5}}", "template")).toEqual({
       value: "R$0.021894125",
+      missing: false,
     })
     expect(
       await evaluate("R${{(row.metrics.cost*5.5).toFixed(4)}}", "template")
-    ).toEqual({ value: "R$0.0219" })
+    ).toEqual({ value: "R$0.0219", missing: false })
   })
   test("supports JavaScript, multiple interpolations and literal quoting", async () => {
     expect(await evaluate("row.metrics.totalTokens + 1")).toEqual({
-      value: "1388",
+      value: 1388,
+      missing: false,
     })
     expect(await evaluate("`R$${row.metrics.cost * 5.5}`")).toEqual({
       value: "R$0.021894125",
+      missing: false,
     })
     expect(
       await evaluate('"{{row.input}}" → {{row.output}}', "template")
-    ).toEqual({ value: '"Weather?" → Sunny' })
+    ).toEqual({ value: '"Weather?" → Sunny', missing: false })
     expect(
       await evaluate(
         "({ expected: row.expectedOutput, matches: row.output === row.expectedOutput })"
       )
-    ).toEqual({ value: '{"expected":"Sunny","matches":true}' })
+    ).toEqual({ value: { expected: "Sunny", matches: true }, missing: false })
   })
   test("keeps missing cost unavailable and preserves zero", () => {
     const without = { ...row, trace: { ...row.trace, attributes: {} } }
@@ -128,9 +132,9 @@ describe("computed eval columns", () => {
     ).toBe(0)
   })
   test("renders null, false and zero without losing values", async () => {
-    expect(await evaluate("null")).toEqual({ value: null })
-    expect(await evaluate("false")).toEqual({ value: "false" })
-    expect(await evaluate("0")).toEqual({ value: "0" })
+    expect(await evaluate("null")).toEqual({ value: null, missing: false })
+    expect(await evaluate("false")).toEqual({ value: false, missing: false })
+    expect(await evaluate("0")).toEqual({ value: 0, missing: false })
   })
   test("reports invalid code and runtime failures as cell errors", async () => {
     expect((await evaluate("row.")).error).toBeTruthy()
