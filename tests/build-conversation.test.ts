@@ -11,7 +11,7 @@ import {
   ConversationHumanOwnedError,
   ConversationService,
 } from "@/src/server/build/conversations"
-import { createAgent } from "@/src/server/build/agents"
+import { archiveAgent, createAgent } from "@/src/server/build/agents"
 import {
   createIsolatedPostgres,
   migrateIsolatedPostgres,
@@ -116,6 +116,8 @@ describe("Build conversation ledger", () => {
     expect(all.items).toHaveLength(2)
     expect(all.items.find((item) => item.id === ordinary.id)).toMatchObject({
       subject: "Opening hours",
+      agentId: "agent-a",
+      agentName: "Test agent",
       status: "active",
       ticketId: null,
     })
@@ -150,6 +152,7 @@ describe("Build conversation ledger", () => {
       channel: "web",
       metadata: {},
     })
+    await archiveAgent({ database, projectId }, "agent-b", 1)
     const agentFirst = await service.list({ agentId: "agent-a", limit: 1 })
     const agentSecond = await service.list({
       agentId: "agent-a",
@@ -163,6 +166,11 @@ describe("Build conversation ledger", () => {
     expect(
       (await service.list({ agentId: "agent-b" })).items.map((item) => item.id)
     ).toEqual([otherConversation.id])
+    expect(
+      (await service.list()).items.find(
+        (item) => item.id === otherConversation.id
+      )
+    ).toMatchObject({ agentId: "agent-b", agentName: "Other agent" })
     expect((await service.list({ agentId: "missing-agent" })).items).toEqual([])
     expect(
       (

@@ -738,6 +738,8 @@ collapsible groups, and Activity contains Conversations, Leads and Collected dat
 Conversations opens the shared all-chats collection filtered to the current
 agent before pagination. Its filter can be removed to browse the whole project. The
 current agent's Integrations page remains reachable from this navigation.
+The Conversations table includes an Agent column with the current agent name,
+including archived agents, using the shared column visibility and ordering controls.
 Home and the other workspace groups are hidden while agent navigation is active.
 
 Inbox uses its own taller navigation: New Ticket, Search, My Inbox, Mentions,

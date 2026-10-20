@@ -90,6 +90,7 @@ import { NewTicketDialog } from "./new-ticket-dialog"
 
 type Ticket = {
   id: string
+  agentName?: string | null
   version?: number
   ticketId?: string | null
   conversationStatus?: string
@@ -708,11 +709,12 @@ export function InboxPage({
             widths={
               isInbox
                 ? [330, 220, 130, 120, 120, 160, 200]
-                : [330, 220, 130, 120, 200]
+                : [330, 220, 220, 130, 120, 200]
             }
             columnIds={[
               "subject",
               "customer",
+              ...(!isInbox ? ["agent"] : []),
               "channel",
               "status",
               ...(isInbox ? ["priority", "assignment"] : []),
@@ -726,6 +728,7 @@ export function InboxPage({
                 {[
                   "Conversation",
                   "Customer",
+                  ...(!isInbox ? ["Agent"] : []),
                   "Channel",
                   "Status",
                   ...(isInbox ? ["Priority", "Assignment"] : []),
@@ -775,6 +778,19 @@ export function InboxPage({
                   <td className={collectionTable.cell}>
                     {ticket.contactName || "Unknown customer"}
                   </td>
+                  {!isInbox ? (
+                    <td className={collectionTable.cell}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Bot
+                          aria-hidden
+                          className="size-4 shrink-0 text-foreground-muted"
+                        />
+                        <span className="truncate">
+                          {ticket.agentName || "Unknown agent"}
+                        </span>
+                      </span>
+                    </td>
+                  ) : null}
                   <td className={collectionTable.cell}>
                     <span className="inline-flex items-center gap-2 capitalize">
                       {ticket.channel ? (
