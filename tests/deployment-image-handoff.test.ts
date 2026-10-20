@@ -82,6 +82,9 @@ fi
     const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", command], {
       env: {
         ...process.env,
+        // CircleCI's shell startup prepends the real Bun to PATH. The injected
+        // commands must stay isolated or this test recursively launches CI.
+        BASH_ENV: "",
         PATH: `${directory}:${process.env.PATH}`,
         CHECK_CALLS: join(directory, "calls"),
         FAIL_COMMAND: failingCommand,
