@@ -231,7 +231,7 @@ jobs:
           command: |
             bunx playwright install --with-deps chromium
             bun run build:monaco
-            bun --no-env-file scripts/test-build-e2e.ts
+            bun --no-env-file scripts/test-build-e2e.ts --production
             bun run test:whatsapp:e2e
       - run:
           name: Verify public agent discovery contracts
@@ -445,7 +445,7 @@ jobs:
           command: |
             test -n "$DATOOL_URL"
             for path in / /faq /faq.md /cms/api/cms-users/me /sign-in /docs /llms.txt; do
-              curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+              curl --fail --silent --show-error --location --proto-redir '=https' --connect-timeout 10 --max-time 30 \
                 --retry 6 --retry-all-errors --retry-delay 5 "$DATOOL_URL$path" --output /dev/null
             done
       - run:

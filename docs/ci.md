@@ -113,7 +113,9 @@ are excluded from this setting. Keep **Pass secrets to builds from forked pull r
 disabled. Verify both settings in your project before enabling public contributions.
 
 The package job uses a large machine for the Build browser fixture, installs
-dependencies, and starts PostgreSQL/Redis once. It runs the complete Bun suite
+dependencies, and starts PostgreSQL/Redis once. The browser fixture compiles the
+application and runs `next start` behind its disposable HTTPS proxy, avoiding
+development-server memory restarts during navigation. It runs the complete Bun suite
 with those services and the scorer images available. Backend tests run with Bun;
 sandbox tests also exercise real JavaScript/Python Docker
 containers and database-backed provider permissions, credentials, and project
