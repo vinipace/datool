@@ -3,17 +3,28 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
+import {
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Lightbulb,
+  ContactRound,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react"
 import { usePathname, useSearchParams } from "next/navigation"
 import {
+  SidebarGroup,
+  SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
-  SidebarMenuSubButton,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { AgentAvatar } from "@/components/ui/agent-avatar"
 import type { AgentAppearance } from "@/src/lib/build/contracts"
 import { useWorkspaceHref } from "@/components/tracer/workspace-path"
+import { productIcons } from "@/components/product-icons"
 import { agentBuildTabs } from "./build-tabs"
 
 const AgentSidebarContext = React.createContext<{
@@ -31,13 +42,18 @@ export function AgentSidebarProvider({ children }: React.PropsWithChildren) {
   )
 }
 
-/** Keep the ordinary Agents link while its editor is loading or unavailable. */
+/** Restore project navigation when no agent editor owns the sidebar. */
 export function AgentSidebarTarget({ children }: React.PropsWithChildren) {
   const context = React.useContext(AgentSidebarContext)
   return (
     <>
-      <div ref={context?.setTarget} className="peer empty:hidden" />
-      <div className="peer-[:not(:empty)]:hidden">{children}</div>
+      <div
+        ref={context?.setTarget}
+        className="peer flex flex-col gap-2 empty:hidden"
+      />
+      <div className="flex flex-col gap-2 peer-[:not(:empty)]:hidden">
+        {children}
+      </div>
     </>
   )
 }
@@ -50,6 +66,8 @@ export function AgentSidebarNavigation({
   onChange,
   canConfigure,
   agentHref,
+  agentId,
+  onNavigate,
 }: {
   name: string
   appearance?: AgentAppearance
@@ -57,6 +75,8 @@ export function AgentSidebarNavigation({
   onChange: (section: string) => void
   canConfigure: boolean
   agentHref?: string
+  agentId?: string
+  onNavigate?: (href: string) => void
 }) {
   const context = React.useContext(AgentSidebarContext)
   const pathname = usePathname()
@@ -66,61 +86,165 @@ export function AgentSidebarNavigation({
   const closeMobileNavigation = () => {
     if (isMobile) setOpenMobile(false)
   }
+  const [expanded, setExpanded] = React.useState({
+    Build: true,
+    Activity: true,
+  })
+  const groupId = React.useId()
+  const internalLink = (id: string, nested = false) => {
+    const tab = agentBuildTabs.find((item) => item.id === id)!
+    if (!canConfigure && id !== "settings" && id !== "instructions") return null
+    const query = new URLSearchParams(agentHref ? "" : searchParams.toString())
+    query.set("section", id)
+    return (
+      <SidebarMenuItem key={id}>
+        <SidebarMenuButton
+          size="lg"
+          isActive={active === id}
+          aria-current={active === id ? "page" : undefined}
+          title={tab.description}
+          render={<a href={`${agentHref ?? pathname}?${query.toString()}`} />}
+          onClick={(event) => {
+            if (
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return
+            event.preventDefault()
+            onChange(id)
+            closeMobileNavigation()
+          }}
+        >
+          {!nested && <tab.icon aria-hidden />}
+          <span>{tab.label}</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    )
+  }
+  const externalLink = (
+    label: string,
+    path: string,
+    Icon: LucideIcon,
+    nested = false
+  ) => {
+    if (!canConfigure) return null
+    const href = workspaceHref(path)
+    return (
+      <SidebarMenuItem key={path}>
+        <SidebarMenuButton
+          size="lg"
+          render={<Link href={href} />}
+          onClick={(event) => {
+            if (
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return
+            if (onNavigate) {
+              event.preventDefault()
+              onNavigate(href)
+            }
+            closeMobileNavigation()
+          }}
+        >
+          {!nested && <Icon aria-hidden />}
+          <span>{label}</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    )
+  }
+  const group = (
+    label: "Build" | "Activity",
+    Icon: LucideIcon,
+    children: React.ReactNode
+  ) => (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        size="lg"
+        aria-expanded={expanded[label]}
+        aria-controls={`${groupId}-${label}`}
+        onClick={() =>
+          setExpanded((current) => ({ ...current, [label]: !current[label] }))
+        }
+      >
+        <Icon aria-hidden />
+        <span>{label}</span>
+        {expanded[label] ? (
+          <ChevronDown aria-hidden className="ml-auto" />
+        ) : (
+          <ChevronRight aria-hidden className="ml-auto" />
+        )}
+      </SidebarMenuButton>
+      <SidebarMenuSub
+        id={`${groupId}-${label}`}
+        hidden={!expanded[label]}
+        className={!expanded[label] ? "hidden" : undefined}
+      >
+        {children}
+      </SidebarMenuSub>
+    </SidebarMenuItem>
+  )
   if (!context?.target) return null
   return createPortal(
-    <>
-      <SidebarMenuButton
-        className="h-7 text-xs"
-        title={`Agents / ${name}`}
-        onClick={closeMobileNavigation}
-        render={<Link href={workspaceHref("/build/agents")} />}
-      >
-        <AgentAvatar appearance={appearance} className="size-5" />
-        <span>Agents / {name}</span>
-      </SidebarMenuButton>
-      <SidebarMenuSub aria-label="Agent sections">
-        {agentBuildTabs
-          .filter(
-            (tab) =>
-              canConfigure || tab.id === "settings" || tab.id === "instructions"
-          )
-          .map((tab) => {
-            const query = new URLSearchParams(
-              agentHref ? "" : searchParams.toString()
-            )
-            query.set("section", tab.id)
-            return (
-              <SidebarMenuItem key={tab.id}>
-                <SidebarMenuSubButton
-                  isActive={active === tab.id}
-                  aria-current={active === tab.id ? "page" : undefined}
-                  title={tab.description}
-                  render={
-                    <a href={`${agentHref ?? pathname}?${query.toString()}`} />
-                  }
-                  onClick={(event) => {
-                    // Preserve open-in-new-tab and copy-link behavior. Ordinary
-                    // clicks use the editor's shallow navigation to retain drafts.
-                    if (
-                      event.button !== 0 ||
-                      event.metaKey ||
-                      event.ctrlKey ||
-                      event.shiftKey ||
-                      event.altKey
-                    )
-                      return
-                    event.preventDefault()
-                    onChange(tab.id)
-                    closeMobileNavigation()
-                  }}
-                >
-                  <span>{tab.label}</span>
-                </SidebarMenuSubButton>
-              </SidebarMenuItem>
-            )
-          })}
-      </SidebarMenuSub>
-    </>,
+    <SidebarGroup className="gap-3">
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="font-medium [&>span:last-child]:whitespace-normal"
+            title={`${name} — back to agents`}
+            aria-label={`${name} — back to agents`}
+            onClick={closeMobileNavigation}
+            render={<Link href={workspaceHref("/build/agents")} />}
+          >
+            <AgentAvatar appearance={appearance} className="size-8" />
+            <span className="line-clamp-2">{name}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+      <SidebarMenu aria-label="Agent sections">
+        {internalLink("overview")}
+        {group(
+          "Build",
+          Wrench,
+          <>
+            {internalLink("instructions", true)}
+            {internalLink("knowledge", true)}
+            {internalLink("actions", true)}
+            {internalLink("widgets", true)}
+            {internalLink("procedures", true)}
+            {externalLink("Suggestions", "/build/suggestions", Lightbulb, true)}
+            {internalLink("guardrails", true)}
+          </>
+        )}
+        {canConfigure &&
+          agentId &&
+          group(
+            "Activity",
+            Eye,
+            <>
+              {externalLink(
+                "Inbox",
+                `/build/inbox?agentId=${encodeURIComponent(agentId)}`,
+                productIcons.buildInbox,
+                true
+              )}
+              {internalLink("leads", true)}
+              {internalLink("collected-data", true)}
+            </>
+          )}
+        {externalLink("Contacts", "/build/contacts", ContactRound)}
+        {internalLink("channels")}
+        {internalLink("integrations")}
+        {internalLink("settings")}
+      </SidebarMenu>
+    </SidebarGroup>,
     context.target
   )
 }

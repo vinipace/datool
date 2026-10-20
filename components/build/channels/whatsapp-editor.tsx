@@ -429,6 +429,8 @@ export function WhatsAppEditor({
           active="channels"
           canConfigure
           agentHref={agentHref}
+          agentId={agent.id}
+          appearance={agent.configuration.appearance}
           onChange={(section) => router.push(`${agentHref}?section=${section}`)}
         />
       )}

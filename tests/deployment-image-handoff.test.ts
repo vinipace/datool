@@ -30,10 +30,75 @@ const deploy = steps.find(
 const commit = "a".repeat(40)
 const directories: string[] = []
 
+test("CI images can deploy only after source checks and image acceptance succeed", () => {
+  const deployment = workflow.workflows.ci.jobs.find(
+    (job: string | Record<string, unknown>) =>
+      typeof job === "object" && "deploy" in job
+  ).deploy
+  expect(deployment.requires).toContain("verify")
+  expect(deployment.requires).toContain("production-image")
+  expect(deployment.filters.branches.only).toBe("main")
+  const checks = workflow.jobs.verify.steps.flatMap(
+    (step: { run?: { command: string } }) => step.run ? [step.run.command] : []
+  )
+  expect(checks.some((command: string) => command.includes("bun run typecheck"))).toBe(true)
+  for (const name of ["regression", "nightly-regression"]) {
+    expect(workflow.workflows[name].jobs.some(
+      (job: string | Record<string, unknown>) =>
+        job === "deploy" || (typeof job === "object" && "deploy" in job)
+    )).toBe(false)
+  }
+})
+
 afterEach(() => {
   for (const directory of directories.splice(0))
     rmSync(directory, { recursive: true, force: true })
 })
+
+for (const failingCommand of [
+  "",
+  "run lint",
+  "run check:styles",
+  "run typecheck",
+  "-m unittest discover -s tests -p dokku_",
+  "-m unittest discover -s tests -p deployment_notifications",
+  "--no-env-file test",
+]) {
+  test(`parallel release checks ${failingCommand ? `reject failure in ${failingCommand}` : "accept success only after all groups finish"}`, () => {
+    const directory = mkdtempSync(join(tmpdir(), "datool-release-checks-"))
+    directories.push(directory)
+    const stub = `#!/bin/bash
+printf '%s\\n' "$*" >> "$CHECK_CALLS"
+if [ -n "$FAIL_COMMAND" ]; then
+  case "$*" in "$FAIL_COMMAND"*) exit 1;; esac
+fi
+`
+    for (const binary of ["bun", "python3"])
+      writeFileSync(join(directory, binary), stub, { mode: 0o755 })
+    const command = workflow.jobs.verify.steps.find(
+      (step: { run?: { name: string } }) =>
+        step.run?.name === "Verify source and release contracts in parallel"
+    ).run.command
+    const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", command], {
+      env: {
+        // Exclude shell startup files and exported pyenv functions from CI.
+        // Only the injected commands and standard shell utilities may run.
+        NODE_ENV: "test",
+        PATH: `${directory}:/usr/bin:/bin`,
+        CHECK_CALLS: join(directory, "calls"),
+        FAIL_COMMAND: failingCommand,
+      },
+      encoding: "utf8",
+      timeout: 5000,
+    })
+    expect(result.status).toBe(failingCommand ? 1 : 0)
+    const calls = readFileSync(join(directory, "calls"), "utf8")
+    for (const invocation of ["run lint", "run typecheck", "unittest discover"])
+      expect(calls).toContain(invocation)
+    for (const group of ["lint", "types", "critical"])
+      expect(new RegExp(`(?:PASS|FAIL) ${group}\\n`).test(result.stdout)).toBe(true)
+  })
+}
 
 function fixture(image = `datool-release:${commit}-123-1`, branch = "main") {
   const directory = mkdtempSync(join(tmpdir(), "datool-image-handoff-"))
@@ -81,6 +146,37 @@ function fixture(image = `datool-release:${commit}-123-1`, branch = "main") {
         }
       ),
   }
+}
+
+for (const [acceptanceExit, archiveExit] of [[0, 0], [1, 0], [0, 1]]) {
+  test(`image handoff requires acceptance (${acceptanceExit}) and archive (${archiveExit}) success`, () => {
+    const directory = mkdtempSync(join(tmpdir(), "datool-image-checks-"))
+    directories.push(directory)
+    mkdirSync(join(directory, "scripts"))
+    writeFileSync(join(directory, "archive-input.tar"), "archive bytes")
+    writeFileSync(join(directory, "pigz"), "#!/bin/bash\ncat\nexit \"$ARCHIVE_EXIT\"\n", { mode: 0o755 })
+    writeFileSync(join(directory, "scripts/test-docker.sh"), "echo checked > acceptance.txt\nexit \"$ACCEPTANCE_EXIT\"\n")
+    const command = workflow.jobs["production-image"].steps.find(
+      (step: { run?: { name: string } }) =>
+        step.run?.name === "Exercise the production image with isolated services"
+    ).run.command
+    const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", command], {
+      cwd: directory,
+      env: {
+        NODE_ENV: "test",
+        PATH: `${directory}:/usr/bin:/bin`,
+        DATOOL_DOCKER_TEST_IMAGE: "fixture-image",
+        DATOOL_DOCKER_ARCHIVE_PATH: join(directory, "archive-input.tar"),
+        ACCEPTANCE_EXIT: String(acceptanceExit),
+        ARCHIVE_EXIT: String(archiveExit),
+      },
+      encoding: "utf8",
+      timeout: 5000,
+    })
+    expect(result.status).toBe(acceptanceExit || archiveExit ? 1 : 0)
+    expect(readFileSync(join(directory, "acceptance.txt"), "utf8")).toBe("checked\n")
+    expect(readFileSync(join(directory, "image.tar.gz"), "utf8")).toBe("archive bytes")
+  })
 }
 
 test("a deploy retry imports the exact archive and recorded build-attempt tag", () => {

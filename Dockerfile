@@ -6,15 +6,29 @@ COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-FROM base AS build
+FROM base AS dependencies
+COPY package.json bun.lock ./
+COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/cli/package.json ./packages/cli/
+COPY packages/chatgpt-trace-explorer/package.json ./packages/chatgpt-trace-explorer/
+# Keep dependency installation reusable when only application source changes.
+# Run project generation after the source is present in the build stage.
+# The installed dependency layer is reusable. Persisting Bun's download cache
+# as well duplicates gigabytes and crowds useful layers out of CircleCI DLC.
+RUN --mount=type=tmpfs,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile --ignore-scripts
+
+FROM dependencies AS build
 COPY . .
+ARG DATOOL_CI_BUILD=false
 # Runtime UI dependencies currently live in devDependencies too; do not prune them.
 # Next's TypeScript worker exceeds Node 22's default heap on CI. Give only the
 # build a 4 GiB heap; the runtime stage keeps Node's default memory settings.
-RUN bun install --frozen-lockfile && NODE_OPTIONS=--max-old-space-size=4096 bun run build
-# Build caches are never needed by next start or the ingestion worker. Remove
-# them before the runtime COPY so they do not occupy a production image layer.
-RUN rm -rf /app/.next/cache
+# The cache mount survives source changes without entering the runtime image.
+RUN --mount=type=tmpfs,target=/root/.bun/install/cache \
+    --mount=type=cache,target=/app/.next/cache \
+    bun install --frozen-lockfile && \
+    DATOOL_CI_BUILD=$DATOOL_CI_BUILD NODE_OPTIONS=--max-old-space-size=4096 bun run build
 
 FROM base AS runtime
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker

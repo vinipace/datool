@@ -718,3 +718,20 @@ revision, retains edits made during an in-flight save, and applies definition
 changes after their editors save them. Invalid changes remain local; failed
 writes preserve the draft and expose Retry. A compact header status announces
 saving and saved states. New agents still require the explicit Create agent action.
+
+
+### Agent and Inbox navigation
+
+The workspace sidebar switches to the agent's navigation while its editor or a
+channel opened from that agent owns `AgentSidebarTarget`. The agent avatar/name
+returns to the agent list. Analytics comes first, Build and Activity are
+collapsible groups, and Activity's Inbox link retains the agent filter. The
+current agent's Integrations page remains reachable from this navigation.
+Home and the other workspace groups are hidden while agent navigation is active.
+
+Inbox uses its own taller navigation: New Ticket, Search, My Inbox, Mentions,
+All, Unassigned, Solved, and a bounded list of recent ticket conversations.
+Queue and agent filters are applied before pagination on the server; My Inbox
+uses the authenticated actor, and Mentions matches explicit @email mentions in
+internal notes. Selection and filters are reflected in the URL for browser Back
+and deep links. Conversations remains the separate collection of all chats.

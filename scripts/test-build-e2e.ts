@@ -579,7 +579,7 @@ try {
     "authenticated browser empty state and agent creation through shared form"
   )
 
-  await selectAgentSection(page, "Knowledge")
+  await selectAgentSection(page, "Data sources")
   await page.getByRole("button", { name: "Add source", exact: true }).click()
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Returns")
   await page

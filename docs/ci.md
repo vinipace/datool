@@ -18,44 +18,106 @@ deployment, npm and Hermes publishing, and disk monitoring.
 GitHub Actions remains only for manual PyPI releases and their reusable verification
 workflow because this PyPI account does not yet offer CircleCI trusted publishers.
 Connect the `vinipace/datool` repository to CircleCI using its existing
-GitHub OAuth integration and this config path. Branch pushes run verification;
-main additionally builds and deploys the production image. No production secrets
+GitHub OAuth integration and this config path. Branch pushes run verification
+and image acceptance; main additionally deploys the production image. No production secrets
 are needed for verification or image builds.
 
-The `verify` job checks source lint, product styles, types, Build authorization and durable queues, team migrations, project home, and the read-only Trace Explorer. Its browser tests cover agent authoring and customer-facing UI; the WhatsApp fixture simulates Meta and model responses without sending live messages. The production image check starts the separate Build worker and waits for it to index a queued knowledge source. Deployment requires web, ingestion, and Build processes to be running.
+### Fast deployment checks
 
-The `verify` job also runs `bun run check:skills` and checks skill discovery
-from the repository root with the pinned skills installer. The installer runs
-from a temporary directory so npm does not interpret the Bun monorepo's
-dependency overrides. The job also installs the pack's minimum published CLI
-0.3.0 in a temporary consumer. Its Node and Bun checks use
-a local HTTP fixture; they do not require Datool credentials or a deployed server.
+Ordinary branch pushes run `verify`, `production-image`, `python-verify`, and
+`hermes-verify` in parallel. Only `main` can deploy. Its deployment waits for
+`verify` and `production-image`; SDK/plugin packaging does not block an
+application release. The existing GitHub PR check names stay unchanged.
 
-| Workflow | Trigger | Coverage |
+`verify` retains full lint, semantic style checks, TypeScript,
+release/SSH/archive safety, organization and request
+authorization, ingestion admission/order, execution-credit enforcement, and
+Composio tenant isolation/idempotency. Lint/styles, types, and critical tests
+run concurrently on the same runner; every group must finish successfully.
+The critical suite runs once. It does not run the full browser, scale, recovery,
+or package-compatibility suites.
+
+`production-image` verifies generated public API/docs contracts as part of the
+application build, then runs the actual deployable image through its acceptance
+checks: repeatable application and CMS migrations, CMS rendering, denied
+unauthenticated requests, API persistence, ingestion delivery, Build-worker
+knowledge indexing, non-root execution, and persistent files. Production still
+checks all three processes and public endpoints after importing that same
+checksummed image. Branch image jobs have no deployment credentials.
+
+The target is **3–5 minutes from a main push to a healthy deployment with a warm
+build cache**, not a guaranteed timeout. The previous measured release spent
+40m40s in verification, 5m59s building/testing the image in parallel, and 2m42s
+in deployment. A cold cache, dependency upgrade, migration, slow host, or queued
+runner can exceed the target. Compare complete workflow timings, not just the
+shorter verification job.
+
+### Build reuse
+
+- Docker layer caching preserves dependency and build layers between image jobs.
+  Dependencies are installed before copying application source; workspaces and
+  postinstall generation still run in the final build. A named `datool-release`
+  BuildKit container keeps its state and cache mounts in a persistent volume.
+- BuildKit retains Next's build cache without copying it into the runtime image.
+  Bun downloads use temporary memory-backed storage: the installed dependency
+  layer is already cached, and keeping both displaced useful build layers.
+- CI supplies `DATOOL_CI_BUILD=true` to the image build to avoid a second
+  TypeScript pass. The required `verify` job runs the full typecheck in parallel.
+  Local and self-hosted Docker builds default to checking types inside Next.
+- BuildKit writes a Docker archive with fast layer compression. Acceptance loads
+  that exact archive; no second `docker save` is needed. `pigz` prepares the
+  transfer while acceptance runs. Both must succeed before the archive is
+  checksummed and handed off. The archive format,
+  checksum verification, commit/pipeline identity, restricted SSH command, and
+  serialized production release remain unchanged.
+- After handoff, the disposable runner retains the latest accepted
+  `datool-release` image and removes older tags. DLC keeps installed shared
+  layers without accumulating every released image. The named BuildKit cache
+  is capped at 9 GB by removing its least recently used entries. This leaves
+  room for runtime and service images: an oversized DLC snapshot was observed
+  being discarded entirely, making the following build cold.
+
+[CircleCI Docker layer caching](https://circleci.com/docs/guides/optimize/docker-layer-caching/)
+costs 200 credits per image job, in addition to runner usage. It is enabled for
+branch images as well so a reviewed change can warm the subsequent main build.
+Cache availability is an optimization, never proof that tests passed.
+Set `verify-image=false` on a manual branch pipeline to skip its image check;
+main always builds and tests its image.
+
+### Extended regression checks
+
+The longer checks run every day at **06:32 UTC** on `main`, and on demand with
+pipeline parameter `operation=regression`. They never deploy or receive
+production credentials. Run them before merging a risky change; a nightly
+failure means a regression may be detected after an application release.
+
+| Job | Coverage |
+| --- | --- |
+| `regression-backend` | The complete Bun suite once, with PostgreSQL, Redis, runtime assets and real scorer containers; managed-prompt HTTP and durable evaluation-recovery scenarios. Includes billing reconciliation, scale, caching, runtime, channel, and trace regressions. |
+| `regression-browser` | Compiled-production Build browser flows, desktop/mobile authoring, public chat and worker delivery; simulated WhatsApp/Meta lifecycle scenarios. |
+| `regression-packages` | Public skill discovery and minimum published CLI; build tarballs once and exercise those same packages and watched CLI under Node 24, Node 22, and Bun. |
+| `python-verify`, `hermes-verify` | Python wheel/ingestion and Hermes packaging/install checks. These also retain their short branch checks. |
+
+The backend, browser, and package jobs run independently. The full backend suite
+replaces the former long list of overlapping targeted invocations. Runtime-
+specific package checks and real-container tests remain because they exercise
+different environments. Tests are retained; moving them off the deployment path
+changes **when regressions are caught**, not their assertions.
+
+### Workflows
+
+| Workflow | Trigger | Effect |
 | --- | --- | --- |
-| `ci` | Branch pushes; default manual pipeline | Builds SDK/CLI tarballs and runs backend/sandbox regressions once, then tests the same tarballs under Node 24 and 22.18.0. On main, builds and tests the production image, waits for package, Python SDK, and image verification, deploys that image, and checks the live app. Python checks test the built wheel and real ingestion on each branch; main and manual pipelines cover Python 3.10, 3.12, and 3.14. |
-| `publish-packages` | Manual, `operation=publish`, main only | Checks release metadata, tests tarballs, publishes with npm OIDC, and verifies the published CLI. Requires `release-version` and `release-package` (`sdk`, `cli`, or `all`). |
-| `publish-hermes` | Manual, `operation=publish-hermes`, main only | Tests and packages the plugin without credentials, then publishes that ZIP and checksum through a restricted job. Requires `release-version` matching `plugin.yaml`; creates `hermes-v<version>` at the tested commit, verifies downloaded assets, and preserves the global Latest release. |
-| `disk-health` | Manual, `operation=disk-health`, main only | Checks the configured host through the restricted monitoring account. |
-| `scheduled-disk-health` | 00:17, 06:17, 12:17, 18:17 UTC on main | Runs the same restricted disk check. |
+| `ci` | Branch pushes; default manual pipeline | Fast source checks and deployable image acceptance. Deploys on main after both pass. |
+| `regression` | Manual, `operation=regression` | Fast verification plus all extended regression jobs; never deploys. |
+| `nightly-regression` | 06:32 UTC daily, main | Extended backend/browser/package/Python/Hermes regression checks; never deploys. |
+| `publish-packages` | Manual, `operation=publish`, main | Verifies release tarballs, publishes using npm OIDC, and checks the published CLI. Requires `release-version` and `release-package`. |
+| `publish-hermes` | Manual, `operation=publish-hermes`, main | Tests and packages the source-only plugin, then publishes the verified ZIP/checksum. Requires `release-version`. |
+| `disk-health`, `scheduled-disk-health` | Manual or 00:17, 06:17, 12:17, 18:17 UTC | Restricted host disk check. |
 
-Set `verify-image=true` on a manual `operation=verify` pipeline to test a feature
-branch's production image. Feature branches never deploy. Publishing and disk
-checks do not also run the ordinary CI workflow. Deployments and publications each
-have their own CircleCI serial group, preventing overlapping releases.
-
-The separate `hermes-verify` job runs on branch pushes and main, and gates
-production deployment. It tests plugin delivery, reproducible packaging, and
-installation from the extracted ZIP, then stores the source-only ZIP and SHA-256
-checksum as CircleCI artifacts. It uses Python only and needs no credentials,
-database, or Node dependencies. A successful preview does not publish a GitHub
-Release; use the explicit `publish-hermes` operation described in the
-[Hermes maintainer instructions](../integrations/hermes/README.md#publish-a-plugin-release-maintainers).
-
-The machine executor keeps Docker on the same host as the tests, so sandbox bind
-mounts, localhost fixture services, and the production acceptance script retain
-their existing behavior. Package and Python SDK checks use 8 GiB VMs; production
-image builds use a 16 GiB VM. Bun's download cache is keyed by lockfile and architecture.
+The machine executor keeps Docker, databases, and tests on the same host.
+Deployment and publication retain separate CircleCI serial groups. No branch,
+regression, package build, or image build receives production secrets.
 
 ### Activation and credentials
 
@@ -95,8 +157,9 @@ Keep installation-specific identifiers in your private operator runbook and
 recheck them if recreating the project, pipeline, or context.
 
 The existing OAuth integration supports the scheduled workflow in this file.
-If switching to the CircleCI GitHub App later, replace that scheduled workflow
-with a schedule trigger using `operation=disk-health` and branch `main`.
+If switching to the CircleCI GitHub App later, replace the scheduled workflows
+with schedule triggers using `operation=disk-health` and `operation=regression`,
+both on branch `main`.
 
 Complete the cutover only after a successful branch verification and image test,
 the restricted contexts, and npm trust configuration are ready. After merging,
@@ -112,21 +175,9 @@ to cancel superseded non-default-branch runs. Main, scheduled workflows, and rer
 are excluded from this setting. Keep **Pass secrets to builds from forked pull requests**
 disabled. Verify both settings in your project before enabling public contributions.
 
-The package job uses a large machine for the Build browser fixture, installs
-dependencies, and starts PostgreSQL/Redis once. The browser fixture compiles the
-application and runs `next start` behind its disposable HTTPS proxy, avoiding
-development-server memory restarts during navigation. It runs the complete Bun suite
-with those services and the scorer images available. Backend tests run with Bun;
-sandbox tests also exercise real JavaScript/Python Docker
-containers and database-backed provider permissions, credentials, and project
-isolation. Switching Node versions repeats only packed-package consumer checks
-(including TypeScript declarations and Node CLI connect/watch) and CLI
-distribution checks. CLI distribution coverage under Bun runs once, alongside
-Node 24. The job uploads one set of tarballs tested on both Node versions.
-
 ## Storybook
 
 Storybook is available locally through `bun run storybook`, `bun run test:storybook`,
 and `bun run build-storybook`. It does not run automatically in CircleCI
 or in pre-push. General TypeScript checking is retained in pre-push and the
-production build.
+required CI verification job; local production builds also check types.

@@ -79,6 +79,7 @@ import {
   BuildStatus,
 } from "@/components/build/shared/build-layout"
 import { agentBuildTabs } from "@/components/build/shared/build-tabs"
+import { AgentActivity } from "./agent-activity"
 import { AgentSidebarNavigation } from "@/components/build/shared/agent-sidebar"
 import { channelLabel } from "@/components/build/shared/channel-catalog"
 import { CopilotTab } from "./copilot-tab"
@@ -252,7 +253,7 @@ function BuildAgentEditorContent({
       : agentBuildTabs.some((tab) => tab.id === initialSection)
         ? initialSection
         : "overview"
-  const mainRef = React.useRef<HTMLElement>(null)
+  const mainRef = React.useRef<HTMLDivElement>(null)
   const [visitedSections, setVisitedTabs] = React.useState(
     () => new Set([active])
   )
@@ -392,6 +393,7 @@ function BuildAgentEditorContent({
         active={active}
         onChange={selectTab}
         canConfigure={Boolean(saved)}
+        agentId={saved?.id}
       />
       <HeaderSlot name="title">
         <div className="flex min-w-0 items-center gap-2">
@@ -496,8 +498,10 @@ function BuildAgentEditorContent({
         </Notice>
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
-        <main
+        <div
           ref={mainRef}
+          role="region"
+          aria-label="Agent editor"
           className={`min-h-0 min-w-0 flex-1 ${active === "playground" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
           {active === "overview" && saved ? (
@@ -621,6 +625,9 @@ function BuildAgentEditorContent({
               <ChannelsManager fixedAgentId={saved.id} embedded />
             </div>
           ) : null}
+          {saved && (active === "leads" || active === "collected-data") ? (
+            <AgentActivity key={`${saved.id}:${active}`} agentId={saved.id} section={active} />
+          ) : null}
           {active === "playground" && saved ? (
             <div className="h-full">
               <AgentPlayground agent={saved} />
@@ -634,7 +641,7 @@ function BuildAgentEditorContent({
               Save the agent before configuring {active}.
             </Notice>
           ) : null}
-        </main>
+        </div>
       </div>
     </Tabs>
   )

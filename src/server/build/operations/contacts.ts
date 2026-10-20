@@ -332,9 +332,11 @@ export async function collectData(context: BuildContext, value: unknown) {
 
 export async function listCollectedData(context: BuildContext, value: unknown) {
   const ctx = await prepareOperations(context)
-  const input = z.object({ contactId: z.string().max(128).optional(), conversationId: z.string().max(256).optional(), limit: z.number().int().min(1).max(100).default(50), cursor: z.string().max(256).optional() }).strict().parse(value ?? {})
-  if (!input.contactId && !input.conversationId) throw new Error("List collected data requires contactId or conversationId.")
+  const input = z.object({ agentId: z.string().min(1).max(128).optional(), fieldKey: z.string().max(120).optional(), contactId: z.string().max(128).optional(), conversationId: z.string().max(256).optional(), limit: z.number().int().min(1).max(100).default(50), cursor: z.string().max(256).optional() }).strict().parse(value ?? {})
+  if (!input.agentId && !input.contactId && !input.conversationId) throw new Error("List collected data requires agentId, contactId or conversationId.")
   const predicates = [sql`project_id=${ctx.projectId}`]
+  if (input.agentId) predicates.push(sql`exists (select 1 from build_conversations c where c.project_id=build_collected_data.project_id and c.id=build_collected_data.conversation_id and c.agent_id=${input.agentId})`)
+  if (input.fieldKey) predicates.push(sql`field_key=${input.fieldKey}`)
   if (input.contactId) predicates.push(sql`contact_id=${input.contactId}`)
   if (input.conversationId) predicates.push(sql`conversation_id=${input.conversationId}`)
   if (input.cursor) predicates.push(sql`id>${input.cursor}`)
@@ -360,8 +362,10 @@ export async function upsertLead(context: BuildContext, value: unknown) {
 
 export async function listLeads(context: BuildContext, value?: unknown) {
   const ctx = await prepareOperations(context)
-  const input = z.object({ status: z.enum(["new", "qualified", "disqualified", "converted"]).optional(), limit: z.number().int().min(1).max(100).default(50), cursor: z.string().max(256).optional() }).strict().parse(value ?? {})
+  const input = z.object({ agentId: z.string().min(1).max(128).optional(), contactId: z.string().max(128).optional(), status: z.enum(["new", "qualified", "disqualified", "converted"]).optional(), limit: z.number().int().min(1).max(100).default(50), cursor: z.string().max(256).optional() }).strict().parse(value ?? {})
   const predicates = [sql`project_id=${ctx.projectId}`]
+  if (input.agentId) predicates.push(sql`exists (select 1 from build_conversations c where c.project_id=build_leads.project_id and c.id=build_leads.conversation_id and c.agent_id=${input.agentId})`)
+  if (input.contactId) predicates.push(sql`contact_id=${input.contactId}`)
   if (input.status) predicates.push(sql`status=${input.status}`)
   if (input.cursor) predicates.push(sql`id>${input.cursor}`)
   const result = await ctx.database.execute<{ id: string; contact_id: string | null; conversation_id: string | null; status: string; score: number | null; source: string | null; data_json: unknown; created_at: unknown; updated_at: unknown }>(sql`select * from build_leads where ${sqlAnd(predicates)} order by id asc limit ${input.limit + 1}`)

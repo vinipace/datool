@@ -58,6 +58,7 @@ type TicketRow = {
   version: number
   created_at: unknown
   updated_at: unknown
+  recent_updated_at?: string
 }
 
 function ticket(row: TicketRow) {
@@ -154,13 +155,16 @@ export async function getTicket(context: BuildContext, id: string) {
   return ticket(ensureRows(result.rows, "Inbox ticket", id))
 }
 
-const listTicketSchema = operationsPageSchema.extend({
+export const listTicketSchema = operationsPageSchema.extend({
+  agentId: z.string().min(1).max(128).optional(),
   search: z.string().max(300).optional(),
   status: ticketStatusSchema.optional(),
   priority: ticketPrioritySchema.optional(),
   teamId: z.string().max(128).optional(),
   assigneeUserId: z.string().max(128).optional(),
   channel: operationsChannelSchema.optional(),
+  queue: z.enum(["mine", "mentions", "unassigned"]).optional(),
+  order: z.enum(["id", "recent"]).default("id"),
 })
 
 export async function listTickets(context: BuildContext, value?: unknown) {
@@ -168,25 +172,69 @@ export async function listTickets(context: BuildContext, value?: unknown) {
   const input = listTicketSchema.parse(value ?? {})
   const limit = pageLimit(input.limit)
   const predicates = [sql`t.project_id=${ctx.projectId}`]
+  if (input.agentId) predicates.push(sql`exists (
+    select 1 from build_conversations c where c.project_id=t.project_id
+      and c.id=t.conversation_id and c.agent_id=${input.agentId}
+  )`)
   if (input.status) predicates.push(sql`t.status=${input.status}`)
   if (input.priority) predicates.push(sql`t.priority=${input.priority}`)
   if (input.teamId) predicates.push(sql`t.team_id=${input.teamId}`)
   if (input.assigneeUserId) predicates.push(sql`t.assignee_user_id=${input.assigneeUserId}`)
   if (input.channel) predicates.push(sql`t.channel=${input.channel}`)
-  if (input.cursor) predicates.push(sql`t.id>${pageCursor(input.cursor)}`)
+  if (input.queue === "mine")
+    predicates.push(ctx.actorId ? sql`t.assignee_user_id=${ctx.actorId}` : sql`false`)
+  if (input.queue === "unassigned") predicates.push(sql`t.assignee_user_id is null`)
+  if (input.queue === "mentions") {
+    const actor = ctx.actorId
+      ? await ctx.database.execute<{ email: string }>(sql`select email from "user" where id=${ctx.actorId}`)
+      : { rows: [] }
+    const email = actor.rows[0]?.email
+    if (!email) predicates.push(sql`false`)
+    else {
+      // Match an explicit @email mention, not a substring or another address.
+      const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      const mention = `(^|[^[:alnum:]_@.+-])@${escaped}(?![[:alnum:]_@+-]|\\.[[:alnum:]])`
+      predicates.push(sql`exists (
+        select 1 from build_ticket_notes n
+        where n.project_id=t.project_id and n.ticket_id=t.id and n.body ~* ${mention}
+      )`)
+    }
+  }
+  if (input.cursor) {
+    if (input.order === "recent") {
+      let cursor: [string, string]
+      try {
+        cursor = z.tuple([z.string().min(1), z.string().min(1)]).parse(
+          JSON.parse(Buffer.from(input.cursor, "base64url").toString())
+        )
+        if (!Number.isFinite(Date.parse(cursor[0]))) throw new Error("Invalid date")
+      } catch {
+        throw new TracerError("VALIDATION_ERROR", "Invalid recent conversations cursor.")
+      }
+      predicates.push(sql`(t.updated_at,t.id)<(${cursor[0]}::timestamptz,${cursor[1]})`)
+    } else predicates.push(sql`t.id>${pageCursor(input.cursor)}`)
+  }
   if (input.search) {
     const query = `%${input.search}%`
     predicates.push(sql`(t.subject ilike ${query} or t.id ilike ${query} or t.conversation_id ilike ${query} or c.display_name ilike ${query} or c.email ilike ${query} or c.phone ilike ${query})`)
   }
   const result = await ctx.database.execute<TicketRow>(sql`
-    select t.*, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
+    select t.*, t.updated_at::text as recent_updated_at, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
     left join build_contacts c on c.project_id=t.project_id and c.id=t.contact_id
     left join "user" u on u.id=t.assignee_user_id
     left join build_teams team on team.id=t.team_id
-    where ${sqlAnd(predicates)} order by t.id asc limit ${limit + 1}
+    where ${sqlAnd(predicates)}
+    order by ${input.order === "recent" ? sql`t.updated_at desc,t.id desc` : sql`t.id asc`}
+    limit ${limit + 1}
   `)
   const rows = result.rows.slice(0, limit)
-  return { items: rows.map(ticket), nextCursor: result.rows.length > limit ? rows.at(-1)?.id ?? null : null }
+  const last = rows.at(-1)
+  const nextCursor = result.rows.length > limit && last
+    ? input.order === "recent"
+      ? Buffer.from(JSON.stringify([last.recent_updated_at, last.id])).toString("base64url")
+      : last.id
+    : null
+  return { items: rows.map(ticket), nextCursor }
 }
 
 export async function updateTicket(context: BuildContext, id: string, value: unknown) {
