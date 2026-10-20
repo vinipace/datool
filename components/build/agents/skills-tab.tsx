@@ -126,47 +126,62 @@ export function SkillsTab({
       onValueChange={setView}
       className="flex min-h-0 w-full flex-col"
     >
-      <div className="shrink-0 border-b border-border px-3">
-        <TabsList variant="underline" aria-label="Skills">
-          <TabsTrigger value="mine">
-            <BookOpen className="size-4" />
-            My skills
-          </TabsTrigger>
-          <TabsTrigger value="templates">
-            <Layers className="size-4" />
-            Templates
-          </TabsTrigger>
-        </TabsList>
-      </div>
-      <TabsContent value="mine">
-        <CollectionPanel label="Skills">
-          <CollectionPage
-            className="contents"
-            state={remote}
-            loadingLabel="Loading skills"
-            header={{
-              children: (
-                <CollectionSearch
-                  label="Search skills"
-                  value={search}
-                  onChange={setSearch}
-                />
-              ),
-              actions: (
+      <CollectionPanel
+        label="Skills"
+        navigation={
+          <TabsList aria-label="Skills">
+            <TabsTrigger value="mine">
+              <BookOpen className="size-4" />
+              My skills
+            </TabsTrigger>
+            <TabsTrigger value="templates">
+              <Layers className="size-4" />
+              Templates
+            </TabsTrigger>
+          </TabsList>
+        }
+      >
+        <CollectionPage
+          className="contents"
+          state={
+            view === "mine"
+              ? remote
+              : {
+                  data: templates,
+                  error: null,
+                  isLoading: false,
+                  isRefreshing: false,
+                  refresh: remote.refresh,
+                }
+          }
+          loadingLabel="Loading skills"
+          header={{
+            children: (
+              <CollectionSearch
+                label={view === "mine" ? "Search skills" : "Search templates"}
+                value={view === "mine" ? search : templateSearch}
+                onChange={view === "mine" ? setSearch : setTemplateSearch}
+              />
+            ),
+            actions:
+              view === "mine" ? (
                 <Button size="sm" onClick={create}>
                   <Plus />
                   New skill
                 </Button>
-              ),
-            }}
-            toolbar={
-              notice ? (
-                <Notice variant="success" role="status">
-                  {notice}
-                </Notice>
-              ) : undefined
-            }
-          >
+              ) : undefined,
+            showRefresh: view === "mine",
+            showExport: view === "mine",
+          }}
+          toolbar={
+            view === "mine" && notice ? (
+              <Notice variant="success" role="status">
+                {notice}
+              </Notice>
+            ) : undefined
+          }
+        >
+          <TabsContent value="mine">
             <CollectionTable
               persistenceKey={`build-skills:${agentId}`}
               columnIds={["name", "trigger", "status", "revision"]}
@@ -263,74 +278,67 @@ export function SkillsTab({
                 )}
               </CollectionTableBody>
             </CollectionTable>
-          </CollectionPage>
-        </CollectionPanel>
-      </TabsContent>
-      <TabsContent value="templates" className="space-y-6 px-3 pt-4 pb-6">
-        <div className="max-w-md">
-          <CollectionSearch
-            label="Search templates"
-            value={templateSearch}
-            onChange={setTemplateSearch}
-          />
-        </div>
-        {(["Support", "E-commerce", "Billing", "Sales"] as const).map(
-          (category) => {
-            const group = templates.filter(
-              (template) => template.category === category
-            )
-            return group.length ? (
-              <section
-                key={category}
-                aria-label={`${category} templates`}
-                className="space-y-3"
-              >
-                <h2 className="text-sm font-medium">{category}</h2>
-                <div className="grid gap-3 lg:grid-cols-2">
-                  {group.map((template) => {
-                    const Icon = templateIcons[template.id] ?? BookOpen
-                    return (
-                      <Card key={template.id}>
-                        <CardAction
-                          className="flex h-full items-start gap-4"
-                          onClick={() => setPreview(template)}
-                        >
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground-muted">
-                            <Icon className="size-5" aria-hidden />
-                          </span>
-                          <span className="min-w-0 space-y-1">
-                            <span className="block text-sm font-medium">
-                              {template.name}
-                            </span>
-                            <span className="block text-sm leading-6 text-foreground-muted">
-                              {template.description}
-                            </span>
-                          </span>
-                        </CardAction>
-                      </Card>
-                    )
-                  })}
-                </div>
-              </section>
-            ) : null
-          }
-        )}
-        {!templates.length ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-foreground-muted">
-              No matching templates.
-            </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-3"
-              onClick={() => setTemplateSearch("")}
-            >
-              Clear search
-            </Button>
-          </div>
-        ) : null}
-      </TabsContent>
+          </TabsContent>
+          <TabsContent value="templates" className="space-y-6 pt-4 pb-6">
+            {(["Support", "E-commerce", "Billing", "Sales"] as const).map(
+              (category) => {
+                const group = templates.filter(
+                  (template) => template.category === category
+                )
+                return group.length ? (
+                  <section
+                    key={category}
+                    aria-label={`${category} templates`}
+                    className="space-y-3"
+                  >
+                    <h2 className="text-sm font-medium">{category}</h2>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {group.map((template) => {
+                        const Icon = templateIcons[template.id] ?? BookOpen
+                        return (
+                          <Card key={template.id}>
+                            <CardAction
+                              className="flex h-full items-start gap-4"
+                              onClick={() => setPreview(template)}
+                            >
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground-muted">
+                                <Icon className="size-5" aria-hidden />
+                              </span>
+                              <span className="min-w-0 space-y-1">
+                                <span className="block text-sm font-medium">
+                                  {template.name}
+                                </span>
+                                <span className="block text-sm leading-6 text-foreground-muted">
+                                  {template.description}
+                                </span>
+                              </span>
+                            </CardAction>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  </section>
+                ) : null
+              }
+            )}
+            {!templates.length ? (
+              <div className="py-16 text-center">
+                <p className="text-sm text-foreground-muted">
+                  No matching templates.
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setTemplateSearch("")}
+                >
+                  Clear search
+                </Button>
+              </div>
+            ) : null}
+          </TabsContent>
+        </CollectionPage>
+      </CollectionPanel>
       {preview ? (
         <Sheet
           open
