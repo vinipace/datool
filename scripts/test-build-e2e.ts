@@ -559,7 +559,7 @@ try {
     .click()
   await page.waitForURL(/\/build\/agents\/new$/, { timeout: 120_000 })
   await page
-    .getByRole("textbox", { name: "Name", exact: true })
+    .getByRole("textbox", { name: "Workspace name", exact: true })
     .fill("Build validation agent")
   await page
     .getByRole("textbox", { name: "Slug", exact: true })
@@ -568,7 +568,7 @@ try {
   await page.waitForURL(/\/build\/agents\/(?!new)[^/?]+/, { timeout: 30_000 })
   const agentId = new URL(page.url()).pathname.split("/").at(-1)!
   await selectAgentSection(page, "Settings")
-  await page.getByRole("textbox", { name: "Name", exact: true }).waitFor()
+  await page.getByRole("textbox", { name: "Workspace name", exact: true }).waitFor()
   await page.screenshot({
     path: join(evidence, "agent-settings.png"),
     fullPage: true,

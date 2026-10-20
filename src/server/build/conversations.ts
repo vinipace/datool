@@ -111,7 +111,9 @@ function toMessage(row: Record<string, unknown>): ConversationMessage {
         : String(row.turn_id),
     ordinal: Number(row.ordinal),
     role: conversationMessageRoleSchema.parse(row.role),
-    content: conversationContentSchema.parse(parseJson(row.content_json, "")),
+    // PostgreSQL already decodes JSONB. Parsing message text again would turn
+    // replies such as "3", "true", or JSON examples into different values.
+    content: conversationContentSchema.parse(row.content_json ?? ""),
     toolCallId:
       row.tool_call_id === null || row.tool_call_id === undefined
         ? null

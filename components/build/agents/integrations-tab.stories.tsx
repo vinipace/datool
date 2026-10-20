@@ -51,6 +51,9 @@ export const Empty: Story = {
     await expect(
       canvas.findByRole("option", { name: /Google Calendar · active/ })
     ).resolves.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("link", { name: "Authorize the app in a new tab" })
+    ).not.toBeInTheDocument()
   },
 }
 export const Pending: Story = {

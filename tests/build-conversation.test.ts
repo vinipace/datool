@@ -48,6 +48,37 @@ async function makeService() {
 }
 
 describe("Build conversation ledger", () => {
+  test("preserves JSON-looking message text and structured content across database reads", async () => {
+    const { service } = await makeService()
+    const conversation = await service.getOrCreate({
+      agentId: "agent-a",
+      channel: "web",
+      metadata: {},
+    })
+    const contents = [
+      "3",
+      "true",
+      "null",
+      '"quoted"',
+      '{"count":3}',
+      '[{"type":"text","text":"literal JSON"}]',
+      [{ type: "text" as const, text: "Structured message" }],
+      { count: 3 },
+    ]
+    for (const content of contents) {
+      const message = await service.appendMessage(conversation.id, {
+        role: "assistant",
+        content,
+        status: "completed",
+        metadata: {},
+      })
+      expect(message.content).toEqual(content)
+    }
+    expect(
+      (await service.listMessages(conversation.id)).items.map((item) => item.content)
+    ).toEqual(contents)
+  }, 30_000)
+
   test("lists all chats with independent conversation status, search and cursor pagination", async () => {
     const { service } = await makeService()
     const ordinary = await service.getOrCreate({

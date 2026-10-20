@@ -4,8 +4,9 @@ Build uses Composio sessions for project-owned app connections and execution.
 Customers connect and manage accounts in **Agent → Integrations**. Authorize in
 a new tab, then return to Integrations and refresh the connection. In
 **Agent → Actions → Create action → Connected app**, choose that account and a
-tool. Save the action and apply the agent revision to make it available to live
-conversations. The action editor links to Integrations and keeps its draft while
+tool. Save the action and wait for the agent's **Saved** status; the editor
+automatically applies the updated revision to live conversations. The action
+editor links to Integrations and keeps its draft while
 you manage accounts.
 Google Calendar is an example; the installation controls which apps and tools
 are offered. Existing human-approval guardrails, channel restrictions, procedures,
@@ -47,6 +48,34 @@ write actions separately and review their permissions. An empty map disables new
 changing its Auth Config, or disconnecting its account blocks existing actions
 at execution time too. OAuth setup, provider credentials, consent/app review and
 scopes must be verified in the actual Composio/Google accounts.
+
+### Google Calendar managed OAuth
+
+Google Calendar supports Composio-managed OAuth, so an installation can use
+Composio's OAuth client without registering its own Google OAuth app. Start with
+the managed toolkit's default scopes. At the time of validation these are
+`https://www.googleapis.com/auth/calendar` and
+`https://www.googleapis.com/auth/calendar.events`.
+These grant broad Calendar permissions, including writes and deletion; the
+Datool tool allowlist independently restricts what an agent can execute.
+
+Do not assume a narrower scope is verified for Composio's managed client.
+Overriding the defaults with `calendar.events.readonly` produced Google's
+"App is blocked" error during local validation; restoring the defaults allowed
+authorization to complete. If narrower OAuth permissions are required, confirm
+support with Composio or configure a custom OAuth client and complete any Google
+verification required for those scopes. See
+[Composio's Calendar FAQ](https://docs.composio.dev/toolkits/googlecalendar#why-am-i-seeing-app-is-blocked-when-connecting-google-calendar)
+and [managed OAuth documentation](https://docs.composio.dev/toolkits/managed-auth).
+
+After changing the Auth Config, start a fresh connection from Datool rather
+than reusing an old authorization link. Return to Integrations and refresh its
+status after consent. Completed, failed, and disconnected connections no longer
+show their previous authorization link. A provider rate-limit error is separate
+from Google's scope-verification error; respect the provider's retry interval.
+
+Configure the Composio key and app map in each deployed web and Build worker
+environment. Local ignored environment files are not deployed with a merge.
 
 Composio sessions use a stable server-derived identity for each organization +
 project. Connections are shared by agents in that project, not by visitors across

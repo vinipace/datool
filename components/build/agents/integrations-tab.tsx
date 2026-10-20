@@ -116,7 +116,7 @@ export function IntegrationsTab({ active = true }: { active?: boolean }) {
                 </Button>
               </div>
             </FormRow>
-            {authorization && (
+            {authorization && selected?.status === "pending" && (
               <Notice>
                 <a
                   className="underline"

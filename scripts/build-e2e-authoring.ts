@@ -99,7 +99,18 @@ async function saveThroughUi(
   const payload = record(await response.json(), `${operation} response`)
   const applied = await appliedPromise
   assert(applied.ok(), `Agent autosave returned HTTP ${applied.status()}`)
-  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
+  const appliedAgent = record(
+    record(await applied.json(), "agent autosave response").data,
+    "applied agent"
+  )
+  assert(Number.isInteger(appliedAgent.currentRevision))
+  assert.equal(appliedAgent.appliedRevision, appliedAgent.currentRevision)
+  // The full-screen widget editor hides the parent agent's status region.
+  await page
+    .getByText("Saved", { exact: true })
+    .filter({ visible: true })
+    .last()
+    .waitFor()
   return record(payload.data, `${operation} data`)
 }
 
@@ -324,7 +335,6 @@ export async function runBuildAuthoringE2e({
     () =>
       page.getByRole("button", { name: "Create widget", exact: true }).click()
   )
-  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
 
   const widgetId = stringValue(createdWidgetResponse.id, "widget id")
   const widgetAfterCreate = record(
@@ -355,7 +365,6 @@ export async function runBuildAuthoringE2e({
   await saveThroughUi(page, "build_save_widget", () =>
     page.getByRole("button", { name: "Save changes", exact: true }).click()
   )
-  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
 
   const widgetAfterEdit = record(
     await call("build_get_widget", { agentId, widgetId }),
@@ -456,7 +465,6 @@ export async function runBuildAuthoringE2e({
   await saveThroughUi(page, "build_save_widget", () =>
     page.getByRole("button", { name: "Save changes", exact: true }).click()
   )
-  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
   const widgetAfterReloadEdit = record(
     await call("build_get_widget", { agentId, widgetId }),
     "widget after reload edit"
