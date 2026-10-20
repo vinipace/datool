@@ -83,6 +83,7 @@ fi
       env: {
         // Exclude shell startup files and exported pyenv functions from CI.
         // Only the injected commands and standard shell utilities may run.
+        NODE_ENV: "test",
         PATH: `${directory}:/usr/bin:/bin`,
         CHECK_CALLS: join(directory, "calls"),
         FAIL_COMMAND: failingCommand,

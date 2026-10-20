@@ -56,19 +56,22 @@ shorter verification job.
 
 - Docker layer caching preserves dependency and build layers between image jobs.
   Dependencies are installed before copying application source; workspaces and
-  postinstall generation still run in the final build.
+  postinstall generation still run in the final build. A named `datool-release`
+  BuildKit container keeps its state and cache mounts in a persistent volume.
 - BuildKit cache mounts retain Bun downloads and Next's build cache without
   copying either into the runtime image.
 - CI supplies `DATOOL_CI_BUILD=true` to the image build to avoid a second
   TypeScript pass. The required `verify` job runs the full typecheck in parallel.
   Local and self-hosted Docker builds default to checking types inside Next.
-- `pigz` compresses the image archive across available CPUs. The archive format,
+- The image job uses an `xlarge` runner and exports uncompressed layers locally;
+  `pigz` compresses the final image archive across available CPUs. The archive format,
   checksum verification, commit/pipeline identity, restricted SSH command, and
   serialized production release remain unchanged.
 
 [CircleCI Docker layer caching](https://circleci.com/docs/guides/optimize/docker-layer-caching/)
 costs 200 credits per image job, in addition to runner usage. It is enabled for
 branch images as well so a reviewed change can warm the subsequent main build.
+The image runner has a higher per-minute cost than the previous `large` runner.
 Cache availability is an optimization, never proof that tests passed.
 Set `verify-image=false` on a manual branch pipeline to skip its image check;
 main always builds and tests its image.

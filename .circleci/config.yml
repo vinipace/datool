@@ -325,7 +325,7 @@ jobs:
     machine:
       image: ubuntu-2404:2026.05.1
       docker_layer_caching: true
-    resource_class: large
+    resource_class: xlarge
     environment:
       CI: "true"
       CIRCLE_PIPELINE_NUMBER: << pipeline.number >>
@@ -339,7 +339,17 @@ jobs:
           command: python3 -m unittest discover -s tests -p 'dokku_*_test.py'
       - run:
           name: Build the production image on the CI runner
-          command: docker build --build-arg DATOOL_CI_BUILD=true --label "org.opencontainers.image.revision=$CIRCLE_SHA1" --tag "$DATOOL_DOCKER_TEST_IMAGE" .
+          command: |
+            # A stable container builder keeps BuildKit state and cache mounts
+            # in a named volume that CircleCI DLC preserves between jobs.
+            docker buildx inspect datool-release >/dev/null 2>&1 ||
+              docker buildx create --name datool-release --driver docker-container
+            # Compress once for transfer below, not again during local export.
+            docker buildx build --builder datool-release --progress plain \
+              --output type=docker,compression=uncompressed \
+              --build-arg DATOOL_CI_BUILD=true \
+              --label "org.opencontainers.image.revision=$CIRCLE_SHA1" \
+              --tag "$DATOOL_DOCKER_TEST_IMAGE" .
       - run:
           name: Test release command, image handoff, and CMS seed guards
           command: |
