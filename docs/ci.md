@@ -71,7 +71,10 @@ shorter verification job.
   serialized production release remain unchanged.
 - After handoff, the disposable runner retains the latest accepted
   `datool-release` image and removes older tags. DLC keeps installed shared
-  layers and the builder cache without accumulating every released image.
+  layers without accumulating every released image. The named BuildKit cache
+  is capped at 8 GB by removing its least recently used entries. This leaves
+  room for runtime and service images: an oversized DLC snapshot was observed
+  being discarded entirely, making the following build cold.
 
 [CircleCI Docker layer caching](https://circleci.com/docs/guides/optimize/docker-layer-caching/)
 costs 200 credits per image job, in addition to runner usage. It is enabled for
