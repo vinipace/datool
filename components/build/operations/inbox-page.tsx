@@ -9,13 +9,13 @@ import {
   Settings2,
   RefreshCw,
   X,
-  MessageCircle,
   Play,
   Send,
   UserRound,
 } from "lucide-react"
 
 import { Chat } from "@/components/ui/chat"
+import { productIcons } from "@/components/product-icons"
 import { PriorityIndicator } from "@/components/ui/priority-indicator"
 import { UserAvatarImage } from "@/components/ui/user-avatar"
 import { formatDate, formatRelative } from "@/components/tracer/format"
@@ -44,7 +44,14 @@ import type { CollectionListOptions } from "@/components/tracer/api"
 import { useTableView } from "@/components/tracer/use-table-view"
 import { Input } from "@/components/ui/input"
 import { Notice } from "@/components/ui/notice"
-import { Select } from "@/components/ui/select"
+import {
+  Select,
+  SelectRoot,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { InspectorSection } from "@/components/ui/inspector-section"
 import { useMutation, useRemote } from "@/components/tracer/hooks"
@@ -68,6 +75,8 @@ import type { ChannelId } from "@/src/lib/build/channels"
 type Ticket = {
   id: string
   version?: number
+  ticketId?: string | null
+  conversationStatus?: string
   conversationId?: string | null
   contactId?: string | null
   contactName?: string | null
@@ -186,6 +195,62 @@ function listTickets({ filter, cursor, limit, signal }: CollectionListOptions) {
       signal
     )
     .then(ticketList)
+}
+
+const conversationStatuses: Record<string, string> = {
+  active: "Ongoing",
+  handed_off: "Taken over",
+  closed: "Ended",
+  blocked: "Blocked",
+}
+const conversationStatusOptions = [
+  { value: "", label: "All statuses" },
+  ...Object.entries(conversationStatuses).map(([value, label]) => ({
+    value,
+    label,
+  })),
+]
+
+function listConversations({
+  filter,
+  cursor,
+  limit,
+  signal,
+}: CollectionListOptions) {
+  const filters = JSON.parse(filter ?? "{}") as {
+    search?: string
+    status?: string
+  }
+  return buildApi
+    .call<unknown>(
+      "build_list_conversations",
+      {
+        cursor,
+        limit,
+        search: filters.search || undefined,
+        status: filters.status || undefined,
+      },
+      signal
+    )
+    .then((value) => {
+      const page = ticketList(value)
+      return {
+        ...page,
+        items: page.items.map((item) => {
+          const summary = item as Ticket & {
+            ticketStatus: string | null
+            ticketVersion: number | null
+          }
+          return {
+            ...item,
+            conversationId: item.id,
+            conversationStatus: item.status ?? "active",
+            status: summary.ticketStatus,
+            version: summary.ticketVersion ?? undefined,
+          }
+        }),
+      }
+    })
 }
 
 function detailFrom(value: unknown): Ticket | null {
@@ -321,15 +386,23 @@ function surveyList(value: unknown) {
   return asList<Survey>(record.items ?? value)
 }
 
-export function InboxPage() {
+export function InboxPage({
+  view = "inbox",
+}: {
+  view?: "inbox" | "conversations"
+}) {
+  const isInbox = view === "inbox"
+  const ItemIcon = isInbox
+    ? productIcons.buildInbox
+    : productIcons.buildConversations
   const scope = useWorkspaceStorageScope()
   const isWide = useWideViewport(900)
   const tableView = useTableView({
-    settingsStorageKey: `datool:build-inbox:${scope}:settings`,
-    orderStorageKey: "datool.build-inbox.columns",
+    settingsStorageKey: `datool:build-${view}:${scope}:settings`,
+    orderStorageKey: `datool.build-${view}.columns`,
   })
   const [search, setSearch] = React.useState("")
-  const [status, setStatus] = React.useState("open")
+  const [status, setStatus] = React.useState(isInbox ? "open" : "")
   const [showSetup, setShowSetup] = React.useState(false)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const returnFocusRef = React.useRef<HTMLElement | null>(null)
@@ -338,7 +411,7 @@ export function InboxPage() {
     returnFocusRef.current?.focus()
   }, [])
   const tickets = useCollectionPages(
-    listTickets,
+    isInbox ? listTickets : listConversations,
     JSON.stringify({ search, status }),
     15_000,
     { refreshLoadedPages: true }
@@ -347,19 +420,19 @@ export function InboxPage() {
     tickets.items.find((ticket) => ticket.id === selectedId) ?? null
   const detail = useRemote(
     (signal) =>
-      selectedId
+      isInbox && selectedId
         ? buildApi
             .call<unknown>("build_get_ticket", { id: selectedId }, signal)
             .then(detailFrom)
         : Promise.resolve(null),
-    [selectedId],
-    { enabled: !!selectedId, intervalMs: 15_000 }
+    [selectedId, isInbox],
+    { enabled: isInbox && !!selectedId, intervalMs: 15_000 }
   )
   const selected = detail.data?.id === selectedId ? detail.data : selectedRow
 
   return (
     <>
-      <CollectionPanel label="Inbox">
+      <CollectionPanel label={isInbox ? "Inbox" : "Conversations"}>
         <CollectionPage
           className="contents"
           state={tickets}
@@ -372,7 +445,7 @@ export function InboxPage() {
           }
           header={{
             exportRows: tickets.items,
-            exportName: "inbox",
+            exportName: view,
             children: (
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <CollectionSearch
@@ -380,15 +453,36 @@ export function InboxPage() {
                   value={search}
                   onChange={setSearch}
                 />
-                <TicketStatusSelect
-                  label="Inbox status"
-                  value={status}
-                  onValueChange={setStatus}
-                  includeAll
-                />
+                {isInbox ? (
+                  <TicketStatusSelect
+                    label="Inbox status"
+                    value={status}
+                    onValueChange={setStatus}
+                    includeAll
+                  />
+                ) : (
+                  <SelectRoot
+                    value={status}
+                    items={conversationStatusOptions}
+                    onValueChange={(value) => {
+                      if (value !== null) setStatus(value)
+                    }}
+                  >
+                    <SelectTrigger aria-label="Conversation status" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {conversationStatusOptions.map(({ value, label }) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </SelectRoot>
+                )}
               </div>
             ),
-            actions: (
+            actions: isInbox ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -398,7 +492,7 @@ export function InboxPage() {
                 <Settings2 className="size-4" />
                 <PanelActionLabel>Settings</PanelActionLabel>
               </Button>
-            ),
+            ) : undefined,
           }}
           isEmpty={!tickets.items.length}
           empty={
@@ -406,12 +500,16 @@ export function InboxPage() {
               title={
                 search
                   ? "No matching conversations"
-                  : "No conversations in this queue"
+                  : isInbox
+                    ? "No escalated conversations"
+                    : "No conversations yet"
               }
               description={
                 search
                   ? "Try another subject, customer name, email or conversation ID."
-                  : "Conversations appear here when customers message your agents."
+                  : isInbox
+                    ? "Conversations appear here when they are escalated for human help."
+                    : "All customer conversations appear here, including chats that never need human help."
               }
               action={
                 search || status ? (
@@ -435,14 +533,17 @@ export function InboxPage() {
             settings={tableView.settings}
             onSettingsChange={tableView.onSettingsChange}
             columnOrderStore={tableView.columnOrderStore}
-            widths={[330, 220, 130, 120, 120, 160, 200]}
+            widths={
+              isInbox
+                ? [330, 220, 130, 120, 120, 160, 200]
+                : [330, 220, 130, 120, 200]
+            }
             columnIds={[
               "subject",
               "customer",
               "channel",
               "status",
-              "priority",
-              "assignment",
+              ...(isInbox ? ["priority", "assignment"] : []),
               "updated",
             ]}
             reorderable
@@ -455,8 +556,7 @@ export function InboxPage() {
                   "Customer",
                   "Channel",
                   "Status",
-                  "Priority",
-                  "Assignment",
+                  ...(isInbox ? ["Priority", "Assignment"] : []),
                   "Updated",
                 ].map((label) => (
                   <th key={label} className={collectionTable.heading}>
@@ -491,7 +591,7 @@ export function InboxPage() {
                   <td aria-hidden className={collectionTable.cell} />
                   <td className={collectionTable.cell}>
                     <span className="flex min-w-0 items-center gap-2 font-medium">
-                      <MessageCircle
+                      <ItemIcon
                         aria-hidden
                         className="size-4 shrink-0 text-foreground-muted"
                       />
@@ -514,28 +614,38 @@ export function InboxPage() {
                     </span>
                   </td>
                   <td className={collectionTable.cell}>
-                    <TicketStatusIndicator status={ticket.status} />
+                    {isInbox ? (
+                      <TicketStatusIndicator status={ticket.status} />
+                    ) : (
+                      conversationStatuses[
+                        ticket.conversationStatus ?? "active"
+                      ]
+                    )}
                   </td>
-                  <td className={collectionTable.cell}>
-                    <PriorityIndicator priority={ticket.priority} />
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <span className="flex min-w-0 items-center gap-2">
-                      {ticket.assigneeName || ticket.teamName ? (
-                        <UserAvatarImage
-                          name={ticket.assigneeName || ticket.teamName!}
-                          image={ticket.assigneeImage ?? null}
-                        />
-                      ) : null}
-                      <span className="truncate text-foreground-muted">
-                        {ticket.assigneeName ||
-                          ticket.teamName ||
-                          (ticket.assigneeUserId
-                            ? "Assigned teammate"
-                            : "Unassigned")}
-                      </span>
-                    </span>
-                  </td>
+                  {isInbox ? (
+                    <>
+                      <td className={collectionTable.cell}>
+                        <PriorityIndicator priority={ticket.priority} />
+                      </td>
+                      <td className={collectionTable.cell}>
+                        <span className="flex min-w-0 items-center gap-2">
+                          {ticket.assigneeName || ticket.teamName ? (
+                            <UserAvatarImage
+                              name={ticket.assigneeName || ticket.teamName!}
+                              image={ticket.assigneeImage ?? null}
+                            />
+                          ) : null}
+                          <span className="truncate text-foreground-muted">
+                            {ticket.assigneeName ||
+                              ticket.teamName ||
+                              (ticket.assigneeUserId
+                                ? "Assigned teammate"
+                                : "Unassigned")}
+                          </span>
+                        </span>
+                      </td>
+                    </>
+                  ) : null}
                   <td className={collectionTable.cell}>
                     <span className="text-foreground-muted">
                       {ticket.updatedAt
@@ -1060,6 +1170,17 @@ function InboxInspector({
     version: number
   } | null>(null)
   const conversationId = ticket?.conversationId ?? ""
+  const ticketId = ticket?.ticketId !== undefined ? ticket.ticketId : ticket?.id
+  const linkedTicket = useRemote(
+    (signal) =>
+      ticket?.ticketId
+        ? buildApi
+            .call<unknown>("build_get_ticket", { id: ticket.ticketId }, signal)
+            .then(detailFrom)
+        : Promise.resolve(null),
+    [ticket?.ticketId],
+    { enabled: !!ticket?.ticketId, intervalMs: 15_000 }
+  )
   const conversation = useRemote(
     (signal) =>
       conversationId
@@ -1086,17 +1207,13 @@ function InboxInspector({
   )
   const notes = useRemote(
     (signal) =>
-      ticket?.id
+      ticketId
         ? buildApi
-            .call<unknown>(
-              "build_list_ticket_notes",
-              { ticketId: ticket.id },
-              signal
-            )
+            .call<unknown>("build_list_ticket_notes", { ticketId }, signal)
             .then(noteList)
         : Promise.resolve<Note[]>([]),
-    [ticket?.id],
-    { enabled: !!ticket?.id }
+    [ticketId],
+    { enabled: !!ticketId }
   )
   const ownershipState = useRemote(
     (signal) =>
@@ -1119,6 +1236,7 @@ function InboxInspector({
   const resolvedTicket = ticket
     ? {
         ...ticket,
+        ...linkedTicket.data,
         messages: messages.data ?? [],
         notes: notes.data ?? [],
         macros: macros.data ?? [],
@@ -1144,6 +1262,7 @@ function InboxInspector({
     conversation.refresh()
     messages.refresh()
     notes.refresh()
+    linkedTicket.refresh()
     ownershipState.refresh()
   }
 
@@ -1156,7 +1275,8 @@ function InboxInspector({
     )
   const activeTicket = resolvedTicket
   const ticketVersion =
-    optimisticMacroVersion?.ticketId === activeTicket.id &&
+    optimisticMacroVersion &&
+    optimisticMacroVersion.ticketId === ticketId &&
     (typeof activeTicket.version !== "number" ||
       activeTicket.version < optimisticMacroVersion.version)
       ? optimisticMacroVersion.version
@@ -1167,10 +1287,11 @@ function InboxInspector({
     !ownershipState.error
 
   async function statusChange(value: string) {
+    if (!ticketId) return
     try {
       await update.run(() =>
         buildApi.call("build_update_ticket", {
-          id: activeTicket.id,
+          id: ticketId,
           status: value,
           expectedVersion: ticketVersion,
         })
@@ -1234,11 +1355,11 @@ function InboxInspector({
   }
   async function submitNote(event: React.FormEvent) {
     event.preventDefault()
-    if (!note.trim()) return
+    if (!ticketId || !note.trim()) return
     try {
       await addNote.run(() =>
         buildApi.call("build_add_ticket_note", {
-          ticketId: activeTicket.id,
+          ticketId,
           body: note.trim(),
         })
       )
@@ -1326,6 +1447,7 @@ function InboxInspector({
   }
 
   async function applyMacro(macro: Macro) {
+    if (!ticketId) return
     const expectedVersion = ticketVersion
     if (
       !Number.isInteger(expectedVersion) ||
@@ -1337,13 +1459,13 @@ function InboxInspector({
       const result = await applyMacroAction.run(() =>
         buildApi.call("build_apply_macro", {
           macroId: macro.id,
-          ticketId: activeTicket.id,
+          ticketId,
           expectedVersion,
         })
       )
       const returnedVersion = Number(asRecord(result).version)
       setOptimisticMacroVersion({
-        ticketId: activeTicket.id,
+        ticketId,
         version:
           Number.isInteger(returnedVersion) && returnedVersion > expectedVersion
             ? returnedVersion
@@ -1447,12 +1569,20 @@ function InboxInspector({
                 : "Handled by AI"}
           </span>
           <div className="ml-auto flex items-center gap-2">
-            <TicketStatusSelect
-              label="Conversation status"
-              value={activeTicket.status ?? "open"}
-              onValueChange={(value) => void statusChange(value)}
-              disabled={update.isPending || isLoading || !!error}
-            />
+            {ticketId ? (
+              <TicketStatusSelect
+                label="Ticket status"
+                value={activeTicket.status ?? "open"}
+                onValueChange={(value) => void statusChange(value)}
+                disabled={
+                  update.isPending ||
+                  isLoading ||
+                  !!error ||
+                  linkedTicket.isLoading ||
+                  !!linkedTicket.error
+                }
+              />
+            ) : null}
             <Button
               size="sm"
               variant={
@@ -1481,6 +1611,11 @@ function InboxInspector({
           </div>
         </div>
         {error ? <Notice variant="error">{error.message}</Notice> : null}
+        {linkedTicket.error ? (
+          <Notice variant="error">
+            Ticket details could not be loaded: {linkedTicket.error.message}
+          </Notice>
+        ) : null}
         {update.error ? (
           <Notice variant="error">{update.error.message}</Notice>
         ) : null}
@@ -1507,15 +1642,19 @@ function InboxInspector({
           aria-label="Conversation sections"
         >
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
-          <TabsTrigger value="notes">
-            Notes
-            {activeTicket.notes.length > 0 ? (
-              <span className="text-xs text-foreground-muted">
-                {activeTicket.notes.length}
-              </span>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger value="details">Details</TabsTrigger>
+          {ticketId ? (
+            <>
+              <TabsTrigger value="notes">
+                Notes
+                {activeTicket.notes.length > 0 ? (
+                  <span className="text-xs text-foreground-muted">
+                    {activeTicket.notes.length}
+                  </span>
+                ) : null}
+              </TabsTrigger>
+              <TabsTrigger value="details">Details</TabsTrigger>
+            </>
+          ) : null}
         </TabsList>
         <TabsContent
           value="conversation"
@@ -1723,15 +1862,18 @@ function InboxInspector({
           className="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
         >
           <InspectorSection label="Assignment">
-            <TicketAssignment
-              ticket={{
-                ...activeTicket,
-                version: ticketVersion,
-                teamId: activeTicket.teamId ?? null,
-                assigneeUserId: activeTicket.assigneeUserId ?? null,
-              }}
-              onChanged={refreshInspector}
-            />
+            {ticketId ? (
+              <TicketAssignment
+                ticket={{
+                  ...activeTicket,
+                  id: ticketId,
+                  version: ticketVersion,
+                  teamId: activeTicket.teamId ?? null,
+                  assigneeUserId: activeTicket.assigneeUserId ?? null,
+                }}
+                onChanged={refreshInspector}
+              />
+            ) : null}
           </InspectorSection>
           {macros.error || activeTicket.macros?.length ? (
             <InspectorSection label="Saved replies">

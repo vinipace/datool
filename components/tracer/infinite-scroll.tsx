@@ -19,7 +19,8 @@ export function InfiniteScroll({
   isFetching,
   loadMoreError,
   loadMore,
-}: InfiniteScrollState) {
+  itemLabel = "traces",
+}: InfiniteScrollState & { itemLabel?: string }) {
   const sentinel = React.useRef<HTMLDivElement>(null)
   const requestMore = React.useEffectEvent(loadMore)
   React.useEffect(() => {
@@ -66,14 +67,14 @@ export function InfiniteScroll({
     <div ref={sentinel} className="min-h-px">
       {isLoadingMore ? (
         <p role="status" className="px-3 py-2 text-xs text-foreground-muted">
-          Loading more traces…
+          Loading more {itemLabel}…
         </p>
       ) : null}
       {loadMoreError ? (
         <Notice variant="error" role="alert">
           {loadMoreError.message}
-          <Button size="sm" variant="outline" onClick={loadMore}>
-            Retry loading traces
+          <Button type="button" size="sm" variant="outline" onClick={loadMore}>
+            Retry loading {itemLabel}
           </Button>
         </Notice>
       ) : null}

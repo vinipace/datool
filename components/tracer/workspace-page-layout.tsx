@@ -27,6 +27,7 @@ const collectionTitles: Record<string, string> = {
 const buildTitles: Record<string, string> = {
   agents: pageTitles.buildAgents,
   inbox: pageTitles.buildInbox,
+  conversations: pageTitles.buildConversations,
   contacts: pageTitles.buildContacts,
   campaigns: pageTitles.buildCampaigns,
   integrations: pageTitles.buildIntegrations,

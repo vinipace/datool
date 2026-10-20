@@ -800,10 +800,7 @@ try {
   await page
     .getByRole("switch", { name: "Require human for actions", exact: true })
     .check()
-  await page
-    .getByRole("button", { name: "Save and apply", exact: true })
-    .click()
-  await page.getByRole("status").filter({ hasText: "applied" }).waitFor()
+  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
   const configured = await call("build_get_agent", { agentId })
   assert.equal(configured.configuration.guardrails.maxOutputTokens, 128)
   assert.deepEqual(configured.configuration.guardrails.blockedTopics, [
@@ -812,7 +809,7 @@ try {
   assert.equal(configured.appliedRevision, configured.currentRevision)
   if (liveModelKey) assert.equal(configured.configuration.provider, "openai")
   passed(
-    "browser saves and applies model, instructions and guardrails to an immutable revision"
+    "browser autosaves and applies model, instructions and guardrails to an immutable revision"
   )
 
   await page.goto(`${prefix}/integrations`, {

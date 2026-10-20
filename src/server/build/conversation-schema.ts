@@ -131,6 +131,14 @@ export const conversationPageSchema = z.object({
   before: z.string().optional(),
 })
 
+export const listConversationsInputSchema = z.object({
+  limit: z.number().int().min(1).max(100).default(50),
+  cursor: z.string().max(256).optional(),
+  search: z.string().max(300).optional(),
+  status: conversationStatusSchema.optional(),
+  channel: buildChannelSchema.optional(),
+})
+
 export type Conversation = {
   id: string
   projectId: string

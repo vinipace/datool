@@ -18,13 +18,17 @@ import {
   Settings,
   Workflow,
   Users,
-  Inbox,
+  Ticket,
   Megaphone,
   Lightbulb,
   House,
 } from "lucide-react"
 import { ScorerIcon } from "@/components/tracer/scorer-icon"
 import { SessionIcon } from "@/components/tracer/session-icon"
+import {
+  ConversationsFilledIcon,
+  TicketFilledIcon,
+} from "@/components/ui/support-icons"
 
 /** Shared by the workspace and public docs navigation. */
 export const productIcons = {
@@ -51,10 +55,16 @@ export const productIcons = {
   mcpConnections: Plug,
   documentation: BookOpenCheck,
   buildAgents: Bot,
-  buildInbox: Inbox,
+  buildInbox: Ticket,
+  buildConversations: MessagesSquare,
   buildContacts: Users,
   buildCampaigns: Megaphone,
   buildIntegrations: Plug,
   buildSuggestions: Lightbulb,
   buildTests: FlaskConical,
+} as const
+
+export const selectedProductIcons = {
+  buildInbox: TicketFilledIcon,
+  buildConversations: ConversationsFilledIcon,
 } as const

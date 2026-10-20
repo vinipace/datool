@@ -201,6 +201,26 @@ export type KnowledgeSourceDetail = KnowledgeSource & {
   config?: WebsiteSourceConfig
 }
 
+export type KnowledgePage = {
+  url: string
+  title: string | null
+  fetchedAt: string | null
+  contentType: string | null
+}
+
+export type KnowledgePageList = {
+  items: KnowledgePage[]
+  total: number
+  filteredTotal: number
+  revision: number
+}
+
+export type KnowledgePageDetail = KnowledgePage & {
+  markdown: string
+  revision: number
+  contentOrigin: "crawl" | "chunks"
+}
+
 export type KnowledgeChunk = {
   id: string
   sourceId: string

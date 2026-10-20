@@ -311,6 +311,7 @@ export async function runBuildUiE2e({
 
   const routes = [
     "agents",
+    "conversations",
     "inbox",
     "contacts",
     "campaigns",
@@ -322,7 +323,7 @@ export async function runBuildUiE2e({
     "Overview",
     "Instructions",
     "Guardrails",
-    "Appearance",
+    "Settings",
     "Knowledge",
     "Actions",
     "Procedures",
@@ -348,13 +349,9 @@ export async function runBuildUiE2e({
       name: "System instructions",
       exact: true,
     })
-    const draftMarker = "Unsaved browser navigation check."
-    const documentEnd =
-      process.platform === "darwin" ? "Meta+ArrowDown" : "Control+End"
-    await instructions.press(documentEnd)
-    await instructions.press("Enter")
-    await page.keyboard.insertText(draftMarker)
-    await page.getByRole("code").filter({ hasText: draftMarker }).waitFor()
+    const originalInstructions = await instructions.inputValue()
+    const editedInstructions = `${originalInstructions}\nBrowser navigation check.`
+    await instructions.fill(editedInstructions)
     if (width === 1440) {
       await selectAgentSection(page, "Guardrails")
       await page
@@ -371,13 +368,9 @@ export async function runBuildUiE2e({
     }
     await selectAgentSection(page, "Guardrails")
     await selectAgentSection(page, "Instructions")
-    // Monaco paints after the section becomes visible; wait for the retained
-    // draft itself rather than reading the previous render synchronously.
-    await page.getByRole("code").filter({ hasText: draftMarker }).waitFor()
-    // Remove only the appended line through Monaco's normal editing commands.
-    await instructions.press(documentEnd)
-    for (let index = 0; index <= draftMarker.length; index++)
-      await instructions.press("Backspace")
+    assert.equal(await instructions.inputValue(), editedInstructions)
+    await instructions.fill(originalInstructions)
+    await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
     for (const section of sections) {
       await selectAgentSection(page, section)
       // Wait for saved resources, not a previously idle document before the
