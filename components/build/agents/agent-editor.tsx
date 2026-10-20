@@ -1355,7 +1355,7 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="w-full min-w-0 space-y-5 px-3 py-1">
+    <div className="w-full min-w-0 space-y-5 px-3 pb-1 pt-4">
       {error && !showSource ? (
         <Notice role="alert" variant="error">
           {error}
