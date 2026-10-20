@@ -148,6 +148,36 @@ function fixture(image = `datool-release:${commit}-123-1`, branch = "main") {
   }
 }
 
+for (const [acceptanceExit, archiveExit] of [[0, 0], [1, 0], [0, 1]]) {
+  test(`image handoff requires acceptance (${acceptanceExit}) and archive (${archiveExit}) success`, () => {
+    const directory = mkdtempSync(join(tmpdir(), "datool-image-checks-"))
+    directories.push(directory)
+    mkdirSync(join(directory, "scripts"))
+    writeFileSync(join(directory, "docker"), "#!/bin/bash\nprintf 'archive bytes'\nexit \"$ARCHIVE_EXIT\"\n", { mode: 0o755 })
+    writeFileSync(join(directory, "pigz"), "#!/bin/bash\ncat\n", { mode: 0o755 })
+    writeFileSync(join(directory, "scripts/test-docker.sh"), "echo checked > acceptance.txt\nexit \"$ACCEPTANCE_EXIT\"\n")
+    const command = workflow.jobs["production-image"].steps.find(
+      (step: { run?: { name: string } }) =>
+        step.run?.name === "Exercise the production image with isolated services"
+    ).run.command
+    const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", command], {
+      cwd: directory,
+      env: {
+        NODE_ENV: "test",
+        PATH: `${directory}:/usr/bin:/bin`,
+        DATOOL_DOCKER_TEST_IMAGE: "fixture-image",
+        ACCEPTANCE_EXIT: String(acceptanceExit),
+        ARCHIVE_EXIT: String(archiveExit),
+      },
+      encoding: "utf8",
+      timeout: 5000,
+    })
+    expect(result.status).toBe(acceptanceExit || archiveExit ? 1 : 0)
+    expect(readFileSync(join(directory, "acceptance.txt"), "utf8")).toBe("checked\n")
+    expect(readFileSync(join(directory, "image.tar.gz"), "utf8")).toBe("archive bytes")
+  })
+}
+
 test("a deploy retry imports the exact archive and recorded build-attempt tag", () => {
   const { directory, run } = fixture()
   const result = run()

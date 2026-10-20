@@ -359,14 +359,23 @@ jobs:
               --entrypoint bun "$DATOOL_DOCKER_TEST_IMAGE" test tests/release-command.test.ts tests/deployment-image-handoff.test.ts tests/cms-seed-options.test.ts
       - run:
           name: Exercise the production image with isolated services
-          command: bash scripts/test-docker.sh
+          command: |
+            # Acceptance runs containers without changing the built image, so
+            # its archive can be prepared concurrently. Both must succeed.
+            command -v pigz >/dev/null || sudo apt-get install -y pigz
+            (
+              docker image save "$DATOOL_DOCKER_TEST_IMAGE" | pigz -1 > image.tar.gz
+            ) &
+            archive_pid=$!
+            status=0
+            bash scripts/test-docker.sh || status=1
+            wait "$archive_pid" || status=1
+            exit "$status"
           environment:
             DATOOL_DOCKER_SKIP_BUILD: "1"
       - run:
-          name: Export the verified image
+          name: Checksum the verified image archive
           command: |
-            command -v pigz >/dev/null || sudo apt-get install -y pigz
-            docker image save "$DATOOL_DOCKER_TEST_IMAGE" | pigz -1 > image.tar.gz
             printf '%s\n' "$DATOOL_DOCKER_TEST_IMAGE" > image-ref.txt
             docker image inspect "$DATOOL_DOCKER_TEST_IMAGE" --format '{{.Size}}' > image-size.txt
             sha256sum image.tar.gz image-ref.txt image-size.txt > image.sha256

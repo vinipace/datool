@@ -64,7 +64,9 @@ shorter verification job.
   TypeScript pass. The required `verify` job runs the full typecheck in parallel.
   Local and self-hosted Docker builds default to checking types inside Next.
 - The image job exports uncompressed layers locally;
-  `pigz` compresses the final image archive across available CPUs. The archive format,
+  `pigz` compresses the final image archive across available CPUs while acceptance
+  checks run against that immutable image. Both must succeed before the archive
+  is checksummed and handed off. The archive format,
   checksum verification, commit/pipeline identity, restricted SSH command, and
   serialized production release remain unchanged.
 
