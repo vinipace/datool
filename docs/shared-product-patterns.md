@@ -714,6 +714,8 @@ action. Theme controls reuse the scoped `datool-chat-surface` tokens.
 Settings combines identity and appearance in the shared, single-column form
 layout, using `InspectorSection` and `FormRow`. Revision history and the setup
 checklist stay in disclosures below the appearance fields.
+Welcome message, input placeholder and suggested replies are configured in the
+chat widget's channel editor, outside agent Settings.
 The former `section=appearance` URL opens Settings for existing bookmarks.
 
 `components/build/agents/agent-editor.tsx` omits the separate revision/save toolbar.

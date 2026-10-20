@@ -720,7 +720,7 @@ function SettingsTab({
           {agent ? "Settings" : "Create your agent"}
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Manage your agent’s identity, appearance and welcome experience.
+          Manage your agent’s identity and appearance.
         </p>
       </div>
       <div className="max-w-3xl">
@@ -1119,59 +1119,6 @@ function AppearanceAndGuardrails({
               }
             />
           </FormRow>
-          <InspectorSection label="Welcome message" variant="form">
-            <Textarea
-              aria-label="Welcome message"
-              rows={3}
-              autoSize
-              value={appearance.welcomeMessage}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    welcomeMessage: event.target.value,
-                  },
-                })
-              }
-            />
-          </InspectorSection>
-          <FormRow label="Input placeholder" htmlFor="appearance-placeholder">
-            <Input
-              id="appearance-placeholder"
-              value={appearance.inputPlaceholder}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    inputPlaceholder: event.target.value,
-                  },
-                })
-              }
-            />
-          </FormRow>
-          <InspectorSection label="Suggested replies" variant="form">
-            <Textarea
-              aria-label="Suggested replies"
-              rows={3}
-              autoSize
-              placeholder="One reply per line"
-              value={appearance.suggestedReplies.join("\n")}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    suggestedReplies: event.target.value
-                      .split("\n")
-                      .map((item) => item.trim())
-                      .filter(Boolean),
-                  },
-                })
-              }
-            />
-          </InspectorSection>
         </InspectorSection>
       ) : null}
       {section !== "appearance" ? (
