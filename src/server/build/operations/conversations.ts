@@ -4,6 +4,7 @@ import {
   appendConversationMessageInputSchema,
   conversationPageSchema,
   createConversationInputSchema,
+  listConversationsInputSchema,
   startConversationTurnInputSchema,
 } from "../conversation-schema"
 import { createConversationService } from "../conversations"
@@ -49,6 +50,13 @@ register(
   (context, input) =>
     createConversationService(context).getOrCreate(input as never),
   { idempotency: "optional" }
+)
+register(
+  "build_list_conversations",
+  "List all customer conversations, including chats that have never been escalated to an inbox ticket.",
+  ["build:read"],
+  listConversationsInputSchema,
+  (context, input) => createConversationService(context).list(input)
 )
 register(
   "build_get_conversation",

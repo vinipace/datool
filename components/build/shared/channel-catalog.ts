@@ -53,7 +53,7 @@ export const channelCatalog: Record<
   telegram: {
     label: "Telegram",
     description:
-      "Help customers through your Telegram bot, with conversations in your inbox.",
+      "Help customers through your Telegram bot and escalate support cases to your inbox.",
     icon: TelegramLogo,
     tone: "text-channel-telegram bg-channel-telegram/10",
     available: true,

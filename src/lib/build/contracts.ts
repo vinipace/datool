@@ -175,6 +175,7 @@ export type SaveAgentInput = {
 }
 
 export const actionTypeSchema = z.enum([
+  "integration",
   "http",
   "client",
   "widget",
@@ -207,6 +208,11 @@ const actionBaseSchema = z.object({
 })
 
 export const actionDefinitionSchema = z.discriminatedUnion("type", [
+  actionBaseSchema.extend({
+    type: z.literal("integration"),
+    connectionId: z.string().uuid(),
+    toolSlug: z.string().regex(/^[A-Z][A-Z0-9_]+$/).max(200),
+  }),
   actionBaseSchema.extend({
     type: z.literal("http"),
     method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),

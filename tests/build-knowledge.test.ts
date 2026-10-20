@@ -21,6 +21,7 @@ import {
   updateKnowledgeSource,
 } from "@/src/server/build/knowledge"
 import { assertPublicUrl } from "@/src/server/build/knowledge/crawler"
+import { getKnowledgePage, listKnowledgePages } from "@/src/server/build/knowledge/pages"
 import * as publicHttp from "@/src/server/build/http"
 import {
   extractDocumentText,
@@ -176,6 +177,12 @@ dbTest(
     })
     let interrupted = false
     let rootRequests = 0
+    const pageMarkdown = [
+      "# Onboarding",
+      "Zirconium support includes weekend onboarding.",
+      ...Array.from({ length: 80 }, (_, index) => `## Step ${index + 1}\nRead the **onboarding guide** and complete the scheduled setup.`),
+      "[Linked documentation](/linked-only?utm_source=test#details)",
+    ].join("\n\n")
     const transport = spyOn(publicHttp, "publicHttpRequest").mockImplementation(
       async (url, options) => {
         const path = new URL(url).pathname
@@ -195,7 +202,7 @@ dbTest(
             : path === "/pages.xml"
               ? `<urlset>${Array.from({ length: 130 }, (_, i) => `<url><loc>https://example.test/page-${i}</loc></url>`).join("")}</urlset>`
               : markdown
-                ? "# Onboarding\nZirconium support includes weekend onboarding.\n[Linked documentation](/linked-only?utm_source=test#details)"
+                ? pageMarkdown
                 : `<html><title>${path}</title><p>Reference content for ${path}. ${path === "/linked-only" ? "Cobalt training includes remote workshops." : "Standard documentation."}</p>${path === "/" ? '<a href="https://unrelated.test/private">External</a>' : ""}</html>`
         return {
           url,
@@ -243,6 +250,33 @@ dbTest(
         query: "Zirconium weekend onboarding",
       })
       expect(results[0]?.metadata.url).toBe("https://example.test/page-129")
+
+      // The page browser owns discovery beyond one result page and exact
+      // stored content; retrieval tests alone cannot establish these contracts.
+      const first = await listKnowledgePages(context, { sourceId: source.id, limit: 100 })
+      const second = await listKnowledgePages(context, { sourceId: source.id, limit: 100, offset: 100 })
+      expect(first.total).toBe(132)
+      expect(first.items).toHaveLength(100)
+      expect(second.items).toHaveLength(32)
+      expect(new Set([...first.items, ...second.items].map((page) => page.url)).size).toBe(132)
+      const matching = await listKnowledgePages(context, { sourceId: source.id, search: "PAGE-129" })
+      expect(matching.items.map((page) => page.url)).toEqual(["https://example.test/page-129"])
+      expect((await listKnowledgePages(context, { sourceId: source.id, search: "missing-page" })).filteredTotal).toBe(0)
+      const detailInput = { sourceId: source.id, url: matching.items[0].url, revision: first.revision }
+      const page = await getKnowledgePage(context, detailInput)
+      expect(page.markdown).toBe(pageMarkdown)
+      expect(page.contentOrigin).toBe("crawl")
+      await assert.rejects(getKnowledgePage(context, { ...detailInput, revision: first.revision + 1 }), /index changed/i)
+      await assert.rejects(getKnowledgePage(context, { ...detailInput, url: "https://example.test/unindexed" }), /not found/i)
+      const otherProject = { ...context, projectId: crypto.randomUUID() }
+      await assert.rejects(listKnowledgePages(otherProject, { sourceId: source.id }), /not found/i)
+      await assert.rejects(getKnowledgePage(otherProject, detailInput), /not found/i)
+
+      // Retired crawl checkpoints must not hide the still-active retrieval index.
+      await database.execute(sql`delete from build_knowledge_crawl_pages where project_id=${context.projectId}`)
+      const fallback = await getKnowledgePage(context, detailInput)
+      expect(fallback.markdown).toBe(pageMarkdown)
+      expect(fallback.contentOrigin).toBe("chunks")
     } finally {
       transport.mockRestore()
     }

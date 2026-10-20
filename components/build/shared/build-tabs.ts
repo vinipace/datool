@@ -23,12 +23,6 @@ export const agentBuildTabs: BuildTab[] = [
     group: "Setup",
   },
   {
-    id: "appearance",
-    label: "Appearance",
-    description: "Welcome and visual style",
-    group: "Setup",
-  },
-  {
     id: "guardrails",
     label: "Guardrails",
     description: "Safety, usage and abuse limits",
@@ -44,6 +38,12 @@ export const agentBuildTabs: BuildTab[] = [
     id: "knowledge",
     label: "Knowledge",
     description: "Sources your agent can use",
+    group: "Build",
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    description: "Connect apps your agent can use",
     group: "Build",
   },
   {
@@ -79,7 +79,7 @@ export const agentBuildTabs: BuildTab[] = [
   {
     id: "settings",
     label: "Settings",
-    description: "Identity and revision history",
+    description: "Identity, appearance and revision history",
     group: "Setup",
   },
 ]

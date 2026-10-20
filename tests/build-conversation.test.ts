@@ -48,6 +48,99 @@ async function makeService() {
 }
 
 describe("Build conversation ledger", () => {
+  test("preserves JSON-looking message text and structured content across database reads", async () => {
+    const { service } = await makeService()
+    const conversation = await service.getOrCreate({
+      agentId: "agent-a",
+      channel: "web",
+      metadata: {},
+    })
+    const contents = [
+      "3",
+      "true",
+      "null",
+      '"quoted"',
+      '{"count":3}',
+      '[{"type":"text","text":"literal JSON"}]',
+      [{ type: "text" as const, text: "Structured message" }],
+      { count: 3 },
+    ]
+    for (const content of contents) {
+      const message = await service.appendMessage(conversation.id, {
+        role: "assistant",
+        content,
+        status: "completed",
+        metadata: {},
+      })
+      expect(message.content).toEqual(content)
+    }
+    expect(
+      (await service.listMessages(conversation.id)).items.map((item) => item.content)
+    ).toEqual(contents)
+  }, 30_000)
+
+  test("lists all chats with independent conversation status, search and cursor pagination", async () => {
+    const { service } = await makeService()
+    const ordinary = await service.getOrCreate({
+      agentId: "agent-a",
+      channel: "web",
+      metadata: {},
+    })
+    const escalated = await service.getOrCreate({
+      agentId: "agent-a",
+      channel: "api",
+      metadata: {},
+    })
+    await service.appendMessage(ordinary.id, {
+      role: "user",
+      content: "Opening hours",
+      status: "completed",
+      metadata: {},
+    })
+    await service.appendMessage(escalated.id, {
+      role: "user",
+      content: "Refund investigation",
+      status: "completed",
+      metadata: {},
+    })
+    await service.claim(escalated.id, {
+      type: "human",
+      id: "support",
+      reason: "Investigate refund",
+    })
+    const all = await service.list()
+    expect(all.items).toHaveLength(2)
+    expect(all.items.find((item) => item.id === ordinary.id)).toMatchObject({
+      subject: "Opening hours",
+      status: "active",
+      ticketId: null,
+    })
+    expect(all.items.find((item) => item.id === escalated.id)).toMatchObject({
+      status: "handed_off",
+      ticketStatus: "open",
+    })
+    expect(
+      all.items.find((item) => item.id === escalated.id)?.ticketId
+    ).toBeTruthy()
+    expect(
+      (
+        await service.list({ search: "Refund", status: "handed_off" })
+      ).items.map((item) => item.id)
+    ).toEqual([escalated.id])
+    expect(
+      (await service.list({ channel: "web" })).items.map((item) => item.id)
+    ).toEqual([ordinary.id])
+    const first = await service.list({ limit: 1 })
+    const second = await service.list({ limit: 1, cursor: first.nextCursor })
+    expect([...first.items, ...second.items].map((item) => item.id)).toEqual(
+      all.items.map((item) => item.id)
+    )
+    expect(second.nextCursor).toBeNull()
+
+    const { service: otherProject } = await makeService()
+    expect((await otherProject.list({ search: "Refund" })).items).toEqual([])
+  })
+
   test("deduplicates external conversations and replays completed request keys", async () => {
     const { service } = await makeService()
     const conversation = await service.getOrCreate({

@@ -157,13 +157,22 @@ saved; previously issued conversations retain their original definition.
 | Actions                   | Validated HTTP/client/widget/handoff operations with channel and approval constraints              |
 | Procedures                | Bounded steps, conditions, variables, action references, and conversation continuations            |
 | Playground                | Hosted runtime with conversation and tool evidence                                                 |
-| Inbox                     | Conversations, tickets, human ownership, notes, replies, routing, macros, and satisfaction records |
+| Conversations             | All customer chats, their transcripts, and conversation ownership, including chats without tickets |
+| Inbox                     | Escalated support cases, ticket status, assignment, notes, replies, routing, macros, and satisfaction records |
 | Contacts                  | Identities, custom attributes, collected data, imports/exports, and leads                          |
 | Campaigns                 | Audience snapshots, suppression, scheduled admission, and channel delivery receipts                |
 | Dashboards                | Customer experience template with conversation activity, inbox, handoffs, and satisfaction metrics |
 | Suggestions               | Feedback and knowledge gaps                                                                        |
 | Simulations               | Frozen configurations, customer scenarios, mocked actions, transcripts, and explicit verdicts      |
 | Copilot                   | Proposed changes, review, approval, application, and audit history                                 |
+
+Incoming messages create conversations, not tickets. A runtime handoff, operator
+takeover, or explicit `build_create_ticket` creates the support case. Repeated
+handoffs reuse the same ticket; returning a conversation to AI keeps its ticket.
+Follow-up messages and new escalations reopen resolved cases.
+`build_list_conversations` returns all chats with their optional ticket
+link, while `build_list_tickets` returns only support cases. Conversation status
+and ticket status are independent.
 
 Contact details show **Connected accounts**, with a separate external ID and
 connection name/status for each linked channel identity. **Primary external ID**
@@ -188,6 +197,12 @@ XML, and HTML. Scanned PDFs require text extraction/OCR before upload. Indexing
 publishes a new source revision atomically and retains the previous index when
 a refresh fails. Source deletion revokes retrieval. Retrieval reports source
 provenance; it must not be described as a vector index.
+
+## Connected apps and usage
+
+Agents can use project-owned third-party accounts through Composio. See
+[Connected apps and agent usage](composio-integrations.md) for setup, OAuth,
+per-agent/conversation token reporting, and shared tier-credit enforcement.
 
 ## MCP and HTTP
 

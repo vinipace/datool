@@ -48,7 +48,7 @@ import { WorkspacePageLayout } from "./workspace-page-layout"
 
 import { useReactViewWebMcp } from "./use-react-view-webmcp"
 import { useViewLibraryWebMcp } from "./use-view-library-webmcp"
-import { productIcons } from "@/components/product-icons"
+import { productIcons, selectedProductIcons } from "@/components/product-icons"
 import { InspectorPanels } from "./inspector-panels"
 import { useOrganizationSessionSync } from "@/lib/workspace-selection"
 import {
@@ -66,8 +66,15 @@ const routeGroups = [
         label: pageTitles.buildAgents,
       },
       {
+        href: "/build/conversations",
+        icon: productIcons.buildConversations,
+        activeIcon: selectedProductIcons.buildConversations,
+        label: pageTitles.buildConversations,
+      },
+      {
         href: "/build/inbox",
         icon: productIcons.buildInbox,
+        activeIcon: selectedProductIcons.buildInbox,
         label: pageTitles.buildInbox,
       },
       {
@@ -306,6 +313,10 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
                     pathname.startsWith(`${href}/`)) ||
                   (route.href === "/playground" &&
                     pathname.startsWith(`${prefix}/apps/`))
+                const Icon =
+                  active && "activeIcon" in route && route.activeIcon
+                    ? route.activeIcon
+                    : route.icon
                 const link = (
                   <SidebarMenuButton
                     className="h-7 text-xs group-data-[collapsible=icon]/sidebar:size-7"
@@ -314,7 +325,7 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
                     aria-current={active ? "page" : undefined}
                     render={<Link href={href} prefetch={true} />}
                   >
-                    <route.icon />
+                    <Icon />
                     <span>{route.label}</span>
                   </SidebarMenuButton>
                 )

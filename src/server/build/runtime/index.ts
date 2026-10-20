@@ -1,8 +1,16 @@
 import { createHash, randomUUID } from "node:crypto"
+import { executeAppAction } from "../integrations/service"
+import { beginModelUsage, finishModelUsage } from "../usage"
 
 import { createGateway } from "@ai-sdk/gateway"
 import { createOpenAI } from "@ai-sdk/openai"
-import { generateText, isStepCount, jsonSchema, tool } from "ai"
+import {
+  generateText,
+  isStepCount,
+  jsonSchema,
+  tool,
+  type LanguageModelCallEndEvent,
+} from "ai"
 import { sql } from "drizzle-orm"
 import { z } from "zod"
 import { getModels } from "tokenlens/models"
@@ -1403,7 +1411,7 @@ async function executeAction(
     knownSecrets,
     options.procedureCursor
   )
-  if (action.type !== "http") {
+  if (action.type !== "http" && action.type !== "integration") {
     try {
       await service.recordToolCallFinish({
         conversationId: conversation.id,
@@ -1435,6 +1443,27 @@ async function executeAction(
     }
   }
   try {
+    if (action.type === "integration") {
+      const result = await executeAppAction(context, {
+        connectionId: action.connectionId,
+        toolSlug: action.toolSlug,
+        agentId: conversation.agentId,
+        conversationId: conversation.id,
+        turnId: turn.id,
+        toolCallId: options.toolCallId,
+        arguments: input,
+        signal: options.signal,
+      })
+      await service.recordToolCallFinish({
+        conversationId: conversation.id,
+        turnId: turn.id,
+        toolCallId: options.toolCallId,
+        status: result.status,
+        output: result.output,
+        ownerFence: turn.ownerFence,
+      })
+      return { ...result, continuation: null }
+    }
     assertSafeActionUrl(action.url)
     const result = await invokeBuildHttp(
       {
@@ -2968,6 +2997,16 @@ export async function runAgentTurn(
         role: message.role as "user" | "assistant",
         content: textFromContent(message.content),
       }))
+    let pendingModelUsage: string | null = null
+    // AI SDK event callbacks report and swallow errors. Keep admission and
+    // side effects blocked if a model usage report could not be persisted.
+    function assertModelUsageRecorded() {
+      if (pendingModelUsage)
+        throw new BuildRuntimeError(
+          "MODEL_USAGE_UNAVAILABLE",
+          "The previous model call's usage is not yet recorded."
+        )
+    }
     const aiTools: Record<string, unknown> = {}
     const continuations: RuntimeContinuation[] = []
     const invokedIntentProcedures = new Set<string>()
@@ -2982,6 +3021,7 @@ export async function runAgentTurn(
           args: Record<string, unknown>,
           toolOptions: { toolCallId?: string }
         ) => {
+          assertModelUsageRecorded()
           const toolCallId = toolOptions.toolCallId ?? randomUUID()
           const result = await executeAction(
             context,
@@ -3030,6 +3070,7 @@ export async function runAgentTurn(
           additionalProperties: false,
         }),
         execute: async () => {
+          assertModelUsageRecorded()
           if (invokedIntentProcedures.has(procedure.id))
             return {
               error: "This intent procedure already ran in this turn.",
@@ -3115,6 +3156,29 @@ export async function runAgentTurn(
             Math.max(1, Math.min(options.maxToolSteps ?? 8, 20))
           ),
           maxRetries: 0,
+          prepareStep: async () => {
+            assertModelUsageRecorded()
+            pendingModelUsage = await beginModelUsage(context, {
+              agentId: agent.id,
+              conversationId: conversation.id,
+              turnId: turn.id,
+              provider: selection.provider,
+              model: selection.modelId,
+            })
+            return undefined
+          },
+          onLanguageModelCallEnd: async (event: LanguageModelCallEndEvent) => {
+            if (pendingModelUsage) {
+              await finishModelUsage(
+                context,
+                pendingModelUsage,
+                event.usage,
+                event.providerMetadata,
+                event.responseId
+              )
+              pendingModelUsage = null
+            }
+          },
           temperature: configuration.temperature,
           maxOutputTokens: configuration.guardrails.maxOutputTokens,
           abortSignal: options.signal,
@@ -3128,6 +3192,10 @@ export async function runAgentTurn(
             : undefined,
         } as never)
       } finally {
+        if (pendingModelUsage)
+          await finishModelUsage(context, pendingModelUsage).catch(
+            () => undefined
+          )
         await telemetry?.shutdown().catch(() => {
           // Delivery failure must not erase the durable customer turn.
           if (trace)

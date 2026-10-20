@@ -147,8 +147,7 @@ retain per-field view settings.
 The Build agent playground mounts `components/build/channels/chat-bubble-editor.tsx`
 with the existing web channel's settings. It uses the same `BubblePreview` and
 `PublicChat` as channel editing, including new conversations, widgets and forms.
-The agent shell omits its revision/save toolbar on this tab; the shared channel
-editor owns settings autosave. Agents without a chat bubble receive a draft
+The shared channel editor owns settings autosave. Agents without a chat bubble receive a draft
 connection, which is not enabled by opening the playground.
 
 `components/ui/chat-rich-content.tsx` owns widget cards and form controls across
@@ -693,7 +692,8 @@ Monaco edits the declarative component JSON and named data states; invalid JSON
 blocks saving. Functions connect existing agent actions through the shared
 combobox, and can insert buttons or forms using those action IDs. API settings and
 credentials stay with the action editor. Saves use the same versioned Build/MCP
-operations and require applying the agent's changes before customer use.
+operations; the agent editor automatically applies saved definition changes for
+customer use.
 
 `components/ui/chat-rich-content.tsx` owns widget rendering in both chats and the
 editor preview. Default state data is merged with named preview state and pinned
@@ -701,3 +701,20 @@ action inputs; template values are rendered as escaped text, never executed.
 `widget-preview.tsx` composes this renderer and the shared Chat for its layout
 previews. Preview interactions show their payload locally without executing an
 action. Theme controls reuse the scoped `datool-chat-surface` tokens.
+
+
+## Agent editing
+
+Settings combines identity and appearance in the shared, single-column form
+layout, using `InspectorSection` and `FormRow`. Revision history and the setup
+checklist stay in disclosures below the appearance fields.
+The former `section=appearance` URL opens Settings for existing bookmarks.
+
+`components/build/agents/agent-editor.tsx` omits the separate revision/save toolbar.
+Existing agents automatically save and apply valid identity, instruction,
+appearance and guardrail edits after a short pause.
+`src/lib/build/agent-autosave.ts` serializes writes using the latest acknowledged
+revision, retains edits made during an in-flight save, and applies definition
+changes after their editors save them. Invalid changes remain local; failed
+writes preserve the draft and expose Retry. A compact header status announces
+saving and saved states. New agents still require the explicit Create agent action.

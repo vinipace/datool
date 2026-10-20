@@ -7,6 +7,8 @@ type TextareaProps = React.ComponentPropsWithoutRef<"textarea"> & {
   icon?: React.ReactNode
   variant?: "default" | "plain"
   autoSize?: boolean
+  /** Minimum visible rows, including when autoSize sizes to content. */
+  minRows?: number
 }
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
@@ -17,6 +19,9 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       icon,
       variant = "default",
       autoSize = false,
+      minRows,
+      rows,
+      style,
       "aria-invalid": ariaInvalid,
       ...props
     },
@@ -26,13 +31,21 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       <textarea
         ref={ref}
         data-slot="textarea"
+        rows={rows ?? minRows}
+        style={{
+          minHeight:
+            minRows === undefined
+              ? undefined
+              : `calc(${Math.max(1, minRows)}lh + ${variant === "plain" ? "0px" : "1rem + 2px"})`,
+          ...style,
+        }}
         aria-invalid={invalid ? true : ariaInvalid}
         className={cn(
           "flex min-h-24 w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm text-foreground transition-colors outline-none placeholder:text-foreground-subtle focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/30",
           variant === "plain" &&
             "min-h-5 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0",
           autoSize && "field-sizing-content resize-none",
-          autoSize && props.rows === 1 && "min-h-9",
+          autoSize && (rows ?? minRows) === 1 && "min-h-9",
           icon && (variant === "plain" ? "pl-6" : "pl-9"),
           className
         )}

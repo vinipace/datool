@@ -17,6 +17,8 @@ export function withActionType(
     inputSchema: current.inputSchema,
   }
   switch (type) {
+    case "integration":
+      return { ...base, type, connectionId: "", toolSlug: "" }
     case "http":
       return {
         ...base,

@@ -88,10 +88,29 @@ async function saveThroughUi(
       pathname.endsWith(`/api/build/${operation}`)
     )
   })
+  const appliedPromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/api/build/build_update_agent")
+  )
   await click()
   const response = await responsePromise
   assert(response.ok(), `${operation} returned HTTP ${response.status()}`)
   const payload = record(await response.json(), `${operation} response`)
+  const applied = await appliedPromise
+  assert(applied.ok(), `Agent autosave returned HTTP ${applied.status()}`)
+  const appliedAgent = record(
+    record(await applied.json(), "agent autosave response").data,
+    "applied agent"
+  )
+  assert(Number.isInteger(appliedAgent.currentRevision))
+  assert.equal(appliedAgent.appliedRevision, appliedAgent.currentRevision)
+  // The full-screen widget editor hides the parent agent's status region.
+  await page
+    .getByText("Saved", { exact: true })
+    .filter({ visible: true })
+    .last()
+    .waitFor()
   return record(payload.data, `${operation} data`)
 }
 
@@ -316,7 +335,6 @@ export async function runBuildAuthoringE2e({
     () =>
       page.getByRole("button", { name: "Create widget", exact: true }).click()
   )
-  await page.getByText("Saved", { exact: true }).waitFor()
 
   const widgetId = stringValue(createdWidgetResponse.id, "widget id")
   const widgetAfterCreate = record(
@@ -347,7 +365,6 @@ export async function runBuildAuthoringE2e({
   await saveThroughUi(page, "build_save_widget", () =>
     page.getByRole("button", { name: "Save changes", exact: true }).click()
   )
-  await page.getByText("Saved", { exact: true }).waitFor()
 
   const widgetAfterEdit = record(
     await call("build_get_widget", { agentId, widgetId }),
@@ -440,15 +457,14 @@ export async function runBuildAuthoringE2e({
     "browser reload hydrates persisted definition names, revisions and fields"
   )
 
-  // Save one post-reload definition change, then apply it from the existing
-  // agent editor. The action remains client-side and disabled throughout.
+  // Saving a post-reload definition must also apply it automatically.
+  // The action remains client-side and disabled throughout.
   await page
     .getByRole("textbox", { name: "Description", exact: true })
     .fill("Edited disabled widget is ready for the applied draft.")
   await saveThroughUi(page, "build_save_widget", () =>
     page.getByRole("button", { name: "Save changes", exact: true }).click()
   )
-  await page.getByText("Saved", { exact: true }).waitFor()
   const widgetAfterReloadEdit = record(
     await call("build_get_widget", { agentId, widgetId }),
     "widget after reload edit"
@@ -471,10 +487,6 @@ export async function runBuildAuthoringE2e({
   await page
     .getByRole("button", { name: "Back to widgets", exact: true })
     .click()
-  const apply = page.getByRole("button", { name: "Apply changes", exact: true })
-  await apply.waitFor()
-  await apply.click()
-  await waitForStatus(page, "Agent saved and applied")
   const appliedAgent = record(
     await call("build_get_agent", { agentId }),
     "applied agent"
@@ -488,6 +500,6 @@ export async function runBuildAuthoringE2e({
     fullPage: true,
   })
   passed(
-    "browser applies the persisted authoring draft and publishes matching agent revisions"
+    "browser automatically applies saved definitions and publishes matching agent revisions"
   )
 }

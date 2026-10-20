@@ -7,6 +7,7 @@ import type { TracerDatabase } from "@/src/server/tracer/db"
 import { getTracerProjectId } from "@/src/server/tracer/db"
 import type { BuildContext } from "./context"
 import { getAgent } from "./agents"
+import { ensureEscalationTicket } from "./operations/ticket-escalation"
 import {
   appendConversationMessageInputSchema,
   conversationContentSchema,
@@ -16,6 +17,7 @@ import {
   conversationToolStatusSchema,
   conversationTurnStatusSchema,
   createConversationInputSchema,
+  listConversationsInputSchema,
   startConversationTurnInputSchema,
   type AppendConversationMessageInput,
   type Conversation,
@@ -109,7 +111,9 @@ function toMessage(row: Record<string, unknown>): ConversationMessage {
         : String(row.turn_id),
     ordinal: Number(row.ordinal),
     role: conversationMessageRoleSchema.parse(row.role),
-    content: conversationContentSchema.parse(parseJson(row.content_json, "")),
+    // PostgreSQL already decodes JSONB. Parsing message text again would turn
+    // replies such as "3", "true", or JSON examples into different values.
+    content: conversationContentSchema.parse(row.content_json ?? ""),
     toolCallId:
       row.tool_call_id === null || row.tool_call_id === undefined
         ? null
@@ -305,6 +309,59 @@ export class ConversationService {
     const conversation = await this.get(id)
     if (!conversation) throw new ConversationNotFoundError(id)
     return conversation
+  }
+
+  async list(value: unknown = {}) {
+    const input = listConversationsInputSchema.parse(value)
+    const result = await this.database.execute<Record<string, unknown>>(sql`
+      select c.*,contact.display_name as contact_name,contact.id as contact_id,
+        t.id as ticket_id,t.version as ticket_version,t.status as ticket_status,
+        coalesce(nullif(t.subject,''),preview.subject,'') as subject
+      from build_conversations c
+      left join build_inbox_tickets t on t.project_id=c.project_id and t.conversation_id=c.id
+      left join build_contacts contact on contact.project_id=c.project_id
+        and contact.id=coalesce(t.contact_id,c.metadata_json->>'contactId')
+      left join lateral (
+        select coalesce(
+          (select m.content_json #>> '{}' from build_conversation_messages m
+           where m.project_id=c.project_id and m.conversation_id=c.id
+             and m.role='user' and jsonb_typeof(m.content_json)='string'
+           order by m.ordinal asc limit 1),
+          (select m.content_json->>'text' from build_channel_message m
+           where m.project_id=c.project_id and m.conversation_id=c.id and m.direction='inbound'
+           order by m.created_at asc,m.id asc limit 1)
+        ) as subject
+      ) preview on true
+      where c.project_id=${this.projectId}
+        ${input.cursor ? sql`and c.id>${input.cursor}` : sql``}
+        ${input.status ? sql`and c.status=${input.status}` : sql``}
+        ${input.channel ? sql`and c.channel=${input.channel}` : sql``}
+        ${
+          input.search
+            ? sql`and (
+          c.id ilike ${`%${input.search}%`} or c.external_conversation_id ilike ${`%${input.search}%`}
+          or coalesce(nullif(t.subject,''),preview.subject,'') ilike ${`%${input.search}%`}
+          or contact.display_name ilike ${`%${input.search}%`}
+          or contact.email ilike ${`%${input.search}%`} or contact.phone ilike ${`%${input.search}%`}
+        )`
+            : sql``
+        }
+      order by c.id asc limit ${input.limit + 1}
+    `)
+    const rows = result.rows.slice(0, input.limit)
+    return {
+      items: rows.map((row) => ({
+        ...toConversation(row),
+        subject: String(row.subject ?? "").slice(0, 500),
+        contactId: row.contact_id as string | null,
+        contactName: row.contact_name as string | null,
+        ticketId: row.ticket_id as string | null,
+        ticketVersion: row.ticket_version as number | null,
+        ticketStatus: row.ticket_status as string | null,
+      })),
+      nextCursor:
+        result.rows.length > input.limit ? String(rows.at(-1)!.id) : null,
+    }
   }
 
   async getByExternalId(
@@ -1239,6 +1296,11 @@ export class ConversationService {
         RETURNING *
       `)
       if (owner.type === "human") {
+        await ensureEscalationTicket(tx, this.projectId, conversationId, {
+          actorId: this.context.actorId,
+          teamId: owner.id,
+          reopen: current.ownerType !== "human",
+        })
         // A takeover fences every in-flight AI turn. Its provider outcome is
         // no longer safe to classify as a clean cancellation: a tool may have
         // reached its destination while the worker was being fenced out.

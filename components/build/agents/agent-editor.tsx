@@ -15,6 +15,8 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Check,
+  LoaderCircle,
   Settings2,
   SquarePlus,
   Network,
@@ -32,7 +34,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CodeEditor } from "@/components/ui/code-editor"
 import { Slider } from "@/components/ui/slider"
 import {
   Card,
@@ -67,7 +68,6 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { PanelActionLabel } from "@/components/ui/panel-action-label"
 import { useRemote } from "@/components/tracer/hooks"
 import { CollectionRow, CollectionTable, CollectionTableBody } from "@/components/tracer/collection-table"
 import { collectionTable } from "@/components/tracer/collection-table-styles"
@@ -76,7 +76,6 @@ import { ProjectModelField } from "@/components/tracer/project-model-field"
 import { useWorkspaceHref } from "@/components/tracer/workspace-path"
 import {
   BuildErrorState,
-  BuildSaveNotice,
   BuildStatus,
 } from "@/components/build/shared/build-layout"
 import { agentBuildTabs } from "@/components/build/shared/build-tabs"
@@ -84,8 +83,12 @@ import { AgentSidebarNavigation } from "@/components/build/shared/agent-sidebar"
 import { channelLabel } from "@/components/build/shared/channel-catalog"
 import { CopilotTab } from "./copilot-tab"
 import { AgentOverview } from "./agent-overview"
+import { KnowledgePages } from "./knowledge-pages"
+import { KnowledgeSourceRow } from "./knowledge-source-row"
 import { WidgetsTab } from "./widgets-tab"
 import { AgentPlayground } from "./agent-playground"
+import { IntegrationActionFields } from "./integration-action-fields"
+import { IntegrationsTab } from "./integrations-tab"
 import { ActionCatalog, ActionIcon, ActionTypeLabel } from "./action-catalog"
 import {
   newActionDraft,
@@ -109,7 +112,11 @@ import type {
   ProcedureDefinition,
   ProcedureRecord,
 } from "@/src/lib/build/contracts"
-import { agentConfigurationSchema } from "@/src/lib/build/contracts"
+import {
+  agentDraft as defaultDraft,
+  createAgentAutosave,
+  validAgentDraft,
+} from "@/src/lib/build/agent-autosave"
 import {
   GATEWAY_PROVIDER,
   OPENAI_PROVIDER,
@@ -158,19 +165,6 @@ function agentProviderForModelProvider(
   if (provider === GATEWAY_PROVIDER)
     return current === "project" ? "project" : "gateway"
   return current
-}
-
-const blankConfiguration: AgentConfiguration = agentConfigurationSchema.parse({
-  appearance: { welcomeMessage: "Hi! How can I help?" },
-})
-
-function defaultDraft(agent?: ManagedAgent) {
-  return {
-    name: agent?.name ?? "",
-    slug: agent?.slug ?? "",
-    description: agent?.description ?? "",
-    configuration: agent?.configuration ?? blankConfiguration,
-  }
 }
 
 export function NewBuildAgentPage() {
@@ -223,9 +217,29 @@ function BuildAgentEditorContent({
   const router = useRouter()
   const searchParams = useSearchParams()
   const workspaceHref = useWorkspaceHref()
-  const [saved, setSaved] = React.useState(agent)
-  const [draft, setDraft] = React.useState(() => defaultDraft(agent))
-  const requestedSection = searchParams.get("section")
+  const [store] = React.useState(() =>
+    createAgentAutosave(agent, (draft, saved, changes) =>
+      saved
+        ? buildCall<ManagedAgent>(buildOperations.updateAgent, {
+            agentId: saved.id,
+            ...changes,
+            expectedRevision: saved.currentRevision,
+            apply: true,
+          })
+        : buildCall<ManagedAgent>(buildOperations.createAgent, draft)
+    )
+  )
+  const saveState = React.useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot
+  )
+  const { saved, draft } = saveState
+  // Keep existing Appearance bookmarks working after merging it into Settings.
+  const sectionParam = searchParams.get("section")
+  const requestedSection =
+    sectionParam === "appearance" ? "settings" : sectionParam
+  const initialSection = initialTab === "appearance" ? "settings" : initialTab
   const requestedIsAllowed =
     !!requestedSection &&
     agentBuildTabs.some((tab) => tab.id === requestedSection) &&
@@ -235,8 +249,8 @@ function BuildAgentEditorContent({
   const active =
     requestedIsAllowed && requestedSection
       ? requestedSection
-      : agentBuildTabs.some((tab) => tab.id === initialTab)
-        ? initialTab
+      : agentBuildTabs.some((tab) => tab.id === initialSection)
+        ? initialSection
         : "overview"
   const mainRef = React.useRef<HTMLElement>(null)
   const [visitedSections, setVisitedTabs] = React.useState(
@@ -244,18 +258,10 @@ function BuildAgentEditorContent({
   )
   const visitedTabs = new Set([...visitedSections, active])
   const [actionsView, setActionsView] = React.useState("mine")
-  const [pending, setPending] = React.useState(false)
+  const pending = saveState.status === "saving"
   const [error, setError] = React.useState<string | null>(null)
-  const [savedMessage, setSavedMessage] = React.useState<string | null>(null)
-  const [definitionDirty, setDefinitionDirty] = React.useState(false)
-  const dirty = JSON.stringify(draft) !== JSON.stringify(defaultDraft(saved))
-  const valid =
-    !!draft.name.trim() &&
-    !!draft.slug.trim() &&
-    !!draft.configuration.model.trim()
-  const hasUnappliedDraft = Boolean(
-    saved && saved.currentRevision > saved.appliedRevision
-  )
+  const dirty = store.pending()
+  const valid = validAgentDraft(draft)
 
   const selectTab = React.useCallback(
     (next: string) => {
@@ -289,52 +295,38 @@ function BuildAgentEditorContent({
     })
   }, [active])
 
-  const save = React.useCallback(
-    async (apply: boolean) => {
-      const canApply = dirty || hasUnappliedDraft || definitionDirty
-      if (!valid || pending || (!dirty && (!apply || !canApply))) return
-      setPending(true)
-      setError(null)
-      setSavedMessage(null)
-      try {
-        const next = saved
-          ? await buildCall<ManagedAgent>(buildOperations.updateAgent, {
-              agentId: saved.id,
-              ...draft,
-              expectedRevision: saved.currentRevision,
-              apply,
-            })
-          : await buildCall<ManagedAgent>(buildOperations.createAgent, {
-              ...draft,
-            })
-        setSaved(next)
-        setDraft(defaultDraft(next))
-        if (apply) setDefinitionDirty(false)
-        setSavedMessage(
-          saved && !apply ? "Agent draft saved" : "Agent saved and applied"
+  const save = React.useCallback(async () => {
+    if (!valid) return
+    setError(null)
+    try {
+      await store.flush()
+      const next = store.getSnapshot().saved
+      if (!agent && next)
+        router.replace(
+          workspaceHref(`/build/agents/${encodeURIComponent(next.id)}`)
         )
-        if (!saved)
-          router.replace(
-            workspaceHref(`/build/agents/${encodeURIComponent(next.id)}`)
-          )
-      } catch (reason) {
-        setError(formatBuildError(reason))
-      } finally {
-        setPending(false)
-      }
-    },
-    [
-      dirty,
-      draft,
-      definitionDirty,
-      hasUnappliedDraft,
-      pending,
-      router,
-      saved,
-      valid,
-      workspaceHref,
-    ]
-  )
+    } catch {
+      // The queue retains the draft and exposes the error for retry.
+    }
+  }, [agent, router, store, valid, workspaceHref])
+
+  React.useEffect(() => {
+    function beforeUnload(event: BeforeUnloadEvent) {
+      if (!store.pending()) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", beforeUnload)
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload)
+      if (
+        store.getSnapshot().saved &&
+        store.pending() &&
+        !store.getSnapshot().error
+      )
+        void store.flush().catch(() => {})
+    }
+  }, [store])
 
   async function cloneAgent(agentToClone: ManagedAgent) {
     try {
@@ -370,7 +362,7 @@ function BuildAgentEditorContent({
     const shortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault()
-        if (!event.repeat && dirty && valid && !pending) void save(false)
+        if (!event.repeat && dirty && valid && !pending) void save()
       }
     }
     window.addEventListener("keydown", shortcut)
@@ -381,9 +373,8 @@ function BuildAgentEditorContent({
     key: K,
     value: (typeof draft)[K]
   ) {
-    setDraft((current) => ({ ...current, [key]: value }))
+    store.update({ ...store.getSnapshot().draft, [key]: value })
     setError(null)
-    setSavedMessage(null)
   }
 
   return (
@@ -411,128 +402,97 @@ function BuildAgentEditorContent({
           {saved ? <BuildStatus state={saved.status} /> : null}
         </div>
       </HeaderSlot>
-      {(active !== "overview" && active !== "playground") || !saved ? (
-        <div
-          role="group"
-          aria-label="Build agent controls"
-          className={`flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-3 ${active === "actions" && saved ? "py-0" : "py-2"}`}
-        >
-          {active === "actions" && saved ? (
-            <TabsList variant="underline" aria-label="Actions">
-              <TabsTrigger value="mine">
-                <Zap className="size-4" />
-                My Actions
-              </TabsTrigger>
-              <TabsTrigger value="create">
-                <SquarePlus className="size-4" />
-                Create Actions
-              </TabsTrigger>
-            </TabsList>
-          ) : (
-            <>
+      <HeaderSlot name="actions">
+        {saved && saveState.status !== "idle" ? (
+          <span
+            role="status"
+            className="inline-flex items-center gap-1.5 text-xs text-foreground-muted"
+          >
+            {pending ? (
+              <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+            ) : null}
+            {saveState.status === "saved" ? (
+              <Check className="size-3.5" aria-hidden />
+            ) : null}
+            {pending
+              ? "Saving…"
+              : saveState.status === "saved"
+                ? "Saved"
+                : "Changes not saved"}
+          </span>
+        ) : null}
+        {!saved ? (
+          <Button
+            type="button"
+            size="sm"
+            disabled={!valid}
+            loading={pending}
+            onClick={() => void save()}
+          >
+            <Plus className="size-3.5" />
+            Create agent
+          </Button>
+        ) : null}
+      </HeaderSlot>
+      {saved ? (
+        <HeaderSlot name="menu">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                onClick={() => router.push(workspaceHref("/build/agents"))}
+                size="icon-sm"
+                aria-label="More agent actions"
+                title="More agent actions"
               >
-                <ArrowLeft className="size-3.5" />
-                <PanelActionLabel>Agents</PanelActionLabel>
+                <MoreHorizontal className="size-4" />
               </Button>
-              <span className="h-4 w-px bg-border" aria-hidden />
-              {saved ? (
-                <span className="text-xs text-foreground-muted">
-                  Revision {saved.currentRevision} · applied{" "}
-                  {saved.appliedRevision}
-                </span>
-              ) : (
-                <span className="text-xs text-foreground-muted">
-                  Draft agent
-                </span>
-              )}
-            </>
-          )}
-          <div
-            className={`ml-auto flex items-center gap-2 ${active === "actions" && saved ? "py-2" : ""}`}
-          >
-            {saved ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="More agent actions"
-                    title="More agent actions"
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => void cloneAgent(saved)}>
-                    <Copy className="size-3.5" />
-                    Clone agent
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => void archiveAgent(saved)}
-                  >
-                    <Archive className="size-3.5" />
-                    Archive agent
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            {saved ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!dirty || !valid || pending}
-                loading={pending && dirty}
-                onClick={() => void save(false)}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={dirty}
+                onSelect={() => void cloneAgent(saved)}
               >
-                {!pending ? <Save className="size-3.5" /> : null}
-                <PanelActionLabel>Save draft</PanelActionLabel>
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              disabled={
-                !valid || (!dirty && !hasUnappliedDraft && !definitionDirty)
-              }
-              loading={
-                pending &&
-                (!saved || hasUnappliedDraft || definitionDirty || dirty)
-              }
-              onClick={() => void save(true)}
-            >
-              {!pending ? <Save className="size-3.5" /> : null}
-              <PanelActionLabel>
-                {saved
-                  ? !dirty && (hasUnappliedDraft || definitionDirty)
-                    ? "Apply changes"
-                    : "Save and apply"
-                  : "Create agent"}
-              </PanelActionLabel>
-            </Button>
-          </div>
+                <Copy className="size-3.5" />
+                Clone agent
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={dirty}
+                variant="destructive"
+                onSelect={() => void archiveAgent(saved)}
+              >
+                <Archive className="size-3.5" />
+                Archive agent
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </HeaderSlot>
+      ) : null}
+      {active === "actions" && saved ? (
+        <div className="shrink-0 border-b border-border bg-muted/30 px-3">
+          <TabsList variant="underline" aria-label="Actions">
+            <TabsTrigger value="mine">
+              <Zap className="size-4" />
+              My Actions
+            </TabsTrigger>
+            <TabsTrigger value="create">
+              <SquarePlus className="size-4" />
+              Create Actions
+            </TabsTrigger>
+          </TabsList>
         </div>
       ) : null}
-      <BuildSaveNotice
-        pending={pending}
-        dirty={dirty}
-        error={error}
-        saved={savedMessage}
-      />
-      {saved && (hasUnappliedDraft || definitionDirty) && !dirty ? (
+      {error || saveState.error ? (
+        <BuildErrorState
+          message={error ?? formatBuildError(saveState.error)}
+          onRetry={saveState.error ? () => void save() : undefined}
+        />
+      ) : null}
+      {saved && saveState.status === "invalid" ? (
         <Notice role="status" variant="warning" layout="banner">
-          {definitionDirty
-            ? "Definition changes are saved. Apply them when they are ready for customer conversations;"
-            : `Draft revision ${saved.currentRevision} is saved. Apply it when it is ready for customer conversations;`}{" "}
-          Customers are still using version {saved.appliedRevision}.
+          Complete the required fields and correct invalid settings to save your
+          changes automatically.
         </Notice>
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
@@ -573,19 +533,6 @@ function BuildAgentEditorContent({
               />
             </div>
           ) : null}
-          {visitedTabs.has("appearance") ? (
-            <div
-              hidden={active !== "appearance"}
-              aria-hidden={active !== "appearance"}
-            >
-              <AppearanceTab
-                draft={draft}
-                onChange={(configuration) =>
-                  updateDraft("configuration", configuration)
-                }
-              />
-            </div>
-          ) : null}
           {visitedTabs.has("guardrails") ? (
             <div
               hidden={active !== "guardrails"}
@@ -606,7 +553,7 @@ function BuildAgentEditorContent({
             >
               <CopilotTab
                 agentId={saved.id}
-                onDefinitionDirty={() => setDefinitionDirty(true)}
+                onDefinitionDirty={store.definitionsChanged}
               />
             </div>
           ) : null}
@@ -618,6 +565,17 @@ function BuildAgentEditorContent({
               <KnowledgeTab agentId={saved.id} />
             </div>
           ) : null}
+          {visitedTabs.has("integrations") && saved ? (
+            <div
+              hidden={active !== "integrations"}
+              aria-hidden={active !== "integrations"}
+            >
+              <IntegrationsTab
+                active={active === "integrations"}
+                onOpenActions={() => selectTab("actions")}
+              />
+            </div>
+          ) : null}
           {visitedTabs.has("actions") && saved ? (
             <div
               hidden={active !== "actions"}
@@ -625,8 +583,10 @@ function BuildAgentEditorContent({
             >
               <ActionsTab
                 agentId={saved.id}
+                active={active === "actions"}
+                onManageIntegrations={() => selectTab("integrations")}
                 onViewChange={setActionsView}
-                onDefinitionDirty={() => setDefinitionDirty(true)}
+                onDefinitionDirty={store.definitionsChanged}
               />
             </div>
           ) : null}
@@ -637,7 +597,7 @@ function BuildAgentEditorContent({
             >
               <ProceduresTab
                 agentId={saved.id}
-                onDefinitionDirty={() => setDefinitionDirty(true)}
+                onDefinitionDirty={store.definitionsChanged}
               />
             </div>
           ) : null}
@@ -649,7 +609,7 @@ function BuildAgentEditorContent({
             >
               <WidgetsTab
                 agentId={saved.id}
-                onDefinitionDirty={() => setDefinitionDirty(true)}
+                onDefinitionDirty={store.definitionsChanged}
               />
             </div>
           ) : null}
@@ -736,7 +696,7 @@ function SettingsTab({
   ]
   const nextStep = steps.find((step) => !step.done)
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6">
       <div>
         <p className="text-xs font-medium tracking-[0.16em] text-foreground-subtle uppercase">
           Agent setup
@@ -745,67 +705,71 @@ function SettingsTab({
           {agent ? "Settings" : "Create your agent"}
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Manage your agent’s identity and saved revisions.
+          Manage your agent’s identity, appearance and welcome experience.
         </p>
       </div>
-      {agent && channelState.error ? (
-        <BuildErrorState
-          message={channelState.error.message}
-          onRetry={channelState.refresh}
+      <div className="max-w-3xl">
+        <InspectorSection
+          label="Identity"
+          icon={<FileText className="size-3.5" />}
+        >
+          <FormRow label="Workspace name" htmlFor="agent-name">
+            <Input
+              id="agent-name"
+              required
+              maxLength={160}
+              value={draft.name}
+              onChange={(event) => onChange("name", event.target.value)}
+            />
+          </FormRow>
+          <FormRow label="Slug" htmlFor="agent-slug">
+            <Input
+              id="agent-slug"
+              required
+              maxLength={160}
+              pattern="[a-zA-Z0-9_.-]+"
+              value={draft.slug}
+              disabled={!!agent}
+              onChange={(event) => onChange("slug", event.target.value)}
+            />
+          </FormRow>
+          <InspectorSection label="Description" variant="form">
+            <Textarea
+              aria-label="Agent description"
+              rows={3}
+              autoSize
+              maxLength={2000}
+              value={draft.description}
+              onChange={(event) => onChange("description", event.target.value)}
+            />
+          </InspectorSection>
+        </InspectorSection>
+        <AppearanceAndGuardrails
+          section="appearance"
+          config={draft.configuration}
+          onChange={(configuration) => onChange("configuration", configuration)}
         />
-      ) : null}
-      <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Identity</CardTitle>
-            <CardDescription>
-              These details appear in your workspace and stay stable across
-              revisions.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-1 pt-2">
-            <FormRow label="Name" htmlFor="agent-name" controlWidth="wide">
-              <Input
-                id="agent-name"
-                required
-                maxLength={160}
-                value={draft.name}
-                onChange={(event) => onChange("name", event.target.value)}
-              />
-            </FormRow>
-            <FormRow label="Slug" htmlFor="agent-slug" controlWidth="wide">
-              <Input
-                id="agent-slug"
-                required
-                maxLength={160}
-                pattern="[a-zA-Z0-9_.-]+"
-                value={draft.slug}
-                disabled={!!agent}
-                onChange={(event) => onChange("slug", event.target.value)}
-              />
-            </FormRow>
-            <InspectorSection label="Description" variant="form">
-              <Textarea
-                aria-label="Agent description"
-                rows={3}
-                autoSize
-                maxLength={2000}
-                value={draft.description}
-                onChange={(event) =>
-                  onChange("description", event.target.value)
-                }
-              />
-            </InspectorSection>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Next steps</CardTitle>
-            <CardDescription>
-              A small checklist keeps the first setup focused.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
+        <InspectorSection
+          label="Revision history"
+          icon={<History className="size-3.5" />}
+          defaultOpen={false}
+        >
+          {agent ? (
+            <RevisionHistory key={agent.currentRevision} agentId={agent.id} />
+          ) : (
+            <p className="text-sm text-foreground-muted">
+              Create the agent to start a revision history.
+            </p>
+          )}
+        </InspectorSection>
+        <InspectorSection label="Setup checklist" defaultOpen={!agent}>
+          {agent && channelState.error ? (
+            <BuildErrorState
+              message={channelState.error.message}
+              onRetry={channelState.refresh}
+            />
+          ) : null}
+          <div className="space-y-2">
             {steps.map((step) => (
               <div key={step.label} className="flex items-start gap-2 text-sm">
                 <span
@@ -844,26 +808,13 @@ function SettingsTab({
               </Button>
             ) : nextStep ? (
               <p className="mt-3 text-xs leading-5 text-foreground-muted">
-                Use the primary save action in the header when the identity and
-                instructions are ready.
+                Use Create agent in the header when the identity and
+                instructions are ready. Future edits save automatically.
               </p>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+        </InspectorSection>
       </div>
-      <InspectorSection
-        label="Revision history"
-        icon={<History className="size-3.5" />}
-        defaultOpen={false}
-      >
-        {agent ? (
-          <RevisionHistory agentId={agent.id} />
-        ) : (
-          <p className="text-sm text-foreground-muted">
-            Create the agent to start a revision history.
-          </p>
-        )}
-      </InspectorSection>
     </div>
   )
 }
@@ -974,23 +925,33 @@ function InstructionsTab({
 
   return (
     <div className="mx-auto grid w-full max-w-6xl min-w-0 grid-cols-1 items-start gap-5 px-4 py-6 sm:px-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle>System instructions</CardTitle>
-          <CardDescription>
+      <section
+        className="min-w-0 space-y-3"
+        aria-labelledby="agent-instructions-heading"
+      >
+        <div className="space-y-1">
+          <h2 id="agent-instructions-heading" className="text-sm font-semibold">
+            System instructions
+          </h2>
+          <p
+            id="agent-instructions-description"
+            className="text-sm text-foreground-muted"
+          >
             Define your agent’s role, tone and how it should help customers.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0 pt-4">
-          <CodeEditor
-            label="System instructions"
-            language="plaintext"
-            className="h-[min(60vh,36rem)] min-h-80"
-            value={config.instructions}
-            onChange={(instructions) => updateConfig({ instructions })}
-          />
-        </CardContent>
-      </Card>
+          </p>
+        </div>
+        <Textarea
+          aria-label="System instructions"
+          aria-describedby="agent-instructions-description"
+          autoSize
+          minRows={8}
+          maxLength={64_000}
+          value={config.instructions}
+          onChange={(event) =>
+            updateConfig({ instructions: event.target.value })
+          }
+        />
+      </section>
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Model settings</CardTitle>
@@ -1050,36 +1011,6 @@ function InstructionsTab({
           </FormRow>
         </CardContent>
       </Card>
-    </div>
-  )
-}
-
-function AppearanceTab({
-  draft,
-  onChange,
-}: {
-  draft: ReturnType<typeof defaultDraft>
-  onChange: (configuration: AgentConfiguration) => void
-}) {
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6">
-      <div>
-        <p className="text-xs font-medium tracking-[0.16em] text-foreground-subtle uppercase">
-          Agent setup
-        </p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight">
-          Appearance
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Shape the welcome experience customers see before they start a
-          conversation.
-        </p>
-      </div>
-      <AppearanceAndGuardrails
-        section="appearance"
-        config={draft.configuration}
-        onChange={onChange}
-      />
     </div>
   )
 }
@@ -1534,6 +1465,69 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
   const [showSource, setShowSource] = React.useState(false)
   const rows = state.data ?? []
   const SourceTypeIcon = knowledgeSourceTypes[kind].icon
+  const sourceFields = (
+    <>
+      <FormRow
+        label="Name"
+        htmlFor="source-name"
+        layout="vertical"
+        variant="plain"
+      >
+        <Input
+          id="source-name"
+          required
+          maxLength={200}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder={
+            kind === "qa"
+              ? "e.g. Shipping and returns"
+              : "e.g. Support handbook"
+          }
+        />
+      </FormRow>
+      {kind === "website" || kind === "sitemap" ? (
+        <FormRow
+          label="URL"
+          htmlFor="source-url"
+          layout="vertical"
+          variant="plain"
+        >
+          <Input
+            id="source-url"
+            type="text"
+            inputMode="url"
+            required
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder={
+              kind === "sitemap"
+                ? "https://example.com/sitemap.xml"
+                : "https://example.com/docs"
+            }
+          />
+        </FormRow>
+      ) : null}
+      {kind === "website" || kind === "sitemap" ? (
+        <FormRow
+          label="Maximum pages"
+          htmlFor="source-max-pages"
+          layout="vertical"
+          variant="plain"
+        >
+          <Input
+            id="source-max-pages"
+            type="number"
+            min={1}
+            max={KNOWLEDGE_LIMITS.maxCrawlPages}
+            required
+            value={maxPages}
+            onChange={(event) => setMaxPages(Number(event.target.value))}
+          />
+        </FormRow>
+      ) : null}
+    </>
+  )
 
   React.useEffect(() => () => sourceRequest.current?.abort(), [])
 
@@ -1791,7 +1785,9 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
           >
             <fieldset
               disabled={pending || loadingSource}
-              className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto p-6"
+              className={selected && (kind === "website" || kind === "sitemap")
+                ? "flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-hidden p-6"
+                : "min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto p-6"}
             >
               {error ? (
                 <Notice role="alert" variant="error">
@@ -1866,74 +1862,22 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
                       </CustomSelect>
                     </FormRow>
                   )}
-                  {selected?.statusMessage ? (
+                  {selected?.statusMessage && !(selected.status === "ready" && /^\d+ pages indexed\.$/.test(selected.statusMessage)) ? (
                     <Notice
                       variant={selected.status === "error" ? "error" : "info"}
                     >
                       {selected.statusMessage}
                     </Notice>
                   ) : null}
-                  <FormRow
-                    label="Name"
-                    htmlFor="source-name"
-                    layout="vertical"
-                    variant="plain"
-                  >
-                    <Input
-                      id="source-name"
-                      required
-                      maxLength={200}
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder={
-                        kind === "qa"
-                          ? "e.g. Shipping and returns"
-                          : "e.g. Support handbook"
-                      }
+                  {selected && (kind === "website" || kind === "sitemap") ? (
+                    <KnowledgePages
+                      key={`${selected.id}:${selected.activeRevision}`}
+                      sourceId={selected.id}
+                      settings={<div className="space-y-6">{sourceFields}</div>}
                     />
-                  </FormRow>
-                  {kind === "website" || kind === "sitemap" ? (
-                    <FormRow
-                      label="URL"
-                      htmlFor="source-url"
-                      layout="vertical"
-                      variant="plain"
-                    >
-                      <Input
-                        id="source-url"
-                        type="text"
-                        inputMode="url"
-                        required
-                        value={url}
-                        onChange={(event) => setUrl(event.target.value)}
-                        placeholder={
-                          kind === "sitemap"
-                            ? "https://example.com/sitemap.xml"
-                            : "https://example.com/docs"
-                        }
-                      />
-                    </FormRow>
-                  ) : null}
-                  {kind === "website" || kind === "sitemap" ? (
-                    <FormRow
-                      label="Maximum pages"
-                      htmlFor="source-max-pages"
-                      layout="vertical"
-                      variant="plain"
-                    >
-                      <Input
-                        id="source-max-pages"
-                        type="number"
-                        min={1}
-                        max={KNOWLEDGE_LIMITS.maxCrawlPages}
-                        required
-                        value={maxPages}
-                        onChange={(event) =>
-                          setMaxPages(Number(event.target.value))
-                        }
-                      />
-                    </FormRow>
-                  ) : null}
+                  ) : (
+                    sourceFields
+                  )}
                   {kind === "file" && !selected ? (
                     <FormRow
                       label="File"
@@ -2117,7 +2061,7 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
           <h2 className="text-sm font-medium">
             Sources
             {state.data ? (
-              <span className="ml-2 text-xs font-normal text-foreground-muted">
+              <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs font-normal text-foreground-muted tabular-nums">
                 {rows.length}
               </span>
             ) : null}
@@ -2140,16 +2084,10 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
           </div>
         </div>
         <CollectionTable
-          widths={[320, 120, 140, 100, 180, 88]}
-          columnIds={[
-            "name",
-            "type",
-            "status",
-            "revision",
-            "indexed",
-            "actions",
-          ]}
+          widths={[360, 140, 120, 180, 88]}
+          columnIds={["name", "content", "status", "indexed", "actions"]}
           actionColumnIds={["actions"]}
+          selectionColumnWidth={0}
           displayControls={false}
           enableRowHeight={false}
           enableCardView={false}
@@ -2157,120 +2095,29 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
         >
           <thead className={collectionTable.head}>
             <tr>
-              <th aria-hidden className={collectionTable.heading} />
-              {[
-                "Source",
-                "Type",
-                "Status",
-                "Revision",
-                "Last indexed",
-                "Actions",
-              ].map((label) => (
-                <th key={label} className={collectionTable.heading}>
+              <th aria-hidden className="p-0" />
+              {["Source", "Content", "Status", "Last indexed"].map((label) => (
+                <th key={label} className={`${collectionTable.heading} border-r-0`}>
                   {label}
                 </th>
               ))}
+              <th className={`${collectionTable.heading} border-r-0`}>
+                <span className="sr-only">Source actions</span>
+              </th>
             </tr>
           </thead>
           <CollectionTableBody rows={rows} empty={null}>
-            {(source) => {
-              const SourceIcon = knowledgeSourceTypes[source.kind].icon
-              return (
-                <CollectionRow
-                  key={source.id}
-                  rowLabel={`Edit ${source.name}`}
-                  onClick={() => void openExistingSource(source)}
-                >
-                  <td aria-hidden className={collectionTable.cell} />
-                  <td className={collectionTable.cell}>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      className="max-w-full justify-start px-0"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        void openExistingSource(source)
-                      }}
-                    >
-                      <SourceIcon
-                        aria-hidden
-                        className="size-4 shrink-0 text-foreground-muted"
-                      />
-                      <span className="truncate">{source.name}</span>
-                    </Button>
-                    {source.uri ? (
-                      <p
-                        className="truncate pl-6 text-xs text-foreground-muted"
-                        title={source.uri}
-                      >
-                        {source.uri}
-                      </p>
-                    ) : null}
-                    {source.statusMessage ? (
-                      <p
-                        className="truncate pl-6 text-xs text-foreground-muted"
-                        title={source.statusMessage}
-                      >
-                        {source.statusMessage}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className={`${collectionTable.cell} text-foreground-muted`}>
-                    {
-                      {
-                        text: "Text",
-                        qa: "Q&A",
-                        website: "Website",
-                        sitemap: "Sitemap",
-                        file: "File",
-                      }[source.kind]
-                    }
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <BuildStatus state={source.status} />
-                  </td>
-                  <td className={collectionTable.cell}>v{source.revision}</td>
-                  <td
-                    className={`${collectionTable.cell} text-xs text-foreground-muted`}
-                  >
-                    {source.lastIndexedAt
-                      ? formatDate(source.lastIndexedAt)
-                      : "—"}
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Reindex"
-                        aria-label={`Reindex ${source.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void resync(source)
-                        }}
-                      >
-                        <RefreshCw className="size-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Delete"
-                        aria-label={`Delete ${source.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void removeSource(source)
-                        }}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </CollectionRow>
-              )
-            }}
+            {(source) => (
+              <KnowledgeSourceRow
+                key={source.id}
+                source={source}
+                icon={knowledgeSourceTypes[source.kind].icon}
+                kindLabel={knowledgeSourceTypes[source.kind].label}
+                onOpen={() => void openExistingSource(source)}
+                onReindex={() => void resync(source)}
+                onDelete={() => void removeSource(source)}
+              />
+            )}
           </CollectionTableBody>
         </CollectionTable>
         {rows.length === 0 ? (
@@ -2348,11 +2195,15 @@ function ResourceEditorPrompt({
 
 function ActionsTab({
   agentId,
+  active,
+  onManageIntegrations,
   onViewChange,
   onDefinitionDirty,
 }: {
   agentId: string
   onViewChange: (value: string) => void
+  active: boolean
+  onManageIntegrations: () => void
   onDefinitionDirty?: () => void
 }) {
   const load = React.useCallback(
@@ -2582,7 +2433,7 @@ function ActionsTab({
         ) : null}
       </TabsContent>
       <Sheet
-        open={Boolean(selected || isCreating)}
+        open={active && Boolean(selected || isCreating)}
         onOpenChange={(open) => {
           if (!open && !pending) clearAction()
         }}
@@ -2681,7 +2532,7 @@ function ActionsTab({
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
                     {(
-                      ["http", "client", "widget", "form", "handoff"] as const
+                      ["integration", "http", "client", "widget", "form", "handoff"] as const
                     ).map((type) => (
                       <SelectItem key={type} value={type}>
                         <ActionTypeLabel type={type} />
@@ -2690,6 +2541,13 @@ function ActionsTab({
                   </SelectContent>
                 </CustomSelect>
               </FormRow>
+              {draft.type === "integration" ? (
+                <IntegrationActionFields
+                  draft={draft}
+                  onChange={setDraft}
+                  onManageIntegrations={onManageIntegrations}
+                />
+              ) : null}
               {draft.type === "http" ? (
                 <HttpActionFields
                   draft={draft}

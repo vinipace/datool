@@ -295,10 +295,15 @@ test("shared ledger serializes reservations, preserves uncertain calls, isolates
     await pool.query(
       "UPDATE execution_credit_period SET period_start=now()-interval '1 month',period_end=now()-interval '1 second'"
     )
+    // Use the database clock; the test runner and PostgreSQL may run on
+    // different hosts. A wall-clock skew must not make this period future-dated.
+    const renewalStart = await pool.query<{ start: Date }>(
+      "SELECT now() AS start"
+    )
     await store.grant({
       ...grant,
       invoiceId: "renewal",
-      start: new Date(),
+      start: renewalStart.rows[0].start,
       plan: "pro",
     })
     expect((await store.usage(target.organizationId)).allowance).toBe(25)

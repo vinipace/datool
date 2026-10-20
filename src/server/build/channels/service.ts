@@ -45,7 +45,6 @@ import {
   ConversationOwnershipLostError,
   ConversationService,
 } from "../conversations"
-import { resolveRoutingWithExecutor } from "../operations/teams"
 import { reconcileCampaignStatus } from "../operations/campaign-status"
 import { decryptChannelCredentials, encryptChannelCredentials } from "./secrets"
 import {
@@ -788,61 +787,30 @@ export async function enqueueTelegramUpdate(
   return enqueueInboundEnvelope(context, envelope)
 }
 
-async function admitInboundTicket(
+async function updateInboundTicket(
   executor: Pick<BuildDatabase, "execute">,
   projectId: string,
   envelope: InboundEnvelope,
   conversationId: string,
   contactId: string
 ) {
-  const contact = await executor.execute<{ status: string }>(sql`
-    select status from build_contacts where project_id=${projectId} and id=${contactId} limit 1
-  `)
-  const assignment = await resolveRoutingWithExecutor(executor, projectId, {
-    channel: envelope.channel,
-    priority: "normal",
-    tags: [],
-    contactStatus: contact.rows[0]?.status,
-  })
-  const subject = envelope.text.trim().replace(/\s+/g, " ").slice(0, 500)
-  const result = await executor.execute<{
-    id: string
-    conversation_id: string
-    contact_id: string | null
-    channel: string
-    team_id: string | null
-    assignee_user_id: string | null
-    inserted: boolean
-  }>(sql`
-    insert into build_inbox_tickets
-      (id,project_id,conversation_id,contact_id,channel,subject,status,priority,tags_json,assignee_user_id,team_id,last_message_at)
-    values
-      (${operationId("ticket")},${projectId},${conversationId},${contactId},${envelope.channel},${subject},'open','normal','[]'::jsonb,${assignment.assigneeUserId},${assignment.teamId},now())
-    on conflict (project_id,conversation_id) do update set
-      contact_id=coalesce(excluded.contact_id,build_inbox_tickets.contact_id),
-      channel=excluded.channel,
-      status=case when build_inbox_tickets.status in ('solved','closed') then 'open' else build_inbox_tickets.status end,
-      resolved_at=case when build_inbox_tickets.status in ('solved','closed') then null else build_inbox_tickets.resolved_at end,
-      assignee_user_id=coalesce(build_inbox_tickets.assignee_user_id,excluded.assignee_user_id),
-      team_id=coalesce(build_inbox_tickets.team_id,excluded.team_id),
-      subject=case when nullif(build_inbox_tickets.subject,'') is null then excluded.subject else build_inbox_tickets.subject end,
-      last_message_at=now(),
-      updated_at=now()
-    returning id,conversation_id,contact_id,channel,team_id,assignee_user_id,xmax=0 as inserted
+  // Receiving a message is not an escalation. Follow-ups can reopen an existing
+  // case, but only explicit ticket creation or handoff creates support work.
+  const result = await executor.execute<{ id: string }>(sql`
+    update build_inbox_tickets
+    set contact_id=coalesce(${contactId},contact_id),last_message_at=now(),updated_at=now(),
+      status=case when status in ('solved','closed') then 'open' else status end,
+      resolved_at=case when status in ('solved','closed') then null else resolved_at end,
+      version=case when status in ('solved','closed') then version+1 else version end
+    where project_id=${projectId} and conversation_id=${conversationId}
+    returning id
   `)
   const row = result.rows[0]
-  if (!row) throw new Error("Inbound message could not create an inbox ticket.")
+  if (!row) return
   await executor.execute(sql`
     insert into build_ticket_events(id,project_id,ticket_id,event_type,actor_id,payload_json)
-    values (${operationId("ticket_event")},${projectId},${row.id},${row.inserted ? "created" : "message_received"},null,${JSON.stringify({ channel: envelope.channel, providerEventId: envelope.providerEventId, ruleId: assignment.ruleId })}::jsonb)
+    values (${operationId("ticket_event")},${projectId},${row.id},'message_received',null,${JSON.stringify({ channel: envelope.channel, providerEventId: envelope.providerEventId })}::jsonb)
   `)
-  if (row.inserted) {
-    await executor.execute(sql`
-      insert into build_operation_events(id,project_id,event_type,conversation_id,contact_id,channel,payload_json)
-      values (${operationId("event")},${projectId},'ticket_created',${row.conversation_id},${row.contact_id},${row.channel},${JSON.stringify({ ticketId: row.id, ruleId: assignment.ruleId, teamId: row.team_id, assigneeUserId: row.assignee_user_id })}::jsonb)
-    `)
-  }
-  return { ticketId: row.id, assignment }
 }
 
 export async function enqueueInboundEnvelope(
@@ -886,7 +854,7 @@ export async function enqueueInboundEnvelope(
       UPDATE build_channel_connection SET last_inbound_at = now(), status = CASE WHEN status = 'error' THEN 'connected' ELSE status END
       WHERE project_id = ${context.projectId} AND id = ${envelope.connectionId}::uuid
     `)
-    await admitInboundTicket(
+    await updateInboundTicket(
       tx,
       context.projectId,
       envelope,
@@ -3011,7 +2979,7 @@ export async function recordExternalChannelMessage(
       sql`UPDATE build_conversation_messages SET created_at=${envelope.receivedAt}::timestamptz WHERE project_id=${context.projectId} AND id=${message.id}`
     )
     if (!options.historical)
-      await admitInboundTicket(
+      await updateInboundTicket(
         tx,
         context.projectId,
         envelope,

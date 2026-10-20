@@ -6,6 +6,12 @@ import { sql } from "drizzle-orm"
 import { createAgent } from "@/src/server/build/agents"
 import { ConversationService } from "@/src/server/build/conversations"
 import {
+  listTickets,
+  listTicketEvents,
+  takeoverConversation,
+  updateTicket,
+} from "@/src/server/build/operations/inbox"
+import {
   runAgentTurn,
   type RuntimeDependencies,
 } from "@/src/server/build/runtime"
@@ -121,6 +127,92 @@ const update = {
 }
 
 describe("durable Build channel delivery", () => {
+  test("only escalated conversations enter the inbox and remain cases after AI resumes", async () => {
+    const { context, connection } = await fixture()
+    const service = new ConversationService(context)
+    const team = await createTeam(context, { name: "Escalations" })
+    await setTeamMember(context, {
+      teamId: team.id,
+      userId: context.actorId!,
+      availability: "online",
+    })
+    await createRoutingRule(context, {
+      name: "Telegram escalations",
+      conditions: { channel: "telegram" },
+      teamId: team.id,
+    })
+    const accepted = await enqueueTelegramUpdate(context, connection.id, update)
+    if (!("conversationId" in accepted))
+      throw new Error("Inbound message was not admitted.")
+    const conversationId = accepted.conversationId
+    expect((await listTickets(context)).items).toEqual([])
+    expect(await service.require(conversationId)).toMatchObject({
+      ownerType: "ai",
+      status: "active",
+    })
+
+    await service.claim(conversationId, {
+      type: "human",
+      id: team.id,
+      reason: "Customer needs help",
+    })
+    const page = await listTickets(context)
+    expect(page.items).toHaveLength(1)
+    const ticket = page.items[0]!
+    expect(ticket).toMatchObject({
+      conversationId,
+      contactName: "Ada",
+      subject: "Where is my order?",
+      status: "open",
+      teamId: team.id,
+      assigneeUserId: context.actorId,
+    })
+    await service.claim(conversationId, {
+      type: "human",
+      id: team.id,
+      reason: "Repeated handoff",
+    })
+    expect(
+      (await listTicketEvents(context, ticket.id)).filter(
+        (event) => event.eventType === "created"
+      )
+    ).toHaveLength(1)
+    await service.releaseToAi(conversationId)
+    await updateTicket(context, ticket.id, { status: "solved" })
+    // Follow-ups preserve the existing support-case reopening behavior.
+    await enqueueTelegramUpdate(context, connection.id, {
+      ...update,
+      update_id: 78,
+      message: { ...update.message, message_id: 12, text: "Thanks" },
+    })
+    expect(
+      (await listTickets(context)).items.map(({ id, status }) => ({
+        id,
+        status,
+      }))
+    ).toEqual([{ id: ticket.id, status: "open" }])
+    await updateTicket(context, ticket.id, { status: "solved" })
+    await takeoverConversation(context, { conversationId })
+    expect(
+      (await listTickets(context)).items.map(({ id, status }) => ({
+        id,
+        status,
+      }))
+    ).toEqual([{ id: ticket.id, status: "open" }])
+
+    const other = await service.getOrCreate({
+      agentId: "agent-telegram",
+      channel: "api",
+      metadata: {},
+    })
+    await takeoverConversation(context, { conversationId: other.id })
+    expect((await listTickets(context)).items).toHaveLength(2)
+    expect(await service.require(other.id)).toMatchObject({
+      status: "handed_off",
+      ownerType: "human",
+    })
+  })
+
   test("serves messages ahead of background polls and coalesces polling while a job is outstanding", async () => {
     const { database, context, connection } = await fixture()
     await database.execute(
@@ -420,21 +512,6 @@ describe("durable Build channel delivery", () => {
 
   test("deduplicates a Telegram webhook, processes it, and delivers the reply", async () => {
     const { database, context, connection } = await fixture()
-    const member = await database.execute<{ user_id: string }>(
-      sql`select m."userId" as user_id from member m join project p on p.organization_id=m."organizationId" where p.id=${context.projectId} limit 1`
-    )
-    const team = await createTeam(context, { name: "Support" })
-    await setTeamMember(context, {
-      teamId: team.id,
-      userId: member.rows[0]!.user_id,
-      availability: "online",
-      maxConcurrent: 10,
-    })
-    await createRoutingRule(context, {
-      name: "Telegram support",
-      conditions: { channel: "telegram" },
-      teamId: team.id,
-    })
     const first = await enqueueTelegramUpdate(context, connection.id, update)
     const duplicate = await enqueueTelegramUpdate(
       context,
@@ -462,10 +539,7 @@ describe("durable Build channel delivery", () => {
     }>(
       sql`select team_id,assignee_user_id from build_inbox_tickets where project_id=${context.projectId} and conversation_id=${conversationId}`
     )
-    expect(ticket.rows[0]).toEqual({
-      team_id: team.id,
-      assignee_user_id: member.rows[0]!.user_id,
-    })
+    expect(ticket.rows).toEqual([])
 
     const inboundJob = await claimNextChannelJob(database)
     expect(inboundJob?.kind).toBe("process_inbound")

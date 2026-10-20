@@ -1,3 +1,4 @@
+import { validateAppAction } from "./integrations/service"
 import { randomUUID } from "node:crypto"
 
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm"
@@ -720,6 +721,15 @@ export async function saveAction(
       existing
     )
     const { definition, encryptedHeaders } = prepared
+    if (definition.type === "integration") {
+      const tool = await validateAppAction(
+        context,
+        definition.connectionId,
+        definition.toolSlug
+      )
+      definition.inputSchema =
+        tool.inputSchema as ActionDefinition["inputSchema"]
+    }
     if (definition.type === "form" && definition.submitActionId)
       await assertActionReferences(context, agentId, [
         definition.submitActionId,

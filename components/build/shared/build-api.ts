@@ -23,6 +23,8 @@ export const buildOperations = {
   listCopilotAudit: "build_list_copilot_audit",
   listKnowledge: "build_list_knowledge_sources",
   getKnowledge: "build_get_knowledge_source",
+  listKnowledgePages: "build_list_knowledge_pages",
+  getKnowledgePage: "build_get_knowledge_page",
   createKnowledge: "build_create_knowledge_source",
   updateKnowledge: "build_update_knowledge_source",
   deleteKnowledge: "build_delete_knowledge_source",

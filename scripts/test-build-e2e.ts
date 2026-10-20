@@ -559,7 +559,7 @@ try {
     .click()
   await page.waitForURL(/\/build\/agents\/new$/, { timeout: 120_000 })
   await page
-    .getByRole("textbox", { name: "Name", exact: true })
+    .getByRole("textbox", { name: "Workspace name", exact: true })
     .fill("Build validation agent")
   await page
     .getByRole("textbox", { name: "Slug", exact: true })
@@ -568,7 +568,7 @@ try {
   await page.waitForURL(/\/build\/agents\/(?!new)[^/?]+/, { timeout: 30_000 })
   const agentId = new URL(page.url()).pathname.split("/").at(-1)!
   await selectAgentSection(page, "Settings")
-  await page.getByRole("textbox", { name: "Name", exact: true }).waitFor()
+  await page.getByRole("textbox", { name: "Workspace name", exact: true }).waitFor()
   await page.screenshot({
     path: join(evidence, "agent-settings.png"),
     fullPage: true,
@@ -800,10 +800,7 @@ try {
   await page
     .getByRole("switch", { name: "Require human for actions", exact: true })
     .check()
-  await page
-    .getByRole("button", { name: "Save and apply", exact: true })
-    .click()
-  await page.getByRole("status").filter({ hasText: "applied" }).waitFor()
+  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
   const configured = await call("build_get_agent", { agentId })
   assert.equal(configured.configuration.guardrails.maxOutputTokens, 128)
   assert.deepEqual(configured.configuration.guardrails.blockedTopics, [
@@ -812,7 +809,7 @@ try {
   assert.equal(configured.appliedRevision, configured.currentRevision)
   if (liveModelKey) assert.equal(configured.configuration.provider, "openai")
   passed(
-    "browser saves and applies model, instructions and guardrails to an immutable revision"
+    "browser autosaves and applies model, instructions and guardrails to an immutable revision"
   )
 
   await page.goto(`${prefix}/integrations`, {

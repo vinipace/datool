@@ -27,6 +27,7 @@ export const pageTitles = {
   newBuildAgent: "New agent",
   buildAgent: "Agent builder",
   buildInbox: "Inbox",
+  buildConversations: "Conversations",
   buildContacts: "Contacts",
   buildCampaigns: "Campaigns",
   buildIntegrations: "Channels",

@@ -52,6 +52,7 @@ import {
   runQueuedKnowledgeJobs,
   updateKnowledgeSource,
 } from "../knowledge/service"
+import { getKnowledgePage, listKnowledgePages } from "../knowledge/pages"
 import {
   createChannelConnection,
   enqueueOutboundEnvelope,
@@ -354,6 +355,20 @@ register(
   ["build:read"],
   z.object({ sourceId: id }),
   (context, input) => getKnowledgeSource(context, input as never)
+)
+register(
+  "build_list_knowledge_pages",
+  "Browse indexed website or sitemap pages, with URL/title search and pagination.",
+  ["build:read"],
+  z.object({ sourceId: id, search: z.string().max(500).optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(100).optional() }),
+  (context, input) => listKnowledgePages(context, input as never)
+)
+register(
+  "build_get_knowledge_page",
+  "Read the stored Markdown or extracted text of one page from the active website index.",
+  ["build:read"],
+  z.object({ sourceId: id, url: z.string().min(1).max(8192), revision: z.number().int().nonnegative() }),
+  (context, input) => getKnowledgePage(context, input as never)
 )
 register(
   "build_create_knowledge_source",

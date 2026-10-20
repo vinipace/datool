@@ -14,9 +14,16 @@ export type TracerDatabase = NodePgDatabase<typeof schema>
 export type TracerSnapshotClientFactory = () => Promise<PoolClient>
 
 type ScopedDatabase = typeof globalThis & {
+  datoolTracerWritePools?: WeakMap<object, Pool>
   datoolTracerProjectIds?: WeakMap<object, string>
   datoolTracerSnapshotFactories?: WeakMap<object, TracerSnapshotClientFactory>
   datoolTracerClosers?: WeakMap<object, () => Promise<void>>
+}
+
+export function getTracerWritePool(database: TracerDatabase): Pool {
+  const pool = (globalThis as ScopedDatabase).datoolTracerWritePools?.get(database)
+  if (!pool) throw new Error("A registered tracer write pool is required.")
+  return pool
 }
 
 function projectIds() {
@@ -71,6 +78,7 @@ export function getTracerSnapshotClientFactory(
 export async function closeTracerDatabase(database: TracerDatabase) {
   await closers().get(database)?.()
   closers().delete(database)
+  ;(globalThis as ScopedDatabase).datoolTracerWritePools?.delete(database)
   projectIds().delete(database)
   snapshotFactories().delete(database)
 }
@@ -121,6 +129,9 @@ export function createTracerDatabase(
 
   const database = drizzle({ client: pool, schema })
   registerTracerProjectId(database, options.projectId)
+  const registry = globalThis as ScopedDatabase
+  registry.datoolTracerWritePools ??= new WeakMap()
+  registry.datoolTracerWritePools.set(database, pool)
   snapshotFactories().set(database, () =>
     (databaseUrl ? pool : analyticsDb).connect()
   )
@@ -149,6 +160,9 @@ export function scopedTracerTransaction(
 ): TracerDatabase {
   const database = transaction as TracerDatabase
   registerTracerProjectId(database, getTracerProjectId(parent))
+  const writePools = (globalThis as ScopedDatabase).datoolTracerWritePools
+  const writePool = writePools?.get(parent)
+  if (writePool) writePools?.set(database, writePool)
   const factory = getTracerSnapshotClientFactory(parent)
   if (factory) snapshotFactories().set(database, factory)
   return database

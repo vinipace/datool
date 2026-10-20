@@ -33,6 +33,7 @@ import {
   sqlAnd,
 } from "./database"
 import { assertTicketAssignment, resolveRoutingWithExecutor } from "./teams"
+import { ensureEscalationTicket } from "./ticket-escalation"
 
 type TicketRow = {
   id: string
@@ -364,6 +365,11 @@ export async function takeoverConversation(context: BuildContext, value: unknown
     if (input.expectedVersion !== undefined && currentVersion !== input.expectedVersion) throw new TracerError("CONFLICT", "Conversation ownership changed. Reload before taking it over.")
     const liveOther = conversation.owner_type === "human" && conversation.owner_id && conversation.owner_id !== ctx.actorId && (!row?.lease_expires_at || new Date(String(row.lease_expires_at)).getTime() > Date.now())
     if (liveOther) throw new TracerError("CONFLICT", "Conversation is currently owned by another agent.")
+    await ensureEscalationTicket(tx, ctx.projectId, input.conversationId, {
+      actorId: ctx.actorId,
+      teamId: input.teamId,
+      reopen: conversation.owner_type !== "human",
+    })
     const token = operationId("lease")
     await tx.execute(sql`
       update build_conversations
