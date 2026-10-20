@@ -165,9 +165,9 @@ export function SkillsTab({
             ),
             actions:
               view === "mine" ? (
-                <Button size="sm" onClick={create}>
+                <Button size="sm" aria-label="New skill" onClick={create}>
                   <Plus />
-                  New skill
+                  <span className="hidden @min-[480px]/page:inline">New skill</span>
                 </Button>
               ) : undefined,
             showRefresh: view === "mine",
