@@ -4,6 +4,11 @@ import { createMDX } from "fumadocs-mdx/next"
 import { withPayload } from "@payloadcms/next/withPayload"
 
 const nextConfig: NextConfig = {
+  // CI runs the complete typecheck in the required verify job alongside the
+  // image build. Self-hosted/local builds retain Next's built-in typecheck.
+  typescript: {
+    ignoreBuildErrors: process.env.DATOOL_CI_BUILD === "true",
+  },
   // Keep the development overlay from covering product header actions.
   devIndicators: false,
   async headers() {
