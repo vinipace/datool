@@ -5,19 +5,19 @@ export type DatasetItemLocation = {
   viewId: string | null
 }
 
-export function readDatasetItemLocation(pathname: string, params: URLSearchParams): DatasetItemLocation {
+export function readDatasetItemLocation(pathname: string, params: URLSearchParams, embedded = false): DatasetItemLocation {
   const segment = pathname.match(/^\/p\/[^/]+\/datasets\/[^/]+\/([^/]+)\/?$/)?.[1]
   let itemId: string | null = null
   try { itemId = segment ? decodeURIComponent(segment) : null } catch { /* Invalid path encoding has no item. */ }
   const tab = params.get("itemTab")
   return {
-    itemId,
+    itemId: embedded ? params.get("item") : itemId,
     tab: tab === "runs" || tab === "views" ? tab : "form",
     viewId: params.get("objectView") || null,
   }
 }
 
-export function writeDatasetItemLocation(datasetPath: string, params: URLSearchParams, location: DatasetItemLocation) {
+export function writeDatasetItemLocation(datasetPath: string, params: URLSearchParams, location: DatasetItemLocation, embedded = false) {
   const next = new URLSearchParams(params)
   next.delete("item")
   if (location.itemId) {
@@ -28,8 +28,9 @@ export function writeDatasetItemLocation(datasetPath: string, params: URLSearchP
     next.delete("itemTab")
     next.delete("objectView")
   }
+  if (embedded && location.itemId) next.set("item", location.itemId)
   return {
-    pathname: location.itemId ? `${datasetPath}/${encodeURIComponent(location.itemId)}` : datasetPath,
+    pathname: !embedded && location.itemId ? `${datasetPath}/${encodeURIComponent(location.itemId)}` : datasetPath,
     search: next.toString(),
   }
 }

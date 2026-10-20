@@ -39,6 +39,13 @@ import {
   KnowledgeExtractionError,
   qaPairsToText,
 } from "./extract"
+import {
+  embedKnowledgeChunks,
+  embedKnowledgeQuery,
+  KEYWORD_KNOWLEDGE_NOTICE,
+  KNOWLEDGE_EMBEDDING_PROFILE,
+} from "./embeddings"
+import { rankKnowledgeCandidates } from "./ranking"
 
 /**
  * BuildContext is intentionally structural here so this module can be used by
@@ -861,6 +868,11 @@ export async function runKnowledgeJob(
       throw new KnowledgeServiceError(
         `The source exceeds the ${chunkLimit} chunk limit.`
       )
+    const embeddings = await embedKnowledgeChunks(ctx, chunks, {
+      sourceId,
+      heartbeat,
+    })
+    await heartbeat()
     // Source revisions fence edits. Index revisions are separate so a resync
     // can stage a fresh chunk set while the previous active revision remains
     // queryable until the replacement commits.
@@ -878,9 +890,13 @@ export async function runKnowledgeJob(
             truncated: boolean
           })
         : null
-    const statusMessage = crawl
+    const crawlMessage = crawl
       ? `${crawl.indexedPages} pages indexed.${crawl.failedPages ? ` ${crawl.failedPages} pages could not be fetched.` : ""}${crawl.truncated ? " Crawl limit reached; some pages were not indexed." : ""}`
-      : null
+      : ""
+    const statusMessage = [
+      crawlMessage,
+      embeddings ? "" : KEYWORD_KNOWLEDGE_NOTICE,
+    ].filter(Boolean).join(" ") || null
     const nextResync = (() => {
       const config = parseJson(source.configJson)
       const hours =
@@ -916,8 +932,8 @@ export async function runKnowledgeJob(
           409
         )
       for (const [ordinal, chunk] of chunks.entries()) {
-        await tx.execute(sql`insert into build_knowledge_chunks (id,project_id,agent_id,source_id,revision,ordinal,content,metadata_json,search_vector)
-          values (${`kc_${randomUUID().replaceAll("-", "")}`},${ctx.projectId},${source.agentId},${sourceId},${indexRevision},${ordinal},${chunk.content},${JSON.stringify(chunk.metadata)}::jsonb,to_tsvector('simple',${chunk.content}))`)
+        await tx.execute(sql`insert into build_knowledge_chunks (id,project_id,agent_id,source_id,revision,ordinal,content,metadata_json,search_vector,embedding_model,embedding)
+          values (${`kc_${randomUUID().replaceAll("-", "")}`},${ctx.projectId},${source.agentId},${sourceId},${indexRevision},${ordinal},${chunk.content},${JSON.stringify(chunk.metadata)}::jsonb,to_tsvector('simple',${chunk.content}),${embeddings ? KNOWLEDGE_EMBEDDING_PROFILE : null},${embeddings ? JSON.stringify(embeddings[ordinal]) : null}::public.vector)`)
       }
       await tx.execute(
         sql`delete from build_knowledge_chunks where project_id=${ctx.projectId} and source_id=${sourceId} and revision <> ${indexRevision}`
@@ -1047,7 +1063,7 @@ export async function exportKnowledgeSource(
   }
 }
 
-export async function retrieveKnowledge(
+async function retrieveLexicalKnowledge(
   ctx: KnowledgeBuildContext,
   input: {
     agentId: string
@@ -1180,7 +1196,7 @@ export async function retrieveKnowledge(
       if (!expandedQuery || seen.has(key)) continue
       seen.add(key)
       expandedResults.push(
-        ...(await retrieveKnowledge(ctx, {
+        ...(await retrieveLexicalKnowledge(ctx, {
           agentId: input.agentId,
           query: expandedQuery,
           limit,
@@ -1216,11 +1232,112 @@ export async function retrieveKnowledge(
 }
 
 /**
+ * Rank fusion preserves exact terminology while adding semantic matches for
+ * paraphrases. Both candidate sets enforce the same tenant/revision boundary.
+ * No semantic provider failure is allowed to discard working lexical results.
+ */
+export async function retrieveKnowledge(
+  ctx: KnowledgeBuildContext,
+  input: {
+    agentId: string
+    query: string
+    limit?: number
+    queryExpander?: KnowledgeQueryExpander
+    signal?: AbortSignal
+  }
+): Promise<KnowledgeSearchResult[]> {
+  assertContext(ctx)
+  const queryText = normalizeKnowledgeText(input.query).slice(
+    0,
+    KNOWLEDGE_LIMITS.maxQueryCharacters
+  )
+  if (!queryText) return []
+  const limit = Math.min(
+    Math.max(input.limit ?? 8, 1),
+    KNOWLEDGE_LIMITS.maxResults
+  )
+  const candidateLimit = KNOWLEDGE_LIMITS.maxResults
+  const [lexical, semantic] = await Promise.all([
+    retrieveLexicalKnowledge(ctx, {
+      ...input,
+      query: queryText,
+      limit: candidateLimit,
+      queryExpander: undefined,
+    }),
+    (async (): Promise<KnowledgeSearchResult[]> => {
+      try {
+        const vector = await embedKnowledgeQuery(
+          ctx,
+          input.agentId,
+          queryText,
+          input.signal
+        )
+        if (!vector) return []
+        const results = await query<KnowledgeSearchResult>(
+          ctx.database,
+          sql`
+          select c.id as "chunkId",c.source_id as "sourceId",c.agent_id as "agentId",
+            s.name as "sourceName",s.kind as "sourceKind",c.content,
+            c.metadata_json as metadata,c.revision,
+            1-(c.embedding <=> ${JSON.stringify(vector)}::public.vector) as score
+          from build_knowledge_chunks c
+          join build_knowledge_sources s on s.project_id=c.project_id and s.id=c.source_id
+          where c.project_id=${ctx.projectId} and c.agent_id=${input.agentId}
+            and s.agent_id=${input.agentId} and s.status <> 'deleted' and c.revision=s.active_revision
+            and c.embedding_model=${KNOWLEDGE_EMBEDDING_PROFILE}
+            and c.embedding is not null
+            and 1-(c.embedding <=> ${JSON.stringify(vector)}::public.vector) >= 0.3
+          order by c.embedding <=> ${JSON.stringify(vector)}::public.vector,c.source_id,c.ordinal
+          limit ${candidateLimit}
+        `
+        )
+        return results
+      } catch {
+        return []
+      }
+    })(),
+  ])
+  let candidates: KnowledgeSearchResult[]
+  if (!semantic.length) {
+    candidates =
+      !lexical.length && input.queryExpander
+        ? await retrieveLexicalKnowledge(ctx, {
+            ...input,
+            query: queryText,
+            limit: candidateLimit,
+          })
+        : lexical
+  } else if (!lexical.length) {
+    candidates = semantic
+  } else {
+    const fused = new Map<string, KnowledgeSearchResult>()
+    for (const results of [lexical, semantic]) {
+      results.forEach((result, rank) => {
+        const previous = fused.get(result.chunkId)
+        fused.set(result.chunkId, {
+          ...result,
+          score: (previous?.score ?? 0) + 1 / (60 + rank + 1),
+        })
+      })
+    }
+    candidates = [...fused.values()].sort(
+      (left, right) =>
+        right.score - left.score || left.chunkId.localeCompare(right.chunkId)
+    )
+  }
+  return rankKnowledgeCandidates(ctx, {
+    query: queryText,
+    candidates,
+    limit,
+    signal: input.signal,
+  })
+}
+
+/**
  * Runtime-facing grounding adapter. The agent runner can pass `context` as a
  * bounded system/user context block and retain `citations` in the turn
- * snapshot. Retrieval is deterministic by default; an optional query
- * expander may improve recall, but only indexed chunks become context or
- * citations and the channel runtime still owns generation.
+ * snapshot. Hybrid candidates are deduplicated and reranked before selecting
+ * the context. Only indexed chunks become citations; generation stays in the runtime.
  */
 export async function retrieveGroundedKnowledge(
   ctx: KnowledgeBuildContext,
@@ -1229,6 +1346,7 @@ export async function retrieveGroundedKnowledge(
     query: string
     limit?: number
     queryExpander?: KnowledgeQueryExpander
+    signal?: AbortSignal
   }
 ) {
   const results = await retrieveKnowledge(ctx, input)
@@ -1260,7 +1378,9 @@ export async function retrieveGroundedKnowledge(
     // Aliases match the runtime's channel-neutral grounding contract while
     // `context` remains useful to MCP callers that need citations separately.
     text: context,
-    documents: results.map((result) => ({
+    documents: results.map((result, index) => ({
+      rank: index + 1,
+      score: result.score,
       chunkId: result.chunkId,
       sourceId: result.sourceId,
       sourceName: result.sourceName,

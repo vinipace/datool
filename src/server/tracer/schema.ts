@@ -222,6 +222,7 @@ export const datasets = pgTable(
   {
     id: text("id").primaryKey(),
     ...projectScope(),
+    agentId: text("agent_id"),
     name: text("name").notNull(),
     description: text("description"),
     metadataJson: text("metadata_json").notNull().default("{}"),
@@ -234,6 +235,7 @@ export const datasets = pgTable(
   (t) => [
     uniqueIndex("datasets_project_id_id_idx").on(t.projectId, t.id),
     index("datasets_project_page_idx").on(t.projectId, t.updatedAt, t.id),
+    index("datasets_agent_page_idx").on(t.projectId, t.agentId, t.updatedAt, t.id),
     uniqueIndex("datasets_project_name_idx").on(t.projectId, t.name),
     index("datasets_parent_idx").on(t.projectId, sql`regexp_replace(${t.name}, '[^/]+$', '')`, t.name, t.id),
   ]
@@ -326,6 +328,7 @@ export const evalRuns = pgTable(
   {
     id: text("id").primaryKey(),
     ...projectScope(),
+    agentId: text("agent_id"),
     metadataJson: text("metadata_json").notNull().default("{}"),
     name: text("name"),
     datasetId: text("dataset_id"),
@@ -343,6 +346,7 @@ export const evalRuns = pgTable(
       name: "eval_runs_project_dataset_fk",
     }).onDelete("no action"),
     index("eval_runs_project_page_idx").on(t.projectId, t.createdAt, t.id),
+    index("eval_runs_agent_page_idx").on(t.projectId, t.agentId, t.createdAt, t.id),
     index("eval_runs_project_time_idx").on(t.projectId, t.createdAtMs),
     index("eval_runs_project_created_at_idx").on(t.projectId, t.createdAt),
     index("eval_runs_project_status_idx").on(t.projectId, t.status),

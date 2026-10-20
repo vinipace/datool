@@ -79,6 +79,7 @@ import {
   BuildStatus,
 } from "@/components/build/shared/build-layout"
 import { agentBuildTabs } from "@/components/build/shared/build-tabs"
+import { AgentTests } from "./agent-tests"
 import { AgentActivity } from "./agent-activity"
 import { AgentSidebarNavigation } from "@/components/build/shared/agent-sidebar"
 import { channelLabel } from "@/components/build/shared/channel-catalog"
@@ -275,7 +276,12 @@ function BuildAgentEditorContent({
       })
       if (typeof window === "undefined") return
       const url = new URL(window.location.href)
+      url.pathname = saved ? workspaceHref(`/build/agents/${encodeURIComponent(saved.id)}${next === "test" ? "/test" : ""}`) : url.pathname
       url.searchParams.set("section", next)
+      if (next !== "test") {
+        for (const key of ["datasetId", "item", "itemTab", "objectView", "filter", "inspector"])
+          url.searchParams.delete(key)
+      }
       if (url.href !== window.location.href)
         window.history.pushState(
           null,
@@ -283,7 +289,7 @@ function BuildAgentEditorContent({
           `${url.pathname}${url.search}${url.hash}`
         )
     },
-    [saved]
+    [saved, workspaceHref]
   )
 
   React.useEffect(() => {
@@ -401,7 +407,7 @@ function BuildAgentEditorContent({
           <h1 className="truncate text-sm font-medium">
             {draft.name || "New agent"}
           </h1>
-          {saved ? <BuildStatus state={saved.status} /> : null}
+          {saved ? <span className={active === "test" ? "hidden sm:contents" : "contents"}><BuildStatus state={saved.status} /></span> : null}
         </div>
       </HeaderSlot>
       <HeaderSlot name="actions">
@@ -504,6 +510,7 @@ function BuildAgentEditorContent({
           aria-label="Agent editor"
           className={`min-h-0 min-w-0 flex-1 ${active === "playground" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
+          {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} /> : null}
           {active === "overview" && saved ? (
             <AgentOverview key={saved.id} agentId={saved.id} />
           ) : null}
@@ -2326,24 +2333,6 @@ function ActionsTab({
         <ActionCatalog onCreate={beginAction} />
       </TabsContent>
       <TabsContent value="mine" className="min-w-0 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">
-            My Actions{" "}
-            <span className="ml-1 font-normal text-foreground-muted">
-              {state.data ? rows.length : ""}
-            </span>
-          </h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Refresh actions"
-            loading={state.isLoading}
-            onClick={state.refresh}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
-        </div>
         {state.error ? (
           <BuildErrorState
             message={state.error.message}
@@ -2979,6 +2968,7 @@ function FormActionFields({
                     <option value="phone">Phone</option>
                     <option value="number">Number</option>
                     <option value="select">Select</option>
+                    <option value="checkbox">Checkbox</option>
                   </Select>
                 </FormRow>
                 <FormRow

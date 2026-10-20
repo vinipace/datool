@@ -32,6 +32,7 @@ import type {
   DatasetDetail,
   DatasetItem,
   DatasetItemPreview,
+  DatasetItemPage,
   DatasetVersion,
   EvalRun,
   EvalRunSummary,
@@ -159,6 +160,7 @@ function datasetItemUrl(id: string, fields?: DatasetItemField[]) {
 }
 
 export type CollectionListOptions = {
+  agentId?: string
   includeTotal?: boolean
   signal?: AbortSignal
   filter?: string
@@ -299,16 +301,17 @@ export const tracerApi = {
       request<{ id: string; name: string }>("/api/datasets/library", { body: input, method: "PATCH", projectId }),
     getItem: (id: string, options: { fields?: DatasetItemField[]; signal?: AbortSignal } = {}) =>
       request<DatasetItemPreview>(datasetItemUrl(id, options.fields), { signal: options.signal }),
-    items: (id: string, options: CollectionListOptions & { preview?: boolean } = {}) =>
-      collection<DatasetItemPreview>(
+    items: (id: string, options: CollectionListOptions & { preview?: boolean; includeResults?: boolean } = {}) =>
+      request<DatasetItemPage>(
         withQuery(`/api/datasets/${encodeURIComponent(id)}/items`, {
           filter: options.filter,
           preview: options.preview?.toString(),
+          includeResults: options.includeResults?.toString(),
           cursor: options.cursor,
           includeTotal: options.includeTotal?.toString(),
           limit: options.limit?.toString(),
         }),
-        options.signal
+        { signal: options.signal }
       ),
     create: (input: CreateDatasetInput) =>
       request<Dataset>("/api/datasets", { body: input, method: "POST" }),
@@ -325,6 +328,7 @@ export const tracerApi = {
     list: (options: CollectionListOptions = {}) =>
       collection<Dataset>(
         withQuery("/api/datasets", {
+          agentId: options.agentId,
           filter: options.filter,
           cursor: options.cursor,
           includeTotal: options.includeTotal?.toString(),
@@ -383,6 +387,7 @@ export const tracerApi = {
     list: (options: CollectionListOptions = {}) =>
       collection<EvalRunSummary>(
         withQuery("/api/evals", {
+          agentId: options.agentId,
           filter: options.filter,
           cursor: options.cursor,
           includeTotal: options.includeTotal?.toString(),

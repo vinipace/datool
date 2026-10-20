@@ -249,6 +249,7 @@ export const actionDefinitionSchema = z.discriminatedUnion("type", [
             "number",
             "select",
             "textarea",
+            "checkbox",
           ]),
           required: z.boolean().default(false),
           options: z.array(z.string().max(300)).max(100).default([]),

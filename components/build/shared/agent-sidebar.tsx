@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  Lightbulb,
   ContactRound,
   Wrench,
   type LucideIcon,
@@ -24,7 +23,6 @@ import {
 import { AgentAvatar } from "@/components/ui/agent-avatar"
 import type { AgentAppearance } from "@/src/lib/build/contracts"
 import { useWorkspaceHref } from "@/components/tracer/workspace-path"
-import { productIcons } from "@/components/product-icons"
 import { agentBuildTabs } from "./build-tabs"
 
 const AgentSidebarContext = React.createContext<{
@@ -95,15 +93,18 @@ export function AgentSidebarNavigation({
     const tab = agentBuildTabs.find((item) => item.id === id)!
     if (!canConfigure && id !== "settings" && id !== "instructions") return null
     const query = new URLSearchParams(agentHref ? "" : searchParams.toString())
+    for (const key of ["datasetId", "item", "itemTab", "objectView", "filter", "inspector"])
+      query.delete(key)
     query.set("section", id)
+    const base = agentHref ?? (agentId ? workspaceHref(`/build/agents/${encodeURIComponent(agentId)}`) : pathname)
+    const href = id === "test" ? `${base}/test` : `${base}?${query.toString()}`
     return (
       <SidebarMenuItem key={id}>
         <SidebarMenuButton
-          size="lg"
           isActive={active === id}
           aria-current={active === id ? "page" : undefined}
           title={tab.description}
-          render={<a href={`${agentHref ?? pathname}?${query.toString()}`} />}
+          render={<a href={href} />}
           onClick={(event) => {
             if (
               event.button !== 0 ||
@@ -135,7 +136,6 @@ export function AgentSidebarNavigation({
     return (
       <SidebarMenuItem key={path}>
         <SidebarMenuButton
-          size="lg"
           render={<Link href={href} />}
           onClick={(event) => {
             if (
@@ -166,7 +166,6 @@ export function AgentSidebarNavigation({
   ) => (
     <SidebarMenuItem>
       <SidebarMenuButton
-        size="lg"
         aria-expanded={expanded[label]}
         aria-controls={`${groupId}-${label}`}
         onClick={() =>
@@ -219,7 +218,6 @@ export function AgentSidebarNavigation({
             {internalLink("actions", true)}
             {internalLink("widgets", true)}
             {internalLink("procedures", true)}
-            {externalLink("Suggestions", "/build/suggestions", Lightbulb, true)}
             {internalLink("guardrails", true)}
           </>
         )}
@@ -229,17 +227,12 @@ export function AgentSidebarNavigation({
             "Activity",
             Eye,
             <>
-              {externalLink(
-                "Inbox",
-                `/build/inbox?agentId=${encodeURIComponent(agentId)}`,
-                productIcons.buildInbox,
-                true
-              )}
               {internalLink("leads", true)}
               {internalLink("collected-data", true)}
             </>
           )}
         {externalLink("Contacts", "/build/contacts", ContactRound)}
+        {internalLink("test")}
         {internalLink("channels")}
         {internalLink("integrations")}
         {internalLink("settings")}

@@ -15,6 +15,7 @@ export async function listEvalSummaries(
   database: TracerDatabase,
   project: string,
   options: {
+    agentId?: string
     includeTotal?: boolean
     filter?: string | null
     cursor?: string | null
@@ -33,7 +34,7 @@ export async function listEvalSummaries(
         EvalRunSummary & { metadata: string }
       >(
         scopedTracerTransaction(database, tx),
-        sql`select * from (${relation}) summaries where ${filter}`,
+        sql`select * from (${relation}) summaries where ${filter} ${options.agentId ? sql`and "agentId"=${options.agentId}` : sql``}`,
         options,
         "createdAt"
       )
@@ -81,7 +82,7 @@ export async function listEvalSummaries(
 }
 
 function evalSummarySource(project: string) {
-  const relation = sql`select id, name, metadata_json as metadata, dataset_id as "datasetId", status, created_at as "createdAt",completed_at as "completedAt",groups_resolved_at as "groupsResolvedAt",
+  const relation = sql`select id, agent_id as "agentId", name, metadata_json as metadata, dataset_id as "datasetId", status, created_at as "createdAt",completed_at as "completedAt",groups_resolved_at as "groupsResolvedAt",
     coalesce((select jsonb_agg(jsonb_build_object('type',g.group_type,'name',g.group_name,'version',g.group_version) order by g.group_type,g.group_name,g.group_version) from eval_run_groups g where g.project_id=${project} and g.run_id=eval_runs.id),'[]'::jsonb) as groups,
     (select count(*)::integer from eval_results r where r.project_id=${project} and r.run_id=eval_runs.id) as "resultCount",
     (select avg(r.score) from eval_results r where r.project_id=${project} and r.run_id=eval_runs.id) as score,

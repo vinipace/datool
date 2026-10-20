@@ -725,7 +725,7 @@ saving and saved states. New agents still require the explicit Create agent acti
 The workspace sidebar switches to the agent's navigation while its editor or a
 channel opened from that agent owns `AgentSidebarTarget`. The agent avatar/name
 returns to the agent list. Analytics comes first, Build and Activity are
-collapsible groups, and Activity's Inbox link retains the agent filter. The
+collapsible groups, and Activity contains Leads and Collected data. The
 current agent's Integrations page remains reachable from this navigation.
 Home and the other workspace groups are hidden while agent navigation is active.
 

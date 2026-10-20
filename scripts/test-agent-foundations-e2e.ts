@@ -134,7 +134,7 @@ try {
     "POSTGRES_PASSWORD=agent-e2e-fixture",
     "-p",
     "127.0.0.1::5432",
-    "postgres:17-alpine"
+    "pgvector/pgvector:pg17"
   )
   ownsContainer = true
   let databaseReady = false

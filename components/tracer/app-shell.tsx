@@ -91,11 +91,6 @@ const routeGroups = [
         icon: productIcons.buildCampaigns,
         label: pageTitles.buildCampaigns,
       },
-      {
-        href: "/build/suggestions",
-        icon: productIcons.buildSuggestions,
-        label: pageTitles.buildSuggestions,
-      },
     ],
   },
   {

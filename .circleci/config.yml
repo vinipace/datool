@@ -130,7 +130,7 @@ commands:
       - run:
           name: Start isolated PostgreSQL 18 and Redis 7
           command: |-
-            docker run -d --name datool-ci-postgres -e POSTGRES_PASSWORD=package-fixture -p 127.0.0.1:5432:5432 postgres:18-alpine
+            docker run -d --name datool-ci-postgres -e POSTGRES_PASSWORD=package-fixture -p 127.0.0.1:5432:5432 pgvector/pgvector:pg18
             docker run -d --name datool-ci-redis -p 127.0.0.1:6379:6379 redis:7-alpine
             for attempt in $(seq 1 60); do
               if docker exec datool-ci-postgres pg_isready -U postgres && docker exec datool-ci-redis redis-cli ping | grep -q PONG; then
