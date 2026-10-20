@@ -75,9 +75,9 @@ export const agentBuildTabs: BuildTab[] = [
   },
   {
     id: "procedures",
-    label: "Procedures",
+    label: "Skills",
     icon: ListChecks,
-    description: "Repeatable workflows",
+    description: "Reusable instructions for specific tasks",
     group: "Build",
   },
   {

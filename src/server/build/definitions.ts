@@ -21,6 +21,7 @@ import {
   encryptProviderKey,
 } from "@/src/server/model-providers/secrets"
 import type { BuildContext } from "./context"
+import { skillActionSlugs } from "@/src/lib/build/skill-mentions"
 import {
   buildActionRevisions,
   buildActions,
@@ -1066,6 +1067,23 @@ export async function saveProcedure(
     definition = procedureDefinitionSchema.parse(input.definition)
   } catch (error) {
     throw validation(error)
+  }
+  if (definition.instructions?.trim()) {
+    const slugs = skillActionSlugs(definition.instructions)
+    if (slugs.length > 100)
+      throw new DefinitionValidationError(
+        "A skill can mention at most 100 actions."
+      )
+    const actions = slugs.length ? await listActions(context, agentId) : []
+    const bySlug = new Map(actions.map((action) => [action.slug, action.id]))
+    definition.actionRefs = slugs.map((slug) => {
+      const id = bySlug.get(slug)
+      if (!id)
+        throw new DefinitionValidationError(
+          `Mentioned action @${slug} is not available on this agent.`
+        )
+      return id
+    })
   }
   await assertActionReferences(context, agentId, [
     ...definition.actionRefs,
