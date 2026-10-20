@@ -8,7 +8,7 @@ import {
   SimpleSpanProcessor,
   InMemorySpanExporter,
 } from "@opentelemetry/sdk-trace-node"
-import { context, trace } from "@opentelemetry/api"
+import { context, propagation, trace } from "@opentelemetry/api"
 
 const published = (version = 1) => ({
   ...defaultPrompt,
@@ -272,18 +272,24 @@ describe("managed prompt SDK", () => {
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     })
     provider.register()
-    const span = provider.getTracer("test").startSpan("app")
-    await context.with(trace.setSpan(context.active(), span), () =>
-      fixture().client.prompts.get("brand")
-    )
-    span.end()
-    expect(exporter.getFinishedSpans()[0].events[0]).toMatchObject({
-      name: "datool.prompt.resolve",
-      attributes: {
-        "datool.prompt.id": "prompt-brand",
-        "datool.prompt.version": 1,
-      },
-    })
-    await provider.shutdown()
+    try {
+      const span = provider.getTracer("test").startSpan("app")
+      await context.with(trace.setSpan(context.active(), span), () =>
+        fixture().client.prompts.get("brand")
+      )
+      span.end()
+      expect(exporter.getFinishedSpans()[0].events[0]).toMatchObject({
+        name: "datool.prompt.resolve",
+        attributes: {
+          "datool.prompt.id": "prompt-brand",
+          "datool.prompt.version": 1,
+        },
+      })
+    } finally {
+      trace.disable()
+      context.disable()
+      propagation.disable()
+      await provider.shutdown()
+    }
   })
 })

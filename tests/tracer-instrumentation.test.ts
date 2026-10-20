@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { afterAll, beforeAll, expect, test } from "bun:test"
-import { context, trace } from "@opentelemetry/api"
+import { context, propagation, trace } from "@opentelemetry/api"
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node"
 import { createTracer } from "../src/lib/tracer/sdk"
 import { DatoolSpanProcessor } from "../src/lib/tracer/otel"
@@ -35,9 +35,10 @@ const tracer = createTracer({
 })
 beforeAll(() => provider.register())
 afterAll(async () => {
-  await provider.shutdown()
   trace.disable()
   context.disable()
+  propagation.disable()
+  await provider.shutdown()
 })
 const patch = (id: string) =>
   Object.assign(
