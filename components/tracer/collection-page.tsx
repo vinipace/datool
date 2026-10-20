@@ -124,10 +124,12 @@ export function CollectionSearch({
   label,
   value,
   onChange,
+  focusRequest,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
+  focusRequest?: number
 }) {
   return (
     <TextSearchInput
@@ -135,6 +137,7 @@ export function CollectionSearch({
       placeholder={`${label}…`}
       value={value}
       onChange={onChange}
+      focusRequest={focusRequest}
     />
   )
 }

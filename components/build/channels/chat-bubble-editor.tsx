@@ -243,6 +243,8 @@ export function ChatBubbleEditor({
           active="channels"
           canConfigure
           agentHref={agentHref}
+          agentId={agent.id}
+          appearance={agent.configuration.appearance}
           onChange={(section) =>
             void navigate(`${agentHref}?section=${section}`)
           }

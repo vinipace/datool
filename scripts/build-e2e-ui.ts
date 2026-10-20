@@ -28,10 +28,21 @@ async function openAgentNavigation(page: Page) {
 export async function selectAgentSection(
   page: Page,
   label: string,
-  value = label.toLowerCase()
+  value = label === "Analytics"
+    ? "overview"
+    : label === "Data sources"
+      ? "knowledge"
+      : label.toLowerCase().replaceAll(" ", "-")
 ) {
   const navigation = await openAgentNavigation(page)
-  await navigation.getByRole("link", { name: label, exact: true }).click()
+  const link = navigation.getByRole("link", { name: label, exact: true })
+  if (!(await link.isVisible())) {
+    const group = ["Inbox", "Leads", "Collected data"].includes(label)
+      ? "Activity"
+      : "Build"
+    await navigation.getByRole("button", { name: group, exact: true }).click()
+  }
+  await link.click()
   await page.waitForURL((url) => url.searchParams.get("section") === value)
   if ((page.viewportSize()?.width ?? 1440) < 768)
     await navigation.waitFor({ state: "hidden" })
@@ -282,7 +293,7 @@ export async function runBuildUiE2e({
   await page.unroute("**/api/build/build_start_simulation")
 
   await page.goto(`${prefix}/agents/${agentId}`, { waitUntil: "networkidle" })
-  await selectAgentSection(page, "Knowledge")
+  await selectAgentSection(page, "Data sources")
   await page.getByRole("button", { name: "Add source", exact: true }).click()
   const sourceDialog = page.getByRole("dialog")
   await sourceDialog
@@ -320,17 +331,17 @@ export async function runBuildUiE2e({
     "tests",
   ]
   const sections = [
-    "Overview",
+    "Analytics",
     "Instructions",
     "Guardrails",
     "Settings",
-    "Knowledge",
+    "Data sources",
     "Actions",
     "Procedures",
     "Widgets",
     "Channels",
-    "Copilot",
-    "Playground",
+    "Leads",
+    "Collected data",
   ]
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
@@ -370,12 +381,15 @@ export async function runBuildUiE2e({
     await selectAgentSection(page, "Instructions")
     assert.equal(await instructions.inputValue(), editedInstructions)
     await instructions.fill(originalInstructions)
-    await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
+    await page
+      .getByRole("status")
+      .filter({ hasText: /^Saved$/ })
+      .waitFor()
     for (const section of sections) {
       await selectAgentSection(page, section)
       // Wait for saved resources, not a previously idle document before the
       // section's effect has started its read.
-      if (section === "Knowledge")
+      if (section === "Data sources")
         await page.getByText("Returns", { exact: true }).waitFor()
       if (["Actions", "Procedures", "Widgets"].includes(section)) {
         const list =
@@ -386,10 +400,6 @@ export async function runBuildUiE2e({
       }
       if (section === "Channels")
         await page.getByText("Website validation", { exact: true }).waitFor()
-      if (section === "Playground")
-        await page
-          .getByText("Waiting for the agent…", { exact: true })
-          .waitFor({ state: "hidden" })
       await assertFitsViewport(page, `agent ${section} ${size}`)
       const mainSize = await page
         .locator("main")
@@ -414,9 +424,12 @@ export async function runBuildUiE2e({
     assert.equal(
       await navigation
         .getByRole("link", { name: "Playground", exact: true })
-        .getAttribute("aria-current"),
-      "page"
+        .count(),
+      0
     )
+    await page
+      .getByText("Waiting for the agent…", { exact: true })
+      .waitFor({ state: "hidden" })
     await page.screenshot({
       path: join(evidence, `agent-sidebar-${size}.png`),
       fullPage: true,
@@ -425,7 +438,7 @@ export async function runBuildUiE2e({
     await assertFitsViewport(page, `standalone playground ${size}`)
     await openAgentNavigation(page)
     const parent = page.getByRole("link", {
-      name: "Agents / Build validation agent",
+      name: "Build validation agent — back to agents",
       exact: true,
     })
     assert.equal(

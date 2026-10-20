@@ -37,7 +37,11 @@ import {
   CollectionSearch,
 } from "@/components/tracer/collection-page"
 import { CollectionInspectorOverlay } from "@/components/tracer/collection-inspector-overlay"
-import { CollectionRow, CollectionTable, CollectionTableBody } from "@/components/tracer/collection-table"
+import {
+  CollectionRow,
+  CollectionTable,
+  CollectionTableBody,
+} from "@/components/tracer/collection-table"
 import { collectionTable } from "@/components/tracer/collection-table-styles"
 import { useCollectionPages } from "@/components/tracer/use-collection-pages"
 import type { CollectionListOptions } from "@/components/tracer/api"
@@ -71,6 +75,18 @@ import {
   TicketStatusSelect,
 } from "@/components/build/shared/ticket-status"
 import type { ChannelId } from "@/src/lib/build/channels"
+import { InboxConversations } from "@/components/build/shared/inbox-sidebar"
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar"
+import {
+  inboxViews,
+  useInboxNavigation,
+} from "@/components/build/shared/inbox-navigation"
+import { NewTicketDialog } from "./new-ticket-dialog"
 
 type Ticket = {
   id: string
@@ -182,6 +198,8 @@ function listTickets({ filter, cursor, limit, signal }: CollectionListOptions) {
   const filters = JSON.parse(filter ?? "{}") as {
     search?: string
     status?: string
+    queue?: string
+    agentId?: string
   }
   return buildApi
     .call<unknown>(
@@ -191,6 +209,8 @@ function listTickets({ filter, cursor, limit, signal }: CollectionListOptions) {
         limit,
         search: filters.search || undefined,
         status: filters.status || undefined,
+        queue: filters.queue,
+        agentId: filters.agentId,
       },
       signal
     )
@@ -396,25 +416,77 @@ export function InboxPage({
     ? productIcons.buildInbox
     : productIcons.buildConversations
   const scope = useWorkspaceStorageScope()
+  const navigation = useInboxNavigation()
+  const { isMobile, setOpenMobile } = useSidebar()
   const isWide = useWideViewport(900)
   const tableView = useTableView({
     settingsStorageKey: `datool:build-${view}:${scope}:settings`,
     orderStorageKey: `datool.build-${view}.columns`,
   })
-  const [search, setSearch] = React.useState("")
-  const [status, setStatus] = React.useState(isInbox ? "open" : "")
+  const agentId = isInbox
+    ? navigation.params.get("agentId") || undefined
+    : undefined
+  const agent = useRemote(
+    (signal) =>
+      agentId
+        ? buildApi.call<{ name: string }>(
+            "build_get_agent",
+            { agentId, includeArchived: true },
+            signal
+          )
+        : Promise.resolve(null),
+    [scope, agentId],
+    { enabled: Boolean(agentId) }
+  )
+  const search = navigation.params.get("q") ?? ""
+  const setSearch = (value: string) =>
+    navigation.navigate({ q: value || null }, true)
+  const requestedStatus = navigation.params.get("status") ?? ""
+  const status =
+    isInbox && navigation.view === "solved"
+      ? "solved"
+      : (isInbox
+            ? ["open", "pending", "snoozed", "solved", "closed"]
+            : Object.keys(conversationStatuses)
+          ).includes(requestedStatus)
+        ? requestedStatus
+        : ""
+  const queue =
+    isInbox && ["mine", "mentions", "unassigned"].includes(navigation.view)
+      ? navigation.view
+      : undefined
+  const viewLabel = inboxViews.find(
+    (item) => item.id === navigation.view
+  )!.label
+  const setStatus = (value: string) =>
+    navigation.navigate({ status: value || null })
   const [showSetup, setShowSetup] = React.useState(false)
-  const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const selectionKey = isInbox ? "ticket" : "conversation"
+  const selectedId = navigation.params.get(selectionKey)
+  const setSelectedId = (id: string | null) =>
+    navigation.navigate({ [selectionKey]: id })
   const returnFocusRef = React.useRef<HTMLElement | null>(null)
-  const closeConversation = React.useCallback(() => {
+  const closeConversation = () => {
     setSelectedId(null)
     returnFocusRef.current?.focus()
-  }, [])
+  }
   const tickets = useCollectionPages(
     isInbox ? listTickets : listConversations,
-    JSON.stringify({ search, status }),
+    JSON.stringify({ search, status, queue, agentId }),
     15_000,
     { refreshLoadedPages: true }
+  )
+  const recent = useRemote(
+    (signal) =>
+      buildApi
+        .call(
+          "build_list_tickets",
+          { order: "recent", limit: 8, agentId },
+          signal
+        )
+        .then(ticketList),
+    [scope, agentId],
+    { enabled: isInbox, intervalMs: 15_000 }
   )
   const selectedRow =
     tickets.items.find((ticket) => ticket.id === selectedId) ?? null
@@ -432,6 +504,72 @@ export function InboxPage({
 
   return (
     <>
+      {isInbox ? (
+        <InboxConversations>
+          {recent.isLoading ? (
+            <p
+              role="status"
+              className="px-2 py-3 text-xs text-foreground-muted"
+            >
+              Loading conversations…
+            </p>
+          ) : recent.error ? (
+            <div className="space-y-2 px-2 py-3 text-xs text-foreground-muted">
+              <p>Could not load recent conversations.</p>
+              <Button size="sm" variant="outline" onClick={recent.refresh}>
+                Retry
+              </Button>
+            </div>
+          ) : recent.data?.items.length ? (
+            <SidebarMenu aria-label="Recent conversations">
+              {recent.data.items.map((ticket) => (
+                <SidebarMenuItem key={ticket.id}>
+                  <SidebarMenuButton
+                    size="lg"
+                    title={
+                      ticket.subject ||
+                      ticket.contactName ||
+                      "Untitled conversation"
+                    }
+                    isActive={selectedId === ticket.id}
+                    aria-current={selectedId === ticket.id ? "page" : undefined}
+                    render={
+                      <a
+                        href={navigation.href({ ticket: ticket.id, new: null })}
+                      />
+                    }
+                    onClick={(event) => {
+                      if (
+                        event.button !== 0 ||
+                        event.metaKey ||
+                        event.ctrlKey ||
+                        event.shiftKey ||
+                        event.altKey
+                      )
+                        return
+                      event.preventDefault()
+                      returnFocusRef.current = event.currentTarget
+                      setSelectedId(ticket.id)
+                      if (isMobile) setOpenMobile(false)
+                    }}
+                  >
+                    <productIcons.buildConversations />
+                    <span>
+                      {ticket.subject ||
+                        ticket.contactName ||
+                        "Untitled conversation"}
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          ) : (
+            <p className="px-2 py-3 text-xs text-foreground-muted">
+              No conversations yet.
+            </p>
+          )}
+        </InboxConversations>
+      ) : null}
       <CollectionPanel label={isInbox ? "Inbox" : "Conversations"}>
         <CollectionPage
           className="contents"
@@ -439,27 +577,54 @@ export function InboxPage({
           loadingLabel="Loading conversations"
           pagination={tickets}
           toolbar={
-            tableView.storageError ? (
-              <Notice variant="error">{tableView.storageError}</Notice>
-            ) : null
+            <>
+              {agentId ? (
+                <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="max-w-full"
+                    aria-label={`Remove agent filter: ${agent.data?.name || agentId}`}
+                    onClick={() =>
+                      navigation.navigate({ agentId: null, ticket: null })
+                    }
+                  >
+                    <Bot aria-hidden className="size-3.5 shrink-0" />
+                    <span className="truncate">
+                      Agent: {agent.data?.name || agentId}
+                    </span>
+                    <X aria-hidden className="size-3.5 shrink-0" />
+                  </Button>
+                </div>
+              ) : null}
+              {tableView.storageError ? (
+                <Notice variant="error">{tableView.storageError}</Notice>
+              ) : null}
+            </>
           }
           header={{
             exportRows: tickets.items,
             exportName: view,
             children: (
               <div className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="shrink-0 text-sm font-medium">
+                  {isInbox ? viewLabel : "Conversations"}
+                </span>
                 <CollectionSearch
                   label="Search conversations"
                   value={search}
                   onChange={setSearch}
+                  focusRequest={Number(navigation.params.get("search")) || 0}
                 />
                 {isInbox ? (
-                  <TicketStatusSelect
-                    label="Inbox status"
-                    value={status}
-                    onValueChange={setStatus}
-                    includeAll
-                  />
+                  navigation.view !== "solved" ? (
+                    <TicketStatusSelect
+                      label="Inbox status"
+                      value={status}
+                      onValueChange={setStatus}
+                      includeAll
+                    />
+                  ) : null
                 ) : (
                   <SelectRoot
                     value={status}
@@ -507,17 +672,24 @@ export function InboxPage({
               description={
                 search
                   ? "Try another subject, customer name, email or conversation ID."
-                  : isInbox
-                    ? "Conversations appear here when they are escalated for human help."
-                    : "All customer conversations appear here, including chats that never need human help."
+                  : !isInbox
+                    ? "All customer conversations appear here, including chats that never need human help."
+                    : navigation.view === "mentions"
+                      ? "Tickets appear here when a teammate mentions your @email in an internal note."
+                      : navigation.view === "mine"
+                        ? "Tickets assigned to you appear here."
+                        : "Conversations appear here when they are escalated for human help."
               }
               action={
-                search || status ? (
+                search || status || queue ? (
                   <Button
                     variant="outline"
                     onClick={() => {
-                      setSearch("")
-                      setStatus("")
+                      navigation.navigate({
+                        q: null,
+                        status: null,
+                        view: "all",
+                      })
                     }}
                   >
                     Clear filters
@@ -676,6 +848,7 @@ export function InboxPage({
               onClose={closeConversation}
               onChanged={() => {
                 tickets.refresh()
+                recent.refresh()
                 detail.refresh()
               }}
             />
@@ -694,6 +867,20 @@ export function InboxPage({
             </div>
           )}
         </CollectionInspectorOverlay>
+      ) : null}
+      {isInbox && navigation.params.get("new") === "ticket" ? (
+        <NewTicketDialog
+          initialAgentId={agentId}
+          onClose={() => navigation.navigate({ new: null }, true)}
+          onCreated={(id) => {
+            navigation.navigate(
+              { new: null, ticket: id, view: "all", status: null, q: null },
+              true
+            )
+            tickets.refresh()
+            recent.refresh()
+          }}
+        />
       ) : null}
       <Sheet open={showSetup} onOpenChange={setShowSetup}>
         <SheetContent>
@@ -1778,6 +1965,10 @@ function InboxInspector({
                   maxLength={16_000}
                   disabled={addNote.isPending}
                 />
+                <p className="text-xs text-foreground-muted">
+                  Mention a teammate with @email to add this ticket to their
+                  Mentions.
+                </p>
                 <div className="flex justify-end">
                   <Button
                     type="submit"

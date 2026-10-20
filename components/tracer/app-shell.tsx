@@ -55,6 +55,10 @@ import {
   AgentSidebarProvider,
   AgentSidebarTarget,
 } from "@/components/build/shared/agent-sidebar"
+import {
+  InboxSidebar,
+  InboxSidebarProvider,
+} from "@/components/build/shared/inbox-sidebar"
 
 const routeGroups = [
   {
@@ -118,7 +122,11 @@ const routeGroups = [
         icon: productIcons.sessions,
         label: pageTitles.sessions,
       },
-      { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
+      {
+        href: "/reports",
+        icon: productIcons.reports,
+        label: pageTitles.reports,
+      },
       { href: "/alerts", icon: productIcons.alerts, label: pageTitles.alerts },
     ],
   },
@@ -269,6 +277,7 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
     if (isMobile) setOpenMobile(false)
   }
   const prefix = projectWorkspaceHref(organization, project)
+  const inInbox = pathname === `${prefix}/build/inbox`
   const inSettings =
     pathname === `${prefix}/settings` ||
     pathname.startsWith(`${prefix}/settings/`)
@@ -280,68 +289,72 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        {!inSettings && (
-          <SidebarGroup>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="h-7 text-xs"
-                  isActive={pathname === prefix || pathname === `${prefix}/`}
-                  aria-current={pathname === prefix || pathname === `${prefix}/` ? "page" : undefined}
-                  onClick={closeMobileNavigation}
-                  render={<Link href={prefix || "/"} prefetch={true} />}
-                >
-                  <productIcons.home />
-                  <span>Home</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
-        {(inSettings
-          ? [{ label: "Project settings", routes: settingsRoutes }]
-          : routeGroups
-        ).map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarMenu>
-              {group.routes.map((route) => {
-                const href = `${prefix}${route.href}`
-                const active =
-                  pathname === href ||
-                  (route.href !== "/settings" &&
-                    pathname.startsWith(`${href}/`)) ||
-                  (route.href === "/playground" &&
-                    pathname.startsWith(`${prefix}/apps/`))
-                const Icon =
-                  active && "activeIcon" in route && route.activeIcon
-                    ? route.activeIcon
-                    : route.icon
-                const link = (
+        <AgentSidebarTarget>
+          {!inSettings && !inInbox && (
+            <SidebarGroup>
+              <SidebarMenu>
+                <SidebarMenuItem>
                   <SidebarMenuButton
-                    className="h-7 text-xs group-data-[collapsible=icon]/sidebar:size-7"
-                    isActive={active}
+                    className="h-7 text-xs"
+                    isActive={pathname === prefix || pathname === `${prefix}/`}
+                    aria-current={
+                      pathname === prefix || pathname === `${prefix}/`
+                        ? "page"
+                        : undefined
+                    }
                     onClick={closeMobileNavigation}
-                    aria-current={active ? "page" : undefined}
-                    render={<Link href={href} prefetch={true} />}
+                    render={<Link href={prefix || "/"} prefetch={true} />}
                   >
-                    <Icon />
-                    <span>{route.label}</span>
+                    <productIcons.home />
+                    <span>Home</span>
                   </SidebarMenuButton>
-                )
-                return (
-                  <SidebarMenuItem key={route.href}>
-                    {route.href === "/build/agents" ? (
-                      <AgentSidebarTarget>{link}</AgentSidebarTarget>
-                    ) : (
-                      link
-                    )}
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
-        ))}
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
+          {inInbox ? (
+            <InboxSidebar />
+          ) : (
+            (inSettings
+              ? [{ label: "Project settings", routes: settingsRoutes }]
+              : routeGroups
+            ).map((group) => (
+              <SidebarGroup key={group.label}>
+                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                <SidebarMenu>
+                  {group.routes.map((route) => {
+                    const href = `${prefix}${route.href}`
+                    const active =
+                      pathname === href ||
+                      (route.href !== "/settings" &&
+                        pathname.startsWith(`${href}/`)) ||
+                      (route.href === "/playground" &&
+                        pathname.startsWith(`${prefix}/apps/`))
+                    const Icon =
+                      active && "activeIcon" in route && route.activeIcon
+                        ? route.activeIcon
+                        : route.icon
+                    const link = (
+                      <SidebarMenuButton
+                        className="h-7 text-xs group-data-[collapsible=icon]/sidebar:size-7"
+                        isActive={active}
+                        onClick={closeMobileNavigation}
+                        aria-current={active ? "page" : undefined}
+                        render={<Link href={href} prefetch={true} />}
+                      >
+                        <Icon />
+                        <span>{route.label}</span>
+                      </SidebarMenuButton>
+                    )
+                    return (
+                      <SidebarMenuItem key={route.href}>{link}</SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroup>
+            ))
+          )}
+        </AgentSidebarTarget>
       </SidebarContent>
 
       <SidebarFooter className="p-2">
@@ -403,14 +416,20 @@ function TracerAppShellContent({
   return (
     <SidebarProvider>
       <AgentSidebarProvider key={project.id}>
-        <AppSidebar organization={organization} project={project} user={user} />
-        <SidebarInset>
-          <WorkspacePageLayout
-            leading={<SidebarTrigger className="-ml-0.5 shrink-0" />}
-          >
-            <InspectorPanels>{children}</InspectorPanels>
-          </WorkspacePageLayout>
-        </SidebarInset>
+        <InboxSidebarProvider>
+          <AppSidebar
+            organization={organization}
+            project={project}
+            user={user}
+          />
+          <SidebarInset>
+            <WorkspacePageLayout
+              leading={<SidebarTrigger className="-ml-0.5 shrink-0" />}
+            >
+              <InspectorPanels>{children}</InspectorPanels>
+            </WorkspacePageLayout>
+          </SidebarInset>
+        </InboxSidebarProvider>
       </AgentSidebarProvider>
     </SidebarProvider>
   )
