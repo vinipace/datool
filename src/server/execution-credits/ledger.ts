@@ -66,7 +66,7 @@ export class ExecutionCreditStore {
   }
   async reserve(
     projectId: string,
-    runtime: "model" | "sandbox",
+    runtime: "model" | "sandbox" | "integration",
     amount: number,
     rateVersion: string,
     id = randomUUID()
@@ -168,6 +168,21 @@ export class ExecutionCreditStore {
           charged || Number(op.reserved),
         ]
       )
+      // Keep Build attribution consistent when the maintainer reconciliation
+      // command resolves an uncertain integration, as well as normal settlement.
+      if (op.runtime === "integration")
+        await client.query(
+          `UPDATE build_usage_event SET cost_nano_usd=$2,provider_log_id=COALESCE($3,provider_log_id),
+           status=CASE WHEN $4::text IN ('completed','failed') THEN $4::text WHEN $5::boolean THEN 'blocked' ELSE status END
+           WHERE credit_operation_id=$1`,
+          [
+            id,
+            charged,
+            providerId,
+            typeof usage.result === "string" ? usage.result : null,
+            usage.dispatched === false,
+          ]
+        )
       if (charged && charged < Number(op.reserved))
         await client.query(
           `INSERT INTO execution_credit_ledger(period_id,operation_id,kind,amount) VALUES($1,$2,'release',$3)`,
@@ -206,6 +221,7 @@ export class ExecutionCreditStore {
         remaining: 0,
         model: 0,
         sandbox: 0,
+        integration: 0,
         pendingRuns: 0,
         projects: [],
       }
@@ -213,6 +229,7 @@ export class ExecutionCreditStore {
       `SELECT o.project_id AS id,COALESCE(p.name,'Deleted project') AS name,
       COALESCE(sum(o.charged) FILTER(WHERE o.runtime='model'),0) AS model,
       COALESCE(sum(o.charged) FILTER(WHERE o.runtime='sandbox'),0) AS sandbox,
+      COALESCE(sum(o.charged) FILTER(WHERE o.runtime='integration'),0) AS integration,
       COALESCE(sum(o.reserved) FILTER(WHERE o.state='reserved'),0) AS reserved,
       count(*) FILTER(WHERE o.state='reserved') AS pending
       FROM execution_credit_operation o LEFT JOIN project p ON p.id=o.project_id
@@ -224,6 +241,7 @@ export class ExecutionCreditStore {
       name: p.name,
       model: Number(p.model) / NANO_USD,
       sandbox: Number(p.sandbox) / NANO_USD,
+      integration: Number(p.integration) / NANO_USD,
       reserved: Number(p.reserved) / NANO_USD,
     }))
     return {
@@ -240,6 +258,7 @@ export class ExecutionCreditStore {
         NANO_USD,
       model: projects.reduce((s, p) => s + p.model, 0),
       sandbox: projects.reduce((s, p) => s + p.sandbox, 0),
+      integration: projects.reduce((s, p) => s + p.integration, 0),
       pendingRuns: totals.rows.reduce((s, p) => s + Number(p.pending), 0),
       projects,
     }

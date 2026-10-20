@@ -40,6 +40,27 @@ const data: OrganizationUsage = {
       },
     ],
   },
+  agents: {
+    periodStart: "2026-09-01T00:00:00Z",
+    periodEnd: "2026-10-01T00:00:00Z",
+    rowLimit: 100,
+    agents: [],
+    conversations: [],
+    totals: {
+      modelCalls: 0,
+      integrationCalls: 0,
+      failedCalls: 0,
+      pendingCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
+      reasoningTokens: 0,
+      missingTokenCalls: 0,
+      modelCostUsd: 0,
+      integrationCostUsd: 0,
+      unpricedModelCalls: 0,
+    },
+  },
   records: {
     periodStart: "2026-09-01T00:00:00Z",
     periodEnd: "2026-10-01T00:00:00Z",
@@ -198,5 +219,72 @@ export const Error: Story = {
     await expect(
       canvas.getByRole("button", { name: "Retry usage" })
     ).toBeEnabled()
+  },
+}
+
+export const WithAgentUsage: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        orgs,
+        http.get(endpoint, () => {
+          const metrics = {
+            modelCalls: 20,
+            integrationCalls: 7,
+            failedCalls: 1,
+            pendingCalls: 1,
+            inputTokens: 12000,
+            outputTokens: 3400,
+            cachedInputTokens: 2300,
+            reasoningTokens: 400,
+            missingTokenCalls: 1,
+            modelCostUsd: 0,
+            integrationCostUsd: 0.07,
+            unpricedModelCalls: 20,
+          }
+          const row = {
+            projectId: "support",
+            projectName: "Customer support",
+            agentId: "calendar",
+            agentName: "Calendar assistant",
+            conversationId: null,
+            ...metrics,
+          }
+          return HttpResponse.json({
+            ...data,
+            credits: {
+              ...data.credits,
+              integration: 0.07,
+              used: 8.47,
+              remaining: 15.93,
+              projects: data.credits.projects.map((project, index) => ({
+                ...project,
+                integration: index === 0 ? 0.07 : 0,
+              })),
+            },
+            agents: {
+              periodStart: data.credits.periodStart,
+              periodEnd: data.credits.periodEnd,
+              totals: metrics,
+              agents: [row],
+              conversations: [
+                { ...row, conversationId: "conversation-calendar-2026-10-20" },
+              ],
+              rowLimit: 100,
+            },
+          })
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.selectOptions(
+      await canvas.findByRole("combobox", { name: "Group agent usage" }),
+      "conversations"
+    )
+    await expect(
+      canvas.findByText("conversation-calendar-2026-10-20")
+    ).resolves.toBeVisible()
   },
 }

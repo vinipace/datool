@@ -86,6 +86,7 @@ import { CopilotTab } from "./copilot-tab"
 import { AgentOverview } from "./agent-overview"
 import { WidgetsTab } from "./widgets-tab"
 import { AgentPlayground } from "./agent-playground"
+import { IntegrationActionFields } from "./integration-action-fields"
 import { ActionCatalog, ActionIcon, ActionTypeLabel } from "./action-catalog"
 import {
   newActionDraft,
@@ -2681,7 +2682,7 @@ function ActionsTab({
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
                     {(
-                      ["http", "client", "widget", "form", "handoff"] as const
+                      ["integration", "http", "client", "widget", "form", "handoff"] as const
                     ).map((type) => (
                       <SelectItem key={type} value={type}>
                         <ActionTypeLabel type={type} />
@@ -2690,6 +2691,7 @@ function ActionsTab({
                   </SelectContent>
                 </CustomSelect>
               </FormRow>
+              {draft.type === "integration" ? <IntegrationActionFields draft={draft} onChange={setDraft} /> : null}
               {draft.type === "http" ? (
                 <HttpActionFields
                   draft={draft}

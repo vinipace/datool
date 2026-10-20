@@ -189,6 +189,12 @@ publishes a new source revision atomically and retains the previous index when
 a refresh fails. Source deletion revokes retrieval. Retrieval reports source
 provenance; it must not be described as a vector index.
 
+## Connected apps and usage
+
+Agents can use project-owned third-party accounts through Composio. See
+[Connected apps and agent usage](composio-integrations.md) for setup, OAuth,
+per-agent/conversation token reporting, and shared tier-credit enforcement.
+
 ## MCP and HTTP
 
 Build UI, HTTP, CLI, and MCP share one operation registry. MCP clients use the
