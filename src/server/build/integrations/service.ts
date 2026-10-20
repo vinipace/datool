@@ -39,7 +39,7 @@ const publicConnection = (row: ConnectionRow): AppConnection => ({
 const unavailable = () =>
   new TracerError(
     "VALIDATION_ERROR",
-    "The app connection is unavailable. Refresh or reconnect it in Actions."
+    "The app connection is unavailable. Refresh or reconnect it in Integrations."
   )
 
 async function ownedConnection(context: BuildContext, id: string) {
