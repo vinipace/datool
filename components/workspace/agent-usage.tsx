@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
-import { logTable } from "@/components/tracer/log-table-styles"
+import { collectionTable } from "@/components/tracer/collection-table-styles"
 import type { AgentUsage, AgentUsageRow } from "@/src/lib/build/integrations"
 import { formatCredits } from "@/src/lib/execution-credits"
 const number = (value: number) => new Intl.NumberFormat("en-US").format(value)
@@ -52,8 +52,8 @@ export function AgentUsageDetails({ usage }: { usage: AgentUsage }) {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className={`${logTable.table} min-w-200`}>
-              <thead className={logTable.head}>
+            <table className={`${collectionTable.table} min-w-200`}>
+              <thead className={collectionTable.head}>
                 <tr>
                   {[
                     group === "agents" ? "Agent" : "Conversation",
@@ -67,7 +67,7 @@ export function AgentUsageDetails({ usage }: { usage: AgentUsage }) {
                     <th
                       key={label}
                       scope="col"
-                      className={`${logTable.heading} first:w-56`}
+                      className={`${collectionTable.heading} first:w-56`}
                     >
                       {label}
                     </th>
@@ -110,8 +110,8 @@ export function AgentUsageDetails({ usage }: { usage: AgentUsage }) {
 }
 function UsageRow({ row }: { row: AgentUsageRow }) {
   return (
-    <tr className={`${logTable.row} cursor-default`}>
-      <td className={logTable.cell}>
+    <tr className={`${collectionTable.row} cursor-default`}>
+      <td className={collectionTable.cell}>
         <div className="max-w-64 font-medium break-words">
           {row.conversationId || row.agentName}
         </div>
@@ -127,11 +127,11 @@ function UsageRow({ row }: { row: AgentUsageRow }) {
         row.reasoningTokens,
         row.integrationCalls,
       ].map((value, index) => (
-        <td key={index} className={`${logTable.cell} tabular-nums`}>
+        <td key={index} className={`${collectionTable.cell} tabular-nums`}>
           {number(value)}
         </td>
       ))}
-      <td className={`${logTable.cell} tabular-nums`}>
+      <td className={`${collectionTable.cell} tabular-nums`}>
         {formatCredits(row.integrationCostUsd)}
       </td>
     </tr>

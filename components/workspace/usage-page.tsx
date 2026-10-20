@@ -273,7 +273,7 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
                     </th>
                     <th
                       scope="col"
-                      className={`${logTable.heading} text-right`}
+                      className={`${collectionTable.heading} text-right`}
                     >
                       Reserved
                     </th>
@@ -304,7 +304,7 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
                         {formatCredits(project.integration ?? 0)}
                       </td>
                       <td
-                        className={`${logTable.cell} text-right tabular-nums`}
+                        className={`${collectionTable.cell} text-right tabular-nums`}
                       >
                         {formatCredits(project.reserved)}
                       </td>
