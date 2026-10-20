@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { FormRow } from "@/components/ui/form-row"
 import { Input } from "@/components/ui/input"
 import { Notice } from "@/components/ui/notice"
-import { Select } from "@/components/ui/select"
 import {
   Sheet,
   SheetContent,
@@ -87,7 +86,7 @@ export function SkillEditor({
     const parsed = procedureDefinitionSchema.safeParse({
       ...draft,
       name: draft.name.trim(),
-      trigger: { ...draft.trigger, value: draft.trigger.value.trim() },
+      trigger: { type: "intent", value: draft.trigger.value.trim() },
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Check the skill fields.")
@@ -206,46 +205,9 @@ export function SkillEditor({
               <FormRow
                 layout="vertical"
                 variant="plain"
-                label="Activation"
-                htmlFor="skill-activation"
-              >
-                <Select
-                  id="skill-activation"
-                  value={draft.trigger.type}
-                  onChange={(event) =>
-                    update("trigger", {
-                      ...draft.trigger,
-                      type: event.target
-                        .value as ProcedureDefinition["trigger"]["type"],
-                    })
-                  }
-                >
-                  <option value="intent">Agent chooses when relevant</option>
-                  <option value="keyword">Keyword match</option>
-                  <option value="event">Trusted event</option>
-                  <option value="manual">Run manually</option>
-                </Select>
-              </FormRow>
-              <FormRow
-                layout="vertical"
-                variant="plain"
-                label={
-                  draft.trigger.type === "intent"
-                    ? "When to use"
-                    : draft.trigger.type === "keyword"
-                      ? "Keyword"
-                      : draft.trigger.type === "event"
-                        ? "Event name"
-                        : "Manual trigger name"
-                }
+                label="When to use"
                 htmlFor="skill-trigger"
-                description={
-                  draft.trigger.type === "intent"
-                    ? "Describe the customer's request. The agent uses this to select the skill."
-                    : draft.trigger.type === "event"
-                      ? "Matches an event provided by an authenticated channel adapter."
-                      : undefined
-                }
+                description="Describe the customer's request. The agent chooses this skill when relevant."
               >
                 <Textarea
                   id="skill-trigger"

@@ -155,12 +155,15 @@ saved; previously issued conversations retain their original definition.
 | Agents                    | Configuration, applied revisions, cloning, and archive lifecycle                                   |
 | Knowledge                 | Text, Q&A, document extraction, website/sitemap crawling, indexing, refresh, retrieval, provenance |
 | Actions                   | Validated HTTP/client/widget/handoff operations with channel and approval constraints              |
-| Skills                    | Reusable task instructions, activation triggers, linked actions, and editable templates; existing structured procedures remain supported |
+| Skills                    | Reusable task instructions, when-to-use guidance, linked actions, and editable templates; existing structured procedures remain supported |
 | Playground                | Hosted runtime with conversation and tool evidence                                                 |
 | Conversations             | All customer chats, their transcripts, and conversation ownership, including chats without tickets |
 | Inbox                     | Escalated support cases, ticket status, assignment, notes, replies, routing, macros, and satisfaction records |
 | Contacts                  | Identities, custom attributes, collected data, imports/exports, and leads                          |
 | Campaigns                 | Audience snapshots, suppression, scheduled admission, and channel delivery receipts                |
+| Dashboards                | Customer experience template with conversation activity, inbox, handoffs, and satisfaction metrics |
+| Simulations               | Frozen configurations, customer scenarios, mocked actions, transcripts, and explicit verdicts      |
+| Copilot                   | Proposed changes, review, approval, application, and audit history                                 |
 
 Skills teach an agent how to handle a specific task. **My skills** lists the
 agent's saved skills; **Templates** offers support, exchange, refund, billing
@@ -168,25 +171,23 @@ and lead/meeting starters with an instruction preview. Using a template opens
 an editable, disabled draft. Review your policies and mention existing actions
 with `@` in Instructions, then enable and save the skill when it is ready.
 
-Each skill has a name, description, activation trigger and Markdown instructions.
-For intent activation, the model sees the name and when-to-use description,
-then loads the instructions through a tool when relevant. Type `@` to search
-actions and insert an inline mention. Mentions are stored as Markdown links to
+Each skill has a name, description, when-to-use guidance and Markdown instructions.
+The agent always chooses skills by relevance: the model sees the name and
+when-to-use description, then loads the instructions through a tool when relevant.
+Type `@` to search actions and insert an inline mention. Mentions are stored as Markdown links to
 stable action slugs; the server derives action references from those links.
 Removing a mention removes its link, and unknown references are rejected.
 Linked actions marked
 procedure-only become available for that turn after selection; channel and
-approval constraints still apply. Keyword, trusted event and manual activation
-can supply skill instructions directly to the model. Instructions guide the
-model; they are not emitted as a scripted customer message.
+approval constraints still apply. Instructions guide the model; they are not
+emitted as a scripted customer message.
 
 Existing structured procedures keep their bounded steps, variables, branches
 and continuations. The `section=procedures` deep link and `build_*_procedure`
-operations remain compatible. Definitions accept either `instructions` or
-structured `steps`; both use the existing versioned catalog without a migration.
-| Dashboards                | Customer experience template with conversation activity, inbox, handoffs, and satisfaction metrics |
-| Simulations               | Frozen configurations, customer scenarios, mocked actions, transcripts, and explicit verdicts      |
-| Copilot                   | Proposed changes, review, approval, application, and audit history                                 |
+operations remain compatible, including legacy keyword, event and manual triggers.
+Saving through the Skills editor uses relevance-based selection. Definitions
+accept either `instructions` or structured `steps`; both use the existing
+versioned catalog without a migration.
 
 Incoming messages create conversations, not tickets. A runtime handoff, operator
 takeover, or explicit `build_create_ticket` creates the support case. Repeated
