@@ -349,9 +349,12 @@ export async function runBuildUiE2e({
       exact: true,
     })
     const draftMarker = "Unsaved browser navigation check."
-    await instructions.press("ControlOrMeta+End")
+    const documentEnd =
+      process.platform === "darwin" ? "Meta+ArrowDown" : "Control+End"
+    await instructions.press(documentEnd)
     await instructions.press("Enter")
     await page.keyboard.insertText(draftMarker)
+    await page.getByRole("code").filter({ hasText: draftMarker }).waitFor()
     if (width === 1440) {
       await selectAgentSection(page, "Guardrails")
       await page
@@ -368,14 +371,11 @@ export async function runBuildUiE2e({
     }
     await selectAgentSection(page, "Guardrails")
     await selectAgentSection(page, "Instructions")
-    assert(
-      (await page.getByRole("code").innerText())
-        .replace(/\s/g, "")
-        .includes(draftMarker.replace(/\s/g, "")),
-      "Switching agent sections discarded an unsaved draft"
-    )
+    // Monaco paints after the section becomes visible; wait for the retained
+    // draft itself rather than reading the previous render synchronously.
+    await page.getByRole("code").filter({ hasText: draftMarker }).waitFor()
     // Remove only the appended line through Monaco's normal editing commands.
-    await instructions.press("ControlOrMeta+End")
+    await instructions.press(documentEnd)
     for (let index = 0; index <= draftMarker.length; index++)
       await instructions.press("Backspace")
     for (const section of sections) {
@@ -385,10 +385,11 @@ export async function runBuildUiE2e({
       if (section === "Knowledge")
         await page.getByText("Returns", { exact: true }).waitFor()
       if (["Actions", "Procedures", "Widgets"].includes(section)) {
-        await page
-          .getByRole("region", { name: section, exact: true })
-          .getByRole("button", { name: /^E2E .* edited/ })
-          .waitFor()
+        const list =
+          section === "Actions"
+            ? page.getByRole("tabpanel", { name: "My Actions", exact: true })
+            : page.getByRole("region", { name: section, exact: true })
+        await list.getByRole("button", { name: /^E2E .* edited/ }).waitFor()
       }
       if (section === "Channels")
         await page.getByText("Website validation", { exact: true }).waitFor()
@@ -439,7 +440,7 @@ export async function runBuildUiE2e({
       `${prefix}/agents`
     )
     await parent.click()
-    await page.getByRole("button", { name: "New agent", exact: true }).waitFor()
+    await page.getByRole("link", { name: "New agent", exact: true }).waitFor()
     const toggle = page
       .getByRole("button", { name: "Toggle sidebar", exact: true })
       .and(page.locator("[aria-expanded]"))

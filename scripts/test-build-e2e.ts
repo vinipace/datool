@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync, spawn, type ChildProcess } from "node:child_process"
+import { createHash, X509Certificate } from "node:crypto"
 import { createServer, request as httpRequest } from "node:http"
 import { createServer as createHttpsServer } from "node:https"
 import {
@@ -88,7 +89,12 @@ async function port() {
   await new Promise<void>((resolve) => server.close(() => resolve()))
   return value
 }
-function start(command: string, args: string[], env: NodeJS.ProcessEnv) {
+function start(
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  echoOutput = false
+) {
   const child = spawn(command, args, {
     cwd: appDirectory,
     env,
@@ -99,9 +105,11 @@ function start(command: string, args: string[], env: NodeJS.ProcessEnv) {
   for (const stream of [child.stdout, child.stderr])
     stream!.on("data", (value) => {
       const text = String(value)
-      logs.push(
-        liveModelKey ? text.replaceAll(liveModelKey, "[redacted]") : text
-      )
+      const sanitized = liveModelKey
+        ? text.replaceAll(liveModelKey, "[redacted]")
+        : text
+      logs.push(sanitized)
+      if (echoOutput) process.stdout.write(sanitized)
       if (logs.length > 2000) logs.shift()
     })
   return child
@@ -290,22 +298,33 @@ try {
       if (error.code !== "ENOENT") throw error
     })
   }
-  await symlink(
-    join(root, "node_modules"),
-    join(appDirectory, "node_modules"),
-    "dir"
-  )
+  if (productionCompile) {
+    // Turbopack resolves dependencies inside the isolated project root. Keep
+    // Bun's relative package links intact without linking outside that root.
+    await cp(join(root, "node_modules"), join(appDirectory, "node_modules"), {
+      recursive: true,
+      verbatimSymlinks: true,
+    })
+  } else {
+    await symlink(
+      join(root, "node_modules"),
+      join(appDirectory, "node_modules"),
+      "dir"
+    )
+  }
+  const nextBinary = join(appDirectory, "node_modules/next/dist/bin/next")
   const env = { ...process.env }
   if (productionCompile) {
     console.info("Compiling the isolated production application…")
     const build = start(
       "node",
-      [join(root, "node_modules/next/dist/bin/next"), "build", "--webpack"],
+      [nextBinary, "build"],
       {
         ...env,
         NODE_ENV: "production",
         NODE_OPTIONS: "--max-old-space-size=4096",
-      }
+      },
+      true
     )
     const code = await new Promise<number | null>((resolve, reject) => {
       build.once("error", reject)
@@ -320,7 +339,7 @@ try {
   const next = start(
     "node",
     [
-      join(root, "node_modules/next/dist/bin/next"),
+      nextBinary,
       ...(productionServer ? ["start"] : ["dev", "--webpack"]),
       "--hostname",
       "127.0.0.1",
@@ -332,13 +351,18 @@ try {
   async function call(
     name: string,
     input: Record<string, unknown> = {},
-    token = key.key,
+    token: string | null = key.key,
     expected = 200
   ) {
     const response = await fetch(`${base}/api/build/${name}`, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token}`,
+        ...(token
+          ? { authorization: `Bearer ${token}` }
+          : {
+              cookie: `${context.authCookies.sessionToken.name}=${cookieValue}`,
+              origin: base,
+            }),
         "x-project-id": target!.projectId,
         "content-type": "application/json",
         "idempotency-key": crypto.randomUUID(),
@@ -409,11 +433,25 @@ try {
     "an unmigrated Build schema returns an actionable 503 without database details"
   )
 
-  browser = await chromium.launch({ headless: true })
+  browser = await chromium.launch({
+    headless: true,
+    // Pin only the disposable proxy's key. Chromium may retry an HTTPS
+    // navigation outside Playwright's per-page certificate-error handler.
+    args: tlsCa
+      ? [
+          `--ignore-certificate-errors-spki-list=${createHash("sha256")
+            .update(
+              new X509Certificate(tlsCa).publicKey.export({
+                type: "spki",
+                format: "der",
+              })
+            )
+            .digest("base64")}`,
+        ]
+      : [],
+  })
   const browserContext = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
-    // Only this disposable browser context accepts the generated loopback cert.
-    ignoreHTTPSErrors: productionServer,
   })
   // Cold Next development compilation can outlast Playwright's 30-second
   // navigation default. Element/action deadlines remain unchanged.
@@ -804,7 +842,11 @@ try {
     .click()
   assert((await connected).ok())
   await page
-    .getByRole("switch", { name: "Enable chat bubble", exact: true, checked: true })
+    .getByRole("switch", {
+      name: "Enable chat bubble",
+      exact: true,
+      checked: true,
+    })
     .waitFor()
   const connections = await call("build_list_channels", { agentId })
   const connection = connections.find(
@@ -1002,9 +1044,12 @@ try {
     "guarded HTTP integration executes against a real public endpoint only after operator approval and delivers the result"
   )
 
-  await call("build_takeover_conversation", {
-    conversationId: visitor.conversationId,
-  })
+  // A human reply must use the signed-in member, not an organization API key.
+  await call(
+    "build_takeover_conversation",
+    { conversationId: visitor.conversationId },
+    null
+  )
   const humanInput = {
     text: "A question for the support person",
     idempotencyKey: "human-inbound",
@@ -1023,11 +1068,15 @@ try {
     visitor.visitorToken,
     202
   )
-  await call("build_send_human_reply", {
-    conversationId: visitor.conversationId,
-    connectionId: connection.id,
-    text: "The support person received your question.",
-  })
+  await call(
+    "build_send_human_reply",
+    {
+      conversationId: visitor.conversationId,
+      connectionId: connection.id,
+      text: "The support person received your question.",
+    },
+    null
+  )
   const history = await publicCall(
     conversationPath,
     "GET",
@@ -1058,7 +1107,6 @@ try {
   })
 
   const publicBrowser = await browser.newContext({
-    ignoreHTTPSErrors: productionServer,
     viewport: { width: 390, height: 844 },
   })
   const publicPage = await publicBrowser.newPage()
@@ -1218,7 +1266,6 @@ try {
   })
   const embeddedBrowser = await browser.newContext({
     viewport: { width: 390, height: 844 },
-    ignoreHTTPSErrors: productionServer,
   })
   const embeddedPage = await embeddedBrowser.newPage()
   activePage = embeddedPage
@@ -1227,9 +1274,9 @@ try {
   await embeddedPage
     .getByRole("button", { name: "Open chat", exact: true })
     .click()
-  const frame = embeddedPage.frameLocator(
-    'iframe[title="Customer support chat"]'
-  )
+  // The accessible title updates when the channel's appearance loads.
+  const embeddedFrameSelector = `[data-datool-widget="${embeddedChannelId}"] iframe`
+  const frame = embeddedPage.frameLocator(embeddedFrameSelector)
   await frame
     .getByRole("textbox", { name: "Message", exact: true })
     .fill("validate-automatic-wait")
@@ -1244,11 +1291,7 @@ try {
   await embeddedPage
     .getByRole("button", { name: "Close chat", exact: true })
     .click()
-  assert(
-    await embeddedPage
-      .locator('iframe[title="Customer support chat"]')
-      .isHidden()
-  )
+  assert(await embeddedPage.locator(embeddedFrameSelector).isHidden())
   await embeddedPage
     .getByRole("button", { name: "Open chat", exact: true })
     .click()

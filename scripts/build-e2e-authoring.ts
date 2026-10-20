@@ -108,13 +108,13 @@ async function revisions(
   return values
 }
 
-async function setWidgetComponents(page: Page, components: unknown[]) {
+async function setWidgetCode(page: Page, code: string) {
   const editor = page.getByRole("textbox", {
-    name: "Widget components",
+    name: "Widget code",
     exact: true,
   })
   await editor.press("ControlOrMeta+A")
-  await page.keyboard.insertText(JSON.stringify(components, null, 2))
+  await page.keyboard.insertText(code)
 }
 
 /**
@@ -139,26 +139,28 @@ export async function runBuildAuthoringE2e({
   const editedProcedureName = `${procedureName} edited`
   const widgetName = `E2E disabled widget ${suffix}`
   const editedWidgetName = `${widgetName} edited`
+  const initialWidgetCode =
+    "export default function Widget() { return <Text>Initial widget copy</Text> }"
+  const editedWidgetCode =
+    "export default function Widget() { return <Text>Edited widget copy</Text> }"
 
   await page.goto(`${prefix}/agents/${encodeURIComponent(agentId)}`, {
     waitUntil: "networkidle",
     timeout: 120_000,
   })
-  await page
-    .getByRole("button", { name: "Save and apply", exact: true })
-    .waitFor({ state: "attached" })
-
   await selectAgentSection(page, "Actions")
-  await page.getByRole("heading", { name: "Actions", exact: true }).waitFor()
-  await page.getByRole("button", { name: "New", exact: true }).click()
+  await page.getByRole("tab", { name: "Create Actions", exact: true }).click()
+  await page
+    .getByRole("button", { name: "Run client-side code", exact: true })
+    .click()
   await page.getByText("Advanced identity", { exact: true }).click()
   await page.locator("#action-id").fill(actionId)
   await page.locator("#action-name").fill(actionName)
   await page
     .getByRole("textbox", { name: "Action description", exact: true })
     .fill("Disabled client action used by the authoring browser check.")
-  await page.locator("#action-type").selectOption("client")
   await page.locator("#action-event").fill(`e2e.client.${suffix}`)
+  await page.getByText("Availability", { exact: true }).click()
   await setSwitch(page, "Enabled", false)
   await setSwitch(page, "Procedure only", true)
   await saveThroughUi(page, "build_save_action", () =>
@@ -178,9 +180,7 @@ export async function runBuildAuthoringE2e({
   assert.equal(createdActionDefinition.procedureOnly, true)
   assert.equal(createdActionDefinition.eventName, `e2e.client.${suffix}`)
 
-  const actionRow = page
-    .getByRole("region", { name: "Actions" })
-    .getByRole("button", { name: new RegExp(escaped(actionName)) })
+  const actionRow = page.getByRole("button", { name: actionName, exact: true })
   await actionRow.waitFor()
   await actionRow.click()
   await page.locator("#action-name").fill(editedActionName)
@@ -304,9 +304,7 @@ export async function runBuildAuthoringE2e({
   await page
     .getByRole("textbox", { name: "Widget name", exact: true })
     .fill(widgetName)
-  await setWidgetComponents(page, [
-    { type: "text", text: "Initial widget copy" },
-  ])
+  await setWidgetCode(page, initialWidgetCode)
   await page.getByRole("tab", { name: "Settings", exact: true }).click()
   await page
     .getByRole("textbox", { name: "Description", exact: true })
@@ -329,11 +327,7 @@ export async function runBuildAuthoringE2e({
   assert.equal(widgetAfterCreate.revision, 1)
   const widgetDefinition = definition(widgetAfterCreate, "widget after create")
   assert.equal(widgetDefinition.enabled, false)
-  assert.equal(
-    record((widgetDefinition.components as unknown[])[0], "widget component")
-      .text,
-    "Initial widget copy"
-  )
+  assert.equal(String(widgetDefinition.code).trim(), initialWidgetCode)
 
   await page
     .getByRole("button", { name: "Back to widgets", exact: true })
@@ -345,9 +339,7 @@ export async function runBuildAuthoringE2e({
   await page
     .getByRole("textbox", { name: "Widget name", exact: true })
     .fill(editedWidgetName)
-  await setWidgetComponents(page, [
-    { type: "text", text: "Edited widget copy" },
-  ])
+  await setWidgetCode(page, editedWidgetCode)
   await page.getByRole("tab", { name: "Settings", exact: true }).click()
   await page
     .getByRole("textbox", { name: "Description", exact: true })
@@ -364,13 +356,8 @@ export async function runBuildAuthoringE2e({
   assert.equal(widgetAfterEdit.id, widgetId)
   assert.equal(widgetAfterEdit.revision, 2)
   assert.equal(
-    record(
-      (
-        definition(widgetAfterEdit, "widget after edit").components as unknown[]
-      )[0],
-      "edited widget component"
-    ).text,
-    "Edited widget copy"
+    String(definition(widgetAfterEdit, "widget after edit").code).trim(),
+    editedWidgetCode
   )
   assert.deepEqual(
     await revisions(
@@ -390,8 +377,7 @@ export async function runBuildAuthoringE2e({
   await page.reload({ waitUntil: "networkidle", timeout: 120_000 })
   await selectAgentSection(page, "Actions")
   await page
-    .getByRole("region", { name: "Actions" })
-    .getByRole("button", { name: new RegExp(escaped(editedActionName)) })
+    .getByRole("button", { name: editedActionName, exact: true })
     .click()
   assert.equal(
     await page.locator("#action-name").inputValue(),
@@ -401,8 +387,20 @@ export async function runBuildAuthoringE2e({
     await page.locator("#action-event").inputValue(),
     `e2e.client.${suffix}`
   )
-  await setSwitch(page, "Enabled", false)
-  await setSwitch(page, "Procedure only", true)
+  await page.getByText("Availability", { exact: true }).click()
+  assert.equal(
+    await page
+      .getByRole("switch", { name: "Enabled", exact: true })
+      .getAttribute("aria-checked"),
+    "false"
+  )
+  assert.equal(
+    await page
+      .getByRole("switch", { name: "Procedure only", exact: true })
+      .getAttribute("aria-checked"),
+    "true"
+  )
+  await page.getByRole("button", { name: "Cancel", exact: true }).click()
 
   await selectAgentSection(page, "Procedures")
   await page
@@ -431,7 +429,9 @@ export async function runBuildAuthoringE2e({
     editedWidgetName
   )
   await page
-    .getByRole("region", { name: "Widget preview" })
+    .frameLocator(
+      '[aria-label="Widget preview"] iframe[title="Widget content"]'
+    )
     .getByText("Edited widget copy", { exact: true })
     .waitFor()
   await page.getByRole("tab", { name: "Settings", exact: true }).click()
