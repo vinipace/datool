@@ -22,9 +22,12 @@ import {
   type WorkspaceOrganization,
 } from "@/lib/workspace-api"
 import { formatCredits, type ExecutionUsage } from "@/src/lib/execution-credits"
+import { AgentUsageDetails } from "./agent-usage"
+import type { AgentUsage } from "@/src/lib/build/integrations"
 import type { CloudPlan, CloudUsage } from "@/src/lib/billing"
 
 export type OrganizationUsage = {
+  agents?: AgentUsage
   credits: ExecutionUsage
   records: CloudUsage
   plan: CloudPlan | null
@@ -111,6 +114,11 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
       label: "Sandboxes",
       value: credits.sandbox,
       className: "text-comparison-2",
+    },
+    {
+      label: "App integrations",
+      value: credits.integration ?? 0,
+      className: "text-comparison-3",
     },
     {
       label: "Reserved",
@@ -233,7 +241,7 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
         <CardHeader>
           <CardTitle>Usage by project</CardTitle>
           <CardDescription>
-            Datool Scorer Model and Datool Sandbox share the same balance.
+            Model scorers, sandboxes and app integrations share the same balance.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-5">
@@ -261,6 +269,12 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
                       scope="col"
                       className={`${collectionTable.heading} text-right`}
                     >
+                      App integrations
+                    </th>
+                    <th
+                      scope="col"
+                      className={`${logTable.heading} text-right`}
+                    >
                       Reserved
                     </th>
                   </tr>
@@ -287,6 +301,11 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
                       <td
                         className={`${collectionTable.cell} text-right tabular-nums`}
                       >
+                        {formatCredits(project.integration ?? 0)}
+                      </td>
+                      <td
+                        className={`${logTable.cell} text-right tabular-nums`}
+                      >
                         {formatCredits(project.reserved)}
                       </td>
                     </tr>
@@ -302,6 +321,7 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
           )}
         </CardContent>
       </Card>
+      {data.agents && <AgentUsageDetails usage={data.agents} />}
       <p className="text-xs leading-relaxed text-foreground-muted">
         Credits expire at the end of the paid period and do not roll over.
         Funded runs stop when the available balance is insufficient; no

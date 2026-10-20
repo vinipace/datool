@@ -25,12 +25,14 @@ export type ExecutionUsage = {
   remaining: number
   model: number
   sandbox: number
+  integration?: number
   pendingRuns: number
   projects: {
     id: string
     name: string
     model: number
     sandbox: number
+  integration?: number
     reserved: number
   }[]
 }

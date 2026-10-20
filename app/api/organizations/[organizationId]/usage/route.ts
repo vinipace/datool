@@ -1,3 +1,4 @@
+import { getAgentUsage } from "@/src/server/build/usage"
 import { accessError, apiError } from "@/lib/api-response"
 import { requireOrganizationRole } from "@/lib/project-access"
 import { executionCredits } from "@/src/server/execution-credits/ledger"
@@ -13,12 +14,13 @@ export async function GET(
   if (authorization.kind !== "ok") return accessError(authorization.kind)
   try {
     const billing = await getBilling(organizationId)
-    const [credits, records] = await Promise.all([
+    const [credits, records, agents] = await Promise.all([
       executionCredits.usage(organizationId),
       getCloudUsage(organizationId),
+      getAgentUsage(organizationId),
     ])
     return Response.json(
-      { credits, records, plan: billing?.plan ?? null },
+      { credits, records, agents, plan: billing?.plan ?? null },
       { headers: { "Cache-Control": "no-store" } }
     )
   } catch {
