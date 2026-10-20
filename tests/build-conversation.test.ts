@@ -19,7 +19,8 @@ import {
   type IsolatedPostgres,
 } from "@/tests/helpers/postgres"
 
-const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> = []
+const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> =
+  []
 
 afterEach(async () => {
   for (const { database, target } of resources.splice(0)) {
@@ -44,6 +45,7 @@ async function makeService() {
   return {
     service: new ConversationService({ database, projectId: target.projectId }),
     projectId: target.projectId,
+    database,
   }
 }
 
@@ -75,12 +77,14 @@ describe("Build conversation ledger", () => {
       expect(message.content).toEqual(content)
     }
     expect(
-      (await service.listMessages(conversation.id)).items.map((item) => item.content)
+      (await service.listMessages(conversation.id)).items.map(
+        (item) => item.content
+      )
     ).toEqual(contents)
   }, 30_000)
 
-  test("lists all chats with independent conversation status, search and cursor pagination", async () => {
-    const { service } = await makeService()
+  test("lists all chats with agent, status and search filters before cursor pagination", async () => {
+    const { service, database, projectId } = await makeService()
     const ordinary = await service.getOrCreate({
       agentId: "agent-a",
       channel: "web",
@@ -137,9 +141,42 @@ describe("Build conversation ledger", () => {
     )
     expect(second.nextCursor).toBeNull()
 
+    await createAgent(
+      { database, projectId },
+      { id: "agent-b", name: "Other agent", slug: "other-agent" }
+    )
+    const otherConversation = await service.getOrCreate({
+      agentId: "agent-b",
+      channel: "web",
+      metadata: {},
+    })
+    const agentFirst = await service.list({ agentId: "agent-a", limit: 1 })
+    const agentSecond = await service.list({
+      agentId: "agent-a",
+      limit: 1,
+      cursor: agentFirst.nextCursor,
+    })
+    expect(
+      [...agentFirst.items, ...agentSecond.items].map((item) => item.id)
+    ).toEqual(all.items.map((item) => item.id))
+    expect(agentSecond.nextCursor).toBeNull()
+    expect(
+      (await service.list({ agentId: "agent-b" })).items.map((item) => item.id)
+    ).toEqual([otherConversation.id])
+    expect((await service.list({ agentId: "missing-agent" })).items).toEqual([])
+    expect(
+      (
+        await service.list({
+          agentId: "agent-a",
+          search: "Refund",
+          status: "handed_off",
+        })
+      ).items.map((item) => item.id)
+    ).toEqual([escalated.id])
+
     const { service: otherProject } = await makeService()
     expect((await otherProject.list({ search: "Refund" })).items).toEqual([])
-  })
+  }, 30_000)
 
   test("deduplicates external conversations and replays completed request keys", async () => {
     const { service } = await makeService()
@@ -316,8 +353,12 @@ describe("Build conversation ledger", () => {
         dailyLimitUsd: 1,
       }),
     ])
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
-    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1)
+    expect(
+      results.filter((result) => result.status === "fulfilled")
+    ).toHaveLength(1)
+    expect(
+      results.filter((result) => result.status === "rejected")
+    ).toHaveLength(1)
     const rejected = results.find((result) => result.status === "rejected")
     expect(rejected?.status === "rejected" && rejected.reason).toBeInstanceOf(
       ConversationBudgetExceededError

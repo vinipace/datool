@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
+  MessagesSquare,
   ContactRound,
   Wrench,
   type LucideIcon,
@@ -227,6 +228,12 @@ export function AgentSidebarNavigation({
             "Activity",
             Eye,
             <>
+              {externalLink(
+                "Conversations",
+                `/build/conversations?agentId=${encodeURIComponent(agentId)}`,
+                MessagesSquare,
+                true
+              )}
               {internalLink("leads", true)}
               {internalLink("collected-data", true)}
             </>

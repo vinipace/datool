@@ -240,6 +240,7 @@ function listConversations({
   const filters = JSON.parse(filter ?? "{}") as {
     search?: string
     status?: string
+    agentId?: string
   }
   return buildApi
     .call<unknown>(
@@ -249,6 +250,7 @@ function listConversations({
         limit,
         search: filters.search || undefined,
         status: filters.status || undefined,
+        agentId: filters.agentId,
       },
       signal
     )
@@ -423,9 +425,7 @@ export function InboxPage({
     settingsStorageKey: `datool:build-${view}:${scope}:settings`,
     orderStorageKey: `datool.build-${view}.columns`,
   })
-  const agentId = isInbox
-    ? navigation.params.get("agentId") || undefined
-    : undefined
+  const agentId = navigation.params.get("agentId") || undefined
   const agent = useRemote(
     (signal) =>
       agentId
@@ -586,7 +586,7 @@ export function InboxPage({
                     className="max-w-full"
                     aria-label={`Remove agent filter: ${agent.data?.name || agentId}`}
                     onClick={() =>
-                      navigation.navigate({ agentId: null, ticket: null })
+                      navigation.navigate({ agentId: null, [selectionKey]: null })
                     }
                   >
                     <Bot aria-hidden className="size-3.5 shrink-0" />

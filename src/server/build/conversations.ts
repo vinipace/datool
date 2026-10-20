@@ -333,6 +333,7 @@ export class ConversationService {
         ) as subject
       ) preview on true
       where c.project_id=${this.projectId}
+        ${input.agentId ? sql`and c.agent_id=${input.agentId}` : sql``}
         ${input.cursor ? sql`and c.id>${input.cursor}` : sql``}
         ${input.status ? sql`and c.status=${input.status}` : sql``}
         ${input.channel ? sql`and c.channel=${input.channel}` : sql``}
