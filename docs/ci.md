@@ -63,12 +63,15 @@ shorter verification job.
 - CI supplies `DATOOL_CI_BUILD=true` to the image build to avoid a second
   TypeScript pass. The required `verify` job runs the full typecheck in parallel.
   Local and self-hosted Docker builds default to checking types inside Next.
-- The image job exports uncompressed layers locally;
-  `pigz` compresses the final image archive across available CPUs while acceptance
-  checks run against that immutable image. Both must succeed before the archive
-  is checksummed and handed off. The archive format,
+- BuildKit writes a Docker archive with fast layer compression. Acceptance loads
+  that exact archive; no second `docker save` is needed. `pigz` prepares the
+  transfer while acceptance runs. Both must succeed before the archive is
+  checksummed and handed off. The archive format,
   checksum verification, commit/pipeline identity, restricted SSH command, and
   serialized production release remain unchanged.
+- After handoff, loaded `datool-release` images are removed from the disposable
+  runner so DLC retains the builder cache without accumulating duplicate runtime
+  images for every commit.
 
 [CircleCI Docker layer caching](https://circleci.com/docs/guides/optimize/docker-layer-caching/)
 costs 200 credits per image job, in addition to runner usage. It is enabled for

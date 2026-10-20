@@ -153,8 +153,8 @@ for (const [acceptanceExit, archiveExit] of [[0, 0], [1, 0], [0, 1]]) {
     const directory = mkdtempSync(join(tmpdir(), "datool-image-checks-"))
     directories.push(directory)
     mkdirSync(join(directory, "scripts"))
-    writeFileSync(join(directory, "docker"), "#!/bin/bash\nprintf 'archive bytes'\nexit \"$ARCHIVE_EXIT\"\n", { mode: 0o755 })
-    writeFileSync(join(directory, "pigz"), "#!/bin/bash\ncat\n", { mode: 0o755 })
+    writeFileSync(join(directory, "archive-input.tar"), "archive bytes")
+    writeFileSync(join(directory, "pigz"), "#!/bin/bash\ncat\nexit \"$ARCHIVE_EXIT\"\n", { mode: 0o755 })
     writeFileSync(join(directory, "scripts/test-docker.sh"), "echo checked > acceptance.txt\nexit \"$ACCEPTANCE_EXIT\"\n")
     const command = workflow.jobs["production-image"].steps.find(
       (step: { run?: { name: string } }) =>
@@ -166,6 +166,7 @@ for (const [acceptanceExit, archiveExit] of [[0, 0], [1, 0], [0, 1]]) {
         NODE_ENV: "test",
         PATH: `${directory}:/usr/bin:/bin`,
         DATOOL_DOCKER_TEST_IMAGE: "fixture-image",
+        DATOOL_DOCKER_ARCHIVE_PATH: join(directory, "archive-input.tar"),
         ACCEPTANCE_EXIT: String(acceptanceExit),
         ARCHIVE_EXIT: String(archiveExit),
       },

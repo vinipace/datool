@@ -329,6 +329,7 @@ jobs:
     environment:
       CI: "true"
       CIRCLE_PIPELINE_NUMBER: << pipeline.number >>
+      DATOOL_DOCKER_ARCHIVE_PATH: /tmp/datool-release-image.tar
     steps:
       - checkout
       - run:
@@ -342,14 +343,14 @@ jobs:
           command: |
             # A stable container builder keeps BuildKit state and cache mounts
             # in a named volume that CircleCI DLC preserves between jobs.
-            docker buildx inspect datool-release >/dev/null 2>&1 ||
-              docker buildx create --name datool-release --driver docker-container
-            # Compress once for transfer below, not again during local export.
+            docker buildx create --name datool-release --driver docker-container
+            # Build one archive and load that exact image for acceptance.
             docker buildx build --builder datool-release --progress plain \
-              --output type=docker,compression=uncompressed \
+              --output "type=docker,compression=gzip,compression-level=1,dest=$DATOOL_DOCKER_ARCHIVE_PATH" \
               --build-arg DATOOL_CI_BUILD=true \
               --label "org.opencontainers.image.revision=$CIRCLE_SHA1" \
               --tag "$DATOOL_DOCKER_TEST_IMAGE" .
+            docker image load --input "$DATOOL_DOCKER_ARCHIVE_PATH"
       - run:
           name: Test release command, image handoff, and CMS seed guards
           command: |
@@ -364,7 +365,7 @@ jobs:
             # its archive can be prepared concurrently. Both must succeed.
             command -v pigz >/dev/null || sudo apt-get install -y pigz
             (
-              docker image save "$DATOOL_DOCKER_TEST_IMAGE" | pigz -1 > image.tar.gz
+              pigz -1 < "$DATOOL_DOCKER_ARCHIVE_PATH" > image.tar.gz
             ) &
             archive_pid=$!
             status=0
@@ -389,6 +390,15 @@ jobs:
             - image.sha256
             - ops/notify-deployment.py
             - notification.sha256
+      - run:
+          name: Keep the build cache without duplicate runtime images
+          when: always
+          command: |
+            # The verified archive is already in the workspace. Preserve the
+            # named builder's cache, not another copy of every released image.
+            docker image ls 'datool-release:*' --format '{{.Repository}}:{{.Tag}}' |
+              xargs --no-run-if-empty docker image rm ||
+              echo "Some cached runtime images are still in use; retaining them."
   deploy:
     executor: ssh
     environment:
