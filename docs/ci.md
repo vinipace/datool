@@ -63,7 +63,7 @@ shorter verification job.
 - CI supplies `DATOOL_CI_BUILD=true` to the image build to avoid a second
   TypeScript pass. The required `verify` job runs the full typecheck in parallel.
   Local and self-hosted Docker builds default to checking types inside Next.
-- The image job uses an `xlarge` runner and exports uncompressed layers locally;
+- The image job exports uncompressed layers locally;
   `pigz` compresses the final image archive across available CPUs. The archive format,
   checksum verification, commit/pipeline identity, restricted SSH command, and
   serialized production release remain unchanged.
@@ -71,7 +71,6 @@ shorter verification job.
 [CircleCI Docker layer caching](https://circleci.com/docs/guides/optimize/docker-layer-caching/)
 costs 200 credits per image job, in addition to runner usage. It is enabled for
 branch images as well so a reviewed change can warm the subsequent main build.
-The image runner has a higher per-minute cost than the previous `large` runner.
 Cache availability is an optimization, never proof that tests passed.
 Set `verify-image=false` on a manual branch pipeline to skip its image check;
 main always builds and tests its image.
