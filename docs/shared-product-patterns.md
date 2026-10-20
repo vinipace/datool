@@ -719,6 +719,12 @@ Welcome message, input placeholder and suggested replies are configured in the
 chat widget's channel editor, outside agent Settings.
 The former `section=appearance` URL opens Settings for existing bookmarks.
 
+Guardrails uses four always-visible groups: Content & access, Conversation limits,
+Traffic & spam, and Daily limits. Shared `FormRow` descriptions explain units,
+optional values and scope; labels remain distinct from accessible descriptions.
+Daily limits describe the existing UTC reset. The editor retains multiline drafts
+while normalizing blocked terms and country codes for autosave.
+
 `components/build/agents/agent-editor.tsx` omits the separate revision/save toolbar.
 Existing agents automatically save and apply valid identity, instruction,
 appearance and guardrail edits after a short pause.

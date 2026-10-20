@@ -17,7 +17,6 @@ import {
   Save,
   Check,
   LoaderCircle,
-  Settings2,
   SquarePlus,
   Network,
   Trash2,
@@ -90,6 +89,7 @@ import { KnowledgeSourceRow } from "./knowledge-source-row"
 import { WidgetsTab } from "./widgets-tab"
 import { ActionWidgetPicker } from "./action-widget-picker"
 import { AgentPlayground } from "./agent-playground"
+import { AgentGuardrails } from "./agent-guardrails"
 import { IntegrationActionFields } from "./integration-action-fields"
 import { IntegrationsTab } from "./integrations-tab"
 import { ActionCatalog, ActionIcon, ActionTypeLabel } from "./action-catalog"
@@ -554,8 +554,8 @@ function BuildAgentEditorContent({
               hidden={active !== "guardrails"}
               aria-hidden={active !== "guardrails"}
             >
-              <GuardrailsTab
-                draft={draft}
+              <AgentGuardrails
+                configuration={draft.configuration}
                 onChange={(configuration) =>
                   updateDraft("configuration", configuration)
                 }
@@ -769,8 +769,7 @@ function SettingsTab({
             onChange={(event) => onChange("description", event.target.value)}
           />
         </FormRow>
-        <AppearanceAndGuardrails
-          section="appearance"
+        <AgentAppearanceFields
           config={draft.configuration}
           onChange={(configuration) => onChange("configuration", configuration)}
         />
@@ -1040,318 +1039,39 @@ function InstructionsTab({
   )
 }
 
-function GuardrailsTab({
-  draft,
-  onChange,
-}: {
-  draft: ReturnType<typeof defaultDraft>
-  onChange: (configuration: AgentConfiguration) => void
-}) {
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6">
-      <div>
-        <p className="text-xs font-medium tracking-[0.16em] text-foreground-subtle uppercase">
-          Agent safety
-        </p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight">
-          Guardrails
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Set the safety, usage and abuse limits that protect customers and your
-          budget.
-        </p>
-      </div>
-      <AppearanceAndGuardrails
-        section="guardrails"
-        config={draft.configuration}
-        onChange={onChange}
-      />
-    </div>
-  )
-}
-
-function AppearanceAndGuardrails({
+function AgentAppearanceFields({
   config,
   onChange,
-  section = "both",
 }: {
   config: AgentConfiguration
   onChange: (configuration: AgentConfiguration) => void
-  section?: "both" | "appearance" | "guardrails"
 }) {
   const appearance = config.appearance
-  const guardrails = config.guardrails
   return (
-    <div
-      className={section === "both" ? "grid gap-4 xl:grid-cols-2" : "max-w-3xl"}
-    >
-      {section !== "guardrails" ? (
-        <>
-          <FormRow label="Avatar" layout="vertical">
-            <AgentAvatarPicker
-              value={appearance}
-              onChange={(next) => onChange({ ...config, appearance: next })}
-            />
-          </FormRow>
-          <FormRow label="Custom image URL" htmlFor="appearance-avatar">
-            <Input
-              id="appearance-avatar"
-              type="url"
-              placeholder="https://…"
-              value={appearance.avatarUrl ?? ""}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    avatarUrl: event.target.value || null,
-                  },
-                })
-              }
-            />
-          </FormRow>
-        </>
-      ) : null}
-      {section !== "appearance" ? (
-        <InspectorSection
-          label="Guardrails"
-          icon={<Settings2 className="size-3.5" />}
-          defaultOpen
-        >
-          <InspectorSection label="Safety" variant="form" defaultOpen>
-            <InspectorSection label="Blocked topics" variant="form">
-              <Textarea
-                aria-label="Blocked topics"
-                rows={3}
-                autoSize
-                placeholder="One topic per line"
-                value={guardrails.blockedTopics.join("\n")}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      blockedTopics: event.target.value
-                        .split("\n")
-                        .map((item) => item.trim())
-                        .filter(Boolean),
-                    },
-                  })
-                }
-              />
-            </InspectorSection>
-            <InspectorSection label="Blocked countries" variant="form">
-              <Textarea
-                aria-label="Blocked countries"
-                rows={2}
-                autoSize
-                placeholder={"BR\nUS"}
-                value={guardrails.blockedCountries.join("\n")}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      blockedCountries: event.target.value
-                        .split("\n")
-                        .map((item) => item.trim().toUpperCase())
-                        .filter(Boolean),
-                    },
-                  })
-                }
-              />
-            </InspectorSection>
-            <FormRow
-              label="Require human for actions"
-              htmlFor="guardrail-human"
-            >
-              <Switch
-                id="guardrail-human"
-                checked={guardrails.requireHumanForActions}
-                onCheckedChange={(value) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      requireHumanForActions: value,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-          </InspectorSection>
-          <InspectorSection
-            label="Usage limits and budget"
-            variant="form"
-            defaultOpen
-          >
-            <FormRow label="Max input characters" htmlFor="guardrail-input">
-              <Input
-                id="guardrail-input"
-                type="number"
-                min={1}
-                max={100000}
-                value={guardrails.maxInputCharacters}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxInputCharacters: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Max output tokens" htmlFor="guardrail-output">
-              <Input
-                id="guardrail-output"
-                type="number"
-                min={1}
-                max={64000}
-                value={guardrails.maxOutputTokens}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxOutputTokens: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Max turns" htmlFor="guardrail-turns">
-              <Input
-                id="guardrail-turns"
-                type="number"
-                min={1}
-                max={200}
-                value={guardrails.maxTurns}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxTurns: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Daily turn limit" htmlFor="guardrail-daily-turns">
-              <Input
-                id="guardrail-daily-turns"
-                type="number"
-                min={1}
-                max={10000000}
-                value={guardrails.dailyTurnLimit ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      dailyTurnLimit: event.target.value
-                        ? Number(event.target.value)
-                        : null,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Daily budget (USD)" htmlFor="guardrail-budget">
-              <Input
-                id="guardrail-budget"
-                type="number"
-                min={0}
-                max={1000000}
-                step={0.01}
-                value={guardrails.dailyBudgetUsd ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      dailyBudgetUsd: event.target.value
-                        ? Number(event.target.value)
-                        : null,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-          </InspectorSection>
-          <InspectorSection
-            label="Abuse protection"
-            variant="form"
-            defaultOpen={false}
-          >
-            <p className="mb-3 text-xs text-foreground-muted">
-              Protect access from bursts and repeated messages. These limits are
-              optional and apply in addition to the usage controls above.
-            </p>
-            <FormRow label="Requests per minute" htmlFor="guardrail-rpm">
-              <Input
-                id="guardrail-rpm"
-                type="number"
-                min={1}
-                max={100000}
-                value={guardrails.requestsPerMinute}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      requestsPerMinute: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow
-              label="Max concurrent turns"
-              htmlFor="guardrail-concurrency"
-            >
-              <Input
-                id="guardrail-concurrency"
-                type="number"
-                min={1}
-                max={1000}
-                value={guardrails.maxConcurrentTurns}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxConcurrentTurns: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Spam after messages" htmlFor="guardrail-spam">
-              <Input
-                id="guardrail-spam"
-                type="number"
-                min={2}
-                max={100}
-                value={guardrails.spamAfterMessages ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      spamAfterMessages: event.target.value
-                        ? Number(event.target.value)
-                        : null,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-          </InspectorSection>
-        </InspectorSection>
-      ) : null}
+    <div className="max-w-3xl">
+      <FormRow label="Avatar" layout="vertical">
+        <AgentAvatarPicker
+          value={appearance}
+          onChange={(next) => onChange({ ...config, appearance: next })}
+        />
+      </FormRow>
+      <FormRow label="Custom image URL" htmlFor="appearance-avatar">
+        <Input
+          id="appearance-avatar"
+          type="url"
+          placeholder="https://…"
+          value={appearance.avatarUrl ?? ""}
+          onChange={(event) =>
+            onChange({
+              ...config,
+              appearance: {
+                ...appearance,
+                avatarUrl: event.target.value || null,
+              },
+            })
+          }
+        />
+      </FormRow>
     </div>
   )
 }
