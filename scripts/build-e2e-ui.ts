@@ -394,7 +394,7 @@ export async function runBuildUiE2e({
       if (["Actions", "Procedures", "Widgets"].includes(section)) {
         const list =
           section === "Actions"
-            ? page.getByRole("tabpanel", { name: "My Actions", exact: true })
+            ? page.getByRole("tabpanel", { name: "My actions", exact: true })
             : page.getByRole("region", { name: section, exact: true })
         await list.getByRole("button", { name: /^E2E .* edited/ }).waitFor()
       }

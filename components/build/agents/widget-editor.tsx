@@ -92,26 +92,28 @@ const stringify = (value: unknown) => JSON.stringify(value, null, 2)
 export function WidgetEditor({
   agentId,
   widget,
+  initial,
   onClose,
   onSaved,
 }: {
   agentId: string
   widget?: WidgetRecord
+  initial?: WidgetDefinition
   onClose: () => void
   onSaved: (deleted?: boolean) => void
 }) {
   const [record, setRecord] = useState(widget)
   const [draft, setDraft] = useState(() =>
-    widgetAsCode(widget?.definition ?? starter)
+    widgetAsCode(widget?.definition ?? initial ?? starter)
   )
   const [code, setCode] = useState(
-    () => widgetAsCode(widget?.definition ?? starter).code!
+    () => widgetAsCode(widget?.definition ?? initial ?? starter).code!
   )
   const [stateSources, setStateSources] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       Object.entries({
         default: {},
-        ...(widget?.definition ?? starter).states,
+        ...(widget?.definition ?? initial ?? starter).states,
       }).map(([key, value]) => [key, stringify(value)])
     )
   )

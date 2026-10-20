@@ -168,7 +168,7 @@ export async function runBuildAuthoringE2e({
     timeout: 120_000,
   })
   await selectAgentSection(page, "Actions")
-  await page.getByRole("tab", { name: "Create Actions", exact: true }).click()
+  await page.getByRole("tab", { name: "Templates", exact: true }).click()
   await page
     .getByRole("button", { name: "Run client-side code", exact: true })
     .click()

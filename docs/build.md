@@ -137,6 +137,13 @@ unsaved draft. Actions, procedures, and widgets are selected from a list before
 editing. Advanced identifiers and JSON configuration stay in expandable sections.
 On narrow screens, customer details open in a sheet.
 
+Actions, Widgets and Skills share a collection header with their resource tab,
+Templates, search and collection controls. Actions offers a searchable catalog
+of existing action starters. Widgets offers six templates: Contact form, Demo
+request, Support request, Quick choices, Order lookup and Order summary. Preview
+a template with example data, then open it as an editable, disabled draft.
+Connect its Functions to your agent's actions before enabling it.
+
 Widgets are authored as JSX in Code, with an editable Zod Schema and JSON
 example data under Default data. Export a default React component receiving
 `{ data }`; built-ins include Box, Col, Row, Text, Card, Button, Form, List,

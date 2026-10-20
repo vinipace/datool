@@ -68,6 +68,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { useRemote } from "@/components/tracer/hooks"
 import { CollectionRow, CollectionTable, CollectionTableBody } from "@/components/tracer/collection-table"
 import { collectionTable } from "@/components/tracer/collection-table-styles"
+import { CollectionPanel } from "@/components/tracer/collection-panel"
+import { CollectionPage, CollectionSearch } from "@/components/tracer/collection-page"
 import { HeaderSlot } from "@/components/tracer/collection-header"
 import { ProjectModelField } from "@/components/tracer/project-model-field"
 import { useWorkspaceHref } from "@/components/tracer/workspace-path"
@@ -479,20 +481,6 @@ function BuildAgentEditorContent({
           </DropdownMenu>
         </HeaderSlot>
       ) : null}
-      {active === "actions" && saved ? (
-        <div className="shrink-0 border-b border-border bg-muted/30 px-3">
-          <TabsList variant="underline" aria-label="Actions">
-            <TabsTrigger value="mine">
-              <Zap className="size-4" />
-              My Actions
-            </TabsTrigger>
-            <TabsTrigger value="create">
-              <SquarePlus className="size-4" />
-              Create Actions
-            </TabsTrigger>
-          </TabsList>
-        </div>
-      ) : null}
       {error || saveState.error ? (
         <BuildErrorState
           message={error ?? formatBuildError(saveState.error)}
@@ -598,6 +586,7 @@ function BuildAgentEditorContent({
                 agentId={saved.id}
                 active={active === "actions"}
                 onManageIntegrations={() => selectTab("integrations")}
+                view={actionsView}
                 onViewChange={setActionsView}
                 onDefinitionDirty={store.definitionsChanged}
               />
@@ -1839,9 +1828,11 @@ function ActionsTab({
   active,
   onManageIntegrations,
   onViewChange,
+  view,
   onDefinitionDirty,
 }: {
   agentId: string
+  view: string
   onViewChange: (value: string) => void
   active: boolean
   onManageIntegrations: () => void
@@ -1866,7 +1857,13 @@ function ActionsTab({
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [message, setMessage] = React.useState<string | null>(null)
-  const rows = state.data ?? []
+  const [search, setSearch] = React.useState("")
+  const [templateSearch, setTemplateSearch] = React.useState("")
+  const rows = (state.data ?? []).filter(({ definition }) =>
+    `${definition.name} ${definition.description} ${definition.type}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase())
+  )
   const futureChannels = draft.channels.filter(
     (item) => !supportedChannelOptions.includes(item)
   )
@@ -1949,116 +1946,187 @@ function ActionsTab({
     }
   }
   return (
-    <div className="w-full min-w-0 space-y-3 px-3 py-1">
-      {error && !selected && !isCreating ? (
-        <Notice role="alert" variant="error">
-          {error}
-        </Notice>
-      ) : null}
-      {message ? (
-        <Notice role="status" variant="success">
-          {message}
-        </Notice>
-      ) : null}
-      <TabsContent value="create">
-        <ActionCatalog onCreate={beginAction} />
-      </TabsContent>
-      <TabsContent value="mine" className="min-w-0 space-y-3">
-        {state.error ? (
-          <BuildErrorState
-            message={state.error.message}
-            onRetry={state.refresh}
-          />
-        ) : null}
-        {state.data === null && !state.error ? (
-          <LoadingState compact label="Loading actions" />
-        ) : rows.length ? (
-          <CollectionTable
-            widths={[300, 160, 360, 120, 90]}
-            columnIds={["name", "type", "description", "status", "revision"]}
-            displayControls={false}
-            enableRowHeight={false}
-            enableCardView={false}
-            reorderable={false}
-          >
-            <thead className={collectionTable.head}>
-              <tr>
-                <th aria-hidden className={collectionTable.heading} />
-                {["Action", "Type", "Description", "Status", "Revision"].map(
-                  (label) => (
-                    <th key={label} className={collectionTable.heading}>
-                      {label}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <CollectionTableBody rows={rows}>
-              {(action, index) => (
-                <CollectionRow key={action.id} onClick={() => selectAction(action)}>
-                  <td className={collectionTable.cell}>
-                    <span className="text-xs text-foreground-muted">
-                      {index + 1}
-                    </span>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="max-w-full justify-start px-0"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        selectAction(action)
-                      }}
-                    >
-                      <ActionIcon type={action.definition.type} size="sm" />
-                      <span className="truncate">{action.definition.name}</span>
-                    </Button>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <ActionTypeLabel type={action.definition.type} />
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <span
-                      className="block truncate text-foreground-muted"
-                      title={action.definition.description}
-                    >
-                      {action.definition.description || "—"}
-                    </span>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <BuildStatus
-                      state={action.definition.enabled ? "active" : "paused"}
-                    />
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <span className="text-foreground-muted">
-                      v{action.revision}
-                    </span>
-                  </td>
-                </CollectionRow>
+    <>
+      <CollectionPanel
+        label="Actions"
+        navigation={
+          <TabsList aria-label="Actions">
+            <TabsTrigger value="mine">
+              <Zap className="size-4" />
+              My actions
+            </TabsTrigger>
+            <TabsTrigger value="create">
+              <SquarePlus className="size-4" />
+              Templates
+            </TabsTrigger>
+          </TabsList>
+        }
+      >
+        <CollectionPage
+          className="contents"
+          state={
+            view === "mine"
+              ? state
+              : {
+                  data: [],
+                  error: null,
+                  isLoading: false,
+                  isRefreshing: false,
+                  refresh: state.refresh,
+                }
+          }
+          loadingLabel="Loading actions"
+          header={{
+            children: (
+              <CollectionSearch
+                label={view === "mine" ? "Search actions" : "Search templates"}
+                value={view === "mine" ? search : templateSearch}
+                onChange={view === "mine" ? setSearch : setTemplateSearch}
+              />
+            ),
+            actions:
+              view === "mine" ? (
+                <Button
+                  size="sm"
+                  aria-label="New action"
+                  onClick={() => onViewChange("create")}
+                >
+                  <Plus />
+                  <span className="hidden @min-[480px]/page:inline">
+                    New action
+                  </span>
+                </Button>
+              ) : undefined,
+            showRefresh: view === "mine",
+            showExport: view === "mine",
+            exportRows: rows,
+            exportName: "actions",
+          }}
+          toolbar={
+            <>
+              {error && !selected && !isCreating && (
+                <Notice role="alert" variant="error">
+                  {error}
+                </Notice>
               )}
-            </CollectionTableBody>
-          </CollectionTable>
-        ) : state.data !== null && !state.error ? (
-          <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center">
-            <p className="text-sm font-medium">No actions added yet</p>
-            <p className="mt-1 text-sm text-foreground-muted">
-              Give your agent something new to do with an action.
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              className="mt-4"
-              onClick={() => onViewChange("create")}
+              {message && (
+                <Notice role="status" variant="success">
+                  {message}
+                </Notice>
+              )}
+            </>
+          }
+        >
+          <TabsContent value="create" className="pt-4 pb-6">
+            <ActionCatalog onCreate={beginAction} search={templateSearch} />
+          </TabsContent>
+          <TabsContent value="mine">
+            <CollectionTable
+              widths={[300, 160, 360, 120, 90]}
+              columnIds={["name", "type", "description", "status", "revision"]}
+              persistenceKey={`build-actions:${agentId}`}
             >
-              <Plus className="size-3.5" />
-              Create action
-            </Button>
-          </div>
-        ) : null}
-      </TabsContent>
+              <thead className={collectionTable.head}>
+                <tr>
+                  <th aria-hidden className={collectionTable.heading} />
+                  {["Action", "Type", "Description", "Status", "Revision"].map(
+                    (label) => (
+                      <th key={label} className={collectionTable.heading}>
+                        {label}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <CollectionTableBody
+                rows={rows}
+                empty={
+                  <tr>
+                    <td colSpan={6} className="px-4 py-20 text-center">
+                      <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+                        <Zap
+                          className="size-7 text-foreground-muted"
+                          aria-hidden
+                        />
+                        <p className="text-sm font-medium">
+                          {search
+                            ? "No matching actions"
+                            : "Give your agent something to do"}
+                        </p>
+                        <p className="text-sm leading-6 text-foreground-muted">
+                          {search
+                            ? "Try another name, description or action type."
+                            : "Use a template to connect an app, show a widget, collect details or hand off to your team."}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            search ? setSearch("") : onViewChange("create")
+                          }
+                        >
+                          {search ? "Clear search" : "Browse templates"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              >
+                {(action, index) => (
+                  <CollectionRow
+                    key={action.id}
+                    onClick={() => selectAction(action)}
+                  >
+                    <td className={collectionTable.cell}>
+                      <span className="text-xs text-foreground-muted">
+                        {index + 1}
+                      </span>
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="max-w-full justify-start px-0"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          selectAction(action)
+                        }}
+                      >
+                        <ActionIcon type={action.definition.type} size="sm" />
+                        <span className="truncate">
+                          {action.definition.name}
+                        </span>
+                      </Button>
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <ActionTypeLabel type={action.definition.type} />
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <span
+                        className="block truncate text-foreground-muted"
+                        title={action.definition.description}
+                      >
+                        {action.definition.description || "—"}
+                      </span>
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <BuildStatus
+                        state={action.definition.enabled ? "active" : "paused"}
+                      />
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <span className="text-foreground-muted">
+                        v{action.revision}
+                      </span>
+                    </td>
+                  </CollectionRow>
+                )}
+              </CollectionTableBody>
+            </CollectionTable>
+          </TabsContent>
+        </CollectionPage>
+      </CollectionPanel>
       <Sheet
         open={active && Boolean(selected || isCreating)}
         onOpenChange={(open) => {
@@ -2159,7 +2227,14 @@ function ActionsTab({
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
                     {(
-                      ["integration", "http", "client", "widget", "form", "handoff"] as const
+                      [
+                        "integration",
+                        "http",
+                        "client",
+                        "widget",
+                        "form",
+                        "handoff",
+                      ] as const
                     ).map((type) => (
                       <SelectItem key={type} value={type}>
                         <ActionTypeLabel type={type} />
@@ -2210,11 +2285,7 @@ function ActionsTab({
               ) : null}
               {draft.type === "widget" ? (
                 <>
-                  <FormRow
-                    label="Widget"
-                    layout="vertical"
-                    variant="plain"
-                  >
+                  <FormRow label="Widget" layout="vertical" variant="plain">
                     <ActionWidgetPicker
                       key={agentId}
                       agentId={agentId}
@@ -2358,7 +2429,7 @@ function ActionsTab({
           </form>
         </SheetContent>
       </Sheet>
-    </div>
+    </>
   )
 }
 
