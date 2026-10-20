@@ -126,9 +126,18 @@ export const ManageFromAction: Story = {
     ).resolves.toBeVisible()
     await expect(page.queryByRole("dialog")).not.toBeInTheDocument()
     await expect(
-      canvas.findByLabelText("Connect an app")
+      canvas.findByRole("group", { name: "Google Calendar" })
     ).resolves.toBeVisible()
-    await userEvent.click(canvas.getByRole("link", { name: "Actions" }))
+    await userEvent.click(canvas.getByRole("button", { name: "Manage" }))
+    const integrationDialog = within(
+      await page.findByRole("dialog", { name: "Google Calendar" })
+    )
+    await userEvent.click(
+      integrationDialog.getByRole("button", { name: "Open Actions" })
+    )
+    await expect(
+      page.queryByRole("dialog", { name: "Google Calendar" })
+    ).not.toBeInTheDocument()
     await expect(
       page.findByLabelText("Name", { selector: "input" })
     ).resolves.toHaveValue("My calendar action")

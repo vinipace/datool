@@ -570,7 +570,10 @@ function BuildAgentEditorContent({
               hidden={active !== "integrations"}
               aria-hidden={active !== "integrations"}
             >
-              <IntegrationsTab active={active === "integrations"} />
+              <IntegrationsTab
+                active={active === "integrations"}
+                onOpenActions={() => selectTab("actions")}
+              />
             </div>
           ) : null}
           {visitedTabs.has("actions") && saved ? (
