@@ -1,3 +1,4 @@
+import { enabledBuildProject } from "../access"
 import { createHash, randomUUID } from "node:crypto"
 import { Buffer } from "node:buffer"
 
@@ -1401,4 +1402,24 @@ export async function retrieveGroundedKnowledge(
     })),
     results,
   }
+}
+
+/** Cross-project worker admission; excluded organizations retain all queued work. */
+export async function listKnowledgeProjectsWithPendingWork(
+  database: TracerDatabase,
+  limit = 50
+): Promise<string[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
+    throw new Error("Knowledge work limit must be between 1 and 1000.")
+  const pending = await database.execute<{ projectId: string }>(sql`
+    select project_id as "projectId" from (
+      select project_id, queued_at as due from build_knowledge_jobs
+      where status='queued' or (status='running' and (lease_expires_at is null or lease_expires_at <= now()))
+      union all
+      select project_id, next_resync_at as due from build_knowledge_sources
+      where status <> 'deleted' and kind in ('website','sitemap') and next_resync_at <= now()
+    ) work where ${enabledBuildProject(sql`work.project_id`)}
+    group by project_id order by min(due), project_id limit ${limit}
+  `)
+  return pending.rows.map((row) => row.projectId)
 }

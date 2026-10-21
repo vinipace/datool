@@ -18,20 +18,45 @@ Additional adapters remain extension points and are not offered as available con
 
 ## Enable Build and start the worker
 
-Build is disabled by default. Set `DATOOL_BUILD_ENABLED=true` in the runtime
-environment of both the web process and Build worker, then restart both. Only
-the exact value `true` enables it; no image rebuild is needed. Docker Compose
-passes this setting from `.env` to both services:
+Build is disabled by default. Enable it for every organization with
+`DATOOL_BUILD_ENABLED=true`, or enable a limited rollout with:
+
+```dotenv
+DATOOL_BUILD_ENABLED=false
+DATOOL_BUILD_ORGANIZATION_IDS=organization-id-one,organization-id-two
+```
+
+The allowlist contains exact organization **IDs**, not names, slugs, project IDs,
+or email domains. Whitespace and duplicate entries are ignored; `*` is not a
+wildcard. Only the exact global value `true` enables every organization, even
+when an allowlist is present. With the global flag false or unset, an empty
+allowlist disables Build everywhere. An unknown organization is never admitted
+by the allowlist.
+
+Set the same runtime values on the web process and Build worker, then restart
+both. No image rebuild or new database migration is needed. Docker Compose
+passes both settings from `.env` to the services:
 
 ```sh
 docker compose up -d --force-recreate app build-worker
 ```
 
-When disabled, the Build navigation group is hidden, `/p/[projectSlug]/build/*`,
-`/chat/*`, and `/api/build`, `/api/build-public`, and `/api/build-webhooks`
-routes return 404, Build MCP tools are unavailable, and the worker stays idle
-without processing queued jobs. Stored Build data is preserved. Observe, Test,
-and trace ingestion remain available.
+For excluded organizations, the Build navigation group is hidden, Build pages
+are unavailable, authenticated Build API calls return 404, and Build MCP tools
+are unavailable. Public chat and widget endpoints check the channel's owning
+organization, so they also become unavailable. Telegram admission is rejected;
+the shared WhatsApp webhook acknowledges signed batches but ignores events for
+excluded organizations, including delivery receipts. Existing organization
+membership, project permissions, and allowed-origin checks still apply.
+
+The worker filters channel delivery, polling, procedure waits, knowledge work,
+simulations, and campaigns before selecting or claiming jobs. Excluded work
+stays in the database with its existing status and retry count; re-enabling an
+organization makes eligible work available again. Removing an organization
+requires restarting both processes and does not undo already completed external
+actions. If Build is disabled everywhere, its routes return 404 before database
+access and the worker remains idle without opening a database connection.
+Observe, Test, and trace ingestion remain available.
 
 Build requires the web process, the checked-in database migrations, and a
 long-lived Build worker. Run migrations using the installation's normal release

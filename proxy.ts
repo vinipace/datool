@@ -6,7 +6,7 @@ import {
   publicMarkdownPath,
 } from "@/lib/markdown-negotiation"
 import { cmsEnabled } from "@/lib/cms/config"
-import { buildEnabled } from "@/lib/build/config"
+import { buildAvailable } from "@/lib/build/config"
 
 const publicChatPath = /^\/chat\/([^/]+)\/?$/
 
@@ -48,7 +48,7 @@ export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const buildApi = /^\/api\/build(?:-public|-webhooks)?(?:\/|$)/.test(pathname)
   if (
-    !buildEnabled() &&
+    !buildAvailable() &&
     (buildApi || /^\/(?:p\/[^/]+\/build|chat)(?:\/|$)/.test(pathname))
   ) {
     const headers = {

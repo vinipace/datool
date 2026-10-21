@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { configureBuildTestEnvironment } from "./helpers/build-env"
+import { buildEnabled } from "../lib/build/config"
+import { describe, expect, test } from "bun:test"
 import { NextRequest } from "next/server"
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server"
 import { config, proxy } from "../proxy"
@@ -7,14 +9,30 @@ import { spawn } from "node:child_process"
 import { once } from "node:events"
 import { setTimeout } from "node:timers/promises"
 
-const previousBuildEnabled = process.env.DATOOL_BUILD_ENABLED
-afterEach(() => {
-  if (previousBuildEnabled === undefined)
-    delete process.env.DATOOL_BUILD_ENABLED
-  else process.env.DATOOL_BUILD_ENABLED = previousBuildEnabled
-})
+configureBuildTestEnvironment("false")
 
 describe("Build runtime opt-in", () => {
+  test("organization IDs are exact, trimmed runtime opt-ins; only true enables everyone", async () => {
+    process.env.DATOOL_BUILD_ORGANIZATION_IDS = " , org-one, org-two ,org-one,, "
+    for (const organizationId of ["org-one", "org-two"]) {
+      expect(buildEnabled(organizationId)).toBe(true)
+    }
+    for (const organizationId of [undefined, null, "", "org", "org-three", "ORG-ONE"]) {
+      expect(buildEnabled(organizationId)).toBe(false)
+    }
+    // Proxy admits allowlist mode to the authenticated/channel-specific guards.
+    for (const path of ["/p/project/build/agents", "/api/build/build_list_agents", "/api/build-public/channel/session", "/api/build-webhooks/whatsapp"]) {
+      expect((await proxy(new NextRequest(`https://datool.test${path}`))).headers.get("x-middleware-next")).toBe("1")
+    }
+    process.env.DATOOL_BUILD_ORGANIZATION_IDS = " , , "
+    expect(buildEnabled("org-one")).toBe(false)
+    expect((await proxy(new NextRequest("https://datool.test/api/build/build_list_agents"))).status).toBe(404)
+    process.env.DATOOL_BUILD_ORGANIZATION_IDS = "*"
+    expect(buildEnabled("org-one")).toBe(false)
+    process.env.DATOOL_BUILD_ENABLED = "true"
+    expect(buildEnabled("org-three")).toBe(true)
+  })
+
   test("disabled worker stays alive without opening a database connection and stops cleanly", async () => {
     let connections = 0
     const database = createServer((socket) => {

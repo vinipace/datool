@@ -1,3 +1,4 @@
+import { configureBuildTestEnvironment } from "./helpers/build-env"
 import { strict as assert } from "node:assert"
 import { expect, test } from "bun:test"
 import { sql } from "drizzle-orm"
@@ -56,6 +57,8 @@ import {
 } from "@/src/server/build/operations/analytics"
 import { getTracerProjectId } from "@/src/server/tracer/db"
 import { closeTracerFixture, createTracerFixture } from "./helpers/tracer-fixture"
+
+configureBuildTestEnvironment()
 
 test("Build operations persist contact identity, attributes, and bounded imports", async () => {
   const database = await createTracerFixture()

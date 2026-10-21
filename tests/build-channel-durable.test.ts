@@ -1,3 +1,4 @@
+import { configureBuildTestEnvironment } from "./helpers/build-env"
 import { afterEach, describe, expect, test } from "bun:test"
 import assert from "node:assert/strict"
 
@@ -61,6 +62,8 @@ import {
   seedTestWorkspace,
   type IsolatedPostgres,
 } from "@/tests/helpers/postgres"
+
+configureBuildTestEnvironment()
 
 const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> =
   []

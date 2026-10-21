@@ -1,5 +1,6 @@
 import { cache } from "react"
 import type { Metadata } from "next"
+import { notFound } from "next/navigation"
 import { pageMetadata } from "@/lib/page-metadata"
 import { PublicChat } from "@/components/build/chat/public-chat"
 import {
@@ -55,6 +56,7 @@ export default async function PublicChatRoute({
 }) {
   const [{ channelId }, query] = await Promise.all([params, searchParams])
   const initialAppearance = await readAppearance(channelId)
+  if (!initialAppearance) notFound()
   return (
     <PublicChat
       channelId={channelId}
