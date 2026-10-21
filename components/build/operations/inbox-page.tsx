@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 
 import { Chat } from "@/components/ui/chat"
+import { AgentAvatar } from "@/components/ui/agent-avatar"
 import { productIcons } from "@/components/product-icons"
 import { PriorityIndicator } from "@/components/ui/priority-indicator"
 import { UserAvatarImage } from "@/components/ui/user-avatar"
@@ -75,6 +76,7 @@ import {
   TicketStatusSelect,
 } from "@/components/build/shared/ticket-status"
 import type { ChannelId } from "@/src/lib/build/channels"
+import type { AgentAppearance } from "@/src/lib/build/contracts"
 import { InboxConversations } from "@/components/build/shared/inbox-sidebar"
 import {
   SidebarMenu,
@@ -91,6 +93,10 @@ import { NewTicketDialog } from "./new-ticket-dialog"
 type Ticket = {
   id: string
   agentName?: string | null
+  agentAvatar?: Pick<
+    AgentAppearance,
+    "avatarUrl" | "avatarStyle" | "avatarColor"
+  > | null
   version?: number
   ticketId?: string | null
   conversationStatus?: string
@@ -417,6 +423,7 @@ export function InboxPage({
   fixedAgentId?: string
 }) {
   const isInbox = view === "inbox"
+  const showAgentColumn = !isInbox && !fixedAgentId
   const ItemIcon = isInbox
     ? productIcons.buildInbox
     : productIcons.buildConversations
@@ -528,7 +535,6 @@ export function InboxPage({
               {recent.data.items.map((ticket) => (
                 <SidebarMenuItem key={ticket.id}>
                   <SidebarMenuButton
-                    size="lg"
                     title={
                       ticket.subject ||
                       ticket.contactName ||
@@ -713,12 +719,12 @@ export function InboxPage({
             widths={
               isInbox
                 ? [330, 220, 130, 120, 120, 160, 200]
-                : [330, 220, 220, 130, 120, 200]
+                : [330, 220, ...(showAgentColumn ? [220] : []), 130, 120, 200]
             }
             columnIds={[
               "subject",
               "customer",
-              ...(!isInbox ? ["agent"] : []),
+              ...(showAgentColumn ? ["agent"] : []),
               "channel",
               "status",
               ...(isInbox ? ["priority", "assignment"] : []),
@@ -732,7 +738,7 @@ export function InboxPage({
                 {[
                   "Conversation",
                   "Customer",
-                  ...(!isInbox ? ["Agent"] : []),
+                  ...(showAgentColumn ? ["Agent"] : []),
                   "Channel",
                   "Status",
                   ...(isInbox ? ["Priority", "Assignment"] : []),
@@ -782,12 +788,12 @@ export function InboxPage({
                   <td className={collectionTable.cell}>
                     {ticket.contactName || "Unknown customer"}
                   </td>
-                  {!isInbox ? (
+                  {showAgentColumn ? (
                     <td className={collectionTable.cell}>
                       <span className="flex min-w-0 items-center gap-2">
-                        <Bot
-                          aria-hidden
-                          className="size-4 shrink-0 text-foreground-muted"
+                        <AgentAvatar
+                          appearance={ticket.agentAvatar ?? undefined}
+                          className="size-5"
                         />
                         <span className="truncate">
                           {ticket.agentName || "Unknown agent"}

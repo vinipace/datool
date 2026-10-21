@@ -41,7 +41,7 @@ export function InboxSidebar() {
       <SidebarGroup>
         <div className="mb-3 flex items-center gap-2">
           <Button
-            className="h-11 min-w-0 flex-1"
+            className="min-w-0 flex-1"
             onClick={() => {
               navigation.navigate({ new: "ticket", search: null })
               closeMobile()
@@ -53,7 +53,7 @@ export function InboxSidebar() {
           <Button
             size="icon"
             variant="outline"
-            className="size-11 shrink-0"
+            className="shrink-0"
             aria-label="Search inbox"
             onClick={() => {
               navigation.navigate({
@@ -71,7 +71,6 @@ export function InboxSidebar() {
           {inboxViews.map((item) => (
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton
-                size="lg"
                 isActive={navigation.view === item.id}
                 aria-current={navigation.view === item.id ? "page" : undefined}
                 render={

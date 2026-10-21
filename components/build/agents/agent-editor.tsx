@@ -4,12 +4,10 @@ import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   Archive,
-  ArrowLeft,
   Copy,
   FileText,
   MessagesSquare,
   Globe,
-  History,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -80,6 +78,7 @@ import {
 import { agentBuildTabs } from "@/components/build/shared/build-tabs"
 import { AgentTests } from "./agent-tests"
 import { AgentActivity } from "./agent-activity"
+import { ContactsPage } from "@/components/build/operations/contacts-page"
 import { AgentSidebarNavigation } from "@/components/build/shared/agent-sidebar"
 import { channelLabel } from "@/components/build/shared/channel-catalog"
 import { CopilotTab } from "./copilot-tab"
@@ -111,7 +110,6 @@ import type {
   ActionDefinition,
   ActionRecord,
   AgentConfiguration,
-  AgentRevision,
   BuildChannel,
   ManagedAgent,
 } from "@/src/lib/build/contracts"
@@ -498,7 +496,7 @@ function BuildAgentEditorContent({
           ref={mainRef}
           role="region"
           aria-label="Agent editor"
-          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" ? "overflow-hidden" : "overflow-y-auto"}`}
+          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" || active === "contacts" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
           {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} /> : null}
           {active === "overview" && saved ? (
@@ -517,7 +515,6 @@ function BuildAgentEditorContent({
                 agent={saved}
                 draft={draft}
                 onChange={updateDraft}
-                onNavigate={selectTab}
               />
             </div>
           ) : null}
@@ -634,6 +631,9 @@ function BuildAgentEditorContent({
               fixedAgentId={saved.id}
             />
           ) : null}
+          {active === "contacts" && saved ? (
+            <ContactsPage key={saved.id} fixedAgentId={saved.id} />
+          ) : null}
           {active === "playground" && saved ? (
             <div className="h-full">
               <AgentPlayground agent={saved} />
@@ -657,7 +657,6 @@ function SettingsTab({
   agent,
   draft,
   onChange,
-  onNavigate,
 }: {
   agent?: ManagedAgent
   draft: ReturnType<typeof defaultDraft>
@@ -665,52 +664,10 @@ function SettingsTab({
     key: K,
     value: ReturnType<typeof defaultDraft>[K]
   ) => void
-  onNavigate: (tab: string) => void
 }) {
-  const overviewAgentId = agent?.id
-  const channelLoad = React.useCallback(
-    (signal: AbortSignal) =>
-      overviewAgentId
-        ? buildCall<unknown>(
-            buildOperations.listChannels,
-            { agentId: overviewAgentId },
-            { signal }
-          ).then((value) => listItems<ChannelConnectionView>(value))
-        : Promise.resolve<ChannelConnectionView[]>([]),
-    [overviewAgentId]
-  )
-  const channelState = useRemote(channelLoad, [overviewAgentId])
-  const hasConnectedChannel = Boolean(
-    channelState.data?.some(
-      (connection) =>
-        connection.status === "connected" || connection.status === "paused"
-    )
-  )
-  const steps = [
-    {
-      label: "Name your agent",
-      done: Boolean(draft.name.trim()),
-      tab: "settings",
-    },
-    {
-      label: "Add instructions",
-      done: Boolean(draft.configuration.instructions.trim()),
-      tab: "instructions",
-    },
-    ...(agent
-      ? [
-          {
-            label: "Connect a channel",
-            done: hasConnectedChannel,
-            tab: "channels",
-          },
-        ]
-      : [{ label: "Save your first revision", done: false, tab: null }]),
-  ]
-  const nextStep = steps.find((step) => !step.done)
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6">
-      <div>
+    <div className="w-full max-w-3xl space-y-5 px-3 py-6">
+      <div className="px-3">
         <p className="text-xs font-medium tracking-[0.16em] text-foreground-subtle uppercase">
           Agent setup
         </p>
@@ -721,7 +678,7 @@ function SettingsTab({
           Manage your agent’s identity and appearance.
         </p>
       </div>
-      <div className="max-w-3xl">
+      <div>
         <FormRow label="Display name" htmlFor="agent-name">
           <Input
             id="agent-name"
@@ -760,164 +717,6 @@ function SettingsTab({
           config={draft.configuration}
           onChange={(configuration) => onChange("configuration", configuration)}
         />
-        <InspectorSection
-          label="Revision history"
-          icon={<History className="size-3.5" />}
-          defaultOpen={false}
-        >
-          {agent ? (
-            <RevisionHistory key={agent.currentRevision} agentId={agent.id} />
-          ) : (
-            <p className="text-sm text-foreground-muted">
-              Create the agent to start a revision history.
-            </p>
-          )}
-        </InspectorSection>
-        <InspectorSection label="Setup checklist" defaultOpen={!agent}>
-          {agent && channelState.error ? (
-            <BuildErrorState
-              message={channelState.error.message}
-              onRetry={channelState.refresh}
-            />
-          ) : null}
-          <div className="space-y-2">
-            {steps.map((step) => (
-              <div key={step.label} className="flex items-start gap-2 text-sm">
-                <span
-                  aria-hidden
-                  className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border text-[10px] ${step.done ? "border-success bg-success/15 text-success" : "border-border text-foreground-muted"}`}
-                >
-                  {step.done ? "✓" : ""}
-                </span>
-                <span
-                  className={
-                    step.done
-                      ? "text-foreground-muted line-through"
-                      : "text-foreground"
-                  }
-                >
-                  {step.label}
-                </span>
-              </div>
-            ))}
-            {nextStep?.tab ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="mt-3 w-full justify-between"
-                onClick={() =>
-                  onNavigate(
-                    nextStep.label === "Add instructions"
-                      ? "instructions"
-                      : nextStep.tab
-                  )
-                }
-              >
-                {nextStep.label}
-                <ArrowLeft className="size-3.5 rotate-180" />
-              </Button>
-            ) : nextStep ? (
-              <p className="mt-3 text-xs leading-5 text-foreground-muted">
-                Use Create agent in the header when the identity and
-                instructions are ready. Future edits save automatically.
-              </p>
-            ) : null}
-          </div>
-        </InspectorSection>
-      </div>
-    </div>
-  )
-}
-
-function RevisionHistory({ agentId }: { agentId: string }) {
-  const state = useRemote(
-    React.useCallback(
-      (signal: AbortSignal) =>
-        buildCall<unknown>(
-          buildOperations.listAgentRevisions,
-          { agentId },
-          { signal }
-        ).then((value) => listItems<AgentRevision>(value)),
-      [agentId]
-    ),
-    [agentId]
-  )
-  if (state.error)
-    return (
-      <Notice role="alert" variant="error">
-        {state.error.message}
-      </Notice>
-    )
-  if (!state.data) return <LoadingState compact label="Loading revisions" />
-  if (!state.data.length)
-    return <p className="text-sm text-foreground-muted">No revisions yet.</p>
-  return <RevisionList agentId={agentId} revisions={state.data} />
-}
-
-function RevisionList({
-  agentId,
-  revisions,
-}: {
-  agentId: string
-  revisions: AgentRevision[]
-}) {
-  const [restoring, setRestoring] = React.useState<number | null>(null)
-  const [error, setError] = React.useState<string | null>(null)
-
-  async function restore(revision: AgentRevision) {
-    if (
-      restoring !== null ||
-      !window.confirm(
-        `Restore revision ${revision.revision} as the new applied revision?`
-      )
-    )
-      return
-    setRestoring(revision.revision)
-    setError(null)
-    try {
-      const current = revisions[0]?.revision ?? revision.revision
-      await buildCall(buildOperations.applyAgentRevision, {
-        agentId,
-        sourceRevision: revision.revision,
-        expectedRevision: current,
-      })
-      window.location.reload()
-    } catch (reason) {
-      setError(formatBuildError(reason))
-      setRestoring(null)
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      {error ? (
-        <Notice role="alert" variant="error">
-          {error}
-        </Notice>
-      ) : null}
-      <div className="divide-y divide-border rounded-md border border-border">
-        {revisions.map((revision) => (
-          <div
-            key={revision.id}
-            className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-sm"
-          >
-            <span>Revision {revision.revision}</span>
-            <span className="text-xs text-foreground-muted">
-              {revision.state} · {formatDate(revision.createdAt)}
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={revision.state === "applied" || restoring !== null}
-              loading={restoring === revision.revision}
-              onClick={() => void restore(revision)}
-            >
-              Restore
-            </Button>
-          </div>
-        ))}
       </div>
     </div>
   )
@@ -1061,16 +860,6 @@ function AgentAppearanceFields({
       </FormRow>
     </div>
   )
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(date)
 }
 
 const knowledgeSourceTypes = {
@@ -2870,14 +2659,4 @@ function parseJsonArray(value: string): unknown[] | null {
   } catch {
     return null
   }
-}
-
-
-type ChannelConnectionView = {
-  id: string
-  channel: BuildChannel
-  label: string
-  status: "draft" | "connected" | "paused" | "error" | "disconnected"
-  externalId: string | null
-  lastError: string | null
 }

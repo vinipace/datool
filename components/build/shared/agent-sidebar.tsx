@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  ContactRound,
   Wrench,
   type LucideIcon,
 } from "lucide-react"
@@ -65,7 +64,6 @@ export function AgentSidebarNavigation({
   canConfigure,
   agentHref,
   agentId,
-  onNavigate,
 }: {
   name: string
   appearance?: AgentAppearance
@@ -74,7 +72,6 @@ export function AgentSidebarNavigation({
   canConfigure: boolean
   agentHref?: string
   agentId?: string
-  onNavigate?: (href: string) => void
 }) {
   const context = React.useContext(AgentSidebarContext)
   const pathname = usePathname()
@@ -124,40 +121,6 @@ export function AgentSidebarNavigation({
         >
           {!nested && <tab.icon aria-hidden />}
           <span>{tab.label}</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    )
-  }
-  const externalLink = (
-    label: string,
-    path: string,
-    Icon: LucideIcon,
-    nested = false
-  ) => {
-    if (!canConfigure) return null
-    const href = workspaceHref(path)
-    return (
-      <SidebarMenuItem key={path}>
-        <SidebarMenuButton
-          render={<Link href={href} />}
-          onClick={(event) => {
-            if (
-              event.button !== 0 ||
-              event.metaKey ||
-              event.ctrlKey ||
-              event.shiftKey ||
-              event.altKey
-            )
-              return
-            if (onNavigate) {
-              event.preventDefault()
-              onNavigate(href)
-            }
-            closeMobileNavigation()
-          }}
-        >
-          {!nested && <Icon aria-hidden />}
-          <span>{label}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     )
@@ -222,6 +185,7 @@ export function AgentSidebarNavigation({
             {internalLink("widgets", true)}
             {internalLink("procedures", true)}
             {internalLink("guardrails", true)}
+            {internalLink("settings", true)}
           </>
         )}
         {canConfigure &&
@@ -235,12 +199,11 @@ export function AgentSidebarNavigation({
               {internalLink("collected-data", true)}
             </>
           )}
-        {externalLink("Contacts", "/build/contacts", ContactRound)}
+        {internalLink("contacts")}
         {internalLink("playground")}
         {internalLink("test")}
         {internalLink("channels")}
         {internalLink("integrations")}
-        {internalLink("settings")}
       </SidebarMenu>
     </SidebarGroup>,
     context.target

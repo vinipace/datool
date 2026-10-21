@@ -714,7 +714,9 @@ action. Theme controls reuse the scoped `datool-chat-surface` tokens.
 Settings uses one flat, single-column form with `FormRow` fields for display name,
 slug, description and avatar, without Identity or Appearance sections. The
 display name edits the agent name and its legacy appearance name together.
-Revision history and the setup checklist stay in disclosures below the fields.
+The form uses the standard left gutter and a single bounded column, with its
+heading aligned to the field labels. Revision history and the setup checklist
+are omitted from Settings.
 Welcome message, input placeholder and suggested replies are configured in the
 chat widget's channel editor, outside agent Settings.
 The former `section=appearance` URL opens Settings for existing bookmarks.
@@ -740,16 +742,25 @@ saving and saved states. New agents still require the explicit Create agent acti
 The workspace sidebar switches to the agent's navigation while its editor or a
 channel opened from that agent owns `AgentSidebarTarget`. The agent avatar/name
 returns to the agent list. Analytics comes first, Build and Activity are
-collapsible groups, and Activity contains Conversations, Leads and Collected data.
+collapsible groups. Settings is the final item inside Build; Activity contains
+Conversations, Leads and Collected data.
 Conversations opens inside the agent editor at `section=conversations`, retaining
 the agent sidebar. It reuses the shared all-chats collection with a fixed agent
 scope applied before pagination; URL filters cannot override or remove it. The
 current agent's Integrations page remains reachable from this navigation.
-The Conversations table includes an Agent column with the current agent name,
-including archived agents, using the shared column visibility and ordering controls.
+The project-wide Conversations table includes an Agent column with the current
+agent name and configured avatar, including archived agents, using the shared
+column visibility and ordering controls. Agent-scoped conversations omit this
+redundant column from both the table and Display controls.
+Contacts opens at `section=contacts` in the same agent navigation. It reuses the
+contact directory and inspector with a fixed agent scope, applied before
+pagination and CSV export. A contact belongs in this view when linked to one of
+the agent's conversations through conversation metadata, a ticket, a lead or
+collected data. Repeated associations produce one row; contacts can appear for
+more than one agent. Creation and imports remain in the project-wide directory.
 Home and the other workspace groups are hidden while agent navigation is active.
 
-Inbox uses its own taller navigation: New Ticket, Search, My Inbox, Mentions,
+Inbox uses the shared default control height for New Ticket, Search, My Inbox, Mentions,
 All, Unassigned, Solved, and a bounded list of recent ticket conversations.
 Queue and agent filters are applied before pagination on the server; My Inbox
 uses the authenticated actor, and Mentions matches explicit @email mentions in

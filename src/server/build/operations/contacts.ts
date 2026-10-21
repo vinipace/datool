@@ -52,10 +52,49 @@ function contact(row: ContactRow) {
   }
 }
 
-const contactPageSchema = operationsPageSchema.extend({
+export const contactPageSchema = operationsPageSchema.extend({
+  agentId: z.string().min(1).max(128).optional(),
   status: contactStatusSchema.optional(),
   search: z.string().max(300).optional(),
 })
+
+export const contactExportSchema = contactPageSchema.extend({
+  format: z.enum(["json", "csv"]).default("json"),
+  limit: z.number().int().min(1).max(1_000).default(1_000),
+}).strict()
+
+function contactPredicates(projectId: string, input: z.infer<typeof contactPageSchema>) {
+  const predicates = [sql`build_contacts.project_id=${projectId}`]
+  if (input.agentId) predicates.push(sql`exists (
+    select 1 from build_conversations c
+    where c.project_id=build_contacts.project_id and c.agent_id=${input.agentId}
+      and (
+        c.metadata_json->>'contactId'=build_contacts.id
+        or exists (
+          select 1 from build_inbox_tickets t
+          where t.project_id=c.project_id and t.conversation_id=c.id
+            and t.contact_id=build_contacts.id
+        )
+        or exists (
+          select 1 from build_leads l
+          where l.project_id=c.project_id and l.conversation_id=c.id
+            and l.contact_id=build_contacts.id
+        )
+        or exists (
+          select 1 from build_collected_data d
+          where d.project_id=c.project_id and d.conversation_id=c.id
+            and d.contact_id=build_contacts.id
+        )
+      )
+  )`)
+  if (input.status) predicates.push(sql`build_contacts.status=${input.status}`)
+  if (input.cursor) predicates.push(sql`build_contacts.id>${pageCursor(input.cursor)}`)
+  if (input.search) {
+    const query = `%${input.search}%`
+    predicates.push(sql`(display_name ilike ${query} or email ilike ${query} or phone ilike ${query} or external_id ilike ${query})`)
+  }
+  return predicates
+}
 
 export async function createContact(context: BuildContext, value: unknown) {
   const ctx = await prepareOperations(context)
@@ -129,13 +168,7 @@ export async function listContacts(context: BuildContext, value?: unknown) {
   const ctx = await prepareOperations(context)
   const input = contactPageSchema.parse(value ?? {})
   const limit = pageLimit(input.limit)
-  const predicates = [sql`project_id=${ctx.projectId}`]
-  if (input.status) predicates.push(sql`status=${input.status}`)
-  if (input.cursor) predicates.push(sql`id>${pageCursor(input.cursor)}`)
-  if (input.search) {
-    const query = `%${input.search}%`
-    predicates.push(sql`(display_name ilike ${query} or email ilike ${query} or phone ilike ${query} or external_id ilike ${query})`)
-  }
+  const predicates = contactPredicates(ctx.projectId, input)
   const result = await ctx.database.execute<ContactRow>(sql`
     select * from build_contacts where ${sqlAnd(predicates)} order by id asc limit ${limit + 1}
   `)
@@ -306,9 +339,8 @@ export async function requestContactExport(context: BuildContext, value?: unknow
 
 export async function exportContacts(context: BuildContext, value?: unknown) {
   const ctx = await prepareOperations(context)
-  const input = z.object({ format: z.enum(["json", "csv"]).default("json"), limit: z.number().int().min(1).max(1_000).default(1_000), cursor: z.string().max(256).optional() }).strict().parse(value ?? {})
-  const predicates = [sql`project_id=${ctx.projectId}`]
-  if (input.cursor) predicates.push(sql`id>${input.cursor}`)
+  const input = contactExportSchema.parse(value ?? {})
+  const predicates = contactPredicates(ctx.projectId, input)
   const result = await ctx.database.execute<ContactRow>(sql`
     select * from build_contacts where ${sqlAnd(predicates)} order by id asc limit ${input.limit + 1}
   `)

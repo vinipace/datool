@@ -68,6 +68,8 @@ import { buildChannelSchema, macroActionSchema, teamInputSchema } from "@/src/li
 import { safeDeliveryRetryCodes } from "@/src/lib/build/operations"
 import {
   collectData,
+  contactExportSchema,
+  contactPageSchema,
   createContact,
   exportContacts,
   getContact,
@@ -557,9 +559,9 @@ register(
 )
 register(
   "build_list_contacts",
-  "List contacts with bounded pagination and optional status/search filters.",
+  "List contacts with bounded pagination and optional agent, status and search filters.",
   ["build:read"],
-  page.extend({ status: z.enum(["active", "blocked", "archived"]).optional(), search: z.string().max(300).optional() }),
+  contactPageSchema,
   (context, input) => listContacts(context, input)
 )
 register(
@@ -572,9 +574,9 @@ register(
 )
 register(
   "build_export_contacts",
-  "Request or read a bounded contact export.",
+  "Export contacts with bounded pagination and optional agent, status and search filters.",
   ["build:read"],
-  z.object({ format: z.enum(["csv", "json"]).optional(), filter: z.record(z.string().max(120), z.json()).optional(), limit: z.number().int().min(1).max(10_000).optional() }),
+  contactExportSchema,
   (context, input) => exportContacts(context, input)
 )
 register(

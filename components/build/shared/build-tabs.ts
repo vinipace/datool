@@ -2,6 +2,7 @@ import {
   BookOpen,
   FlaskConical,
   ChartNoAxesCombined,
+  ContactRound,
   FileText,
   Database,
   UserRoundCheck,
@@ -109,6 +110,13 @@ export const agentBuildTabs: BuildTab[] = [
     group: "Activity",
   },
   {
+    id: "contacts",
+    label: "Contacts",
+    icon: ContactRound,
+    description: "Contacts from this agent’s conversations",
+    group: "Manage",
+  },
+  {
     id: "channels",
     label: "Channels",
     icon: Radio,
@@ -126,7 +134,7 @@ export const agentBuildTabs: BuildTab[] = [
     id: "settings",
     label: "Settings",
     icon: Settings,
-    description: "Identity, appearance and revision history",
-    group: "Manage",
+    description: "Identity and appearance",
+    group: "Build",
   },
 ]
