@@ -129,6 +129,9 @@ customer systems.
 
 ## Authoring and operations
 
+Campaigns is temporarily unavailable in the product. Existing Campaigns page
+URLs redirect to the current project’s Agents page.
+
 When an agent is open, the main sidebar shows **Agents / agent name**, with
 Overview, Instructions, Appearance, Guardrails and the other agent sections
 nested underneath. The parent link returns to the agent list. The same links
