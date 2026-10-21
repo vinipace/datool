@@ -39,6 +39,7 @@ environment=(--network "$prefix"
   -e BETTER_AUTH_URL=https://localhost:3443
   -e BETTER_AUTH_SECRET=docker-test-only-secret-at-least-thirty-two-characters
   -e DATOOL_CMS_ENABLED=true
+  -e DATOOL_BUILD_ENABLED=true
   -e PAYLOAD_SECRET=docker-test-only-payload-secret-at-least-thirty-two-characters
   -e DATOOL_PROJECT_ID=docker-test-project
   -e DATOOL_API_KEY=docker-test-only-key)

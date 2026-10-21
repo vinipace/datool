@@ -206,7 +206,7 @@ export function Sidebar({
       data-slot="sidebar"
       data-state={state}
       className={cn(
-        "group/sidebar relative hidden min-h-svh shrink-0 flex-col border-r border-sidebar-border/50 bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-linear md:flex",
+        "group/sidebar relative hidden h-dvh min-h-0 shrink-0 flex-col border-r border-sidebar-border/50 bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-linear md:flex",
         "w-(--sidebar-width) data-[collapsible=icon]:w-(--sidebar-width-icon) md:data-[collapsible=offcanvas]:hidden",
         className
       )}

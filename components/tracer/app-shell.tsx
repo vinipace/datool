@@ -250,19 +250,25 @@ function DemoWorkflowButton({ compact = false }: { compact?: boolean }) {
 }
 
 type WorkspaceShellProps = {
+  buildEnabled?: boolean
   user: AccountMenuUser
   organization: WorkspaceOrganization
   project: Pick<WorkspaceProject, "id" | "name" | "slug">
 }
 
-function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
+function AppSidebar({
+  organization,
+  project,
+  user,
+  buildEnabled = false,
+}: WorkspaceShellProps) {
   const pathname = usePathname()
   const { isMobile, setOpenMobile } = useSidebar()
   const closeMobileNavigation = () => {
     if (isMobile) setOpenMobile(false)
   }
   const prefix = projectWorkspaceHref(organization, project)
-  const inInbox = pathname === `${prefix}/build/inbox`
+  const inInbox = buildEnabled && pathname === `${prefix}/build/inbox`
   const inSettings =
     pathname === `${prefix}/settings` ||
     pathname.startsWith(`${prefix}/settings/`)
@@ -302,7 +308,9 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
           ) : (
             (inSettings
               ? [{ label: "Project settings", routes: settingsRoutes }]
-              : routeGroups
+              : routeGroups.filter(
+                  (group) => group.label !== "Build" || buildEnabled
+                )
             ).map((group) => (
               <SidebarGroup key={group.label}>
                 <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
@@ -391,6 +399,7 @@ export function TracerAppShell(
 
 function TracerAppShellContent({
   children,
+  buildEnabled = false,
   organization,
   project,
   user,
@@ -403,6 +412,7 @@ function TracerAppShellContent({
       <AgentSidebarProvider key={project.id}>
         <InboxSidebarProvider>
           <AppSidebar
+            buildEnabled={buildEnabled}
             organization={organization}
             project={project}
             user={user}

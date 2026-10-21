@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import assert from "node:assert/strict"
 
 import {
@@ -9,7 +9,29 @@ import {
 import { routeScopes } from "@/src/server/auth/request"
 import { withWorkspace } from "@/src/server/auth/context"
 
+const previousBuildEnabled = process.env.DATOOL_BUILD_ENABLED
+beforeEach(() => {
+  process.env.DATOOL_BUILD_ENABLED = "true"
+})
+afterEach(() => {
+  if (previousBuildEnabled === undefined) delete process.env.DATOOL_BUILD_ENABLED
+  else process.env.DATOOL_BUILD_ENABLED = previousBuildEnabled
+})
+
 describe("Build operation HTTP contract", () => {
+  test("disabled Build rejects a granted operation before accessing project data", async () => {
+    delete process.env.DATOOL_BUILD_ENABLED
+    await withWorkspace(
+      { organizationId: "org-test", projectId: "project-test", userId: "user-test", kind: "oauth", scopes: ["build:read"] },
+      async () => {
+        await assert.rejects(executeBuildOperation("build_list_agents", {}), (error) => {
+          expect(error).toMatchObject({ code: "NOT_FOUND", status: 404, message: "Build is disabled on this installation." })
+          return true
+        })
+      }
+    )
+  })
+
   test("publishes a unique, scoped operation catalog with retry metadata", () => {
     const names = buildOperations.map((operation) => operation.name)
     expect(new Set(names).size).toBe(names.length)

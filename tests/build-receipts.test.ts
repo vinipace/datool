@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { sql } from "drizzle-orm"
@@ -34,7 +34,14 @@ const resources: Array<{
   target: IsolatedPostgres
 }> = []
 
+const previousBuildEnabled = process.env.DATOOL_BUILD_ENABLED
+beforeEach(() => {
+  process.env.DATOOL_BUILD_ENABLED = "true"
+})
+
 afterEach(async () => {
+  if (previousBuildEnabled === undefined) delete process.env.DATOOL_BUILD_ENABLED
+  else process.env.DATOOL_BUILD_ENABLED = previousBuildEnabled
   for (const { database, target } of resources.splice(0)) {
     await closeTracerDatabase(database)
     await target.close()

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { requireActiveOrganization } from "@/lib/workspace-access"
 import { getProjectByOrganizationSlug } from "@/lib/project-access"
 import { TracerAppShell } from "@/components/tracer/app-shell"
+import { buildEnabled } from "@/lib/build/config"
 export default async function Layout({
   children,
   params,
@@ -31,6 +32,7 @@ export default async function Layout({
         organization={organization}
         user={user}
         project={{ id: project.id, name: project.name, slug: project.slug }}
+        buildEnabled={buildEnabled()}
       >
         {children}
       </TracerAppShell>

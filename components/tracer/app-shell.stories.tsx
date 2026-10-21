@@ -23,8 +23,10 @@ const prefix = `/p/${storybookProject.slug}`
 
 function AppShellExample({
   user = { name: "Ana Martins", email: "ana@example.com", image: null },
+  buildEnabled = false,
 }: {
   user?: AccountMenuUser
+  buildEnabled?: boolean
 }) {
   return (
     <ProjectScopeProvider
@@ -37,6 +39,7 @@ function AppShellExample({
           organization={storybookOrganization}
           project={storybookProject}
           user={user}
+          buildEnabled={buildEnabled}
         >
           <div className="space-y-4 p-4">
             <h2 className="text-lg font-semibold">Trace workspace</h2>
@@ -89,6 +92,19 @@ type Story = StoryObj<typeof AppShellExample>
 export const WorkspaceShell: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    const toggle = within(
+      canvas.getByRole("banner", { name: "Page controls" })
+    ).getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    expect(
+      canvas.queryByRole("link", { name: "Conversations" })
+    ).not.toBeInTheDocument()
+    expect(canvas.queryByText("Build", { exact: true })).not.toBeInTheDocument()
+    expect(canvas.getByRole("link", { name: "Traces" })).toHaveAttribute(
+      "href",
+      `${prefix}/traces`
+    )
     await expect(
       canvas.getByRole("banner", { name: "Page controls" })
     ).toBeVisible()
@@ -102,6 +118,7 @@ export const WorkspaceShell: Story = {
 }
 
 export const InboxSidebar: Story = {
+  render: () => <AppShellExample buildEnabled />,
   parameters: {
     nextjs: { navigation: { pathname: `${prefix}/build/inbox`, query: {} } },
   },
@@ -127,6 +144,30 @@ export const InboxSidebar: Story = {
     await expect(
       canvas.queryByRole("link", { name: "Traces" })
     ).not.toBeInTheDocument()
+  },
+}
+
+export const BuildEnabled: Story = {
+  render: () => <AppShellExample buildEnabled />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const toggle = within(
+      canvas.getByRole("banner", { name: "Page controls" })
+    ).getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    await expect(canvas.getByText("Build", { exact: true })).toBeVisible()
+    for (const [label, route] of [
+      ["Agents", "agents"],
+      ["Conversations", "conversations"],
+      ["Inbox", "inbox"],
+      ["Contacts", "contacts"],
+    ]) {
+      await expect(canvas.getByRole("link", { name: label })).toHaveAttribute(
+        "href",
+        `${prefix}/build/${route}`
+      )
+    }
   },
 }
 

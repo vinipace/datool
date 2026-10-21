@@ -118,6 +118,11 @@ describe("Build conversation ledger", () => {
       subject: "Opening hours",
       agentId: "agent-a",
       agentName: "Test agent",
+      agentAvatar: {
+        avatarUrl: null,
+        avatarStyle: "friendly",
+        avatarColor: "orange",
+      },
       status: "active",
       ticketId: null,
     })
@@ -145,7 +150,18 @@ describe("Build conversation ledger", () => {
 
     await createAgent(
       { database, projectId },
-      { id: "agent-b", name: "Other agent", slug: "other-agent" }
+      {
+        id: "agent-b",
+        name: "Other agent",
+        slug: "other-agent",
+        configuration: {
+          appearance: {
+            avatarUrl: "https://example.test/agent.png",
+            avatarStyle: "wink",
+            avatarColor: "violet",
+          },
+        },
+      }
     )
     const otherConversation = await service.getOrCreate({
       agentId: "agent-b",
@@ -170,7 +186,15 @@ describe("Build conversation ledger", () => {
       (await service.list()).items.find(
         (item) => item.id === otherConversation.id
       )
-    ).toMatchObject({ agentId: "agent-b", agentName: "Other agent" })
+    ).toMatchObject({
+      agentId: "agent-b",
+      agentName: "Other agent",
+      agentAvatar: {
+        avatarUrl: "https://example.test/agent.png",
+        avatarStyle: "wink",
+        avatarColor: "violet",
+      },
+    })
     expect((await service.list({ agentId: "missing-agent" })).items).toEqual([])
     expect(
       (

@@ -90,7 +90,9 @@ presence here; the real login verifies that they work.
 4. Send a trace, wait for the worker to persist it, and open it in Observe.
 5. Configure a sandbox as described below before running a JavaScript or Python
    scorer. LLM scorers also need a project model-provider key.
-6. To deploy customer-facing agents, follow the [Build setup guide](build.md).
+6. Build is disabled by default. To deploy customer-facing agents, set
+   `DATOOL_BUILD_ENABLED=true` in `.env` and recreate `app` and `build-worker`.
+   Follow the [Build setup guide](build.md).
    The `build-worker` service processes hosted conversations, Telegram messages,
    knowledge indexing, simulations, and campaigns.
 

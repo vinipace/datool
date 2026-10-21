@@ -393,9 +393,6 @@ function ChannelEditor({
           canConfigure
           agentHref={agentHref}
           agentId={data.agent.id}
-          onNavigate={(href) => {
-            if (!dirty || window.confirm("Discard unsaved channel changes?")) router.push(href)
-          }}
           appearance={data.agent.configuration.appearance}
           onChange={(section) => {
             if (!dirty || window.confirm("Discard unsaved channel changes?"))

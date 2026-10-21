@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 
@@ -6,7 +6,36 @@ import { createMcpServer } from "@/src/server/mcp/server"
 import type { TracerService } from "@/src/server/tracer/service"
 import { buildOperationCatalog } from "@/src/server/build/bootstrap"
 
+const previousBuildEnabled = process.env.DATOOL_BUILD_ENABLED
+beforeEach(() => {
+  process.env.DATOOL_BUILD_ENABLED = "true"
+})
+afterEach(() => {
+  if (previousBuildEnabled === undefined) delete process.env.DATOOL_BUILD_ENABLED
+  else process.env.DATOOL_BUILD_ENABLED = previousBuildEnabled
+})
+
 describe("Build MCP transport", () => {
+  test("disabled Build is neither discoverable nor callable, while Observe tools remain", async () => {
+    delete process.env.DATOOL_BUILD_ENABLED
+    const server = createMcpServer({} as TracerService, ["build:read", "build:write", "build:run", "metrics:read"])
+    const client = new Client({ name: "build-disabled-test", version: "1" })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    try {
+      await server.connect(serverTransport)
+      await client.connect(clientTransport)
+      const names = (await client.listTools()).tools.map((tool) => tool.name)
+      expect(names).toContain("query_metrics")
+      expect(names.some((name) => name.startsWith("build_"))).toBe(false)
+      const result = await client.callTool({ name: "build_list_agents", arguments: {} })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain("not found")
+    } finally {
+      await client.close()
+      await server.close()
+    }
+  })
+
   test("discovers read tools while omitting denied write and run tools", async () => {
     const server = createMcpServer({} as TracerService, ["build:read", "metrics:read"])
     const client = new Client({ name: "build-mcp-test", version: "1" })

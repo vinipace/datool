@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto"
 
 import { sql } from "drizzle-orm"
 
-import type { BuildChannel } from "@/src/lib/build/contracts"
+import {
+  agentAppearanceSchema,
+  type BuildChannel,
+} from "@/src/lib/build/contracts"
 import type { TracerDatabase } from "@/src/server/tracer/db"
 import { getTracerProjectId } from "@/src/server/tracer/db"
 import type { BuildContext } from "./context"
@@ -35,6 +38,11 @@ import {
 export type ConversationContext = BuildContext
 
 const TURN_LOCK_MS = 2 * 60 * 1000
+const agentAvatarSchema = agentAppearanceSchema.pick({
+  avatarUrl: true,
+  avatarStyle: true,
+  avatarColor: true,
+})
 
 function now() {
   return new Date().toISOString()
@@ -315,6 +323,7 @@ export class ConversationService {
     const input = listConversationsInputSchema.parse(value)
     const result = await this.database.execute<Record<string, unknown>>(sql`
       select c.*,a.name as agent_name,
+        a.current_config_json->'appearance' as agent_appearance,
         contact.display_name as contact_name,contact.id as contact_id,
         t.id as ticket_id,t.version as ticket_version,t.status as ticket_status,
         coalesce(nullif(t.subject,''),preview.subject,'') as subject
@@ -356,6 +365,7 @@ export class ConversationService {
       items: rows.map((row) => ({
         ...toConversation(row),
         agentName: row.agent_name as string | null,
+        agentAvatar: agentAvatarSchema.parse(row.agent_appearance ?? {}),
         subject: String(row.subject ?? "").slice(0, 500),
         contactId: row.contact_id as string | null,
         contactName: row.contact_name as string | null,
