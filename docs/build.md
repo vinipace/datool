@@ -129,8 +129,9 @@ customer systems.
 
 ## Authoring and operations
 
-Campaigns is temporarily unavailable in the product. Existing Campaigns page
-URLs redirect to the current project’s Agents page.
+Campaigns and the project-wide Conversation tests page are unavailable in the
+product. Their old page URLs redirect to the current project’s Agents page.
+Agent testing is available from each agent’s Test section.
 
 When an agent is open, the main sidebar shows **Agents / agent name**, with
 Overview, Instructions, Appearance, Guardrails and the other agent sections

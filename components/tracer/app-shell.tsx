@@ -128,11 +128,6 @@ const routeGroups = [
         icon: productIcons.playground,
         label: pageTitles.playground,
       },
-      {
-        href: "/build/tests",
-        icon: productIcons.buildTests,
-        label: pageTitles.buildTests,
-      },
       { href: "/evals", icon: productIcons.evals, label: pageTitles.evals },
       {
         href: "/datasets",
