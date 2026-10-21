@@ -88,6 +88,8 @@ describe("Build catalog contracts", () => {
       components: [{ type: "text", text: "{{order.status}}" }],
     })
     expect(procedure.actionRefs).toEqual([])
+    expect(() => procedureDefinitionSchema.parse({ name: "Empty skill", trigger: { type: "intent", value: "A request" } })).toThrow()
+    expect(() => procedureDefinitionSchema.parse({ ...procedure, instructions: "Do something else as well." })).toThrow()
     expect(widget.components).toHaveLength(1)
     expect("code" in widget).toBe(false)
   })
@@ -309,10 +311,11 @@ describe("durable project-scoped Build catalog", () => {
           definition: {
             name: "Lookup",
             trigger: { type: "intent", value: "lookup" },
-            steps: [{ id: "lookup", kind: "action", actionId: action.id }],
-            actionRefs: [action.id],
+            instructions: `Use [@Lookup](action:${action.slug}) after collecting the customer's order reference.`,
+            actionRefs: ["unmentioned-action"],
           },
         })
+        expect(procedure.definition.actionRefs).toEqual([action.id])
         const widget = await saveWidget(context, agent.id, {
           slug: "order-card",
           definition: {
@@ -339,6 +342,8 @@ describe("durable project-scoped Build catalog", () => {
         expect(clonedProcedures[0]?.definition.actionRefs).toEqual([
           clonedActions[0]?.id,
         ])
+        expect(clonedProcedures[0]?.definition.instructions).toBe(`Use [@Lookup](action:${clonedActions[0]?.slug}) after collecting the customer's order reference.`)
+        expect(clonedProcedures[0]?.definition.steps).toEqual([])
         expect(clonedWidgets[0]?.definition.components[0]).toMatchObject({
           type: "button",
           actionId: clonedActions[0]?.id,
@@ -387,7 +392,16 @@ describe("durable project-scoped Build catalog", () => {
           deleteAction(context, agent.id, action.id, 2),
           DefinitionConflictError
         )
-        await deleteProcedure(context, agent.id, procedure.id, 1)
+        await assert.rejects(saveProcedure(context, agent.id, {
+          definition: { name: "Unknown action skill", trigger: { type: "intent", value: "Unknown action" }, instructions: "Use [@Missing](action:not-on-this-agent)." },
+        }), /Mentioned action @not-on-this-agent is not available/)
+        const unlinked = await saveProcedure(context, agent.id, {
+          id: procedure.id,
+          expectedRevision: procedure.revision,
+          definition: { ...procedure.definition, instructions: "Ask for the customer's order reference." },
+        })
+        expect(unlinked.definition.actionRefs).toEqual([])
+        await deleteProcedure(context, agent.id, procedure.id, unlinked.revision)
         await deleteWidget(context, agent.id, widget.id, 1)
         const republished = await updateAgent(context, agent.id, {
           expectedRevision: 3,

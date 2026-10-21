@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { sql } from "drizzle-orm"
+import { generateText } from "ai"
+import { MockLanguageModelV4 } from "ai/test"
 
 import type { ActionRecord } from "@/src/lib/build/contracts"
 import type { RuntimeAgent } from "@/src/server/build/runtime"
@@ -620,6 +622,189 @@ describe("Build agent tool runtime", () => {
     )
     expect(invoked.text).toBe("order found")
     expect(invoked.status).toBe("completed")
+  }, 30_000)
+
+  test("loads skill instructions on demand and unlocks only its linked actions", async () => {
+    const { context, service } = await makeContext()
+    const linked = await saveAction(context, "agent-a", {
+      id: "lookup_skill_order",
+      slug: "lookup-skill-order",
+      definition: {
+        ...clientAction.definition,
+        id: "lookup_skill_order",
+        procedureOnly: true,
+      },
+    })
+    const unrelated = await saveAction(context, "agent-a", {
+      id: "private_billing",
+      slug: "private-billing",
+      definition: {
+        ...clientAction.definition,
+        id: "private_billing",
+        procedureOnly: true,
+      },
+    })
+    const skill = await saveProcedure(context, "agent-a", {
+      definition: {
+        name: "Check a refund",
+        trigger: {
+          type: "intent",
+          value: "The customer asks whether an order is refundable.",
+        },
+        instructions:
+          `Ask for the order reference. Use [@Order lookup](action:${linked.slug}). Explain eligibility from the approved policy; do not invent a refund.`,
+      },
+    })
+    await updateAgent(context, "agent-a", {
+      expectedRevision: 1,
+      configuration: { model: "skill-test" },
+      apply: true,
+    })
+    const usage = {
+      inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 2, text: 2, reasoning: 0 },
+    }
+    const calls: string[][] = []
+    let loadedSkillResult = ""
+    let turn = 0
+    const toolName = `procedure_${skill.id}`
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        calls.push((options.tools ?? []).map((item) => item.name))
+        const current = turn++
+        if (current === 1) {
+          const loaded = options.prompt.flatMap((message) =>
+            message.role === "tool" ? message.content : []
+          )
+          loadedSkillResult = JSON.stringify(loaded)
+        }
+        return {
+          content:
+            current === 0
+              ? [
+                  {
+                    type: "tool-call" as const,
+                    toolCallId: "load-skill",
+                    toolName,
+                    input: "{}",
+                  },
+                ]
+              : current === 1
+                ? [
+                    {
+                      type: "tool-call" as const,
+                      toolCallId: "lookup-skill",
+                      toolName: linked.id,
+                      input: "{}",
+                    },
+                  ]
+                : [
+                    {
+                      type: "text" as const,
+                      text: "The order is eligible for review.",
+                    },
+                  ],
+          finishReason: {
+            unified: current < 2 ? ("tool-calls" as const) : ("stop" as const),
+            raw: "stop",
+          },
+          usage,
+          warnings: [],
+        }
+      },
+    })
+    const executed: string[] = []
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: "agent-a",
+        channel: "telegram",
+        externalConversationId: "skill-selection",
+        requestKey: "skill-selection-1",
+        message: "Could I get my order refunded?",
+      },
+      {
+        conversationService: service,
+        dependencies: {
+          retrieveKnowledge: async () => null,
+          generateText: async (options) => {
+            const tools = options.tools as unknown as Record<
+              string,
+              {
+                execute: (
+                  input: object,
+                  options: { toolCallId: string }
+                ) => Promise<unknown>
+              }
+            >
+            if (tools[unrelated.id])
+              await rejects(
+                () =>
+                  tools[unrelated.id].execute({}, { toolCallId: "unselected" }),
+                /Load the linked skill/
+              )
+            return generateText({ ...options, model })
+          },
+          executeAction: async ({ action }) => {
+            executed.push(action.id)
+            return { output: { eligible: true } }
+          },
+        },
+      }
+    )
+    expect(result.text).toBe("The order is eligible for review.")
+    expect(loadedSkillResult).toContain(
+      "Explain eligibility from the approved policy"
+    )
+    expect(loadedSkillResult).toContain(linked.id)
+    expect(calls[0]).toContain(toolName)
+    expect(calls[0]).not.toContain(linked.id)
+    expect(calls[1]).toContain(linked.id)
+    expect(calls.flat()).not.toContain(unrelated.id)
+    expect(executed).toEqual([linked.id])
+    expect(await service.listToolCalls(result.conversation.id)).toHaveLength(1)
+  }, 30_000)
+
+  test("supplies matched keyword skill instructions to the model instead of echoing them", async () => {
+    const { context, service } = await makeContext()
+    const skill = await saveProcedure(context, "agent-a", {
+      definition: {
+        name: "Refund policy",
+        trigger: { type: "keyword", value: "refund" },
+        instructions:
+          "Ask for an order reference before checking refund eligibility.",
+      },
+    })
+    let supplied = ""
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: "agent-a",
+        channel: "telegram",
+        requestKey: "keyword-skill-1",
+        message: "I need a refund",
+      },
+      {
+        conversationService: service,
+        agent: agent(context),
+        dependencies: {
+          resolveActions: async () => [],
+          resolveProcedures: async () => [skill],
+          retrieveKnowledge: async () => null,
+          generateText: (async (options: { system: string }) => {
+            supplied = options.system
+            return {
+              text: "What is your order reference?",
+              usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            }
+          }) as never,
+        },
+      }
+    )
+    expect(supplied).toContain(
+      "Ask for an order reference before checking refund eligibility."
+    )
+    expect(result.text).toBe("What is your order reference?")
   }, 30_000)
 
   test("runs only the selected manual procedure through the trusted operation boundary", async () => {

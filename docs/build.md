@@ -129,6 +129,10 @@ customer systems.
 
 ## Authoring and operations
 
+Campaigns and the project-wide Conversation tests page are unavailable in the
+product. Their old page URLs redirect to the current project’s Agents page.
+Agent testing is available from each agent’s Test section.
+
 When an agent is open, the main sidebar shows **Agents / agent name**, with
 Overview, Instructions, Appearance, Guardrails and the other agent sections
 nested underneath. The parent link returns to the agent list. The same links
@@ -137,10 +141,24 @@ unsaved draft. Actions, procedures, and widgets are selected from a list before
 editing. Advanced identifiers and JSON configuration stay in expandable sections.
 On narrow screens, customer details open in a sheet.
 
+Actions, Widgets and Skills share a collection header with their resource tab,
+Templates, search and collection controls. Actions offers a searchable catalog
+of existing action starters. Widgets offers an image gallery of twelve templates
+across Sales, Support, E-commerce, Booking and Insights: Book a demo, Buy products,
+Get cart, Usage chart, Gym class booking, Hotel booking, Collect leads, Fetch
+weather, Support request, Quick choices, Order lookup and Order summary. Each
+image is captured from the actual template. Open a live sandbox preview with
+example data, then use it as an editable, disabled draft. Connect its Functions
+to your agent's actions before enabling interactive widgets. The sample products,
+classes, hotel and weather are examples; templates do not connect to live services
+automatically.
+
 Widgets are authored as JSX in Code, with an editable Zod Schema and JSON
 example data under Default data. Export a default React component receiving
 `{ data }`; built-ins include Box, Col, Row, Text, Card, Button, Form, List,
-and Image. React hooks and imports from `react` or `@datool/widgets` are supported.
+and Image. Image accepts HTTPS sources or the bundled example photos under
+`/widget-template-assets/`. React hooks and imports from `react` or
+`@datool/widgets` are supported.
 The schema exports a Zod schema (imports from `zod`) and validates and parses
 state data before preview or customer rendering. Code and schema run only in
 an isolated iframe. Syntax is also checked when saving; server code never
@@ -155,7 +173,7 @@ saved; previously issued conversations retain their original definition.
 | Agents                    | Configuration, applied revisions, cloning, and archive lifecycle                                   |
 | Knowledge                 | Text, Q&A, document extraction, website/sitemap crawling, indexing, refresh, retrieval, provenance |
 | Actions                   | Validated HTTP/client/widget/handoff operations with channel and approval constraints              |
-| Procedures                | Bounded steps, conditions, variables, action references, and conversation continuations            |
+| Skills                    | Reusable task instructions, when-to-use guidance, linked actions, and editable templates; existing structured procedures remain supported |
 | Playground                | Hosted runtime with conversation and tool evidence                                                 |
 | Conversations             | All customer chats, their transcripts, and conversation ownership, including chats without tickets |
 | Inbox                     | Escalated support cases, ticket status, assignment, notes, replies, routing, macros, and satisfaction records |
@@ -164,6 +182,30 @@ saved; previously issued conversations retain their original definition.
 | Dashboards                | Customer experience template with conversation activity, inbox, handoffs, and satisfaction metrics |
 | Simulations               | Frozen configurations, customer scenarios, mocked actions, transcripts, and explicit verdicts      |
 | Copilot                   | Proposed changes, review, approval, application, and audit history                                 |
+
+Skills teach an agent how to handle a specific task. **My skills** lists the
+agent's saved skills; **Templates** offers support, exchange, refund, billing
+and lead/meeting starters with an instruction preview. Using a template opens
+an editable, disabled draft. Review your policies and mention existing actions
+with `@` in Instructions, then enable and save the skill when it is ready.
+
+Each skill has a name, description, when-to-use guidance and Markdown instructions.
+The agent always chooses skills by relevance: the model sees the name and
+when-to-use description, then loads the instructions through a tool when relevant.
+Type `@` to search actions and insert an inline mention. Mentions are stored as Markdown links to
+stable action slugs; the server derives action references from those links.
+Removing a mention removes its link, and unknown references are rejected.
+Linked actions marked
+procedure-only become available for that turn after selection; channel and
+approval constraints still apply. Instructions guide the model; they are not
+emitted as a scripted customer message.
+
+Existing structured procedures keep their bounded steps, variables, branches
+and continuations. The `section=procedures` deep link and `build_*_procedure`
+operations remain compatible, including legacy keyword, event and manual triggers.
+Saving through the Skills editor uses relevance-based selection. Definitions
+accept either `instructions` or structured `steps`; both use the existing
+versioned catalog without a migration.
 
 Incoming messages create conversations, not tickets. A runtime handoff, operator
 takeover, or explicit `build_create_ticket` creates the support case. Repeated

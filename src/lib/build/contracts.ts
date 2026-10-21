@@ -315,25 +315,46 @@ export const procedureStepSchema = z.discriminatedUnion("kind", [
 ])
 export type ProcedureStep = z.infer<typeof procedureStepSchema>
 
-export const procedureDefinitionSchema = z.object({
-  name: z.string().min(1).max(160),
-  description: z.string().max(2_000).default(""),
-  enabled: z.boolean().default(true),
-  trigger: procedureTriggerSchema,
-  variables: z.record(z.string().max(120), z.json()).default({}),
-  steps: z.array(procedureStepSchema).min(1).max(15),
-  branches: z
-    .array(
-      z.object({
-        id: z.string().min(1).max(120),
-        condition: z.string().min(1).max(2_000),
-        steps: z.array(procedureStepSchema).max(15),
+export const procedureDefinitionSchema = z
+  .object({
+    name: z.string().min(1).max(160),
+    description: z.string().max(2_000).default(""),
+    enabled: z.boolean().default(true),
+    trigger: procedureTriggerSchema,
+    instructions: z.string().max(32_000).optional(),
+    variables: z.record(z.string().max(120), z.json()).default({}),
+    steps: z.array(procedureStepSchema).max(15).default([]),
+    branches: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(120),
+          condition: z.string().min(1).max(2_000),
+          steps: z.array(procedureStepSchema).max(15),
+        })
+      )
+      .max(5)
+      .default([]),
+    actionRefs: z.array(z.string().min(1).max(120)).max(100).default([]),
+  })
+  .superRefine((definition, context) => {
+    const hasInstructions = Boolean(definition.instructions?.trim())
+    if (!hasInstructions && !definition.steps.length)
+      context.addIssue({
+        code: "custom",
+        path: ["instructions"],
+        message: "Add skill instructions or at least one structured step.",
       })
+    if (
+      hasInstructions &&
+      (definition.steps.length || definition.branches.length)
     )
-    .max(5)
-    .default([]),
-  actionRefs: z.array(z.string().min(1).max(120)).max(100).default([]),
-})
+      context.addIssue({
+        code: "custom",
+        path: ["steps"],
+        message: "Use skill instructions or structured steps, not both.",
+      })
+  })
+
 export type ProcedureDefinition = z.infer<typeof procedureDefinitionSchema>
 
 export type ProcedureRecord = {

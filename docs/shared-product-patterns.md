@@ -695,6 +695,12 @@ credentials stay with the action editor. Saves use the same versioned Build/MCP
 operations; the agent editor automatically applies saved definition changes for
 customer use.
 
+Create Actions includes **Show Widget** under Custom actions. Its editor uses
+`action-widget-picker.tsx` to search this agent’s widgets by name; disabled
+widgets remain visible but cannot be selected. A widget must be chosen before
+the action can be saved. The Actions collection uses the same `px-3 py-1`
+content spacing as the Widgets collection.
+
 `components/ui/chat-rich-content.tsx` owns widget rendering in both chats and the
 editor preview. Default state data is merged with named preview state and pinned
 action inputs; template values are rendered as escaped text, never executed.
@@ -705,10 +711,19 @@ action. Theme controls reuse the scoped `datool-chat-surface` tokens.
 
 ## Agent editing
 
-Settings combines identity and appearance in the shared, single-column form
-layout, using `InspectorSection` and `FormRow`. Revision history and the setup
-checklist stay in disclosures below the appearance fields.
+Settings uses one flat, single-column form with `FormRow` fields for display name,
+slug, description and avatar, without Identity or Appearance sections. The
+display name edits the agent name and its legacy appearance name together.
+Revision history and the setup checklist stay in disclosures below the fields.
+Welcome message, input placeholder and suggested replies are configured in the
+chat widget's channel editor, outside agent Settings.
 The former `section=appearance` URL opens Settings for existing bookmarks.
+
+Guardrails uses four always-visible groups: Content & access, Conversation limits,
+Traffic & spam, and Daily limits. Shared `FormRow` descriptions explain units,
+optional values and scope; labels remain distinct from accessible descriptions.
+Daily limits describe the existing UTC reset. The editor retains multiline drafts
+while normalizing blocked terms and country codes for autosave.
 
 `components/build/agents/agent-editor.tsx` omits the separate revision/save toolbar.
 Existing agents automatically save and apply valid identity, instruction,
@@ -725,8 +740,13 @@ saving and saved states. New agents still require the explicit Create agent acti
 The workspace sidebar switches to the agent's navigation while its editor or a
 channel opened from that agent owns `AgentSidebarTarget`. The agent avatar/name
 returns to the agent list. Analytics comes first, Build and Activity are
-collapsible groups, and Activity contains Leads and Collected data. The
+collapsible groups, and Activity contains Conversations, Leads and Collected data.
+Conversations opens inside the agent editor at `section=conversations`, retaining
+the agent sidebar. It reuses the shared all-chats collection with a fixed agent
+scope applied before pagination; URL filters cannot override or remove it. The
 current agent's Integrations page remains reachable from this navigation.
+The Conversations table includes an Agent column with the current agent name,
+including archived agents, using the shared column visibility and ordering controls.
 Home and the other workspace groups are hidden while agent navigation is active.
 
 Inbox uses its own taller navigation: New Ticket, Search, My Inbox, Mentions,

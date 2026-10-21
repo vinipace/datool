@@ -13,6 +13,7 @@ export function CollectionPanel({
   children,
   selectionControls,
   heading,
+  navigation,
   refreshInMenu: alwaysRefreshInMenu = false,
   displayIconOnly = false,
   contentClassName,
@@ -20,6 +21,7 @@ export function CollectionPanel({
   label: string
   selectionControls?: React.ReactNode
   heading?: React.ReactNode
+  navigation?: React.ReactNode
   refreshInMenu?: boolean
   displayIconOnly?: boolean
   contentClassName?: string
@@ -84,6 +86,7 @@ export function CollectionPanel({
             </div>
           )}
           {heading && <div className="min-w-0">{heading}</div>}
+          {navigation && <div className="shrink-0">{navigation}</div>}
           <div
             ref={setSelection}
             className={cn(

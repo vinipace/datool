@@ -61,6 +61,7 @@ describe("agent autosave", () => {
     await store.flush()
     expect(revisions).toEqual([1, 2])
     expect(persisted.name).toBe("Newest edit")
+    expect(persisted.configuration.appearance.displayName).toBe("Newest edit")
     expect(store.getSnapshot().draft.name).toBe("Newest edit")
     expect(store.getSnapshot().saved?.appliedRevision).toBe(3)
     expect(store.pending()).toBe(false)
@@ -153,5 +154,8 @@ describe("agent autosave", () => {
     await store.flush()
     expect(writes).toBe(1)
     expect(store.getSnapshot().saved?.name).toBe("New agent")
+    expect(
+      store.getSnapshot().saved?.configuration.appearance.displayName
+    ).toBe("New agent")
   })
 })

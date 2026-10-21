@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   Archive,
   ArrowLeft,
-  ChevronDown,
   Copy,
   FileText,
   MessagesSquare,
@@ -17,7 +16,6 @@ import {
   Save,
   Check,
   LoaderCircle,
-  Settings2,
   SquarePlus,
   Network,
   Trash2,
@@ -39,7 +37,6 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -71,6 +68,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { useRemote } from "@/components/tracer/hooks"
 import { CollectionRow, CollectionTable, CollectionTableBody } from "@/components/tracer/collection-table"
 import { collectionTable } from "@/components/tracer/collection-table-styles"
+import { CollectionPanel } from "@/components/tracer/collection-panel"
+import { CollectionPage, CollectionSearch } from "@/components/tracer/collection-page"
 import { HeaderSlot } from "@/components/tracer/collection-header"
 import { ProjectModelField } from "@/components/tracer/project-model-field"
 import { useWorkspaceHref } from "@/components/tracer/workspace-path"
@@ -88,7 +87,10 @@ import { AgentOverview } from "./agent-overview"
 import { KnowledgePages } from "./knowledge-pages"
 import { KnowledgeSourceRow } from "./knowledge-source-row"
 import { WidgetsTab } from "./widgets-tab"
+import { ActionWidgetPicker } from "./action-widget-picker"
 import { AgentPlayground } from "./agent-playground"
+import { AgentGuardrails } from "./agent-guardrails"
+import { SkillsTab } from "./skills-tab"
 import { IntegrationActionFields } from "./integration-action-fields"
 import { IntegrationsTab } from "./integrations-tab"
 import { ActionCatalog, ActionIcon, ActionTypeLabel } from "./action-catalog"
@@ -98,6 +100,7 @@ import {
   type ActionPreset,
 } from "./action-presets"
 import { ChannelsManager } from "@/components/build/operations/integrations-page"
+import { InboxPage } from "@/components/build/operations/inbox-page"
 import {
   buildCall,
   buildOperations,
@@ -111,8 +114,6 @@ import type {
   AgentRevision,
   BuildChannel,
   ManagedAgent,
-  ProcedureDefinition,
-  ProcedureRecord,
 } from "@/src/lib/build/contracts"
 import {
   agentDraft as defaultDraft,
@@ -279,7 +280,10 @@ function BuildAgentEditorContent({
       url.pathname = saved ? workspaceHref(`/build/agents/${encodeURIComponent(saved.id)}${next === "test" ? "/test" : ""}`) : url.pathname
       url.searchParams.set("section", next)
       if (next !== "test") {
-        for (const key of ["datasetId", "item", "itemTab", "objectView", "filter", "inspector"])
+        for (const key of [
+          "datasetId", "item", "itemTab", "objectView", "filter", "inspector",
+          "conversation", "ticket", "q", "status", "agentId", "view",
+        ])
           url.searchParams.delete(key)
       }
       if (url.href !== window.location.href)
@@ -477,20 +481,6 @@ function BuildAgentEditorContent({
           </DropdownMenu>
         </HeaderSlot>
       ) : null}
-      {active === "actions" && saved ? (
-        <div className="shrink-0 border-b border-border bg-muted/30 px-3">
-          <TabsList variant="underline" aria-label="Actions">
-            <TabsTrigger value="mine">
-              <Zap className="size-4" />
-              My Actions
-            </TabsTrigger>
-            <TabsTrigger value="create">
-              <SquarePlus className="size-4" />
-              Create Actions
-            </TabsTrigger>
-          </TabsList>
-        </div>
-      ) : null}
       {error || saveState.error ? (
         <BuildErrorState
           message={error ?? formatBuildError(saveState.error)}
@@ -508,7 +498,7 @@ function BuildAgentEditorContent({
           ref={mainRef}
           role="region"
           aria-label="Agent editor"
-          className={`min-h-0 min-w-0 flex-1 ${active === "playground" ? "overflow-hidden" : "overflow-y-auto"}`}
+          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
           {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} /> : null}
           {active === "overview" && saved ? (
@@ -549,8 +539,8 @@ function BuildAgentEditorContent({
               hidden={active !== "guardrails"}
               aria-hidden={active !== "guardrails"}
             >
-              <GuardrailsTab
-                draft={draft}
+              <AgentGuardrails
+                configuration={draft.configuration}
                 onChange={(configuration) =>
                   updateDraft("configuration", configuration)
                 }
@@ -596,6 +586,7 @@ function BuildAgentEditorContent({
                 agentId={saved.id}
                 active={active === "actions"}
                 onManageIntegrations={() => selectTab("integrations")}
+                view={actionsView}
                 onViewChange={setActionsView}
                 onDefinitionDirty={store.definitionsChanged}
               />
@@ -606,7 +597,8 @@ function BuildAgentEditorContent({
               hidden={active !== "procedures"}
               aria-hidden={active !== "procedures"}
             >
-              <ProceduresTab
+              <SkillsTab
+                active={active === "procedures"}
                 agentId={saved.id}
                 onDefinitionDirty={store.definitionsChanged}
               />
@@ -634,6 +626,13 @@ function BuildAgentEditorContent({
           ) : null}
           {saved && (active === "leads" || active === "collected-data") ? (
             <AgentActivity key={`${saved.id}:${active}`} agentId={saved.id} section={active} />
+          ) : null}
+          {active === "conversations" && saved ? (
+            <InboxPage
+              key={saved.id}
+              view="conversations"
+              fixedAgentId={saved.id}
+            />
           ) : null}
           {active === "playground" && saved ? (
             <div className="h-full">
@@ -719,47 +718,45 @@ function SettingsTab({
           {agent ? "Settings" : "Create your agent"}
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Manage your agent’s identity, appearance and welcome experience.
+          Manage your agent’s identity and appearance.
         </p>
       </div>
       <div className="max-w-3xl">
-        <InspectorSection
-          label="Identity"
-          icon={<FileText className="size-3.5" />}
+        <FormRow label="Display name" htmlFor="agent-name">
+          <Input
+            id="agent-name"
+            required
+            maxLength={160}
+            value={draft.name}
+            onChange={(event) => onChange("name", event.target.value)}
+          />
+        </FormRow>
+        <FormRow label="Slug" htmlFor="agent-slug">
+          <Input
+            id="agent-slug"
+            required
+            maxLength={160}
+            pattern="[a-zA-Z0-9_.-]+"
+            value={draft.slug}
+            disabled={!!agent}
+            onChange={(event) => onChange("slug", event.target.value)}
+          />
+        </FormRow>
+        <FormRow
+          label="Description"
+          htmlFor="agent-description"
+          layout="vertical"
         >
-          <FormRow label="Workspace name" htmlFor="agent-name">
-            <Input
-              id="agent-name"
-              required
-              maxLength={160}
-              value={draft.name}
-              onChange={(event) => onChange("name", event.target.value)}
-            />
-          </FormRow>
-          <FormRow label="Slug" htmlFor="agent-slug">
-            <Input
-              id="agent-slug"
-              required
-              maxLength={160}
-              pattern="[a-zA-Z0-9_.-]+"
-              value={draft.slug}
-              disabled={!!agent}
-              onChange={(event) => onChange("slug", event.target.value)}
-            />
-          </FormRow>
-          <InspectorSection label="Description" variant="form">
-            <Textarea
-              aria-label="Agent description"
-              rows={3}
-              autoSize
-              maxLength={2000}
-              value={draft.description}
-              onChange={(event) => onChange("description", event.target.value)}
-            />
-          </InspectorSection>
-        </InspectorSection>
-        <AppearanceAndGuardrails
-          section="appearance"
+          <Textarea
+            id="agent-description"
+            rows={3}
+            autoSize
+            maxLength={2000}
+            value={draft.description}
+            onChange={(event) => onChange("description", event.target.value)}
+          />
+        </FormRow>
+        <AgentAppearanceFields
           config={draft.configuration}
           onChange={(configuration) => onChange("configuration", configuration)}
         />
@@ -1029,390 +1026,39 @@ function InstructionsTab({
   )
 }
 
-function GuardrailsTab({
-  draft,
-  onChange,
-}: {
-  draft: ReturnType<typeof defaultDraft>
-  onChange: (configuration: AgentConfiguration) => void
-}) {
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6">
-      <div>
-        <p className="text-xs font-medium tracking-[0.16em] text-foreground-subtle uppercase">
-          Agent safety
-        </p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight">
-          Guardrails
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-          Set the safety, usage and abuse limits that protect customers and your
-          budget.
-        </p>
-      </div>
-      <AppearanceAndGuardrails
-        section="guardrails"
-        config={draft.configuration}
-        onChange={onChange}
-      />
-    </div>
-  )
-}
-
-function AppearanceAndGuardrails({
+function AgentAppearanceFields({
   config,
   onChange,
-  section = "both",
 }: {
   config: AgentConfiguration
   onChange: (configuration: AgentConfiguration) => void
-  section?: "both" | "appearance" | "guardrails"
 }) {
   const appearance = config.appearance
-  const guardrails = config.guardrails
   return (
-    <div
-      className={section === "both" ? "grid gap-4 xl:grid-cols-2" : "max-w-3xl"}
-    >
-      {section !== "guardrails" ? (
-        <InspectorSection
-          label="Appearance"
-          icon={<Globe className="size-3.5" />}
-          defaultOpen={section !== "both"}
-        >
-          <FormRow label="Display name" htmlFor="appearance-name">
-            <Input
-              id="appearance-name"
-              value={appearance.displayName}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    displayName: event.target.value,
-                  },
-                })
-              }
-            />
-          </FormRow>
-          <FormRow label="Avatar" layout="vertical">
-            <AgentAvatarPicker
-              value={appearance}
-              onChange={(next) => onChange({ ...config, appearance: next })}
-            />
-          </FormRow>
-          <FormRow label="Custom image URL" htmlFor="appearance-avatar">
-            <Input
-              id="appearance-avatar"
-              type="url"
-              placeholder="https://…"
-              value={appearance.avatarUrl ?? ""}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    avatarUrl: event.target.value || null,
-                  },
-                })
-              }
-            />
-          </FormRow>
-          <InspectorSection label="Welcome message" variant="form">
-            <Textarea
-              aria-label="Welcome message"
-              rows={3}
-              autoSize
-              value={appearance.welcomeMessage}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    welcomeMessage: event.target.value,
-                  },
-                })
-              }
-            />
-          </InspectorSection>
-          <FormRow label="Input placeholder" htmlFor="appearance-placeholder">
-            <Input
-              id="appearance-placeholder"
-              value={appearance.inputPlaceholder}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    inputPlaceholder: event.target.value,
-                  },
-                })
-              }
-            />
-          </FormRow>
-          <InspectorSection label="Suggested replies" variant="form">
-            <Textarea
-              aria-label="Suggested replies"
-              rows={3}
-              autoSize
-              placeholder="One reply per line"
-              value={appearance.suggestedReplies.join("\n")}
-              onChange={(event) =>
-                onChange({
-                  ...config,
-                  appearance: {
-                    ...appearance,
-                    suggestedReplies: event.target.value
-                      .split("\n")
-                      .map((item) => item.trim())
-                      .filter(Boolean),
-                  },
-                })
-              }
-            />
-          </InspectorSection>
-        </InspectorSection>
-      ) : null}
-      {section !== "appearance" ? (
-        <InspectorSection
-          label="Guardrails"
-          icon={<Settings2 className="size-3.5" />}
-          defaultOpen
-        >
-          <InspectorSection label="Safety" variant="form" defaultOpen>
-            <InspectorSection label="Blocked topics" variant="form">
-              <Textarea
-                aria-label="Blocked topics"
-                rows={3}
-                autoSize
-                placeholder="One topic per line"
-                value={guardrails.blockedTopics.join("\n")}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      blockedTopics: event.target.value
-                        .split("\n")
-                        .map((item) => item.trim())
-                        .filter(Boolean),
-                    },
-                  })
-                }
-              />
-            </InspectorSection>
-            <InspectorSection label="Blocked countries" variant="form">
-              <Textarea
-                aria-label="Blocked countries"
-                rows={2}
-                autoSize
-                placeholder={"BR\nUS"}
-                value={guardrails.blockedCountries.join("\n")}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      blockedCountries: event.target.value
-                        .split("\n")
-                        .map((item) => item.trim().toUpperCase())
-                        .filter(Boolean),
-                    },
-                  })
-                }
-              />
-            </InspectorSection>
-            <FormRow
-              label="Require human for actions"
-              htmlFor="guardrail-human"
-            >
-              <Switch
-                id="guardrail-human"
-                checked={guardrails.requireHumanForActions}
-                onCheckedChange={(value) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      requireHumanForActions: value,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-          </InspectorSection>
-          <InspectorSection
-            label="Usage limits and budget"
-            variant="form"
-            defaultOpen
-          >
-            <FormRow label="Max input characters" htmlFor="guardrail-input">
-              <Input
-                id="guardrail-input"
-                type="number"
-                min={1}
-                max={100000}
-                value={guardrails.maxInputCharacters}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxInputCharacters: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Max output tokens" htmlFor="guardrail-output">
-              <Input
-                id="guardrail-output"
-                type="number"
-                min={1}
-                max={64000}
-                value={guardrails.maxOutputTokens}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxOutputTokens: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Max turns" htmlFor="guardrail-turns">
-              <Input
-                id="guardrail-turns"
-                type="number"
-                min={1}
-                max={200}
-                value={guardrails.maxTurns}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxTurns: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Daily turn limit" htmlFor="guardrail-daily-turns">
-              <Input
-                id="guardrail-daily-turns"
-                type="number"
-                min={1}
-                max={10000000}
-                value={guardrails.dailyTurnLimit ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      dailyTurnLimit: event.target.value
-                        ? Number(event.target.value)
-                        : null,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Daily budget (USD)" htmlFor="guardrail-budget">
-              <Input
-                id="guardrail-budget"
-                type="number"
-                min={0}
-                max={1000000}
-                step={0.01}
-                value={guardrails.dailyBudgetUsd ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      dailyBudgetUsd: event.target.value
-                        ? Number(event.target.value)
-                        : null,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-          </InspectorSection>
-          <InspectorSection
-            label="Abuse protection"
-            variant="form"
-            defaultOpen={false}
-          >
-            <p className="mb-3 text-xs text-foreground-muted">
-              Protect access from bursts and repeated messages. These limits are
-              optional and apply in addition to the usage controls above.
-            </p>
-            <FormRow label="Requests per minute" htmlFor="guardrail-rpm">
-              <Input
-                id="guardrail-rpm"
-                type="number"
-                min={1}
-                max={100000}
-                value={guardrails.requestsPerMinute}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      requestsPerMinute: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow
-              label="Max concurrent turns"
-              htmlFor="guardrail-concurrency"
-            >
-              <Input
-                id="guardrail-concurrency"
-                type="number"
-                min={1}
-                max={1000}
-                value={guardrails.maxConcurrentTurns}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      maxConcurrentTurns: Number(event.target.value),
-                    },
-                  })
-                }
-              />
-            </FormRow>
-            <FormRow label="Spam after messages" htmlFor="guardrail-spam">
-              <Input
-                id="guardrail-spam"
-                type="number"
-                min={2}
-                max={100}
-                value={guardrails.spamAfterMessages ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...config,
-                    guardrails: {
-                      ...guardrails,
-                      spamAfterMessages: event.target.value
-                        ? Number(event.target.value)
-                        : null,
-                    },
-                  })
-                }
-              />
-            </FormRow>
-          </InspectorSection>
-        </InspectorSection>
-      ) : null}
+    <div className="max-w-3xl">
+      <FormRow label="Avatar" layout="vertical">
+        <AgentAvatarPicker
+          value={appearance}
+          onChange={(next) => onChange({ ...config, appearance: next })}
+        />
+      </FormRow>
+      <FormRow label="Custom image URL" htmlFor="appearance-avatar">
+        <Input
+          id="appearance-avatar"
+          type="url"
+          placeholder="https://…"
+          value={appearance.avatarUrl ?? ""}
+          onChange={(event) =>
+            onChange({
+              ...config,
+              appearance: {
+                ...appearance,
+                avatarUrl: event.target.value || null,
+              },
+            })
+          }
+        />
+      </FormRow>
     </div>
   )
 }
@@ -1696,7 +1342,7 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="w-full min-w-0 space-y-5 px-4 py-6 sm:px-6">
+    <div className="w-full min-w-0 space-y-5 px-3 pb-1 pt-4">
       {error && !showSource ? (
         <Notice role="alert" variant="error">
           {error}
@@ -2177,44 +1823,16 @@ function readFileBase64(file: File) {
   })
 }
 
-function ResourceEditorPrompt({
-  resource,
-  description,
-  actionLabel,
-  onCreate,
-}: {
-  resource: string
-  description: string
-  actionLabel: string
-  onCreate: () => void
-}) {
-  return (
-    <Card className="self-start border-dashed">
-      <CardHeader>
-        <CardTitle>
-          Select or create {resource === "action" ? "an" : "a"}{" "}
-          {resource.toLowerCase()}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button type="button" size="sm" onClick={onCreate}>
-          <Plus className="size-3.5" />
-          {actionLabel}
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
 function ActionsTab({
   agentId,
   active,
   onManageIntegrations,
   onViewChange,
+  view,
   onDefinitionDirty,
 }: {
   agentId: string
+  view: string
   onViewChange: (value: string) => void
   active: boolean
   onManageIntegrations: () => void
@@ -2239,7 +1857,13 @@ function ActionsTab({
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [message, setMessage] = React.useState<string | null>(null)
-  const rows = state.data ?? []
+  const [search, setSearch] = React.useState("")
+  const [templateSearch, setTemplateSearch] = React.useState("")
+  const rows = (state.data ?? []).filter(({ definition }) =>
+    `${definition.name} ${definition.description} ${definition.type}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase())
+  )
   const futureChannels = draft.channels.filter(
     (item) => !supportedChannelOptions.includes(item)
   )
@@ -2270,6 +1894,10 @@ function ActionsTab({
   async function saveAction(event: React.FormEvent) {
     event.preventDefault()
     if (pending || !draft.id.trim() || !draft.name.trim()) return
+    if (draft.type === "widget" && !draft.widgetId.trim()) {
+      setError("Choose a widget to show.")
+      return
+    }
     setPending(true)
     setError(null)
     setMessage(null)
@@ -2318,116 +1946,187 @@ function ActionsTab({
     }
   }
   return (
-    <div className="w-full min-w-0 space-y-8 px-4 py-6 sm:px-6">
-      {error && !selected && !isCreating ? (
-        <Notice role="alert" variant="error">
-          {error}
-        </Notice>
-      ) : null}
-      {message ? (
-        <Notice role="status" variant="success">
-          {message}
-        </Notice>
-      ) : null}
-      <TabsContent value="create">
-        <ActionCatalog onCreate={beginAction} />
-      </TabsContent>
-      <TabsContent value="mine" className="min-w-0 space-y-3">
-        {state.error ? (
-          <BuildErrorState
-            message={state.error.message}
-            onRetry={state.refresh}
-          />
-        ) : null}
-        {state.data === null && !state.error ? (
-          <LoadingState compact label="Loading actions" />
-        ) : rows.length ? (
-          <CollectionTable
-            widths={[300, 160, 360, 120, 90]}
-            columnIds={["name", "type", "description", "status", "revision"]}
-            displayControls={false}
-            enableRowHeight={false}
-            enableCardView={false}
-            reorderable={false}
-          >
-            <thead className={collectionTable.head}>
-              <tr>
-                <th aria-hidden className={collectionTable.heading} />
-                {["Action", "Type", "Description", "Status", "Revision"].map(
-                  (label) => (
-                    <th key={label} className={collectionTable.heading}>
-                      {label}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <CollectionTableBody rows={rows}>
-              {(action, index) => (
-                <CollectionRow key={action.id} onClick={() => selectAction(action)}>
-                  <td className={collectionTable.cell}>
-                    <span className="text-xs text-foreground-muted">
-                      {index + 1}
-                    </span>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="max-w-full justify-start px-0"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        selectAction(action)
-                      }}
-                    >
-                      <ActionIcon type={action.definition.type} size="sm" />
-                      <span className="truncate">{action.definition.name}</span>
-                    </Button>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <ActionTypeLabel type={action.definition.type} />
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <span
-                      className="block truncate text-foreground-muted"
-                      title={action.definition.description}
-                    >
-                      {action.definition.description || "—"}
-                    </span>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <BuildStatus
-                      state={action.definition.enabled ? "active" : "paused"}
-                    />
-                  </td>
-                  <td className={collectionTable.cell}>
-                    <span className="text-foreground-muted">
-                      v{action.revision}
-                    </span>
-                  </td>
-                </CollectionRow>
+    <>
+      <CollectionPanel
+        label="Actions"
+        navigation={
+          <TabsList aria-label="Actions">
+            <TabsTrigger value="mine">
+              <Zap className="size-4" />
+              My actions
+            </TabsTrigger>
+            <TabsTrigger value="create">
+              <SquarePlus className="size-4" />
+              Templates
+            </TabsTrigger>
+          </TabsList>
+        }
+      >
+        <CollectionPage
+          className="contents"
+          state={
+            view === "mine"
+              ? state
+              : {
+                  data: [],
+                  error: null,
+                  isLoading: false,
+                  isRefreshing: false,
+                  refresh: state.refresh,
+                }
+          }
+          loadingLabel="Loading actions"
+          header={{
+            children: (
+              <CollectionSearch
+                label={view === "mine" ? "Search actions" : "Search templates"}
+                value={view === "mine" ? search : templateSearch}
+                onChange={view === "mine" ? setSearch : setTemplateSearch}
+              />
+            ),
+            actions:
+              view === "mine" ? (
+                <Button
+                  size="sm"
+                  aria-label="New action"
+                  onClick={() => onViewChange("create")}
+                >
+                  <Plus />
+                  <span className="hidden @min-[480px]/page:inline">
+                    New action
+                  </span>
+                </Button>
+              ) : undefined,
+            showRefresh: view === "mine",
+            showExport: view === "mine",
+            exportRows: rows,
+            exportName: "actions",
+          }}
+          toolbar={
+            <>
+              {error && !selected && !isCreating && (
+                <Notice role="alert" variant="error">
+                  {error}
+                </Notice>
               )}
-            </CollectionTableBody>
-          </CollectionTable>
-        ) : state.data !== null && !state.error ? (
-          <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center">
-            <p className="text-sm font-medium">No actions added yet</p>
-            <p className="mt-1 text-sm text-foreground-muted">
-              Give your agent something new to do with an action.
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              className="mt-4"
-              onClick={() => onViewChange("create")}
+              {message && (
+                <Notice role="status" variant="success">
+                  {message}
+                </Notice>
+              )}
+            </>
+          }
+        >
+          <TabsContent value="create" className="pt-4 pb-6">
+            <ActionCatalog onCreate={beginAction} search={templateSearch} />
+          </TabsContent>
+          <TabsContent value="mine">
+            <CollectionTable
+              widths={[300, 160, 360, 120, 90]}
+              columnIds={["name", "type", "description", "status", "revision"]}
+              persistenceKey={`build-actions:${agentId}`}
             >
-              <Plus className="size-3.5" />
-              Create action
-            </Button>
-          </div>
-        ) : null}
-      </TabsContent>
+              <thead className={collectionTable.head}>
+                <tr>
+                  <th aria-hidden className={collectionTable.heading} />
+                  {["Action", "Type", "Description", "Status", "Revision"].map(
+                    (label) => (
+                      <th key={label} className={collectionTable.heading}>
+                        {label}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <CollectionTableBody
+                rows={rows}
+                empty={
+                  <tr>
+                    <td colSpan={6} className="px-4 py-20 text-center">
+                      <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+                        <Zap
+                          className="size-7 text-foreground-muted"
+                          aria-hidden
+                        />
+                        <p className="text-sm font-medium">
+                          {search
+                            ? "No matching actions"
+                            : "Give your agent something to do"}
+                        </p>
+                        <p className="text-sm leading-6 text-foreground-muted">
+                          {search
+                            ? "Try another name, description or action type."
+                            : "Use a template to connect an app, show a widget, collect details or hand off to your team."}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            search ? setSearch("") : onViewChange("create")
+                          }
+                        >
+                          {search ? "Clear search" : "Browse templates"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              >
+                {(action, index) => (
+                  <CollectionRow
+                    key={action.id}
+                    onClick={() => selectAction(action)}
+                  >
+                    <td className={collectionTable.cell}>
+                      <span className="text-xs text-foreground-muted">
+                        {index + 1}
+                      </span>
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="max-w-full justify-start px-0"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          selectAction(action)
+                        }}
+                      >
+                        <ActionIcon type={action.definition.type} size="sm" />
+                        <span className="truncate">
+                          {action.definition.name}
+                        </span>
+                      </Button>
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <ActionTypeLabel type={action.definition.type} />
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <span
+                        className="block truncate text-foreground-muted"
+                        title={action.definition.description}
+                      >
+                        {action.definition.description || "—"}
+                      </span>
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <BuildStatus
+                        state={action.definition.enabled ? "active" : "paused"}
+                      />
+                    </td>
+                    <td className={collectionTable.cell}>
+                      <span className="text-foreground-muted">
+                        v{action.revision}
+                      </span>
+                    </td>
+                  </CollectionRow>
+                )}
+              </CollectionTableBody>
+            </CollectionTable>
+          </TabsContent>
+        </CollectionPage>
+      </CollectionPanel>
       <Sheet
         open={active && Boolean(selected || isCreating)}
         onOpenChange={(open) => {
@@ -2528,7 +2227,14 @@ function ActionsTab({
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
                     {(
-                      ["integration", "http", "client", "widget", "form", "handoff"] as const
+                      [
+                        "integration",
+                        "http",
+                        "client",
+                        "widget",
+                        "form",
+                        "handoff",
+                      ] as const
                     ).map((type) => (
                       <SelectItem key={type} value={type}>
                         <ActionTypeLabel type={type} />
@@ -2579,19 +2285,15 @@ function ActionsTab({
               ) : null}
               {draft.type === "widget" ? (
                 <>
-                  <FormRow
-                    label="Widget ID"
-                    htmlFor="action-widget"
-                    layout="vertical"
-                    variant="plain"
-                  >
-                    <Input
-                      id="action-widget"
-                      required
+                  <FormRow label="Widget" layout="vertical" variant="plain">
+                    <ActionWidgetPicker
+                      key={agentId}
+                      agentId={agentId}
                       value={draft.widgetId}
-                      onChange={(event) =>
-                        update("widgetId", event.target.value)
-                      }
+                      onValueChange={(value) => {
+                        update("widgetId", value)
+                        setError(null)
+                      }}
                     />
                   </FormRow>
                   <FormRow
@@ -2636,7 +2338,7 @@ function ActionsTab({
                     onCheckedChange={(value) => update("enabled", value)}
                   />
                 </FormRow>
-                <FormRow label="Procedure only" htmlFor="action-procedure-only">
+                <FormRow label="Skill only" htmlFor="action-procedure-only">
                   <Switch
                     id="action-procedure-only"
                     checked={draft.procedureOnly}
@@ -2727,7 +2429,7 @@ function ActionsTab({
           </form>
         </SheetContent>
       </Sheet>
-    </div>
+    </>
   )
 }
 
@@ -3170,530 +2872,6 @@ function parseJsonArray(value: string): unknown[] | null {
   }
 }
 
-const emptyProcedure: ProcedureDefinition = {
-  name: "",
-  description: "",
-  enabled: true,
-  trigger: { type: "keyword", value: "" },
-  variables: {},
-  steps: [{ id: `step-${Date.now()}`, kind: "message", content: "" }],
-  branches: [],
-  actionRefs: [],
-}
-
-function ProceduresTab({
-  agentId,
-  onDefinitionDirty,
-}: {
-  agentId: string
-  onDefinitionDirty?: () => void
-}) {
-  const load = React.useCallback(
-    (signal: AbortSignal) =>
-      buildCall<unknown>(
-        buildOperations.listProcedures,
-        { agentId },
-        { signal }
-      ).then((value) => listItems<ProcedureRecord>(value)),
-    [agentId]
-  )
-  const state = useRemote(load, [agentId])
-  const [selected, setSelected] = React.useState<ProcedureRecord | null>(null)
-  const [isCreating, setIsCreating] = React.useState(false)
-  const [draft, setDraft] = React.useState<ProcedureDefinition>(emptyProcedure)
-  const [pending, setPending] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-  const [message, setMessage] = React.useState<string | null>(null)
-  const rows = state.data ?? []
-  const update = <K extends keyof ProcedureDefinition>(
-    key: K,
-    value: ProcedureDefinition[K]
-  ) => setDraft((current) => ({ ...current, [key]: value }))
-  function beginProcedure() {
-    setSelected(null)
-    setIsCreating(true)
-    setDraft({
-      ...emptyProcedure,
-      steps: [{ id: `step-${Date.now()}`, kind: "message", content: "" }],
-    })
-    setError(null)
-    setMessage(null)
-  }
-  function selectProcedure(procedure: ProcedureRecord) {
-    setSelected(procedure)
-    setIsCreating(false)
-    setDraft(procedure.definition)
-    setError(null)
-    setMessage(null)
-  }
-  function clearProcedure() {
-    setSelected(null)
-    setIsCreating(false)
-    setError(null)
-    setMessage(null)
-  }
-  async function saveProcedure(event: React.FormEvent) {
-    event.preventDefault()
-    if (
-      pending ||
-      !draft.name.trim() ||
-      !draft.trigger.value.trim() ||
-      !draft.steps.length
-    )
-      return
-    setPending(true)
-    setError(null)
-    setMessage(null)
-    try {
-      const savedProcedure = await buildCall<ProcedureRecord>(
-        selected
-          ? buildOperations.updateProcedure
-          : buildOperations.createProcedure,
-        {
-          agentId,
-          id: selected?.id ?? `procedure-${Date.now()}`,
-          slug: draft.name
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-|-$/g, ""),
-          definition: draft,
-          ...(selected ? { expectedRevision: selected.revision } : {}),
-        }
-      )
-      onDefinitionDirty?.()
-      setSelected(savedProcedure)
-      setIsCreating(false)
-      setDraft(savedProcedure.definition)
-      setMessage(selected ? "Procedure updated." : "Procedure created.")
-      state.refresh()
-    } catch (reason) {
-      setError(formatBuildError(reason))
-    } finally {
-      setPending(false)
-    }
-  }
-  async function deleteProcedure(procedure: ProcedureRecord) {
-    if (!window.confirm(`Delete ${procedure.definition.name}?`)) return
-    try {
-      await buildCall(buildOperations.deleteProcedure, {
-        agentId,
-        procedureId: procedure.id,
-        expectedRevision: procedure.revision,
-      })
-      onDefinitionDirty?.()
-      if (selected?.id === procedure.id) clearProcedure()
-      setMessage("Procedure deleted.")
-      state.refresh()
-    } catch (reason) {
-      setError(formatBuildError(reason))
-    }
-  }
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6">
-      <div>
-        <h2 className="text-base font-semibold">Procedures</h2>
-        <p className="mt-1 text-sm text-foreground-muted">
-          Turn a repeatable customer task into a short, testable sequence of
-          messages, actions and handoffs.
-        </p>
-      </div>
-      {error ? (
-        <Notice role="alert" variant="error">
-          {error}
-        </Notice>
-      ) : null}
-      {message ? (
-        <Notice role="status" variant="success">
-          {message}
-        </Notice>
-      ) : null}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(15rem,0.34fr)_minmax(0,0.66fr)]">
-        <section aria-label="Procedures">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-medium">Configured procedures</h3>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={beginProcedure}
-            >
-              <Plus className="size-3.5" />
-              New
-            </Button>
-          </div>
-          {state.error ? (
-            <BuildErrorState
-              message={state.error.message}
-              onRetry={state.refresh}
-            />
-          ) : state.data === null ? (
-            <LoadingState compact label="Loading procedures" />
-          ) : rows.length ? (
-            <div className="divide-y divide-border rounded-md border border-border">
-              {rows.map((procedure) => (
-                <button
-                  type="button"
-                  key={procedure.id}
-                  className={`flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-sm outline-none hover:bg-surface-row-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${selected?.id === procedure.id ? "bg-selection text-selection-foreground" : ""}`}
-                  onClick={() => selectProcedure(procedure)}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">
-                      {procedure.definition.name}
-                    </span>
-                    <span className="mt-1 block text-xs text-foreground-muted">
-                      {procedure.definition.trigger.type} ·{" "}
-                      {procedure.definition.steps.length} steps
-                    </span>
-                  </span>
-                  <BuildStatus
-                    state={procedure.definition.enabled ? "active" : "paused"}
-                  />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <Notice variant="info">No procedures yet.</Notice>
-          )}
-        </section>
-        {selected || isCreating ? (
-          <form
-            onSubmit={(event) => void saveProcedure(event)}
-            className="min-w-0 rounded-xl border border-border bg-muted p-4"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium">
-                  {selected
-                    ? `Edit ${selected.definition.name}`
-                    : "New procedure"}
-                </h3>
-                <p className="text-xs text-foreground-muted">
-                  Start with the trigger and steps. Optional variables and
-                  branches stay available below.
-                </p>
-              </div>
-              {selected ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Clear selected procedure"
-                  onClick={clearProcedure}
-                >
-                  ×
-                </Button>
-              ) : null}
-            </div>
-            <fieldset disabled={pending} className="space-y-1">
-              <FormRow label="Name" htmlFor="procedure-name">
-                <Input
-                  id="procedure-name"
-                  required
-                  value={draft.name}
-                  onChange={(event) => update("name", event.target.value)}
-                />
-              </FormRow>
-              <InspectorSection label="Description" variant="form">
-                <Textarea
-                  aria-label="Procedure description"
-                  rows={2}
-                  autoSize
-                  value={draft.description}
-                  onChange={(event) =>
-                    update("description", event.target.value)
-                  }
-                />
-              </InspectorSection>
-              <FormRow label="Enabled" htmlFor="procedure-enabled">
-                <Switch
-                  id="procedure-enabled"
-                  checked={draft.enabled}
-                  onCheckedChange={(value) => update("enabled", value)}
-                />
-              </FormRow>
-              <FormRow label="Trigger" htmlFor="procedure-trigger-type">
-                <Select
-                  id="procedure-trigger-type"
-                  value={draft.trigger.type}
-                  onChange={(event) =>
-                    update("trigger", {
-                      ...draft.trigger,
-                      type: event.target.value as typeof draft.trigger.type,
-                    })
-                  }
-                >
-                  <option value="keyword">A keyword is mentioned</option>
-                  <option value="intent">An intent is detected</option>
-                  <option value="event">An event arrives</option>
-                  <option value="manual">Run manually</option>
-                </Select>
-              </FormRow>
-              <FormRow label="Trigger value" htmlFor="procedure-trigger-value">
-                <Input
-                  id="procedure-trigger-value"
-                  required
-                  value={draft.trigger.value}
-                  onChange={(event) =>
-                    update("trigger", {
-                      ...draft.trigger,
-                      value: event.target.value,
-                    })
-                  }
-                />
-              </FormRow>
-              <ProcedureSteps
-                steps={draft.steps}
-                onChange={(steps) => update("steps", steps)}
-              />
-              <InspectorSection
-                label="Variables (JSON)"
-                variant="form"
-                defaultOpen={false}
-              >
-                <Textarea
-                  aria-label="Procedure variables JSON"
-                  rows={4}
-                  autoSize
-                  spellCheck={false}
-                  value={JSON.stringify(draft.variables, null, 2)}
-                  onChange={(event) => {
-                    const value = parseJsonObject(event.target.value)
-                    if (value)
-                      update(
-                        "variables",
-                        value as ProcedureDefinition["variables"]
-                      )
-                  }}
-                />
-              </InspectorSection>
-              <InspectorSection
-                label="Branches (JSON)"
-                variant="form"
-                defaultOpen={false}
-              >
-                <Textarea
-                  aria-label="Procedure branches JSON"
-                  rows={5}
-                  autoSize
-                  spellCheck={false}
-                  value={JSON.stringify(draft.branches, null, 2)}
-                  onChange={(event) => {
-                    const value = parseJsonArray(event.target.value)
-                    if (value)
-                      update(
-                        "branches",
-                        value as ProcedureDefinition["branches"]
-                      )
-                  }}
-                />
-              </InspectorSection>
-              <InspectorSection
-                label="Action references (JSON)"
-                variant="form"
-                defaultOpen={false}
-              >
-                <Textarea
-                  aria-label="Procedure action references JSON"
-                  rows={3}
-                  autoSize
-                  spellCheck={false}
-                  value={JSON.stringify(draft.actionRefs, null, 2)}
-                  onChange={(event) => {
-                    const value = parseJsonArray(event.target.value)
-                    if (value)
-                      update(
-                        "actionRefs",
-                        value.filter(
-                          (item): item is string => typeof item === "string"
-                        )
-                      )
-                  }}
-                />
-              </InspectorSection>
-            </fieldset>
-            <div className="mt-4 flex justify-end gap-2">
-              {selected ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void deleteProcedure(selected)}
-                >
-                  <Trash2 className="size-3.5" />
-                  Delete
-                </Button>
-              ) : null}
-              <Button type="submit" size="sm" loading={pending}>
-                <Save className="size-3.5" />
-                {selected ? "Save procedure" : "Create procedure"}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <ResourceEditorPrompt
-            resource="procedure"
-            description="Select a procedure to review it, or create a repeatable workflow for the agent."
-            actionLabel="New procedure"
-            onCreate={beginProcedure}
-          />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ProcedureSteps({
-  steps,
-  onChange,
-}: {
-  steps: ProcedureDefinition["steps"]
-  onChange: (steps: ProcedureDefinition["steps"]) => void
-}) {
-  return (
-    <InspectorSection
-      label={`Steps (${steps.length}/15)`}
-      icon={<ChevronDown className="size-3.5" />}
-    >
-      <div className="space-y-2">
-        {steps.map((step, index) => (
-          <div
-            key={step.id}
-            className="rounded-md border border-border bg-background p-2"
-          >
-            <div className="flex items-center gap-2">
-              <span className="w-6 text-center text-xs text-foreground-muted">
-                {index + 1}
-              </span>
-              <Select
-                aria-label={`Step ${index + 1} type`}
-                value={step.kind}
-                onChange={(event) => {
-                  const kind = event.target
-                    .value as ProcedureDefinition["steps"][number]["kind"]
-                  const next = [...steps]
-                  next[index] =
-                    kind === "message"
-                      ? { id: step.id, kind, content: "" }
-                      : kind === "action"
-                        ? { id: step.id, kind, actionId: "", input: {} }
-                        : kind === "set_variable"
-                          ? { id: step.id, kind, name: "", value: "" }
-                          : kind === "wait"
-                            ? { id: step.id, kind, seconds: 1 }
-                            : { id: step.id, kind, actionId: "" }
-                  onChange(next)
-                }}
-              >
-                <option value="message">Message</option>
-                <option value="action">Action</option>
-                <option value="set_variable">Set variable</option>
-                <option value="wait">Wait</option>
-                <option value="handoff">Handoff</option>
-              </Select>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Remove step ${index + 1}`}
-                onClick={() =>
-                  onChange(steps.filter((_, position) => position !== index))
-                }
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
-            <div className="mt-2 pl-8">
-              {step.kind === "message" ? (
-                <Textarea
-                  aria-label={`Step ${index + 1} message`}
-                  rows={2}
-                  autoSize
-                  required
-                  value={step.content}
-                  onChange={(event) => {
-                    const next = [...steps]
-                    next[index] = { ...step, content: event.target.value }
-                    onChange(next)
-                  }}
-                />
-              ) : null}
-              {step.kind === "action" || step.kind === "handoff" ? (
-                <Input
-                  aria-label={`Step ${index + 1} action ID`}
-                  placeholder="action-id"
-                  required
-                  value={step.actionId}
-                  onChange={(event) => {
-                    const next = [...steps]
-                    next[index] = { ...step, actionId: event.target.value }
-                    onChange(next)
-                  }}
-                />
-              ) : null}
-              {step.kind === "set_variable" ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input
-                    aria-label={`Step ${index + 1} variable name`}
-                    placeholder="variable"
-                    required
-                    value={step.name}
-                    onChange={(event) => {
-                      const next = [...steps]
-                      next[index] = { ...step, name: event.target.value }
-                      onChange(next)
-                    }}
-                  />
-                  <Input
-                    aria-label={`Step ${index + 1} value`}
-                    value={String(step.value)}
-                    onChange={(event) => {
-                      const next = [...steps]
-                      next[index] = { ...step, value: event.target.value }
-                      onChange(next)
-                    }}
-                  />
-                </div>
-              ) : null}
-              {step.kind === "wait" ? (
-                <Input
-                  aria-label={`Step ${index + 1} wait seconds`}
-                  type="number"
-                  min={0}
-                  max={86400}
-                  value={step.seconds}
-                  onChange={(event) => {
-                    const next = [...steps]
-                    next[index] = {
-                      ...step,
-                      seconds: Number(event.target.value),
-                    }
-                    onChange(next)
-                  }}
-                />
-              ) : null}
-            </div>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={steps.length >= 15}
-          onClick={() =>
-            onChange([
-              ...steps,
-              { id: `step-${Date.now()}`, kind: "message", content: "" },
-            ])
-          }
-        >
-          <Plus className="size-3.5" />
-          Add step
-        </Button>
-      </div>
-    </InspectorSection>
-  )
-}
 
 type ChannelConnectionView = {
   id: string

@@ -132,6 +132,7 @@ export const conversationPageSchema = z.object({
 })
 
 export const listConversationsInputSchema = z.object({
+  agentId: z.string().trim().min(1).max(120).optional(),
   limit: z.number().int().min(1).max(100).default(50),
   cursor: z.string().max(256).optional(),
   search: z.string().max(300).optional(),

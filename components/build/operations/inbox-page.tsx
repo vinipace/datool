@@ -90,6 +90,7 @@ import { NewTicketDialog } from "./new-ticket-dialog"
 
 type Ticket = {
   id: string
+  agentName?: string | null
   version?: number
   ticketId?: string | null
   conversationStatus?: string
@@ -240,6 +241,7 @@ function listConversations({
   const filters = JSON.parse(filter ?? "{}") as {
     search?: string
     status?: string
+    agentId?: string
   }
   return buildApi
     .call<unknown>(
@@ -249,6 +251,7 @@ function listConversations({
         limit,
         search: filters.search || undefined,
         status: filters.status || undefined,
+        agentId: filters.agentId,
       },
       signal
     )
@@ -408,8 +411,10 @@ function surveyList(value: unknown) {
 
 export function InboxPage({
   view = "inbox",
+  fixedAgentId,
 }: {
   view?: "inbox" | "conversations"
+  fixedAgentId?: string
 }) {
   const isInbox = view === "inbox"
   const ItemIcon = isInbox
@@ -423,9 +428,7 @@ export function InboxPage({
     settingsStorageKey: `datool:build-${view}:${scope}:settings`,
     orderStorageKey: `datool.build-${view}.columns`,
   })
-  const agentId = isInbox
-    ? navigation.params.get("agentId") || undefined
-    : undefined
+  const agentId = fixedAgentId || navigation.params.get("agentId") || undefined
   const agent = useRemote(
     (signal) =>
       agentId
@@ -436,7 +439,7 @@ export function InboxPage({
           )
         : Promise.resolve(null),
     [scope, agentId],
-    { enabled: Boolean(agentId) }
+    { enabled: Boolean(agentId) && !fixedAgentId }
   )
   const search = navigation.params.get("q") ?? ""
   const setSearch = (value: string) =>
@@ -578,7 +581,7 @@ export function InboxPage({
           pagination={tickets}
           toolbar={
             <>
-              {agentId ? (
+              {agentId && !fixedAgentId ? (
                 <div className="flex min-w-0 items-center gap-2 px-3 py-2">
                   <Button
                     size="sm"
@@ -586,7 +589,7 @@ export function InboxPage({
                     className="max-w-full"
                     aria-label={`Remove agent filter: ${agent.data?.name || agentId}`}
                     onClick={() =>
-                      navigation.navigate({ agentId: null, ticket: null })
+                      navigation.navigate({ agentId: null, [selectionKey]: null })
                     }
                   >
                     <Bot aria-hidden className="size-3.5 shrink-0" />
@@ -673,7 +676,9 @@ export function InboxPage({
                 search
                   ? "Try another subject, customer name, email or conversation ID."
                   : !isInbox
-                    ? "All customer conversations appear here, including chats that never need human help."
+                    ? fixedAgentId
+                      ? "This agent’s customer conversations appear here, including chats that never need human help."
+                      : "All customer conversations appear here, including chats that never need human help."
                     : navigation.view === "mentions"
                       ? "Tickets appear here when a teammate mentions your @email in an internal note."
                       : navigation.view === "mine"
@@ -708,11 +713,12 @@ export function InboxPage({
             widths={
               isInbox
                 ? [330, 220, 130, 120, 120, 160, 200]
-                : [330, 220, 130, 120, 200]
+                : [330, 220, 220, 130, 120, 200]
             }
             columnIds={[
               "subject",
               "customer",
+              ...(!isInbox ? ["agent"] : []),
               "channel",
               "status",
               ...(isInbox ? ["priority", "assignment"] : []),
@@ -726,6 +732,7 @@ export function InboxPage({
                 {[
                   "Conversation",
                   "Customer",
+                  ...(!isInbox ? ["Agent"] : []),
                   "Channel",
                   "Status",
                   ...(isInbox ? ["Priority", "Assignment"] : []),
@@ -775,6 +782,19 @@ export function InboxPage({
                   <td className={collectionTable.cell}>
                     {ticket.contactName || "Unknown customer"}
                   </td>
+                  {!isInbox ? (
+                    <td className={collectionTable.cell}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Bot
+                          aria-hidden
+                          className="size-4 shrink-0 text-foreground-muted"
+                        />
+                        <span className="truncate">
+                          {ticket.agentName || "Unknown agent"}
+                        </span>
+                      </span>
+                    </td>
+                  ) : null}
                   <td className={collectionTable.cell}>
                     <span className="inline-flex items-center gap-2 capitalize">
                       {ticket.channel ? (

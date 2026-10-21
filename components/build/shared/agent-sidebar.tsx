@@ -93,7 +93,10 @@ export function AgentSidebarNavigation({
     const tab = agentBuildTabs.find((item) => item.id === id)!
     if (!canConfigure && id !== "settings" && id !== "instructions") return null
     const query = new URLSearchParams(agentHref ? "" : searchParams.toString())
-    for (const key of ["datasetId", "item", "itemTab", "objectView", "filter", "inspector"])
+    for (const key of [
+      "datasetId", "item", "itemTab", "objectView", "filter", "inspector",
+      "conversation", "ticket", "q", "status", "agentId", "view",
+    ])
       query.delete(key)
     query.set("section", id)
     const base = agentHref ?? (agentId ? workspaceHref(`/build/agents/${encodeURIComponent(agentId)}`) : pathname)
@@ -227,11 +230,13 @@ export function AgentSidebarNavigation({
             "Activity",
             Eye,
             <>
+              {internalLink("conversations", true)}
               {internalLink("leads", true)}
               {internalLink("collected-data", true)}
             </>
           )}
         {externalLink("Contacts", "/build/contacts", ContactRound)}
+        {internalLink("playground")}
         {internalLink("test")}
         {internalLink("channels")}
         {internalLink("integrations")}

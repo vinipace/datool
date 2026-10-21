@@ -314,10 +314,12 @@ export class ConversationService {
   async list(value: unknown = {}) {
     const input = listConversationsInputSchema.parse(value)
     const result = await this.database.execute<Record<string, unknown>>(sql`
-      select c.*,contact.display_name as contact_name,contact.id as contact_id,
+      select c.*,a.name as agent_name,
+        contact.display_name as contact_name,contact.id as contact_id,
         t.id as ticket_id,t.version as ticket_version,t.status as ticket_status,
         coalesce(nullif(t.subject,''),preview.subject,'') as subject
       from build_conversations c
+      left join build_agents a on a.project_id=c.project_id and a.id=c.agent_id
       left join build_inbox_tickets t on t.project_id=c.project_id and t.conversation_id=c.id
       left join build_contacts contact on contact.project_id=c.project_id
         and contact.id=coalesce(t.contact_id,c.metadata_json->>'contactId')
@@ -333,6 +335,7 @@ export class ConversationService {
         ) as subject
       ) preview on true
       where c.project_id=${this.projectId}
+        ${input.agentId ? sql`and c.agent_id=${input.agentId}` : sql``}
         ${input.cursor ? sql`and c.id>${input.cursor}` : sql``}
         ${input.status ? sql`and c.status=${input.status}` : sql``}
         ${input.channel ? sql`and c.channel=${input.channel}` : sql``}
@@ -352,6 +355,7 @@ export class ConversationService {
     return {
       items: rows.map((row) => ({
         ...toConversation(row),
+        agentName: row.agent_name as string | null,
         subject: String(row.subject ?? "").slice(0, 500),
         contactId: row.contact_id as string | null,
         contactName: row.contact_name as string | null,

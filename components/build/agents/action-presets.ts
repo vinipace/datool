@@ -135,5 +135,12 @@ export function newActionDraft(preset: ActionPreset): ActionDefinition {
       description:
         "Hand off to the team when a customer asks for a person or needs help the agent cannot provide.",
     }
+  if (draft.type === "widget")
+    return {
+      ...draft,
+      name: "Show Widget",
+      description:
+        "Show this widget when it helps the customer take the next step in the conversation.",
+    }
   return draft
 }

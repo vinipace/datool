@@ -465,8 +465,7 @@ export function ContactsPage() {
           <DialogHeader>
             <DialogTitle>Create contact</DialogTitle>
             <DialogDescription>
-              Add a customer identity that can be reused across conversations
-              and campaigns.
+              Add a customer identity that can be reused across conversations.
             </DialogDescription>
           </DialogHeader>
           <form

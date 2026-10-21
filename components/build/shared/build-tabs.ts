@@ -6,6 +6,7 @@ import {
   Database,
   UserRoundCheck,
   ListChecks,
+  MessagesSquare,
   PanelsTopLeft,
   Play,
   Plug,
@@ -74,9 +75,9 @@ export const agentBuildTabs: BuildTab[] = [
   },
   {
     id: "procedures",
-    label: "Procedures",
+    label: "Skills",
     icon: ListChecks,
-    description: "Repeatable workflows",
+    description: "Reusable instructions for specific tasks",
     group: "Build",
   },
   {
@@ -85,6 +86,13 @@ export const agentBuildTabs: BuildTab[] = [
     icon: PanelsTopLeft,
     description: "Interactive responses",
     group: "Build",
+  },
+  {
+    id: "conversations",
+    label: "Conversations",
+    icon: MessagesSquare,
+    description: "Conversations with this agent",
+    group: "Activity",
   },
   {
     id: "leads",
@@ -111,8 +119,8 @@ export const agentBuildTabs: BuildTab[] = [
     id: "playground",
     label: "Playground",
     icon: Play,
-    description: "Try the applied agent",
-    group: "Hidden",
+    description: "Preview and try your website chat widget",
+    group: "Manage",
   },
   {
     id: "settings",

@@ -124,7 +124,12 @@ function Image({
   fit = "cover",
   ...props
 }: React.ImgHTMLAttributes<HTMLImageElement> & { fit?: "contain" | "cover" }) {
-  if (typeof src !== "string" || !/^https:\/\//.test(src)) return null
+  if (
+    typeof src !== "string" ||
+    (!/^https:\/\//.test(src) &&
+      !/^\/widget-template-assets\/[a-z0-9-]+\.webp$/.test(src))
+  )
+    return null
   // Images remain in the opaque iframe and cannot access parent credentials.
   return (
     <img

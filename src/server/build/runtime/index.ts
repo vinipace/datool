@@ -1147,6 +1147,8 @@ function evaluateBranch(condition: string, variables: Record<string, unknown>) {
 
 type ProcedureResult = {
   text: string
+  instructions?: string
+  actionRefs?: string[]
   continuations: RuntimeContinuation[]
   stopped: boolean
   handoff: boolean
@@ -1573,6 +1575,16 @@ async function runProcedure(
         )
       )
   if (!procedure) return null
+  if (procedure.definition.instructions?.trim())
+    return {
+      text: "",
+      instructions: procedure.definition.instructions,
+      actionRefs: procedure.definition.actionRefs,
+      continuations: [],
+      stopped: false,
+      handoff: false,
+      handoffOwnerId: null,
+    }
   let variables = {
     ...conversation.variables,
     ...procedure.definition.variables,
@@ -3043,6 +3055,20 @@ export async function runAgentTurn(
     const system = [
       configuration.instructions,
       knowledge?.text ? `Knowledge context:\n${knowledge.text}` : "",
+      procedures.some(
+        (item) => item.definition.enabled && item.definition.instructions?.trim()
+      )
+        ? "Skills provide reusable instructions for specific tasks. Follow any skill instructions supplied for this turn. To use another skill, load it with its procedure tool on each turn. Follow the returned instructions, use only available actions, and never claim an action succeeded without its result."
+        : "",
+      procedureResult?.instructions
+        ? `Skill instructions for this turn:\n${procedureResult.instructions}`
+        : "",
+      procedureResult?.actionRefs?.length
+        ? `Actions mentioned in this skill:\n${JSON.stringify(procedureResult.actionRefs.flatMap(id => {
+            const action = actionMap.get(id)
+            return action ? [{ mention: `action:${action.slug}`, toolName: id, name: action.definition.name }] : []
+          }))}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n\n")
@@ -3067,7 +3093,13 @@ export async function runAgentTurn(
     const aiTools: Record<string, unknown> = {}
     const continuations: RuntimeContinuation[] = []
     const invokedIntentProcedures = new Set<string>()
-    for (const action of modelActionMap.values()) {
+    // Private actions are exposed only after their skill is selected this turn.
+    const skillActionRefs = new Set(procedureResult?.actionRefs ?? [])
+    const activeTools = () =>
+      Object.keys(aiTools).filter(
+        (name) => !actionMap.has(name) || modelActionMap.has(name) || skillActionRefs.has(name)
+      )
+    for (const action of actionMap.values()) {
       const actionDefinition = action.definition
       aiTools[action.id] = tool({
         description: actionDefinition.description || actionDefinition.name,
@@ -3079,6 +3111,11 @@ export async function runAgentTurn(
           toolOptions: { toolCallId?: string }
         ) => {
           assertModelUsageRecorded()
+          if (!modelActionMap.has(action.id) && !skillActionRefs.has(action.id))
+            throw new BuildRuntimeError(
+              "ACTION_NOT_AVAILABLE",
+              "Load the linked skill before using this action."
+            )
           const toolCallId = toolOptions.toolCallId ?? randomUUID()
           const result = await executeAction(
             context,
@@ -3119,8 +3156,7 @@ export async function runAgentTurn(
       const procedureToolName = `procedure_${procedure.id}`
       aiTools[procedureToolName] = tool({
         description:
-          procedure.definition.description ||
-          `Run the intent procedure ${procedure.definition.name} for customer requests matching the configured intent '${procedure.definition.trigger.value}'.`,
+          `Use ${procedure.definition.name} when: ${procedure.definition.trigger.value}. ${procedure.definition.description}${procedure.definition.instructions?.trim() ? " Load this skill's instructions before responding or taking its actions." : ""}`,
         inputSchema: jsonSchema<Record<string, unknown>>({
           type: "object",
           properties: {},
@@ -3153,6 +3189,8 @@ export async function runAgentTurn(
               "PROCEDURE_NOT_FOUND",
               "The requested intent procedure is no longer available."
             )
+          for (const actionId of procedureResult.actionRefs ?? [])
+            skillActionRefs.add(actionId)
           continuations.push(...procedureResult.continuations)
           if (procedureResult.handoff) {
             handoffRequested = true
@@ -3160,6 +3198,17 @@ export async function runAgentTurn(
           }
           return {
             text: procedureResult.text,
+            ...(procedureResult.instructions
+              ? {
+                  instructions: procedureResult.instructions,
+                  actions: (procedureResult.actionRefs ?? []).flatMap((id) => {
+                    const action = actionMap.get(id)
+                    return action
+                      ? [{ mention: `action:${action.slug}`, toolName: id, name: action.definition.name }]
+                      : []
+                  }),
+                }
+              : {}),
             continuations: procedureResult.continuations,
           }
         },
@@ -3209,6 +3258,7 @@ export async function runAgentTurn(
           system,
           messages: modelMessages,
           tools: aiTools,
+          activeTools: activeTools(),
           stopWhen: isStepCount(
             Math.max(1, Math.min(options.maxToolSteps ?? 8, 20))
           ),
@@ -3222,7 +3272,7 @@ export async function runAgentTurn(
               provider: selection.provider,
               model: selection.modelId,
             })
-            return undefined
+            return { activeTools: activeTools() }
           },
           onLanguageModelCallEnd: async (event: LanguageModelCallEndEvent) => {
             if (pendingModelUsage) {
