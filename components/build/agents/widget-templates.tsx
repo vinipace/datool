@@ -1,15 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import {
-  FileInput,
-  Layers,
-  MousePointer2,
-  PanelsTopLeft,
-  Plus,
-} from "lucide-react"
+import { useRef, useState } from "react"
+import Image from "next/image"
+import { Layers, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction } from "@/components/ui/card"
+import { CardAction } from "@/components/ui/card"
 import {
   Sheet,
   SheetContent,
@@ -34,6 +29,7 @@ export function WidgetTemplates({
   onClear: () => void
   onUse: (definition: WidgetDefinition) => void
 }) {
+  const previewTrigger = useRef<HTMLButtonElement | null>(null)
   const [preview, setPreview] = useState<WidgetTemplate | null>(null)
   const [stateName, setStateName] = useState("default")
   const templates = widgetTemplates.filter(({ category, definition }) =>
@@ -43,54 +39,39 @@ export function WidgetTemplates({
   )
   return (
     <>
-      <div className="space-y-6 pt-4 pb-6">
-        {(["Sales", "Support", "E-commerce"] as const).map((category) => {
-          const group = templates.filter(
-            (template) => template.category === category
-          )
-          return group.length ? (
-            <section
-              key={category}
-              aria-label={`${category} widget templates`}
-              className="space-y-3"
+      <div className="@container/widget-gallery pt-4 pb-6">
+        <div className="grid items-start gap-x-5 gap-y-6 @min-[560px]/widget-gallery:grid-cols-2 @min-[900px]/widget-gallery:grid-cols-3 @min-[1200px]/widget-gallery:grid-cols-4">
+          {templates.map((template) => (
+            <CardAction
+              key={template.id}
+              variant="preview"
+              aria-label={`Preview ${template.definition.name}`}
+              onClick={(event) => {
+                previewTrigger.current = event.currentTarget
+                setStateName("default")
+                setPreview(template)
+              }}
             >
-              <h2 className="text-sm font-medium">{category}</h2>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {group.map((template) => {
-                  const Icon =
-                    template.id === "order-summary"
-                      ? PanelsTopLeft
-                      : template.id === "quick-choices"
-                        ? MousePointer2
-                        : FileInput
-                  return (
-                    <Card key={template.id}>
-                      <CardAction
-                        className="flex h-full items-start gap-4"
-                        onClick={() => {
-                          setStateName("default")
-                          setPreview(template)
-                        }}
-                      >
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground-muted">
-                          <Icon className="size-5" aria-hidden />
-                        </span>
-                        <span className="min-w-0 space-y-1">
-                          <span className="block text-sm font-medium">
-                            {template.definition.name}
-                          </span>
-                          <span className="block text-sm leading-6 text-foreground-muted">
-                            {template.definition.description}
-                          </span>
-                        </span>
-                      </CardAction>
-                    </Card>
-                  )
-                })}
-              </div>
-            </section>
-          ) : null
-        })}
+              <span className="relative block aspect-[6/5] w-full overflow-hidden rounded-xl border border-border bg-muted transition-colors group-hover:border-foreground-muted">
+                <Image
+                  src={template.previewImage}
+                  alt=""
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, (max-width: 1500px) 33vw, 25vw"
+                  className="object-cover object-top"
+                />
+              </span>
+              <span className="min-w-0 space-y-1 px-0.5">
+                <span className="block text-sm font-medium">
+                  {template.definition.name}
+                </span>
+                <span className="block text-xs leading-5 text-foreground-muted">
+                  {template.definition.description}
+                </span>
+              </span>
+            </CardAction>
+          ))}
+        </div>
         {!templates.length && (
           <div className="py-16 text-center">
             <Layers
@@ -118,7 +99,13 @@ export function WidgetTemplates({
             if (!open) setPreview(null)
           }}
         >
-          <SheetContent className="sm:max-w-xl">
+          <SheetContent
+            className="sm:max-w-xl"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              previewTrigger.current?.focus()
+            }}
+          >
             <SheetHeader className="shrink-0 border-b border-border p-5">
               <span className="mb-2 w-fit rounded-md border border-border px-2 py-1 text-xs text-foreground-muted">
                 {preview.category}
@@ -144,6 +131,7 @@ export function WidgetTemplates({
             <SheetFooter className="shrink-0 border-t border-border p-5">
               <Button
                 onClick={() => {
+                  previewTrigger.current = null
                   onUse(structuredClone(preview.definition))
                   setPreview(null)
                 }}

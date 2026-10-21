@@ -139,15 +139,22 @@ On narrow screens, customer details open in a sheet.
 
 Actions, Widgets and Skills share a collection header with their resource tab,
 Templates, search and collection controls. Actions offers a searchable catalog
-of existing action starters. Widgets offers six templates: Contact form, Demo
-request, Support request, Quick choices, Order lookup and Order summary. Preview
-a template with example data, then open it as an editable, disabled draft.
-Connect its Functions to your agent's actions before enabling it.
+of existing action starters. Widgets offers an image gallery of twelve templates
+across Sales, Support, E-commerce, Booking and Insights: Book a demo, Buy products,
+Get cart, Usage chart, Gym class booking, Hotel booking, Collect leads, Fetch
+weather, Support request, Quick choices, Order lookup and Order summary. Each
+image is captured from the actual template. Open a live sandbox preview with
+example data, then use it as an editable, disabled draft. Connect its Functions
+to your agent's actions before enabling interactive widgets. The sample products,
+classes, hotel and weather are examples; templates do not connect to live services
+automatically.
 
 Widgets are authored as JSX in Code, with an editable Zod Schema and JSON
 example data under Default data. Export a default React component receiving
 `{ data }`; built-ins include Box, Col, Row, Text, Card, Button, Form, List,
-and Image. React hooks and imports from `react` or `@datool/widgets` are supported.
+and Image. Image accepts HTTPS sources or the bundled example photos under
+`/widget-template-assets/`. React hooks and imports from `react` or
+`@datool/widgets` are supported.
 The schema exports a Zod schema (imports from `zod`) and validates and parses
 state data before preview or customer rendering. Code and schema run only in
 an isolated iframe. Syntax is also checked when saving; server code never

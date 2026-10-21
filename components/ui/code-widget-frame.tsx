@@ -13,6 +13,7 @@ const themeProperties = [
   "--color-primary-foreground",
   "--color-ring",
   "--color-destructive",
+  "--color-data-series-primary",
 ]
 
 /** The same isolated React runtime is used by authoring previews and customer widgets. */
@@ -147,7 +148,7 @@ export function CodeWidgetFrame({
   }, [ready, payload])
 
   const source = origin
-    ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-eval' ${origin}/widget-runtime.js; style-src 'unsafe-inline' ${origin}/widget-runtime.css; img-src https: data:; connect-src 'none'; form-action 'none'; base-uri 'none';"><link rel="stylesheet" href="${origin}/widget-runtime.css"></head><body><div id="root"></div><script src="${origin}/widget-runtime.js"></script></body></html>`
+    ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-eval' ${origin}/widget-runtime.js; style-src 'unsafe-inline' ${origin}/widget-runtime.css; img-src https: data: ${origin}/widget-template-assets/; connect-src 'none'; form-action 'none'; base-uri 'none';"><link rel="stylesheet" href="${origin}/widget-runtime.css"></head><body><div id="root"></div><script src="${origin}/widget-runtime.js"></script></body></html>`
     : undefined
   return (
     <div ref={host} className="w-full min-w-0">
