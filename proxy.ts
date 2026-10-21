@@ -6,6 +6,7 @@ import {
   publicMarkdownPath,
 } from "@/lib/markdown-negotiation"
 import { cmsEnabled } from "@/lib/cms/config"
+import { buildEnabled } from "@/lib/build/config"
 
 const publicChatPath = /^\/chat\/([^/]+)\/?$/
 
@@ -19,14 +20,21 @@ function publicChatConnectionId(pathname: string) {
   }
 }
 
-async function applyPublicChatPolicy(request: NextRequest, response: NextResponse) {
+async function applyPublicChatPolicy(
+  request: NextRequest,
+  response: NextResponse
+) {
   const connectionId = publicChatConnectionId(request.nextUrl.pathname)
   if (!connectionId) return response
 
   try {
-    const { getPublicChatFramePolicy } = await import("@/src/server/build/channels/service")
+    const { getPublicChatFramePolicy } =
+      await import("@/src/server/build/channels/service")
     const policy = await getPublicChatFramePolicy(connectionId)
-    response.headers.set("Content-Security-Policy", policy.contentSecurityPolicy)
+    response.headers.set(
+      "Content-Security-Policy",
+      policy.contentSecurityPolicy
+    )
   } catch {
     // A missing, disconnected, or unavailable connection must never become
     // embeddable while the policy lookup is unavailable.
@@ -37,6 +45,32 @@ async function applyPublicChatPolicy(request: NextRequest, response: NextRespons
 
 /** Preserve the requested deep link across authentication and organization selection. */
 export function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+  const buildApi = /^\/api\/build(?:-public|-webhooks)?(?:\/|$)/.test(pathname)
+  if (
+    !buildEnabled() &&
+    (buildApi || /^\/(?:p\/[^/]+\/build|chat)(?:\/|$)/.test(pathname))
+  ) {
+    const headers = {
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+    }
+    return buildApi
+      ? NextResponse.json(
+          {
+            error: {
+              code: "NOT_FOUND",
+              message: "Build is disabled on this installation.",
+            },
+          },
+          { status: 404, headers }
+        )
+      : new NextResponse("Not found\n", {
+          status: 404,
+          headers: { ...headers, "Content-Type": "text/plain; charset=utf-8" },
+        })
+  }
+  if (buildApi) return NextResponse.next()
   // Stop before streaming starts: a page/layout notFound() can otherwise retain
   // HTTP 200 after its parent has flushed the response headers.
   if (
@@ -101,5 +135,10 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/|api$|_next/|\\.well-known/|favicon.ico$).*)"],
+  matcher: [
+    "/api/build/:path*",
+    "/api/build-public/:path*",
+    "/api/build-webhooks/:path*",
+    "/((?!api/|api$|_next/|\\.well-known/|favicon.ico$).*)",
+  ],
 }

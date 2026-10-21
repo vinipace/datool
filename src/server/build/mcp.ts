@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
+import { buildEnabled } from "@/lib/build/config"
 
 import { asTracerError } from "@/src/server/tracer/errors"
 import {
@@ -19,6 +20,7 @@ export function registerBuildMcpTools(
   scopes: readonly string[]
 ) {
   const describeTools: (() => Tool)[] = []
+  if (!buildEnabled()) return describeTools
   for (const operation of buildOperations) {
     const discover = operation.name === "build_describe_operations"
     if (

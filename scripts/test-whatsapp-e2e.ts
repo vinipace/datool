@@ -31,6 +31,7 @@ try {
   await migrateIsolatedPostgres(target)
   await seedTestWorkspace(target)
   Object.assign(process.env, {
+    DATOOL_BUILD_ENABLED: "true",
     DATABASE_URL: target.databaseUrl,
     BETTER_AUTH_SECRET: "b".repeat(64),
     DATOOL_META_APP_ID: "10000000001",

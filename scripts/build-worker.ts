@@ -34,6 +34,22 @@ import {
   processNextCampaignDelivery,
 } from "../src/server/build/operations/campaigns"
 import type { AgentTurnRunner } from "../src/lib/build/channels"
+import { buildEnabled } from "../lib/build/config"
+
+// Stay healthy under process supervisors without admitting or processing jobs.
+if (!buildEnabled()) {
+  console.info("[build-worker] disabled; set DATOOL_BUILD_ENABLED=true to enable")
+  await new Promise<void>((resolve) => {
+    const timer = setInterval(() => {}, 60_000)
+    const stop = () => {
+      clearInterval(timer)
+      resolve()
+    }
+    process.once("SIGINT", stop)
+    process.once("SIGTERM", stop)
+  })
+  process.exit(0)
+}
 
 /** Independent queues keep long crawls and simulations from delaying customer replies. */
 const workerDatabase = createTracerDatabase(undefined, {

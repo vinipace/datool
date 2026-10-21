@@ -16,7 +16,22 @@ The implemented channel adapters are Website, Telegram, and WhatsApp (Embedded S
 messaging providers, and a Portuguese dashboard are outside this implementation.
 Additional adapters remain extension points and are not offered as available connections.
 
-## Start the worker
+## Enable Build and start the worker
+
+Build is disabled by default. Set `DATOOL_BUILD_ENABLED=true` in the runtime
+environment of both the web process and Build worker, then restart both. Only
+the exact value `true` enables it; no image rebuild is needed. Docker Compose
+passes this setting from `.env` to both services:
+
+```sh
+docker compose up -d --force-recreate app build-worker
+```
+
+When disabled, the Build navigation group is hidden, `/p/[projectSlug]/build/*`,
+`/chat/*`, and `/api/build`, `/api/build-public`, and `/api/build-webhooks`
+routes return 404, Build MCP tools are unavailable, and the worker stays idle
+without processing queued jobs. Stored Build data is preserved. Observe, Test,
+and trace ingestion remain available.
 
 Build requires the web process, the checked-in database migrations, and a
 long-lived Build worker. Run migrations using the installation's normal release

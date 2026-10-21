@@ -4,6 +4,7 @@ import { WhatsAppApiError } from "./channels/whatsapp-api"
 import type { BuildScope } from "@/src/lib/auth/permissions"
 import { workspaceIdentity } from "@/src/server/auth/context"
 import { getBuildContext, type BuildContext } from "./context"
+import { buildEnabled } from "@/lib/build/config"
 import { sanitizePublicActionResult } from "./definitions"
 import {
   beginBuildOperationReceiptInTransaction,
@@ -320,6 +321,8 @@ export async function executeBuildOperation(
   options: BuildExecutionOptions = {}
 ) {
   const operation = findBuildOperation(name)
+  if (!buildEnabled())
+    throw new TracerError("NOT_FOUND", "Build is disabled on this installation.")
   if (!operation)
     throw new TracerError(
       "NOT_FOUND",
