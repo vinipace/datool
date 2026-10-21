@@ -321,8 +321,8 @@ export async function executeBuildOperation(
   options: BuildExecutionOptions = {}
 ) {
   const operation = findBuildOperation(name)
-  if (!buildEnabled())
-    throw new TracerError("NOT_FOUND", "Build is disabled on this installation.")
+  if (!buildEnabled(workspaceIdentity()?.organizationId))
+    throw new TracerError("NOT_FOUND", "Build is disabled for this organization.")
   if (!operation)
     throw new TracerError(
       "NOT_FOUND",

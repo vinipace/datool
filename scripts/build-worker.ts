@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm"
 import { createTracerDatabase } from "../src/server/tracer/db"
 import { createBuildContext } from "../src/server/build/context"
 import {
@@ -21,6 +20,7 @@ import {
 } from "../src/server/build/channels/service"
 import {
   enqueueDueKnowledgeResyncs,
+  listKnowledgeProjectsWithPendingWork,
   runQueuedKnowledgeJobs,
 } from "../src/server/build/knowledge/service"
 import {
@@ -34,11 +34,11 @@ import {
   processNextCampaignDelivery,
 } from "../src/server/build/operations/campaigns"
 import type { AgentTurnRunner } from "../src/lib/build/channels"
-import { buildEnabled } from "../lib/build/config"
+import { buildAvailable } from "../lib/build/config"
 
 // Stay healthy under process supervisors without admitting or processing jobs.
-if (!buildEnabled()) {
-  console.info("[build-worker] disabled; set DATOOL_BUILD_ENABLED=true to enable")
+if (!buildAvailable()) {
+  console.info("[build-worker] disabled; set DATOOL_BUILD_ENABLED=true or DATOOL_BUILD_ORGANIZATION_IDS to enable")
   await new Promise<void>((resolve) => {
     const timer = setInterval(() => {}, 60_000)
     const stop = () => {
@@ -274,16 +274,8 @@ async function waitTask() {
   return (await enqueueConversationWaitJobs(workerDatabase, { limit: 100 })) > 0
 }
 async function knowledgeTask() {
-  const pending = await workerDatabase.execute<{ projectId: string }>(sql`
-    select project_id as "projectId" from (
-      select project_id, queued_at as due from build_knowledge_jobs
-      where status='queued' or (status='running' and (lease_expires_at is null or lease_expires_at <= now()))
-      union all
-      select project_id, next_resync_at as due from build_knowledge_sources
-      where status <> 'deleted' and kind in ('website','sitemap') and next_resync_at <= now()
-    ) work group by project_id order by min(due), project_id limit 50
-  `)
-  for (const { projectId } of pending.rows) {
+  const projects = await listKnowledgeProjectsWithPendingWork(workerDatabase)
+  for (const projectId of projects) {
     if (stopped) break
     const context = projectContext(projectId)
     try {
@@ -293,7 +285,7 @@ async function knowledgeTask() {
       reportWorkerError("knowledge project job failed", error)
     }
   }
-  return pending.rows.length > 0
+  return projects.length > 0
 }
 async function simulationTask() {
   const projects = await listSimulationProjectsWithPendingRuns(

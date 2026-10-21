@@ -1,3 +1,4 @@
+import { enabledBuildProject } from "../access"
 import { sql } from "drizzle-orm"
 import { z } from "zod"
 
@@ -358,13 +359,12 @@ export async function listCampaignProjectsWithPendingWork(
     from build_campaigns c
     left join build_campaign_deliveries d
       on d.project_id=c.project_id and d.campaign_id=c.id
-    where (
-      c.status='scheduled' and c.scheduled_at is not null and c.scheduled_at<=now()
-    ) or (
-      c.status='running' and (
+    where ${enabledBuildProject(sql`c.project_id`)} and (
+      (c.status='scheduled' and c.scheduled_at is not null and c.scheduled_at<=now())
+      or (c.status='running' and (
         (d.state='queued' and d.next_attempt_at<=now()) or
         (d.state='sending' and d.updated_at<now()-interval '5 minutes')
-      )
+      ))
     )
     group by c.project_id
     order by c.project_id asc

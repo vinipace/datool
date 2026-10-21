@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { withWorkspace } from "@/src/server/auth/context"
+import { configureBuildTestEnvironment } from "./helpers/build-env"
+import { describe, expect, test } from "bun:test"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 
@@ -6,14 +8,7 @@ import { createMcpServer } from "@/src/server/mcp/server"
 import type { TracerService } from "@/src/server/tracer/service"
 import { buildOperationCatalog } from "@/src/server/build/bootstrap"
 
-const previousBuildEnabled = process.env.DATOOL_BUILD_ENABLED
-beforeEach(() => {
-  process.env.DATOOL_BUILD_ENABLED = "true"
-})
-afterEach(() => {
-  if (previousBuildEnabled === undefined) delete process.env.DATOOL_BUILD_ENABLED
-  else process.env.DATOOL_BUILD_ENABLED = previousBuildEnabled
-})
+configureBuildTestEnvironment()
 
 describe("Build MCP transport", () => {
   test("disabled Build is neither discoverable nor callable, while Observe tools remain", async () => {
@@ -33,6 +28,28 @@ describe("Build MCP transport", () => {
     } finally {
       await client.close()
       await server.close()
+    }
+  })
+
+  test("allowlisted and excluded organizations receive different MCP catalogs", async () => {
+    process.env.DATOOL_BUILD_ENABLED = "false"
+    process.env.DATOOL_BUILD_ORGANIZATION_IDS = "org-allowed"
+    for (const organizationId of ["org-allowed", "org-excluded"]) {
+      await withWorkspace({ organizationId, projectId: "project-test", kind: "oauth", scopes: ["build:read", "metrics:read"] }, async () => {
+        const server = createMcpServer({} as TracerService, ["build:read", "metrics:read"])
+        const client = new Client({ name: "build-allowlist-test", version: "1" })
+        const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+        try {
+          await server.connect(serverTransport)
+          await client.connect(clientTransport)
+          const names = (await client.listTools()).tools.map((tool) => tool.name)
+          expect(names).toContain("query_metrics")
+          expect(names.includes("build_list_agents")).toBe(organizationId === "org-allowed")
+        } finally {
+          await client.close()
+          await server.close()
+        }
+      })
     }
   })
 

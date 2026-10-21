@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { configureBuildTestEnvironment } from "./helpers/build-env"
+import { describe, expect, test } from "bun:test"
 import assert from "node:assert/strict"
 
 import {
@@ -9,14 +10,7 @@ import {
 import { routeScopes } from "@/src/server/auth/request"
 import { withWorkspace } from "@/src/server/auth/context"
 
-const previousBuildEnabled = process.env.DATOOL_BUILD_ENABLED
-beforeEach(() => {
-  process.env.DATOOL_BUILD_ENABLED = "true"
-})
-afterEach(() => {
-  if (previousBuildEnabled === undefined) delete process.env.DATOOL_BUILD_ENABLED
-  else process.env.DATOOL_BUILD_ENABLED = previousBuildEnabled
-})
+configureBuildTestEnvironment()
 
 describe("Build operation HTTP contract", () => {
   test("disabled Build rejects a granted operation before accessing project data", async () => {
@@ -25,11 +19,30 @@ describe("Build operation HTTP contract", () => {
       { organizationId: "org-test", projectId: "project-test", userId: "user-test", kind: "oauth", scopes: ["build:read"] },
       async () => {
         await assert.rejects(executeBuildOperation("build_list_agents", {}), (error) => {
-          expect(error).toMatchObject({ code: "NOT_FOUND", status: 404, message: "Build is disabled on this installation." })
+          expect(error).toMatchObject({ code: "NOT_FOUND", status: 404, message: "Build is disabled for this organization." })
           return true
         })
       }
     )
+  })
+
+  test("allowlist uses authorized organization identity, never an input override", async () => {
+    process.env.DATOOL_BUILD_ENABLED = "false"
+    process.env.DATOOL_BUILD_ORGANIZATION_IDS = "org-allowed"
+    const identity = { organizationId: "org-excluded", projectId: "project-test", userId: "user-test", kind: "oauth" as const, scopes: ["build:read"] }
+    await withWorkspace(identity, async () => {
+      await assert.rejects(executeBuildOperation("build_list_agents", { organizationId: "org-allowed" }), (error) => {
+        expect(error).toMatchObject({ code: "NOT_FOUND", status: 404 })
+        return true
+      })
+    })
+    // The same operation still enforces permissions after organization admission.
+    await withWorkspace({ ...identity, organizationId: "org-allowed" }, async () => {
+      await assert.rejects(executeBuildOperation("build_create_agent", {}), (error) => {
+        expect(error).toMatchObject({ code: "UNAUTHORIZED", status: 403, details: { reason: "INSUFFICIENT_SCOPE" } })
+        return true
+      })
+    })
   })
 
   test("publishes a unique, scoped operation catalog with retry metadata", () => {

@@ -1,3 +1,4 @@
+import { configureBuildTestEnvironment } from "./helpers/build-env"
 import { expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { sql } from "drizzle-orm"
@@ -29,6 +30,8 @@ import {
   closeTracerFixture,
 } from "./helpers/tracer-fixture"
 import { getTracerProjectId } from "../src/server/tracer/db"
+
+configureBuildTestEnvironment()
 
 function snapshot() {
   return {

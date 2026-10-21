@@ -32,7 +32,7 @@ export default async function Layout({
         organization={organization}
         user={user}
         project={{ id: project.id, name: project.name, slug: project.slug }}
-        buildEnabled={buildEnabled()}
+        buildEnabled={buildEnabled(organization.id)}
       >
         {children}
       </TracerAppShell>

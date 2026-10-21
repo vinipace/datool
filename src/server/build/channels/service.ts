@@ -2,6 +2,8 @@ import { createHmac, randomUUID } from "node:crypto"
 import { isIP } from "node:net"
 
 import { sql } from "drizzle-orm"
+import { buildEnabled } from "@/lib/build/config"
+import { enabledBuildProject } from "../access"
 import {
   chatBubbleOverridesSchema,
   resolveChatBubbleSettings,
@@ -403,11 +405,12 @@ export async function publicConnectionContext(
     project_id: string
     organization_id: string
   }>(
-    "SELECT project_id, organization_id FROM build_channel_connection WHERE id = $1::uuid LIMIT 1",
+    "SELECT c.project_id, p.organization_id FROM build_channel_connection c JOIN project p ON p.id = c.project_id WHERE c.id = $1::uuid LIMIT 1",
     [connectionId]
   )
   const row = result.rows[0]
-  if (!row) throw new Error("Channel connection was not found.")
+  if (!row || !buildEnabled(row.organization_id))
+    throw new Error("Channel connection was not found.")
   const scoped = createTracerDatabase(undefined, { projectId: row.project_id })
   return {
     database: scoped,
@@ -984,6 +987,7 @@ export async function claimNextChannelJob(
       SET status = 'uncertain', locked_at = NULL, lock_token = NULL,
           last_error = 'The channel job lease was lost; delivery outcome is uncertain.'
       WHERE status = 'running'
+        AND ${enabledBuildProject(sql`build_channel_job.project_id`)}
         AND kind = 'deliver_outbound'
         AND locked_at < now() - interval '5 minutes'
       RETURNING id, project_id, message_id
@@ -1002,6 +1006,7 @@ export async function claimNextChannelJob(
       JOIN build_channel_connection c
         ON c.project_id = j.project_id AND c.id = j.connection_id
       WHERE c.status = 'connected'
+        AND ${enabledBuildProject(sql`j.project_id`)}
         AND NOT EXISTS (
           SELECT 1 FROM stale_outbound s
           WHERE s.project_id = j.project_id AND s.id = j.id
@@ -1515,6 +1520,7 @@ export async function enqueueTelegramPollingJobs(database: TracerDatabase) {
     WITH due AS (
       SELECT c.id,c.project_id FROM build_channel_connection c
       WHERE c.channel = 'telegram' AND c.status = 'connected' AND c.webhook_mode = 'polling'
+        AND ${enabledBuildProject(sql`c.project_id`)}
         AND NOT EXISTS (
           SELECT 1 FROM build_channel_job j
           WHERE j.project_id=c.project_id AND j.connection_id=c.id
@@ -1558,6 +1564,7 @@ export async function enqueueConversationWaitJobs(
       ON cc.project_id = c.project_id
      AND cc.id::text = c.metadata_json->>'connectionId'
     WHERE tc.status = 'awaiting_client'
+      AND ${enabledBuildProject(sql`tc.project_id`)}
       AND tc.continuation_json->>'type' = 'wait'
       AND nullif(tc.continuation_json->>'continuationId', '') IS NOT NULL
       AND (
