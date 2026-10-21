@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
+import datoolLogo from "@/app/icon.svg"
 import { MessageCircle, MessageCircleWarning, RefreshCw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -750,8 +752,24 @@ export function PublicChat({
       ) : null}
       {appearance.showBranding &&
       !messages.some((message) => message.direction === "inbound") ? (
-        <p className="mb-3 text-center text-xs text-foreground-muted">
-          {copy.branding}
+        <p className="mb-3 flex items-center justify-center gap-1 text-xs text-foreground-muted">
+          <span>{copy.branding} </span>
+          <a
+            href="https://trydatool.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-sm px-0.5 py-1 font-medium text-foreground outline-none transition-colors hover:text-foreground-muted focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Image
+              src={datoolLogo}
+              alt=""
+              width={16}
+              height={16}
+              unoptimized
+              className="size-4 shrink-0"
+            />
+            Datool
+          </a>
         </p>
       ) : null}
       <form
