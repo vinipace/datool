@@ -236,6 +236,7 @@ export function AgentSidebarNavigation({
             </>
           )}
         {externalLink("Contacts", "/build/contacts", ContactRound)}
+        {internalLink("playground")}
         {internalLink("test")}
         {internalLink("channels")}
         {internalLink("integrations")}

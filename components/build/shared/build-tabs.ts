@@ -119,8 +119,8 @@ export const agentBuildTabs: BuildTab[] = [
     id: "playground",
     label: "Playground",
     icon: Play,
-    description: "Try the applied agent",
-    group: "Hidden",
+    description: "Preview and try your website chat widget",
+    group: "Manage",
   },
   {
     id: "settings",
