@@ -24,6 +24,12 @@
     ? sourceUrl.origin
     : window.location.origin;
   var baseUrl = safeHttpUrl(dataset.baseUrl || sourceOrigin) || window.location.origin;
+  var stateKey = "datool:launcher:" + baseUrl + ":" + channelId;
+  function saveOpen(opened) {
+    try { window.sessionStorage.setItem(stateKey, opened ? "open" : "closed"); } catch (_) { /* Optional browser storage. */ }
+  }
+  var wasOpen = false;
+  try { wasOpen = window.sessionStorage.getItem(stateKey) === "open"; } catch (_) { /* Optional browser storage. */ }
   var disposed = false;
   var settings = {};
   var launcher = {};
@@ -50,12 +56,14 @@
   button.style.cssText = "display:block;margin-left:auto;border:1px solid ButtonBorder;border-radius:999px;background:ButtonFace;color:ButtonText;padding:10px 16px;font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer;box-shadow:0 4px 16px color-mix(in srgb, CanvasText 18%, transparent);";
 
   function open() {
+    saveOpen(true);
     frame.style.display = "block";
     frame.setAttribute("aria-hidden", "false");
     renderLauncher(true);
   }
 
   function close() {
+    saveOpen(false);
     frame.style.display = "none";
     frame.setAttribute("aria-hidden", "true");
     renderLauncher(false);
@@ -76,6 +84,14 @@
   function onMessage(event) {
     if (event.source !== frame.contentWindow || event.origin !== new URL(baseUrl).origin) return;
     if (event.data && event.data.type === "datool:chat:close") close();
+    if (event.data && event.data.type === "datool:chat:navigate" && typeof event.data.href === "string") {
+      try {
+        var destination = new URL(event.data.href);
+        if (destination.origin !== window.location.origin || destination.username || destination.password || !/^https?:$/.test(destination.protocol)) return;
+        saveOpen(frame.style.display !== "none");
+        window.location.assign(destination.href);
+      } catch (_) { /* Ignore invalid navigation messages. */ }
+    }
   }
 
   button.addEventListener("click", toggle);
@@ -127,5 +143,5 @@
       (document.body || document.documentElement).appendChild(host);
     }).catch(function () { /* Paused, unavailable or disallowed channels stay hidden. */ });
   window.DatoolWidget = { channelId: channelId, open: open, close: close, toggle: toggle, destroy: destroy };
-  if (dataset.open === "true" || dataset.open === "1") open();
+  if (dataset.open === "true" || dataset.open === "1" || wasOpen) open();
 })();

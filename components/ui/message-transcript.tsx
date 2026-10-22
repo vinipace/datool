@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Bot, ChevronRight, UserRound } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { ChatLink } from "./chat-navigation"
 import type {
   InspectorMessage,
   InspectorToolCall,
@@ -370,6 +371,7 @@ export function MessageTranscript({
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
+                              a: ChatLink,
                               code: ({ className, children }) => {
                                 const language =
                                   /(?:^|\s)language-(json|ya?ml)(?:\s|$)/.exec(

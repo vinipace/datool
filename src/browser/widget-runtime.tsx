@@ -273,6 +273,41 @@ const components = {
 }
 const root = createRoot(document.getElementById("root")!)
 let requestId = 0
+let navigationOrigin: string | undefined
+// Keep links out of this opaque content frame. Store navigation is relayed
+// through the chat; external links use a separate, opener-free tab.
+document.addEventListener(
+  "click",
+  (event) => {
+    const anchor =
+      event.target instanceof Element ? event.target.closest("a[href]") : null
+    if (!(anchor instanceof HTMLAnchorElement)) return
+    event.preventDefault()
+    if (!event.isTrusted || event.button !== 0) return
+    try {
+      const url = new URL(anchor.href)
+      if (!/^https?:$/.test(url.protocol) || url.username || url.password)
+        return
+      if (
+        url.origin === navigationOrigin &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        parent.postMessage(
+          { type: "widget-navigate", requestId, href: url.href },
+          "*"
+        )
+      } else {
+        window.open(url.href, "_blank", "noopener,noreferrer")
+      }
+    } catch {
+      /* Invalid links never navigate the widget frame. */
+    }
+  },
+  true
+)
 function report(error: string | null) {
   parent.postMessage({ type: "widget-status", requestId, error }, "*")
 }
@@ -303,6 +338,10 @@ window.addEventListener("message", (event) => {
   if (event.source !== parent || event.data?.type !== "render-widget") return
   const value = event.data
   requestId = value.requestId
+  navigationOrigin =
+    typeof value.navigationOrigin === "string"
+      ? value.navigationOrigin
+      : undefined
   for (const [name, setting] of Object.entries(value.theme ?? {})) {
     if (typeof setting !== "string") continue
     if (name.startsWith("--color-"))
