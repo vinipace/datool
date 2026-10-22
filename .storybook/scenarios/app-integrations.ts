@@ -11,6 +11,8 @@ export function appIntegrationScenario(
     | "error"
     | "loading"
     | "catalog"
+    | "shopify"
+    | "shopify-unconfigured"
     | "connect-error" = "active"
 ) {
   let status: AppConnection["status"] | null = null
@@ -28,7 +30,7 @@ export function appIntegrationScenario(
   return {
     reset,
     handlers: [
-      http.post("*/api/build/:operation", async ({ params }) => {
+      http.post("*/api/build/:operation", async ({ params, request }) => {
         if (initial === "loading") await delay("infinite")
         if (initial === "error")
           return HttpResponse.json(
@@ -39,24 +41,37 @@ export function appIntegrationScenario(
           return HttpResponse.json({
             data: {
               configured: initial !== "disabled",
-              apps: [
-                { slug: "googlecalendar", name: "Google Calendar" },
-                ...(initial === "catalog"
-                  ? [
-                      { slug: "slack", name: "Slack" },
-                      { slug: "shopify", name: "Shopify" },
-                      { slug: "zendesk", name: "Zendesk" },
-                      { slug: "github", name: "GitHub" },
-                      { slug: "notion", name: "Notion" },
-                    ]
-                  : []),
-              ],
+              apps: initial.startsWith("shopify")
+                ? [
+                    {
+                      slug: "shopify_native",
+                      name: "Shopify",
+                      connectionMethod: "shopify",
+                      available: initial !== "shopify-unconfigured",
+                    },
+                  ]
+                : [
+                    { slug: "googlecalendar", name: "Google Calendar" },
+                    ...(initial === "catalog"
+                      ? [
+                          { slug: "slack", name: "Slack" },
+                          { slug: "shopify", name: "Shopify" },
+                          { slug: "zendesk", name: "Zendesk" },
+                          { slug: "github", name: "GitHub" },
+                          { slug: "notion", name: "Notion" },
+                        ]
+                      : []),
+                  ],
               connections: status
                 ? [
                     {
                       id: connectionId,
-                      toolkit: "googlecalendar",
-                      label: "Google Calendar",
+                      toolkit: initial.startsWith("shopify")
+                        ? "shopify_native"
+                        : "googlecalendar",
+                      label: initial.startsWith("shopify")
+                        ? "sample.myshopify.com"
+                        : "Google Calendar",
                       status,
                     },
                     ...(initial === "catalog"
@@ -94,6 +109,14 @@ export function appIntegrationScenario(
             ],
           })
         if (params.operation === "build_connect_app") {
+          if (initial === "shopify") {
+            const input = (await request.json()) as { shop?: string }
+            if (input.shop !== "sample.myshopify.com")
+              return HttpResponse.json(
+                { error: { message: "Enter a myshopify.com store address." } },
+                { status: 400 }
+              )
+          }
           if (initial === "connect-error" && connectAttempts++ === 0)
             return HttpResponse.json(
               { error: { message: "Unable to start authorization." } },
@@ -103,7 +126,10 @@ export function appIntegrationScenario(
           return HttpResponse.json({
             data: {
               id: connectionId,
-              redirectUrl: "https://connect.composio.dev/fixture",
+              redirectUrl:
+                initial === "shopify"
+                  ? "https://datool.example/api/shopify/connect?token=fixture"
+                  : "https://connect.composio.dev/fixture",
             },
           })
         }

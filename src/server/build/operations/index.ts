@@ -321,7 +321,7 @@ for (const [kind, list, get, save, listVersions, remove] of [
   )
   register(
     `build_save_${kind}`,
-    `Create or update a ${kind} definition with optimistic revision checks.`,
+    `Create or update a ${kind} definition with optimistic revision checks.${kind === "widget" ? " Before authoring, discover build_list_widget_templates and build_get_widget_components. Supply representative states.default data; use build_validate_widget and the browser's build_validate_widget_preview, then reopen the saved widget. Saving does not prove a rendered preview." : ""}`,
     ["build:write"],
     agentId.extend({ id: id.optional(), slug: z.string().trim().max(120).optional(), definition, expectedRevision: z.number().int().positive().optional() }),
     (context, input) => save(context, input.agentId as string, input as never),

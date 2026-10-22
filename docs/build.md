@@ -208,6 +208,35 @@ The runtime admits only actions from the widget revision pinned to that
 conversation. Existing component definitions open as JSX and convert when
 saved; previously issued conversations retain their original definition.
 
+Widget authoring discovery is shared across the editor, MCP and the generic CLI:
+`build_list_widget_templates`, `build_get_widget_template` and
+`build_get_widget_components` return the maintained starters and component props.
+`build_validate_widget` performs read-only static checks and explicitly returns
+`rendered:false` and `schemaValidated:false`. It never evaluates customer source
+on the server. While the Widgets section is open, the browser WebMCP operation
+`build_validate_widget_preview` checks a candidate definition or a saved widget ID
+in the existing opaque sandbox. It checks Zod data, visible content, image loads,
+undefined direct style-variable references and viewport overflow without
+dispatching actions. The preview's **Check preview**
+button uses the same checker. Intentional empty-state checks can set `allowEmpty`;
+normal previews should contain representative example data. Browser reports are
+observations, not publication receipts or proof of visual quality.
+
+Run `bun run test:widgets:e2e` with `DATOOL_TEST_DATABASE_URL` pointing to a
+disposable loopback PostgreSQL database with pgvector. The check creates and drops
+its own schema, starts a local app, exercises real MCP and CLI discovery, validates
+positive and negative previews, and reopens a saved widget in the editor. The
+browser regression CI runs this deterministic check. For the authoring-agent
+evaluation, run `bun --no-env-file scripts/test-widget-authoring-e2e.ts --live-model`
+after building browser assets, with `OPENAI_API_KEY` set in the environment.
+This additionally gives a model only the public tools, distributed skill and a
+synthetic product-widget request; it grades discovery before saving, component
+reuse, saved preview data, responsive rendering and product links. It is capped
+at 24 steps and four minutes and incurs model usage. The model defaults to
+`gpt-4.1`; `DATOOL_WIDGET_EVAL_MODEL` overrides it. Reports, screenshots and model
+tool events are written under ignored `artifacts/widget-authoring-e2e/`. A
+deterministic pass does not imply the live model evaluation was run.
+
 | Area                      | Purpose                                                                                            |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
 | Agents                    | Configuration, applied revisions, cloning, and archive lifecycle                                   |

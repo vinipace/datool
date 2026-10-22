@@ -7,6 +7,8 @@ import {
   compileWidgetSchema,
 } from "../lib/build/widget-compiler"
 import "./widget-runtime.css"
+import { checkWidgetPreview } from "./widget-preview-check"
+import type { WidgetComponentName } from "../lib/build/widget-components"
 
 type Action =
   string | { functionName: string; additionalInputs?: Record<string, unknown> }
@@ -270,6 +272,9 @@ const components = {
   Image,
   get,
   format,
+} satisfies Record<WidgetComponentName, unknown> & {
+  get: typeof get
+  format: typeof format
 }
 const root = createRoot(document.getElementById("root")!)
 let requestId = 0
@@ -310,6 +315,34 @@ document.addEventListener(
 )
 function report(error: string | null) {
   parent.postMessage({ type: "widget-status", requestId, error }, "*")
+}
+function RenderCheck({
+  id,
+  preview,
+}: {
+  id: number
+  preview?: { allowEmpty: boolean }
+}) {
+  React.useEffect(() => {
+    let cancelled = false
+    // This effect only commits if the widget rendered without throwing.
+    if (id === requestId) report(null)
+    if (preview)
+      void checkWidgetPreview(
+        document.getElementById("root")!,
+        preview.allowEmpty
+      ).then((result) => {
+        if (!cancelled && id === requestId)
+          parent.postMessage(
+            { type: "widget-preview-result", requestId: id, report: result },
+            "*"
+          )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id, preview])
+  return null
 }
 class Boundary extends React.Component<
   { children: React.ReactNode },
@@ -429,13 +462,13 @@ window.addEventListener("message", (event) => {
         "*"
       )
     }
-    report(null)
     root.render(
       <Boundary
         key={`${value.code}:${value.schemaCode ?? ""}:${JSON.stringify(data)}`}
       >
         <Context.Provider value={{ enabled: value.enabled, dispatch }}>
           <Component data={data} />
+          <RenderCheck id={renderRequestId} preview={value.validatePreview} />
         </Context.Provider>
       </Boundary>
     )

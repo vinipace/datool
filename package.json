@@ -70,7 +70,8 @@
     "generate:api": "node scripts/generate-agent-output-schemas.mjs && bun --no-env-file scripts/generate-docs-reference.ts",
     "check:docs:links": "bun --no-env-file scripts/check-doc-links.ts",
     "test:docs:http": "node --import tsx tests/docs-markdown-http.integration.ts",
-    "test:react-views:e2e": "bun run build:monaco && bun --no-env-file scripts/test-react-views-e2e.ts"
+    "test:react-views:e2e": "bun run build:monaco && bun --no-env-file scripts/test-react-views-e2e.ts",
+    "test:widgets:e2e": "bun run build:monaco && bun --no-env-file scripts/test-widget-authoring-e2e.ts"
   },
   "devDependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -160,6 +161,7 @@
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@openai/mcp-extensions": "0.1.0",
     "@opentelemetry/sdk-trace-node": "2.10.0",
+    "@shopify/shopify-api": "15.0.1",
     "@vercel/sandbox": "^3.3.0",
     "@xyflow/react": "^12.11.6",
     "ai": "^7.0.105",

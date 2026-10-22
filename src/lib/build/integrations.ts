@@ -6,7 +6,12 @@ export type AppConnection = {
 }
 export type IntegrationCatalog = {
   configured: boolean
-  apps: { slug: string; name: string }[]
+  apps: {
+    slug: string
+    name: string
+    connectionMethod?: "shopify"
+    available?: boolean
+  }[]
   connections: AppConnection[]
 }
 export type IntegrationTool = {

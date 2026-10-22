@@ -9,6 +9,7 @@ const pending = appIntegrationScenario("pending")
 const catalog = appIntegrationScenario("catalog")
 const disconnect = appIntegrationScenario()
 const connectError = appIntegrationScenario("connect-error")
+const shopify = appIntegrationScenario("shopify")
 const meta = {
   title: "Build/AgentIntegrations",
   component: IntegrationsTab,
@@ -17,6 +18,58 @@ const meta = {
 } satisfies Meta<typeof IntegrationsTab>
 export default meta
 type Story = StoryObj<typeof meta>
+export const Shopify: Story = {
+  parameters: { msw: { handlers: shopify.handlers } },
+  beforeEach: shopify.reset,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole("button", { name: /^Connect$/ })
+    )
+    const dialog = within(
+      await within(canvasElement.ownerDocument.body).findByRole("dialog", {
+        name: "Shopify",
+      })
+    )
+    await expect(
+      dialog.getByRole("button", { name: "Connect store" })
+    ).toBeDisabled()
+    await userEvent.type(
+      dialog.getByLabelText("Store address"),
+      "invalid.example"
+    )
+    await userEvent.click(dialog.getByRole("button", { name: "Connect store" }))
+    await expect(dialog.findByRole("alert")).resolves.toHaveTextContent(
+      "myshopify.com"
+    )
+    await userEvent.clear(dialog.getByLabelText("Store address"))
+    await userEvent.type(
+      dialog.getByLabelText("Store address"),
+      "sample.myshopify.com"
+    )
+    await userEvent.click(dialog.getByRole("button", { name: "Connect store" }))
+    await expect(
+      dialog.findByRole("link", { name: "Authorize account" })
+    ).resolves.toHaveAttribute(
+      "href",
+      "https://datool.example/api/shopify/connect?token=fixture"
+    )
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Check connection" })
+    )
+    await expect(
+      dialog.findByText("Connected", { exact: true })
+    ).resolves.toBeVisible()
+    await expect(
+      dialog.getByRole("button", { name: "Open Actions" })
+    ).toBeVisible()
+  },
+}
+export const ShopifySetupRequired: Story = {
+  parameters: {
+    msw: { handlers: appIntegrationScenario("shopify-unconfigured").handlers },
+  },
+}
 export const Connected: Story = {
   beforeEach: active.reset,
   play: async ({ canvasElement }) => {

@@ -10,6 +10,13 @@ import { ExecutionCreditStore } from "@/src/server/execution-credits/ledger"
 import { getTracerWritePool } from "@/src/server/tracer/db"
 import { TracerError } from "@/src/server/tracer/errors"
 import { assertBuildProject, type BuildContext } from "../context"
+import { SHOPIFY_TOOLKIT, shopifyConfigured } from "./shopify-provider"
+import {
+  connectShopify,
+  executeShopifyTool,
+  refreshShopifyConnection,
+} from "./shopify"
+import { shopifyTools } from "./shopify-catalog"
 import {
   authorizeSession,
   executeSession,
@@ -64,16 +71,29 @@ export async function listAppConnections(
     sql`SELECT * FROM build_app_connections WHERE project_id=${context.projectId} ORDER BY created_at DESC LIMIT 100`
   )
   return {
-    configured:
-      Boolean(process.env.COMPOSIO_API_KEY) && Object.keys(config).length > 0,
-    apps: Object.entries(config).map(([slug, app]) => ({
-      slug,
-      name: app.name,
-    })),
+    configured: true,
+    apps: [
+      {
+        slug: SHOPIFY_TOOLKIT,
+        name: "Shopify",
+        connectionMethod: "shopify",
+        available: shopifyConfigured(),
+      },
+      ...Object.entries(config).map(([slug, app]) => ({
+        slug,
+        name: app.name,
+        available: Boolean(process.env.COMPOSIO_API_KEY),
+      })),
+    ],
     connections: rows.map(publicConnection),
   }
 }
-export async function connectApp(context: BuildContext, toolkit: string) {
+export async function connectApp(
+  context: BuildContext,
+  toolkit: string,
+  shop?: string
+) {
+  if (toolkit === SHOPIFY_TOOLKIT) return connectShopify(context, shop ?? "")
   const ctx = await assertBuildProject(context)
   const app = integrationApp(toolkit)
   const id = randomUUID()
@@ -143,6 +163,10 @@ export async function connectApp(context: BuildContext, toolkit: string) {
 }
 export async function refreshAppConnection(context: BuildContext, id: string) {
   const row = await ownedConnection(context, id)
+  if (row.toolkit === SHOPIFY_TOOLKIT) {
+    if (row.status === "active") await refreshShopifyConnection(context, id)
+    return publicConnection(await ownedConnection(context, id))
+  }
   if (row.status === "disconnected" || !row.connected_account_id)
     return publicConnection(row)
   const app = integrationApp(row.toolkit)
@@ -181,6 +205,12 @@ export async function disconnectApp(context: BuildContext, id: string) {
   await context.database.execute(
     sql`UPDATE build_app_connections SET status='disconnected',updated_at=now() WHERE id=${id}::uuid AND project_id=${context.projectId}`
   )
+  if (row.toolkit === SHOPIFY_TOOLKIT) {
+    await context.database.execute(
+      sql`UPDATE build_shopify_connections SET session_encrypted=NULL,start_token_hash=NULL,oauth_state_hash=NULL WHERE connection_id=${id}::uuid AND project_id=${context.projectId}`
+    )
+    return { ...publicConnection(row), status: "disconnected" as const }
+  }
   if (row.connected_account_id) {
     try {
       await composioClient().connectedAccounts.delete(
@@ -202,6 +232,10 @@ export async function listAppTools(
 ): Promise<IntegrationTool[]> {
   const row = await ownedConnection(context, connectionId)
   if (row.status !== "active") throw unavailable()
+  if (row.toolkit === SHOPIFY_TOOLKIT) {
+    if (!shopifyConfigured()) throw unavailable()
+    return shopifyTools
+  }
   const app = integrationApp(row.toolkit)
   try {
     const tools = await composioClient().tools.getRawComposioTools(
@@ -260,9 +294,19 @@ export async function executeAppAction(
 ) {
   const ctx = await assertBuildProject(context)
   const connection = await ownedConnection(ctx, input.connectionId)
-  if (connection.status !== "active" || !connection.connected_account_id)
+  const native = connection.toolkit === SHOPIFY_TOOLKIT
+  if (
+    connection.status !== "active" ||
+    (!native && !connection.connected_account_id)
+  )
     throw unavailable()
-  const app = integrationApp(connection.toolkit)
+  const app = native
+    ? {
+        authConfigId: "shopify-native-v1",
+        tools: shopifyTools.map((tool) => tool.slug),
+        costNanoUsd: 0,
+      }
+    : integrationApp(connection.toolkit)
   if (
     app.authConfigId !== connection.auth_config_id ||
     !app.tools.includes(input.toolSlug)
@@ -275,13 +319,33 @@ export async function executeAppAction(
   const id = randomUUID()
   const admitted = await ctx.database
     .execute(sql`INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,toolkit,tool_slug,connection_id,status,cost_source)
-    VALUES(${id}::uuid,${ctx.organizationId},${ctx.projectId},${input.agentId},${input.conversationId},${input.turnId},${`integration:${input.turnId}:${input.toolCallId}`},'integration','composio',${connection.toolkit},${input.toolSlug},${connection.id}::uuid,'pending','configured')
+    VALUES(${id}::uuid,${ctx.organizationId},${ctx.projectId},${input.agentId},${input.conversationId},${input.turnId},${`integration:${input.turnId}:${input.toolCallId}`},'integration',${native ? "shopify" : "composio"},${connection.toolkit},${input.toolSlug},${connection.id}::uuid,'pending','configured')
     ON CONFLICT(project_id,event_key) DO NOTHING RETURNING id`)
   if (!admitted.rows.length)
     throw new TracerError(
       "VALIDATION_ERROR",
       "This app action was already attempted. Inspect its result before retrying."
     )
+  if (native) {
+    try {
+      const output = await executeShopifyTool(
+        ctx,
+        connection.id,
+        input.toolSlug,
+        input.arguments,
+        input.signal
+      )
+      await ctx.database.execute(
+        sql`UPDATE build_usage_event SET status='completed',cost_nano_usd=0 WHERE id=${id}::uuid`
+      )
+      return { output, status: "completed" as const }
+    } catch (error) {
+      await ctx.database.execute(
+        sql`UPDATE build_usage_event SET status='failed',cost_nano_usd=0 WHERE id=${id}::uuid`
+      )
+      throw error
+    }
+  }
   const credits = new ExecutionCreditStore(getTracerWritePool(ctx.database))
   let reserved = false
   let dispatched = false
@@ -289,7 +353,7 @@ export async function executeAppAction(
     const session = await integrationSession(
       connection.provider_user_id,
       connection.toolkit,
-      connection.connected_account_id,
+      connection.connected_account_id!,
       input.toolSlug
     )
     if (billingEnabled()) {

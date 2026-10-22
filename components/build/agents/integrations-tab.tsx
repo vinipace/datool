@@ -3,6 +3,8 @@
 import * as React from "react"
 import { ArrowRight, Plus, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Card,
   CardHeader,
@@ -32,6 +34,8 @@ const descriptions: Record<string, string> = {
     "Bring calendar events and scheduling context into your agent’s conversations.",
   slack: "Bring messages and team conversations into your agent’s workflow.",
   shopify: "Help customers with store, product, and order information.",
+  shopify_native:
+    "Show live products, prices and availability, and answer questions using your store’s policies.",
   zendesk: "Bring support tickets and help center context into conversations.",
   github:
     "Give your agent context from repositories, issues, and pull requests.",
@@ -64,6 +68,7 @@ export function IntegrationsTab({
     { enabled: active }
   )
   const [appSlug, setAppSlug] = React.useState<string | null>(null)
+  const [shop, setShop] = React.useState("")
   const [disconnectId, setDisconnectId] = React.useState<string | null>(null)
   const disconnectTrigger = React.useRef<HTMLButtonElement | null>(null)
   const cancelDisconnectButton = React.useRef<HTMLButtonElement | null>(null)
@@ -129,7 +134,10 @@ export function IntegrationsTab({
     return run(async () => {
       const result = await buildApi.call<{ id: string; redirectUrl: string }>(
         "build_connect_app",
-        { toolkit: slug }
+        {
+          toolkit: slug,
+          ...(app?.connectionMethod === "shopify" ? { shop } : {}),
+        }
       )
       setAuthorization({ id: result.id, url: result.redirectUrl })
       connections.refresh()
@@ -275,8 +283,14 @@ export function IntegrationsTab({
                     onClick={(event) => {
                       trigger.current = event.currentTarget
                       setAppSlug(item.slug)
+                      setShop("")
                       setError(null)
-                      if (!manage) void connect(item.slug)
+                      if (
+                        !manage &&
+                        !item.connectionMethod &&
+                        item.available !== false
+                      )
+                        void connect(item.slug)
                     }}
                   >
                     {manage ? "Manage" : "Connect"}
@@ -350,6 +364,47 @@ export function IntegrationsTab({
                       </Button>
                     </Notice>
                   )}
+                  {app.available === false ? (
+                    <Notice>
+                      This integration needs administrator setup before you can
+                      connect an account.
+                    </Notice>
+                  ) : app.connectionMethod === "shopify" ? (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        void connect(app.slug)
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="shopify-store-domain">
+                          Store address
+                        </Label>
+                        <Input
+                          id="shopify-store-domain"
+                          autoComplete="off"
+                          placeholder="your-store.myshopify.com"
+                          value={shop}
+                          onChange={(event) => setShop(event.target.value)}
+                          disabled={busy}
+                          required
+                        />
+                      </div>
+                      <p className="text-sm text-foreground-muted">
+                        Authorize read access to products and store policies in
+                        Shopify. Orders, customers and payments are not
+                        requested.
+                      </p>
+                      <Button
+                        type="submit"
+                        loading={busy}
+                        disabled={!shop.trim() || busy}
+                      >
+                        Connect store
+                      </Button>
+                    </form>
+                  ) : null}
                   <div className="flex items-center justify-between gap-3">
                     <h3
                       ref={accountSection}
@@ -358,22 +413,24 @@ export function IntegrationsTab({
                     >
                       Accounts
                     </h3>
-                    {visibleAccounts.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => connect(app.slug)}
-                      >
-                        <Plus aria-hidden /> Add account
-                      </Button>
-                    )}
+                    {visibleAccounts.length > 0 &&
+                      !app.connectionMethod &&
+                      app.available !== false && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => connect(app.slug)}
+                        >
+                          <Plus aria-hidden /> Add account
+                        </Button>
+                      )}
                   </div>
                   {visibleAccounts.length > 0 ? (
                     <div className="space-y-3">
                       {visibleAccounts.map(renderAccount)}
                     </div>
-                  ) : (
+                  ) : !app.connectionMethod && app.available !== false ? (
                     <Card className="space-y-4 p-4">
                       <div className="space-y-1">
                         <p className="text-sm font-medium">
@@ -388,7 +445,7 @@ export function IntegrationsTab({
                         <Plus aria-hidden /> Connect account
                       </Button>
                     </Card>
-                  )}
+                  ) : null}
                   <p className="text-xs leading-relaxed text-foreground-muted">
                     Accounts are shared across agents in this project.
                   </p>

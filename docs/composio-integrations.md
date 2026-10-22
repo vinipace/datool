@@ -1,6 +1,8 @@
 # Connected apps and agent usage
 
 Build uses Composio sessions for project-owned app connections and execution.
+The [native Shopify connector](shopify-integration.md) uses Shopify OAuth and
+direct Admin API calls instead; it does not require a Composio account.
 Customers connect and manage accounts in **Agent → Integrations**. Authorize in
 a new tab, then return to Integrations and refresh the connection. In
 **Agent → Actions → Create action → Connected app**, choose that account and a
