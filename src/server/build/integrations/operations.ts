@@ -24,10 +24,18 @@ registerBuildOperation({
   description:
     "Start a private OAuth app connection for the current project. Open the returned HTTPS URL to authorize.",
   scopes: ["build:write"],
-  schema: z.object({ toolkit: z.string().min(1).max(100) }),
+  schema: z.object({
+    toolkit: z.string().min(1).max(100),
+    shop: z.string().max(260).optional(),
+  }),
   idempotency: "required",
   openWorld: true,
-  execute: (ctx, input) => connectApp(ctx, String(input.toolkit)),
+  execute: (ctx, input) =>
+    connectApp(
+      ctx,
+      String(input.toolkit),
+      typeof input.shop === "string" ? input.shop : undefined
+    ),
 })
 registerBuildOperation({
   name: "build_refresh_app_connection",

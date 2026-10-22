@@ -7,7 +7,7 @@ import { TracerService } from "@/src/server/tracer/service"
 import { runTracerEffect } from "@/src/server/tracer/effect"
 
 import type { RuntimeAgent } from "@/src/server/build/runtime"
-import { runAgentTurn } from "@/src/server/build/runtime"
+import { runAgentTurn, BuildRuntimeError } from "@/src/server/build/runtime"
 import { createAgent } from "@/src/server/build/agents"
 import {
   closeTracerDatabase,
@@ -103,6 +103,99 @@ function agent(
 }
 
 describe("Build agent runtime", () => {
+  test("retains the safe HTTP failure status in tool traces", async () => {
+    const { context, service } = await makeContext()
+    const usage = {
+      inputTokens: { total: 2, noCache: 2, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 2, text: 2, reasoning: 0 },
+    }
+    const model = new MockLanguageModelV4({
+      doGenerate: [
+        {
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "products-1",
+              toolName: "products",
+              input: '{"query":""}',
+            },
+          ],
+          finishReason: { unified: "tool-calls", raw: "tool_calls" },
+          usage,
+          warnings: [],
+        },
+        {
+          content: [
+            { type: "text", text: "Store data is temporarily unavailable." },
+          ],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage,
+          warnings: [],
+        },
+      ],
+    })
+    const action: ActionRecord = {
+      id: "products",
+      projectId: context.projectId,
+      agentId: "agent-a",
+      slug: "products",
+      revision: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      definition: {
+        id: "products",
+        type: "client",
+        name: "Products",
+        description: "Find products",
+        enabled: true,
+        channels: ["telegram"],
+        procedureOnly: false,
+        eventName: "products",
+        resultSchema: {},
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+      },
+    }
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: "agent-a",
+        channel: "telegram",
+        requestKey: "http-failure-trace",
+        message: "What products do you sell?",
+      },
+      {
+        conversationService: service,
+        agent: agent(context, { model: "trace-test-model" }),
+        dependencies: {
+          generateText: (options) => generateText({ ...options, model }),
+          resolveActions: async () => [action],
+          resolveProcedures: async () => [],
+          executeAction: async () => {
+            throw new BuildRuntimeError(
+              "ACTION_HTTP_ERROR",
+              "The outbound action returned HTTP 502."
+            )
+          },
+        },
+      }
+    )
+    const trace = await runTracerEffect(
+      new TracerService(context.database).getTrace(result.traceId!)
+    )
+    const tool = trace.spans.find((span) => span.kind === "tool")
+    expect(tool?.status).toBe("errored")
+    expect(tool?.attributes["error.message"]).toBe(
+      "The outbound action returned HTTP 502."
+    )
+    expect(result.toolCalls[0]?.error).toMatchObject({
+      kind: "ACTION_HTTP_ERROR",
+      message: "The outbound action returned HTTP 502.",
+    })
+  }, 30_000)
   test("captures each real model call, including instructions, history and tool results", async () => {
     const { context, service } = await makeContext()
     const conversation = await service.getOrCreate({

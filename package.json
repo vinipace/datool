@@ -160,6 +160,7 @@
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@openai/mcp-extensions": "0.1.0",
     "@opentelemetry/sdk-trace-node": "2.10.0",
+    "@shopify/shopify-api": "15.0.1",
     "@vercel/sandbox": "^3.3.0",
     "@xyflow/react": "^12.11.6",
     "ai": "^7.0.105",

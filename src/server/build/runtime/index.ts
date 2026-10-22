@@ -364,7 +364,13 @@ function redactTracePayload(payload: unknown, knownSecrets: readonly string[]) {
               // Provider exceptions can contain request bodies and credentials. Preserve
               // status and HTTP codes, following the runtime's safe-error contract.
               .filter(
-                ([key]) => key !== "otel.events" && key !== "error.message"
+                ([key, value]) =>
+                  key !== "otel.events" &&
+                  (key !== "error.message" ||
+                    (typeof value === "string" &&
+                      /^The outbound action returned HTTP [1-5][0-9]{2}\.$/.test(
+                        value
+                      )))
               )
               .map(([key, value]) => [
                 key,
@@ -496,6 +502,11 @@ function textFromContent(content: ConversationContent | string): string {
 }
 
 function safeError(error: unknown) {
+  if (error instanceof BuildActionTransportError && error.httpStatus)
+    return {
+      kind: "ACTION_HTTP_ERROR",
+      message: `The outbound action returned HTTP ${error.httpStatus}.`,
+    }
   if (error instanceof GuardrailBlockedError) {
     return { kind: error.code, message: error.message }
   }
@@ -693,7 +704,8 @@ function assertSafeActionUrl(raw: string) {
 class BuildActionTransportError extends Error {
   constructor(
     message: string,
-    readonly uncertain: boolean
+    readonly uncertain: boolean,
+    readonly httpStatus?: number
   ) {
     super(message)
     this.name = "BuildActionTransportError"
@@ -784,8 +796,9 @@ async function invokeBuildHttp(
   }
   if (response.status < 200 || response.status >= 300)
     throw new BuildActionTransportError(
-      "The outbound action returned an error response.",
-      false
+      `The outbound action returned HTTP ${response.status}.`,
+      false,
+      response.status
     )
   const text = Buffer.from(response.body).toString("utf8")
   let output: unknown = text
@@ -1533,6 +1546,11 @@ async function executeAction(
         error: safeError(error),
       },
     }).catch(() => undefined)
+    if (error instanceof BuildActionTransportError && error.httpStatus)
+      throw new BuildRuntimeError(
+        "ACTION_HTTP_ERROR",
+        `The outbound action returned HTTP ${error.httpStatus}.`
+      )
     throw new BuildRuntimeError(
       uncertain ? "ACTION_UNCERTAIN" : "ACTION_FAILED",
       uncertain
