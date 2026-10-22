@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
+import { ChatNavigationContext } from "./chat-navigation-context"
+import { isSafeHttpUrl } from "@/src/lib/build/urls"
 
 const themeProperties = [
   "--color-background",
@@ -36,12 +38,13 @@ export function CodeWidgetFrame({
   ) => void
   onStatus?: (error: string | null) => void
 }) {
+  const navigation = React.useContext(ChatNavigationContext)
   const frame = React.useRef<HTMLIFrameElement>(null)
   const host = React.useRef<HTMLDivElement>(null)
-  const current = React.useRef({ functions, onAction, onStatus })
+  const current = React.useRef({ functions, onAction, onStatus, navigation })
   React.useEffect(() => {
-    current.current = { functions, onAction, onStatus }
-  }, [functions, onAction, onStatus])
+    current.current = { functions, onAction, onStatus, navigation }
+  }, [functions, onAction, onStatus, navigation])
   const [origin, setOrigin] = React.useState("")
   const [height, setHeight] = React.useState(96)
   const [ready, setReady] = React.useState(false)
@@ -53,6 +56,7 @@ export function CodeWidgetFrame({
     enabled: Boolean(onAction),
     functions: functions.map((fn) => fn.name),
     theme,
+    navigationOrigin: navigation?.origin,
   })
   const request = React.useRef(0)
 
@@ -100,7 +104,13 @@ export function CodeWidgetFrame({
         return
       }
       if (value?.requestId !== request.current) return
-      if (value.type === "widget-height" && Number.isFinite(value.height)) {
+      if (value.type === "widget-navigate") {
+        if (typeof value.href === "string" && isSafeHttpUrl(value.href))
+          current.current.navigation?.navigate(value.href)
+      } else if (
+        value.type === "widget-height" &&
+        Number.isFinite(value.height)
+      ) {
         setHeight(Math.max(40, Math.min(1600, Math.ceil(value.height))))
       } else if (value.type === "widget-status") {
         current.current.onStatus?.(
@@ -156,7 +166,7 @@ export function CodeWidgetFrame({
         <iframe
           ref={frame}
           title="Widget content"
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
           srcDoc={source}
           className="block w-full border-0"
           style={{ height }}

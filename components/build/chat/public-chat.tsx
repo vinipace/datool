@@ -29,6 +29,8 @@ import {
 import { ChatComposer, ChatTypingIndicator } from "@/components/ui/chat"
 import { ChatFeedback } from "@/components/ui/chat-feedback"
 import { formatRelative } from "@/components/tracer/format"
+import { ChatNavigationContext } from "@/components/ui/chat-navigation-context"
+import { isSafeHttpUrl } from "@/src/lib/build/urls"
 
 type Appearance = ChatBubbleSettings
 
@@ -129,6 +131,39 @@ export function PublicChat({
   const sendingRef = React.useRef(false)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [draft, setDraft] = React.useState("")
+  const updateDraft = React.useCallback(
+    (value: string) => {
+      setDraft(value)
+      const active = sessionRef.current
+      if (!active || previewAgentId) return
+      try {
+        window.sessionStorage.setItem(
+          `${sessionKey(channelId, embedOrigin)}:draft:${active.conversationId}`,
+          value
+        )
+      } catch {
+        /* Chat remains available without browser storage. */
+      }
+    },
+    [channelId, embedOrigin, previewAgentId]
+  )
+  const linkNavigation = React.useMemo(
+    () => ({
+      origin: embedded && !previewAgentId ? embedOrigin : undefined,
+      navigate(href: string) {
+        if (!embedded || previewAgentId || !embedOrigin || !isSafeHttpUrl(href))
+          return false
+        if (new URL(href).origin !== embedOrigin) return false
+        // The host validates this frame's source, origin and destination again.
+        window.parent.postMessage(
+          { type: "datool:chat:navigate", href },
+          embedOrigin
+        )
+        return true
+      },
+    }),
+    [embedded, previewAgentId, embedOrigin]
+  )
   const [loading, setLoading] = React.useState(true)
   const [sending, setSending] = React.useState(false)
   const [feedback, setFeedback] = React.useState<
@@ -363,6 +398,15 @@ export function PublicChat({
         activeConversationId.current = active.conversationId
         sessionRef.current = active
         setSession(active)
+        try {
+          setDraft(
+            window.sessionStorage.getItem(
+              `${key}:draft:${active.conversationId}`
+            ) ?? ""
+          )
+        } catch {
+          setDraft("")
+        }
         const display = await requestJson<{ appearance: Appearance }>(
           `/api/build-public/${encodeURIComponent(channelId)}/appearance`
         )
@@ -466,7 +510,7 @@ export function PublicChat({
     if (!text || !session || waitingReply || loading) return
     sendingRef.current = true
     ++readSequence.current
-    setDraft("")
+    updateDraft("")
     setError(null)
     setSending(true)
     const localMessageId = `local-${optimisticId.current++}`
@@ -529,7 +573,7 @@ export function PublicChat({
       setMessages((current) =>
         current.filter((message) => message.id !== localMessageId)
       )
-      if (!suggestedText && !interaction) setDraft(text)
+      if (!suggestedText && !interaction) updateDraft(text)
       setError(
         reason instanceof Error
           ? reason.message
@@ -656,7 +700,12 @@ export function PublicChat({
       )
       return
     }
-    window.sessionStorage.removeItem(sessionKey(channelId, embedOrigin))
+    updateDraft("")
+    try {
+      window.sessionStorage.removeItem(sessionKey(channelId, embedOrigin))
+    } catch {
+      /* Optional storage. */
+    }
     setMessages([])
     setFeedback({})
     setFeedbackError({})
@@ -783,7 +832,7 @@ export function PublicChat({
         <ChatComposer
           variant={helpPage && !messages.length ? "help-page" : "customer"}
           text={draft}
-          onTextChange={setDraft}
+          onTextChange={updateDraft}
           running={waitingReply}
           disabled={loading || !session || unavailable}
           canSubmit={!!draft.trim() && !waitingReply && !loading && !!session}
@@ -798,218 +847,222 @@ export function PublicChat({
   )
 
   return (
-    <main
-      className={cn(
-        "datool-chat-surface flex min-h-0 w-full justify-center bg-background text-foreground",
-        previewAgentId ? "h-full" : "h-dvh",
-        helpPage && "datool-help-page @container/help"
-      )}
-      lang={language}
-      data-theme={theme}
-      style={bubbleStyle(appearance)}
-    >
-      {helpPage ? <HelpPageSidebar {...navigation} /> : null}
-      <section
-        aria-label={`${appearance.displayName} chat`}
+    <ChatNavigationContext.Provider value={linkNavigation}>
+      <main
         className={cn(
-          "@container/chat flex min-h-0 w-full min-w-0 flex-col overflow-hidden bg-surface-canvas",
+          "datool-chat-surface flex min-h-0 w-full justify-center bg-background text-foreground",
           previewAgentId ? "h-full" : "h-dvh",
-          !helpPage && "max-w-2xl",
-          !helpPage && !previewAgentId && "border-x border-border shadow-sm"
+          helpPage && "datool-help-page @container/help"
         )}
+        lang={language}
+        data-theme={theme}
+        style={bubbleStyle(appearance)}
       >
-        {helpPage ? (
-          <HelpPageToolbar {...navigation} />
-        ) : (
-          <header
-            data-bubble-header={appearance.accentHeader ? "accent" : undefined}
-            className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 @min-[28rem]/chat:px-5"
-          >
-            <div className="flex min-w-0 items-center gap-3">
-              <AgentAvatar
-                appearance={appearance}
-                className="size-9 rounded-lg"
-              />
-              <div className="min-w-0">
-                <h1 className="truncate text-sm font-semibold">
-                  {appearance.displayName}
-                </h1>
-                <p className="text-xs opacity-70">{copy.assistant}</p>
+        {helpPage ? <HelpPageSidebar {...navigation} /> : null}
+        <section
+          aria-label={`${appearance.displayName} chat`}
+          className={cn(
+            "@container/chat flex min-h-0 w-full min-w-0 flex-col overflow-hidden bg-surface-canvas",
+            previewAgentId ? "h-full" : "h-dvh",
+            !helpPage && "max-w-2xl",
+            !helpPage && !previewAgentId && "border-x border-border shadow-sm"
+          )}
+        >
+          {helpPage ? (
+            <HelpPageToolbar {...navigation} />
+          ) : (
+            <header
+              data-bubble-header={
+                appearance.accentHeader ? "accent" : undefined
+              }
+              className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 @min-[28rem]/chat:px-5"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <AgentAvatar
+                  appearance={appearance}
+                  className="size-9 rounded-lg"
+                />
+                <div className="min-w-0">
+                  <h1 className="truncate text-sm font-semibold">
+                    {appearance.displayName}
+                  </h1>
+                  <p className="text-xs opacity-70">{copy.assistant}</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost-muted"
-                disabled={loading || sending || !session}
-                onClick={() => void resetConversation()}
-                aria-label={copy.newChat}
-                title={copy.newChat}
-              >
-                <RefreshCw className="size-4" aria-hidden />
-              </Button>
-              {embedded ? (
+              <div className="flex items-center gap-1">
                 <Button
                   type="button"
                   size="icon-sm"
                   variant="ghost-muted"
-                  onClick={() =>
-                    onClose
-                      ? onClose()
-                      : window.parent.postMessage(
-                          { type: "datool:chat:close" },
-                          "*"
-                        )
-                  }
-                  aria-label={copy.close}
-                  title={copy.close}
+                  disabled={loading || sending || !session}
+                  onClick={() => void resetConversation()}
+                  aria-label={copy.newChat}
+                  title={copy.newChat}
                 >
-                  <X className="size-4" aria-hidden />
+                  <RefreshCw className="size-4" aria-hidden />
                 </Button>
-              ) : null}
-            </div>
-          </header>
-        )}
-        <div
-          role="log"
-          ref={messageLogRef}
-          tabIndex={0}
-          aria-label={`Conversation with ${appearance.displayName}`}
-          aria-live="polite"
-          aria-busy={loading || waitingReply}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset @min-[28rem]/chat:px-5"
-        >
-          {loading ? <LoadingState compact label={copy.loading} /> : null}
-          {unavailable ? (
-            <div
-              role="alert"
-              className="m-auto flex max-w-64 flex-col items-center px-3 py-8 text-center"
-            >
-              <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-muted text-foreground-muted">
-                <MessageCircleWarning className="size-5" aria-hidden />
+                {embedded ? (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost-muted"
+                    onClick={() =>
+                      onClose
+                        ? onClose()
+                        : window.parent.postMessage(
+                            { type: "datool:chat:close" },
+                            "*"
+                          )
+                    }
+                    aria-label={copy.close}
+                    title={copy.close}
+                  >
+                    <X className="size-4" aria-hidden />
+                  </Button>
+                ) : null}
               </div>
-              <h2 className="text-sm font-medium text-foreground">
-                {copy.unavailable}
-              </h2>
-              <p className="mt-2 text-sm leading-5 text-foreground-muted">
-                {copy.unavailableDescription}
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="mt-5"
-                onClick={() => void startSession(true)}
+            </header>
+          )}
+          <div
+            role="log"
+            ref={messageLogRef}
+            tabIndex={0}
+            aria-label={`Conversation with ${appearance.displayName}`}
+            aria-live="polite"
+            aria-busy={loading || waitingReply}
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset @min-[28rem]/chat:px-5"
+          >
+            {loading ? <LoadingState compact label={copy.loading} /> : null}
+            {unavailable ? (
+              <div
+                role="alert"
+                className="m-auto flex max-w-64 flex-col items-center px-3 py-8 text-center"
               >
-                <RefreshCw className="size-3.5" aria-hidden />
-                {copy.retry}
-              </Button>
-            </div>
-          ) : null}
-          {!helpPage &&
-          !loading &&
-          !error &&
-          !messages.length &&
-          appearance.welcomeMessage ? (
-            <div
-              data-bubble-message
-              className="mb-4 w-fit max-w-[min(85%,36rem)] bg-muted px-3 py-2.5 text-sm"
-            >
-              <p className="break-words whitespace-pre-wrap">
-                {appearance.welcomeMessage}
-              </p>
-            </div>
-          ) : null}
-          {!helpPage &&
-          !loading &&
-          !error &&
-          !messages.length &&
-          !appearance.welcomeMessage ? (
-            <div className="flex flex-1 flex-col items-center justify-center text-center text-sm text-foreground-muted">
-              <MessageCircle className="mb-2 size-5" aria-hidden />
-              <p>{copy.start}</p>
-            </div>
-          ) : null}
-          {helpPage && !loading && !error && !messages.length ? (
-            <div className="m-auto w-full max-w-3xl px-3 py-10 @min-[700px]/help:px-8">
-              <HelpPageWelcome settings={appearance} />
-              {composer}
-              <HelpPageLinks settings={appearance} />
-            </div>
-          ) : null}
-          <div className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}>
-            <MessageTranscript
-              key={session?.conversationId}
-              pendingReply={
-                waitingReply ? (
-                  <ChatTypingIndicator label={copy.thinking} />
-                ) : undefined
-              }
-              variant="customer"
-              messages={messages.map((message) => ({
-                ...message,
-                role: message.direction === "inbound" ? "user" : "assistant",
-                content: message.text ?? "",
-                toolCalls: [],
-              }))}
-              onWidgetInteraction={
-                sending || loading || !session
-                  ? undefined
-                  : (message, interaction, label) =>
-                      void submit(undefined, label, {
-                        ...interaction,
-                        sourceMessageId: message.id,
-                      })
-              }
-              renderMessageFooter={(message) => {
-                if (message.role !== "assistant" || !message.id) return null
-                const messageId = message.id
-                return (
-                  <div className="mt-1 max-w-[85%] px-2 text-xs text-foreground-muted">
-                    <div className="flex items-center gap-2">
-                      {message.createdAt ? (
-                        <time
-                          dateTime={message.createdAt}
-                          title={new Date(message.createdAt).toLocaleString(
-                            language
-                          )}
-                        >
-                          {Math.abs(
-                            Date.now() - new Date(message.createdAt).getTime()
-                          ) < 60_000
-                            ? copy.justNow
-                            : formatRelative(message.createdAt, language)}
-                        </time>
-                      ) : null}
-                      {appearance.showFeedback ? (
-                        <ChatFeedback
-                          value={feedback[messageId]}
-                          onChange={(value) =>
-                            void sendFeedback(messageId, value)
-                          }
-                          disabled={!session || feedbackPending[messageId]}
-                          label={copy.feedback}
-                          positiveLabel={copy.helpful}
-                          negativeLabel={copy.notHelpful}
-                          hideLabel
-                        />
+                <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-muted text-foreground-muted">
+                  <MessageCircleWarning className="size-5" aria-hidden />
+                </div>
+                <h2 className="text-sm font-medium text-foreground">
+                  {copy.unavailable}
+                </h2>
+                <p className="mt-2 text-sm leading-5 text-foreground-muted">
+                  {copy.unavailableDescription}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-5"
+                  onClick={() => void startSession(true)}
+                >
+                  <RefreshCw className="size-3.5" aria-hidden />
+                  {copy.retry}
+                </Button>
+              </div>
+            ) : null}
+            {!helpPage &&
+            !loading &&
+            !error &&
+            !messages.length &&
+            appearance.welcomeMessage ? (
+              <div
+                data-bubble-message
+                className="mb-4 w-fit max-w-[min(85%,36rem)] bg-muted px-3 py-2.5 text-sm"
+              >
+                <p className="break-words whitespace-pre-wrap">
+                  {appearance.welcomeMessage}
+                </p>
+              </div>
+            ) : null}
+            {!helpPage &&
+            !loading &&
+            !error &&
+            !messages.length &&
+            !appearance.welcomeMessage ? (
+              <div className="flex flex-1 flex-col items-center justify-center text-center text-sm text-foreground-muted">
+                <MessageCircle className="mb-2 size-5" aria-hidden />
+                <p>{copy.start}</p>
+              </div>
+            ) : null}
+            {helpPage && !loading && !error && !messages.length ? (
+              <div className="m-auto w-full max-w-3xl px-3 py-10 @min-[700px]/help:px-8">
+                <HelpPageWelcome settings={appearance} />
+                {composer}
+                <HelpPageLinks settings={appearance} />
+              </div>
+            ) : null}
+            <div className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}>
+              <MessageTranscript
+                key={session?.conversationId}
+                pendingReply={
+                  waitingReply ? (
+                    <ChatTypingIndicator label={copy.thinking} />
+                  ) : undefined
+                }
+                variant="customer"
+                messages={messages.map((message) => ({
+                  ...message,
+                  role: message.direction === "inbound" ? "user" : "assistant",
+                  content: message.text ?? "",
+                  toolCalls: [],
+                }))}
+                onWidgetInteraction={
+                  sending || loading || !session
+                    ? undefined
+                    : (message, interaction, label) =>
+                        void submit(undefined, label, {
+                          ...interaction,
+                          sourceMessageId: message.id,
+                        })
+                }
+                renderMessageFooter={(message) => {
+                  if (message.role !== "assistant" || !message.id) return null
+                  const messageId = message.id
+                  return (
+                    <div className="mt-1 max-w-[85%] px-2 text-xs text-foreground-muted">
+                      <div className="flex items-center gap-2">
+                        {message.createdAt ? (
+                          <time
+                            dateTime={message.createdAt}
+                            title={new Date(message.createdAt).toLocaleString(
+                              language
+                            )}
+                          >
+                            {Math.abs(
+                              Date.now() - new Date(message.createdAt).getTime()
+                            ) < 60_000
+                              ? copy.justNow
+                              : formatRelative(message.createdAt, language)}
+                          </time>
+                        ) : null}
+                        {appearance.showFeedback ? (
+                          <ChatFeedback
+                            value={feedback[messageId]}
+                            onChange={(value) =>
+                              void sendFeedback(messageId, value)
+                            }
+                            disabled={!session || feedbackPending[messageId]}
+                            label={copy.feedback}
+                            positiveLabel={copy.helpful}
+                            negativeLabel={copy.notHelpful}
+                            hideLabel
+                          />
+                        ) : null}
+                      </div>
+                      {feedbackError[messageId] ? (
+                        <p className="mt-1 text-destructive" role="alert">
+                          {feedbackError[messageId]}
+                        </p>
                       ) : null}
                     </div>
-                    {feedbackError[messageId] ? (
-                      <p className="mt-1 text-destructive" role="alert">
-                        {feedbackError[messageId]}
-                      </p>
-                    ) : null}
-                  </div>
-                )
-              }}
-            />
+                  )
+                }}
+              />
+            </div>
+            <div className="min-h-1" aria-hidden />
           </div>
-          <div className="min-h-1" aria-hidden />
-        </div>
-        {!helpPage || messages.length > 0 ? composer : null}
-      </section>
-    </main>
+          {!helpPage || messages.length > 0 ? composer : null}
+        </section>
+      </main>
+    </ChatNavigationContext.Provider>
   )
 }
