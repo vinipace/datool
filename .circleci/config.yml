@@ -277,10 +277,14 @@ jobs:
             bun run build:monaco
             bun run build:chatgpt
             bun --no-env-file scripts/test-build-e2e.ts --production
+            bun --no-env-file scripts/test-widget-authoring-e2e.ts
             bun run test:whatsapp:e2e
       - store_artifacts:
           path: artifacts/build-e2e
           destination: build-browser-checks
+      - store_artifacts:
+          path: artifacts/widget-authoring-e2e
+          destination: widget-authoring-checks
   regression-packages:
     executor: linux
     resource_class: large

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import {
   Check,
   LayoutTemplate,
@@ -24,6 +24,9 @@ import {
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
 import type { InspectorMessage } from "@/src/lib/tracer/value-messages"
 import { cn } from "@/lib/utils"
+import { Notice } from "@/components/ui/notice"
+import { validateWidgetPreview } from "@/src/lib/build/widget-preview-client"
+import type { WidgetPreviewReport } from "@/src/lib/build/widget-validation"
 
 const modes = [
   { value: "widget", label: "Widget", icon: PanelsTopLeft },
@@ -49,6 +52,60 @@ export function WidgetPreview({
     null
   )
   const [reset, setReset] = useState(0)
+  const surface = useRef<HTMLDivElement>(null)
+  const [check, setCheck] = useState<{
+    key: string
+    report: WidgetPreviewReport
+  } | null>(null)
+  const [checking, setChecking] = useState(false)
+  const activeCheck = useRef<AbortController | null>(null)
+  const checkKey = JSON.stringify([definition, selectedState, theme, mode])
+  useEffect(() => () => activeCheck.current?.abort(), [])
+  const report = check?.key === checkKey ? check.report : null
+  async function validatePreview() {
+    if (!definition) return
+    activeCheck.current?.abort()
+    const controller = new AbortController()
+    activeCheck.current = controller
+    setChecking(true)
+    try {
+      const result = await validateWidgetPreview(definition, {
+        state: selectedState,
+        width: Math.max(
+          240,
+          Math.min(
+            1440,
+            Math.round(
+              surface.current?.querySelector("iframe")?.getBoundingClientRect()
+                .width || 360
+            )
+          )
+        ),
+        themeElement: surface.current ?? undefined,
+        signal: controller.signal,
+      })
+      setCheck({ key: checkKey, report: result })
+    } catch (error) {
+      if (!controller.signal.aborted)
+        setCheck({
+          key: checkKey,
+          report: {
+            valid: false,
+            rendered: false,
+            schemaValidated: false,
+            diagnostics: [
+              {
+                code: "preview_error",
+                severity: "error",
+                message: String(error),
+              },
+            ],
+          },
+        })
+    } finally {
+      if (activeCheck.current === controller) setChecking(false)
+    }
+  }
   const selectedMode = modes.find((item) => item.value === mode)!
   const states = Object.keys(definition?.states ?? {})
   const message: InspectorMessage = {
@@ -76,6 +133,15 @@ export function WidgetPreview({
       <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
         <span className="text-xs font-medium">Live preview</span>
         <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!definition}
+            loading={checking}
+            onClick={() => void validatePreview()}
+          >
+            Check preview
+          </Button>
           <Button
             size="icon-sm"
             variant="ghost"
@@ -108,6 +174,7 @@ export function WidgetPreview({
         </div>
       </div>
       <div
+        ref={surface}
         className={cn(
           "datool-chat-surface flex min-h-0 flex-1 overflow-y-auto p-5 sm:p-8",
           mode === "center" && "items-center",
@@ -165,6 +232,13 @@ export function WidgetPreview({
           </div>
         )}
       </div>
+      {report && (
+        <Notice variant={report.valid ? "success" : "error"} role="status">
+          {report.valid
+            ? "Preview checks passed. Review its appearance before saving."
+            : report.diagnostics.map((item) => item.message).join(" ")}
+        </Notice>
+      )}
       {event && (
         <div
           role="status"

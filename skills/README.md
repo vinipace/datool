@@ -38,7 +38,7 @@ If you installed from `vinpac/datool-skills` or `vinipace/datool-skills`, run th
 
 | Skill | Purpose |
 | --- | --- |
-| [datool](datool/SKILL.md) | Discover operations, integrate managed prompts and combine workflows |
+| [datool](datool/SKILL.md) | Discover operations, author agent widgets, integrate managed prompts and combine workflows |
 | [datool-traces](datool-traces/SKILL.md) | Investigate traces, spans, sessions and scores |
 | [datool-scorers](datool-scorers/SKILL.md) | Develop, preview and version scorers |
 | [datool-datasets](datool-datasets/SKILL.md) | Curate cases, edit items atomically and freeze snapshots |
