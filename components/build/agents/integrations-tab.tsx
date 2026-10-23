@@ -373,9 +373,8 @@ export function IntegrationsTab({
                   ) : app.connectionMethod === "shopify" ? (
                     <div className="space-y-3">
                       <p className="text-sm text-foreground-muted">
-                        Choose your store and authorize product and policy
-                        access in Shopify. Your existing Datool billing stays in
-                        place.
+                        Choose your store and review Datool’s requested access
+                        in Shopify. Your existing Datool billing stays in place.
                       </p>
                       {authorization ? (
                         <Button asChild>
