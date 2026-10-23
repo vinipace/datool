@@ -1334,60 +1334,23 @@ async function executeAction(
     throw error
   }
   const continuationId = options.continuationId ?? randomUUID()
-  if (
+  const needsApproval =
     (options.requireHumanForActions ||
       (action.type === "integration" &&
         shopifyActionNeedsHuman(action.toolSlug, action.shopifySettings))) &&
     action.type !== "handoff" &&
     !options.allowApproval
-  ) {
-    const approval: RuntimeContinuation = {
-      type: "approval_required",
-      actionId: action.id,
-      continuationId,
-      input: persistedRuntimeRecord(input, knownSecrets),
-      message: "A teammate must approve this action before it runs.",
-      ...(action.type === "integration" &&
-      action.toolSlug.startsWith("SHOPIFY_")
-        ? { shopifySourceTurnId: turn.id }
-        : {}),
-      ...(options.procedureCursor
-        ? {
-            procedureCursor: persistedProcedureCursor(
-              options.procedureCursor,
-              knownSecrets
-            ),
-          }
-        : {}),
-    }
-    await service.recordToolCallFinish({
-      conversationId: conversation.id,
-      turnId: turn.id,
-      toolCallId: options.toolCallId,
-      status: "awaiting_client",
-      output: approval,
-      continuation: approval,
-      ownerFence: turn.ownerFence,
-    })
-    return {
-      output: approval,
-      continuation: approval,
-      status: "awaiting_client" as const,
-    }
-  }
-  if (
+  const needsConfirmation =
     action.type === "integration" &&
     shopifyActionNeedsConfirmation(action.toolSlug) &&
     !options.shopifyConfirmed &&
     !options.allowApproval
-  ) {
-    const confirmation: RuntimeContinuation = {
-      type: "client_action",
+  if (needsApproval || needsConfirmation) {
+    // Teammate approval takes precedence and also confirms the pinned input.
+    const pending: RuntimeContinuation = {
+      type: needsApproval ? "approval_required" : "client_action",
       actionId: action.id,
       continuationId,
-      eventName: "Confirm changes",
-      title: action.name,
-      message: "Review the details and confirm to apply this change.",
       input: persistedRuntimeRecord(input, knownSecrets),
       ...(options.procedureCursor
         ? {
@@ -1398,18 +1361,30 @@ async function executeAction(
           }
         : {}),
     }
+    if (needsApproval) {
+      pending.message = "A teammate must approve this action before it runs."
+      if (
+        action.type === "integration" &&
+        action.toolSlug.startsWith("SHOPIFY_")
+      )
+        pending.shopifySourceTurnId = turn.id
+    } else {
+      pending.eventName = "Confirm changes"
+      pending.title = action.name
+      pending.message = "Review the details and confirm to apply this change."
+    }
     await service.recordToolCallFinish({
       conversationId: conversation.id,
       turnId: turn.id,
       toolCallId: options.toolCallId,
       status: "awaiting_client",
-      output: confirmation,
-      continuation: confirmation,
+      output: pending,
+      continuation: pending,
       ownerFence: turn.ownerFence,
     })
     return {
-      output: confirmation,
-      continuation: confirmation,
+      output: pending,
+      continuation: pending,
       status: "awaiting_client" as const,
     }
   }

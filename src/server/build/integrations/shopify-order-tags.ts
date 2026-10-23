@@ -44,7 +44,6 @@ export async function tagShopifyOrder(
     throw new Error("No matching accessible order was found.")
   const tagged = await shopifyMutation<{
     node: { id: string } | null
-    userErrors: []
   }>(
     graphql,
     ORDER_TAGS_ADD,

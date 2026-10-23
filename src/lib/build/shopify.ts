@@ -22,15 +22,17 @@ export const shopifyActionSettingsSchema = z
 
 export type ShopifyActionSettings = z.infer<typeof shopifyActionSettingsSchema>
 
+const confirmationActions = new Set([
+  "SHOPIFY_UPDATE_PROFILE",
+  "SHOPIFY_UPDATE_ADDRESS",
+  "SHOPIFY_ACTIVATE_ACCOUNT",
+  "SHOPIFY_CREATE_ORDER",
+  "SHOPIFY_RETURN_OR_EXCHANGE",
+  "SHOPIFY_CREATE_EXCHANGE_ORDER",
+])
+
 export function shopifyActionNeedsConfirmation(slug: string) {
-  return new Set([
-    "SHOPIFY_UPDATE_PROFILE",
-    "SHOPIFY_UPDATE_ADDRESS",
-    "SHOPIFY_ACTIVATE_ACCOUNT",
-    "SHOPIFY_CREATE_ORDER",
-    "SHOPIFY_RETURN_OR_EXCHANGE",
-    "SHOPIFY_CREATE_EXCHANGE_ORDER",
-  ]).has(slug)
+  return confirmationActions.has(slug)
 }
 
 export function shopifyActionNeedsHuman(

@@ -10,21 +10,21 @@ export class ShopifyWriteUncertainError extends Error {
   }
 }
 
+type MutationPayload<T> = T & {
+  userErrors: Array<{ field?: string[] | null; message?: string }>
+}
+
 /** A timeout after dispatch is not proof that a commerce write failed. */
-export async function shopifyMutation<
-  T extends {
-    userErrors: Array<{ field?: string[] | null; message?: string }>
-  },
->(
+export async function shopifyMutation<T = Record<string, unknown>>(
   graphql: ShopifyGraphqlClient,
   query: string,
   variables: Record<string, unknown>,
   field: string,
   beforeWrite: () => Promise<void>
-): Promise<T> {
+): Promise<MutationPayload<T>> {
   await beforeWrite()
   let response: Response
-  let result: { data?: Record<string, T>; errors?: unknown[] }
+  let result: { data?: Record<string, MutationPayload<T>>; errors?: unknown[] }
   try {
     response = await graphql(query, { variables })
     result = await response.json()

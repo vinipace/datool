@@ -15,6 +15,7 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [ ] Returns/refunds and exchanges on the existing order within merchant policy.
 - [ ] Replacement orders with mandatory human approval and original-order credit accounting.
 - [ ] Action settings, confirmations, error states and reusable chat controls.
+- [ ] Delayed teammate approval and customer re-verification when the Shopify session has expired.
 - [ ] Required/optional scope configuration, protected customer data approval and reconnect guidance.
 - [ ] Behavioral authorization, policy, idempotency and UI tests; Shopify schema validation.
 - [ ] Update this PR and verify a controlled sandbox install after release.
@@ -36,3 +37,13 @@ Public apps require Shopify approval for protected customer/order data. Access t
 ## Verification recorded so far
 
 The first implementation slice has six behavioral tests covering message-bound identity, account changes, tag policies, guest order proofs, account activation and one-shot customer confirmation. The confirmation regression fails on the prior runtime because it dispatches the change before consent. Seven Chromium story tests cover the confirmation and integration controls. Order/customer GraphQL operations validate against Shopify 2026-10. These are local checks; production still needs the new release and customer/order permissions.
+
+## Design review
+
+The implementation deliberately reuses the Shopify SDK, Datool's action runtime, durable tool records, existing continuation storage and Inbox approvals. Customer confirmation and teammate approval now share one persistence path while retaining separate authorization rules. The mutation helper owns common Shopify error handling; callers describe only their action-specific response. The simplification is covered by four commerce tests and seven runtime tests for confirmation, approval, continuation and handoff behavior.
+
+Keep the server-owned message identity record and the ownership recheck immediately before writes. Removing those checks would let untrusted chat input or stale account identity influence customer access. Keep ambiguous writes distinguishable from failures; a shorter automatic retry path could repeat a change that Shopify already applied.
+
+For the remaining actions, Shopify remains responsible for prices, discounts, shipping, tax and payment state. Use the existing continuation mechanism for storefront interactions instead of introducing another queue or workflow engine. Checkout and return settings in the draft contract are reserved for unfinished actions; they do not establish implemented payment or return policy enforcement.
+
+Before financial actions are considered ready, validate delayed approvals across the five-minute identity freshness boundary, provide an explicit re-verification path, and test reconciliation after ambiguous external writes. Complete privacy/uninstall handling and scope/reconnect guidance, then verify the full customer journey in the sandbox. Passing the current unit and database tests does not replace those release checks.

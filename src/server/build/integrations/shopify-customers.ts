@@ -89,7 +89,6 @@ export async function runShopifyCustomerTool(
     const id = requireShopifyCustomer(shopper)
     const result = await shopifyMutation<{
       customer: { id: string } | null
-      userErrors: []
     }>(
       graphql,
       CUSTOMER_UPDATE,
@@ -114,7 +113,6 @@ export async function runShopifyCustomerTool(
     const addressId = data.customer.defaultAddress?.id
     const result = await shopifyMutation<{
       address: { id: string } | null
-      userErrors: []
     }>(
       graphql,
       addressId ? ADDRESS_UPDATE : ADDRESS_CREATE,
