@@ -451,6 +451,7 @@ jobs:
           key-file: datool_deploy
       - run:
           name: Import and release the verified image through Dokku
+          no_output_timeout: 30m
           command: |
             test "$CIRCLE_BRANCH" = main
             read -r image < image-ref.txt

@@ -3191,6 +3191,7 @@ export async function runAgentTurn(
     }
     const system = [
       configuration.instructions,
+      "A human handoff queues the conversation for support. Do not promise a response time, immediate availability, or say someone has replied unless the action result establishes it.",
       knowledge?.text ? `Knowledge context:\n${knowledge.text}` : "",
       procedures.some(
         (item) =>
