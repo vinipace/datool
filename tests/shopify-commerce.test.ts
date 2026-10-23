@@ -438,6 +438,10 @@ test("published Shopify tool schemas accept documented inputs in the runtime val
   const { validateSchema } = await import("@/src/server/playground/schema")
   const examples = [
     [
+      "SHOPIFY_SEARCH_PRODUCTS",
+      { query: "board", maxPrice: 50, inStockOnly: true },
+    ],
+    [
       "SHOPIFY_GET_ORDERS",
       { orderNumber: "1001", email: "buyer@example.test" },
     ],
@@ -461,4 +465,98 @@ test("published Shopify tool schemas accept documented inputs in the runtime val
     if (!tool) throw new Error(`Missing native tool ${slug}`)
     expect(() => validateSchema(tool.inputSchema, input)).not.toThrow()
   }
+})
+
+test("live product search filters published products and finds available matching variants beyond the first page", async () => {
+  const { runShopifyStoreTool } =
+    await import("@/src/server/build/integrations/shopify-catalog")
+  const calls: Array<Record<string, unknown>> = []
+  const variant = (id: string, price: string, availableForSale: boolean) => ({
+    id: `gid://shopify/ProductVariant/${id}`,
+    title: `Size ${id}`,
+    price,
+    availableForSale,
+  })
+  const product = {
+    id: "gid://shopify/Product/10",
+    title: "Board",
+    description: "A board",
+    handle: "board",
+    status: "ACTIVE",
+    publishedAt: "2020-01-01T00:00:00Z",
+    onlineStoreUrl: null,
+    priceRangeV2: {
+      minVariantPrice: { amount: "20" },
+      maxVariantPrice: { amount: "100" },
+    },
+    variants: {
+      nodes: [variant("11", "20", false)],
+      pageInfo: { hasNextPage: true, endCursor: "variants-next" },
+    },
+  }
+  const graphql = async (
+    _query: string,
+    options?: { variables?: Record<string, unknown> }
+  ) => {
+    const args = options?.variables ?? {}
+    calls.push(args)
+    if (args.id)
+      return Response.json({
+        data: {
+          product: {
+            variants: {
+              nodes: [variant("12", "35", true), variant("13", "100", true)],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        },
+      })
+    return Response.json({
+      data: {
+        shop: {
+          currencyCode: "USD",
+          primaryDomain: { url: "https://store.example" },
+        },
+        products: {
+          nodes: [
+            product,
+            { ...product, id: "gid://shopify/Product/20", publishedAt: null },
+            { ...product, id: "gid://shopify/Product/30", status: "DRAFT" },
+          ],
+          pageInfo: { hasNextPage: true, endCursor: "products-next" },
+        },
+      },
+    })
+  }
+  const result = await runShopifyStoreTool(
+    "products",
+    {
+      query: "board",
+      productType: 'Boards" OR status:draft',
+      maxPrice: 50,
+      after: "previous-page",
+      inStockOnly: false,
+    },
+    graphql,
+    { excludeOutOfStock: true }
+  )
+  if (!result.products) throw new Error("Expected product results")
+  expect(result.nextCursor).toBe("products-next")
+  expect(result.products).toHaveLength(1)
+  expect(result.products[0]).toMatchObject({
+    url: "https://store.example/products/board",
+    optionsTruncated: true,
+    variants: [{ cartVariantId: "12", price: "35", availableForSale: true }],
+  })
+  expect(calls).toHaveLength(2)
+  expect(calls[0]).toMatchObject({ after: "previous-page" })
+  expect(calls[0].query).toContain('product_type:"Boards\\" OR status:draft"')
+  expect(calls[0].query).toContain("price:<=50")
+  await rejects(
+    runShopifyStoreTool(
+      "products",
+      { query: "board", minPrice: 60, maxPrice: 50 },
+      graphql
+    )
+  )
 })

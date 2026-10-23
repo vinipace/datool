@@ -4,6 +4,7 @@ import { z } from "zod"
 export const shopifyActionSettingsSchema = z
   .object({
     requireHumanApproval: z.boolean().default(false),
+    excludeOutOfStock: z.boolean().default(false),
     allowedOrderTags: z
       .array(z.string().trim().min(1).max(100))
       .max(30)

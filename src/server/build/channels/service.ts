@@ -1557,16 +1557,21 @@ export async function enqueueAgentTurnResult(
   const text =
     result.text ||
     (result.conversation.channel === "web" ? "" : continuationText)
-  if (!text && !continuations.length)
+  const metadata =
+    result.conversation.channel === "web"
+      ? runtimeMessageMetadata(result, continuations)
+      : undefined
+  if (
+    !text &&
+    !continuations.length &&
+    !metadata?.shopifyProducts &&
+    !metadata?.shopifyCart
+  )
     return {
       queued: false,
       deduplicated: false,
       reason: "empty_result" as const,
     }
-  const metadata =
-    result.conversation.channel === "web"
-      ? runtimeMessageMetadata(result, continuations)
-      : undefined
   const contactId = result.conversation.metadata.contactId
   const replayedHandoffFence =
     result.status === "replayed"
@@ -1741,6 +1746,7 @@ function publicMessageMetadata(metadata: Record<string, unknown>) {
     "continuations",
     "completedContinuationId",
     "shopifyCart",
+    "shopifyProducts",
   ])
   return Object.fromEntries(
     Object.entries(metadata).filter(([key]) => allowed.has(key))

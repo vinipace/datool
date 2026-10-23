@@ -5,7 +5,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 ## Delivery checklist
 
 - [x] Bind customer authorization to authenticated channel messages and recheck identity before each action.
-- [ ] Product discovery, variant IDs, stock filtering and product cards with cart controls.
+- [x] Product discovery, variant IDs, stock filtering and product cards with cart controls.
+- [ ] Catalog image search, complete variant browsing and messaging-channel cart support from Chatbase's documented action matrix.
 - [x] Read and update the shopper's storefront cart; retain chat state during navigation.
 - [ ] Online checkout, cash on delivery and free orders, with merchant-selected payment policies.
 - [x] Own order history, status and tracking; guest lookup by order number and checkout email or phone.
@@ -30,6 +31,10 @@ Cart operations execute against the current storefront session using a bounded, 
 
 Cart writes require browser storage and Web Locks. A receipt is saved before dispatch and reused across clicks, reloads and tabs; a lost response or Shopify inventory error never causes an automatic replay. Each command expires after one hour, allowing old receipts to be removed. Unsupported browsers can use the store's cart directly. A `datool:cart:updated` DOM event provides the refreshed snapshot for themes that want to update their cart badge or drawer; themes must subscribe to it. These receipts prevent accidental replay, not deliberate same-origin storage tampering by a shopper.
 
+Product cards use live catalog results, including product type/vendor/price filters, stock availability and product-page cursors. The merchant's stock exclusion setting cannot be weakened by model arguments. A card can offer cart selection only when exactly one enabled, non-private Update shopping cart action is available for the same store and channel. Its saved, expiring selection permits only the variants actually shown; selecting it runs the existing cart action and merchant approval path. It does not itself claim the cart was changed. Card selection, approval and browser cart completion reuse the existing tool records, without another queue or persistence table.
+
+Large variant collections currently show the first matching page and link to the store's complete options. Full in-chat variant browsing, catalog image search and messaging-channel cart support remain unfinished. Prices use the store's base currency and are re-evaluated by Shopify when the cart changes.
+
 Shopify calculates prices, discounts, shipping, taxes and payment status. Browser cart totals are untrusted display data and must never authorize refunds, order prices or payment. The cart's Checkout link navigates to Shopify checkout; it does not create or prove a completed/paid order. Updating an account address does not change a placed order's delivery address.
 
 Existing abuse protections remain burst-oriented. This work does not add default daily message quotas or spending caps.
@@ -45,6 +50,8 @@ The first implementation slice has six behavioral tests covering message-bound i
 The cart slice adds real-runtime database tests for both model calls and multi-step procedures: merchant approval precedes the browser command, replacement input is ignored, one usage record is produced on completion, and a consumed continuation cannot be reused. The host-script test covers origin/source checks, localization, private-field removal, duplicate/reload protection and ambiguous writes. Eighteen focused Shopify/bridge tests and ten Chromium chat stories pass locally. Cart populated, empty, keyboard-focus and error states were inspected at mobile and desktop widths; the draft message survives cart interactions.
 
 Those full-path tests exposed an incompatible JSON Schema dialect in the new native customer/order tools. Their published schemas now target Draft 7, matching Datool's runtime validator. Regression checks demonstrated failures before the schema, composer-draft, procedure-cart and next-turn model-context fixes, then passed after repair. The existing generic approval/continuation checks remain required. No new Shopify GraphQL operations were introduced by the cart slice, and live-store cart verification is still pending release.
+
+The product-card slice exercises seven real-runtime cart paths, including product searches through model tools, keyword procedures, intent procedures and approved reads. They verify public card delivery, allowed variant selection, preserved merchant approval and one-shot completion. The regressions exposed missing procedure metadata, raw catalog JSON in approved replies and dropped card-only outbound messages; each failed before its repair. Six commerce tests cover Shopify adapters and published input schemas, including stock/price filtering across variant pages. Fifteen Chromium stories cover the chat and integration controls. Product images, mobile/desktop layout, keyboard focus, empty results and network errors were inspected. The product and variant GraphQL queries validate against Shopify 2026-10. These checks do not establish a live Shopify installation.
 
 ## Design review
 

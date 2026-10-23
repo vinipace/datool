@@ -23,6 +23,7 @@ import {
   shopifyDomain,
   shopifyOrigin,
 } from "./shopify-provider"
+import { shopifyProductSearchSchema } from "@/src/lib/build/shopify-products"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
 import { readShopifyOrders } from "./shopify-orders"
 import { shopifyShopper } from "./shopify-identity"
@@ -347,10 +348,7 @@ export async function executeShopifyTool(
   if (!product && !commerce && slug !== "SHOPIFY_READ_POLICIES")
     throw unavailable()
   const args = product
-    ? z
-        .object({ query: z.string().max(160) })
-        .strict()
-        .parse(input)
+    ? shopifyProductSearchSchema.parse(input)
     : commerce
       ? input
       : z.object({}).strict().parse(input)
@@ -425,7 +423,8 @@ export async function executeShopifyTool(
     return await runShopifyStoreTool(
       product ? "products" : "policies",
       args,
-      graphql
+      graphql,
+      execution?.settings
     )
   } catch (error) {
     if (

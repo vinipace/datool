@@ -549,7 +549,15 @@ test("Turnstile requires provider verification, correct hostname, action and dep
   }
 })
 
-for (const flow of ["model", "procedure"])
+for (const flow of [
+  "model",
+  "procedure",
+  "products",
+  "products-procedure",
+  "products-intent",
+  "products-approved",
+  "products-approved-procedure",
+])
   test(`native cart actions preserve merchant approval and deliver a one-shot browser result to the storefront (${flow})`, async () => {
     const f = await fixture({})
     const providerSession = new Session({
@@ -590,27 +598,101 @@ for (const flow of ["model", "procedure"])
       operation: "add",
       items: [{ variantId: "123", quantity: 2 }],
     }
-    if (flow === "procedure")
-      await saveProcedure(f.context, f.agent.id, {
-        slug: "cart-flow",
-        definition: {
-          name: "Cart flow",
-          trigger: { type: "keyword", value: "Update cart" },
-          steps: [
-            {
-              id: "cart",
-              kind: "action",
-              actionId: action.id,
-              input: nativeInput,
+    const productsFlow = flow.startsWith("products")
+    const searchAction = productsFlow
+      ? await saveAction(f.context, f.agent.id, {
+          slug: "search-products",
+          definition: {
+            type: "integration",
+            name: "Search products",
+            connectionId: f.connectionId,
+            toolSlug: "SHOPIFY_SEARCH_PRODUCTS",
+            channels: ["web"],
+            shopifySettings: {
+              requireHumanApproval: flow.includes("approved"),
             },
-            {
-              id: "next",
-              kind: "message",
-              content: "Continue to checkout when you are ready.",
+            inputSchema: {
+              type: "object",
+              properties: { query: { type: "string" } },
+              required: ["query"],
             },
-          ],
-        },
+          },
+        })
+      : action
+    if (productsFlow) {
+      const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+        _url: unknown,
+        init: RequestInit
+      ) => {
+        const body = JSON.parse(String(init.body))
+        if (!body.query.includes("DatoolProducts"))
+          throw new Error("Unexpected external request")
+        return Response.json({
+          data: {
+            shop: {
+              currencyCode: "BRL",
+              primaryDomain: { url: "https://fixture.myshopify.com" },
+            },
+            products: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: ["123", "456"].map((id) => ({
+                id: `gid://shopify/Product/${id}`,
+                title: id === "123" ? "Board wax" : "Helmet",
+                description: "Live product",
+                handle: id,
+                status: "ACTIVE",
+                publishedAt: "2020-01-01T00:00:00Z",
+                onlineStoreUrl: null,
+                priceRangeV2: {
+                  minVariantPrice: { amount: "25" },
+                  maxVariantPrice: { amount: "25" },
+                },
+                variants: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      id: `gid://shopify/ProductVariant/${id}`,
+                      title: "Default Title",
+                      price: "25",
+                      availableForSale: true,
+                    },
+                  ],
+                },
+              })),
+            },
+          },
+        })
+      }) as typeof fetch)
+      cleanup.push(async () => {
+        fetchSpy.mockRestore()
       })
+    }
+    const procedure =
+      flow.endsWith("procedure") || flow.endsWith("intent")
+        ? await saveProcedure(f.context, f.agent.id, {
+            slug: "cart-flow",
+            definition: {
+              name: "Cart flow",
+              trigger: {
+                type: flow.endsWith("intent") ? "intent" : "keyword",
+                value: "Update cart",
+              },
+              steps: [
+                {
+                  id: "cart",
+                  kind: "action",
+                  actionId: searchAction.id,
+                  input: productsFlow ? { query: "" } : nativeInput,
+                },
+                {
+                  id: "next",
+                  kind: "message",
+                  content: "Continue to checkout when you are ready.",
+                },
+              ],
+            },
+          })
+        : null
     const agent = await updateAgent(f.context, f.agent.id, {
       expectedRevision: 1,
       apply: true,
@@ -633,9 +715,22 @@ for (const flow of ["model", "procedure"])
           }
         >
       }) => {
-        await options.tools[action.id].execute(nativeInput, {
-          toolCallId: "cart-call",
-        })
+        const output = await options.tools[
+          flow.endsWith("intent")
+            ? `procedure_${procedure!.id}`
+            : searchAction.id
+        ].execute(
+          flow.endsWith("intent")
+            ? {}
+            : productsFlow
+              ? { query: "" }
+              : nativeInput,
+          {
+            toolCallId: "cart-call",
+          }
+        )
+        if (flow.endsWith("intent"))
+          expect(JSON.stringify(output)).toContain("Board wax")
         return {
           text: "Review your cart request.",
           usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
@@ -668,11 +763,95 @@ for (const flow of ["model", "procedure"])
         metadata: metadata as never,
       }
     }
-    const pending = await runAgentTurn(
+    let pending = await runAgentTurn(
       f.context,
       await admittedTurn({ shopifyCartApproved: true }),
       { agent, dependencies }
     )
+    if (flow.includes("approved")) {
+      expect(pending.continuations[0]?.type).toBe("approval_required")
+      const continuationId = pending.continuations[0].continuationId
+      if (!continuationId)
+        throw new Error("Expected product approval capability")
+      pending = await runAgentTurn(
+        f.context,
+        {
+          agentId: f.agent.id,
+          channel: "web",
+          conversationId: session.conversationId,
+          requestKey: "trusted-product-approval",
+          message: "Approve product search",
+          metadata: {
+            widgetInteraction: {
+              actionId: searchAction.id,
+              continuationId,
+              input: {},
+            },
+          },
+        },
+        {
+          agent,
+          dependencies,
+          trustedApproval: { actionId: searchAction.id, continuationId },
+        }
+      )
+      expect(pending.text).not.toContain("gid://shopify/")
+    }
+    if (productsFlow) {
+      await enqueueAgentTurnResult(f.context, pending, "product-cards")
+      const projected = await readPublicConversation(
+        f.context,
+        f.channel.id,
+        session.conversationId,
+        session.visitorToken,
+        "https://chat.example.test"
+      )
+      const { shopifyProductsSchema } =
+        await import("@/src/lib/build/shopify-products")
+      const catalog = shopifyProductsSchema.parse(
+        projected.at(-1)?.metadata.shopifyProducts
+      )
+      const first = catalog.products[0].cartInteraction!
+      const second = catalog.products[1].cartInteraction!
+      expect(first.actionId).toBe(action.id)
+      await assert.rejects(
+        runAgentTurn(
+          f.context,
+          await admittedTurn({
+            widgetInteraction: {
+              ...second,
+              input: { variantId: "999", quantity: 2 },
+            },
+          }),
+          { agent, dependencies }
+        ),
+        /product selection is no longer available/
+      )
+      pending = await runAgentTurn(
+        f.context,
+        await admittedTurn({
+          shopifyCartApproved: true,
+          widgetInteraction: {
+            ...first,
+            input: { variantId: "123", quantity: 2 },
+          },
+        }),
+        { agent, dependencies }
+      )
+      await assert.rejects(
+        runAgentTurn(
+          f.context,
+          await admittedTurn({
+            widgetInteraction: {
+              ...first,
+              input: { variantId: "123", quantity: 2 },
+            },
+          }),
+          { agent, dependencies }
+        ),
+        /no longer available/
+      )
+    }
     expect(pending.continuations[0]?.type).toBe("approval_required")
     const approvalId = pending.continuations[0].continuationId
     if (!approvalId) throw new Error("Expected approval capability")
@@ -792,7 +971,11 @@ for (const flow of ["model", "procedure"])
     const usage = await f.database.execute<{ status: string }>(
       sql`SELECT status FROM build_usage_event WHERE connection_id=${f.connectionId}::uuid`
     )
-    expect(usage.rows).toEqual([{ status: "completed" }])
+    expect(usage.rows).toEqual(
+      Array.from({ length: productsFlow ? 2 : 1 }, () => ({
+        status: "completed",
+      }))
+    )
     await assert.rejects(
       runAgentTurn(f.context, await admittedTurn(interaction), {
         agent,

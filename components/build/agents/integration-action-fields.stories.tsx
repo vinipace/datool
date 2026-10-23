@@ -92,3 +92,21 @@ export const ShopifyTags: Story = {
     await expect(approval).toBeChecked()
   },
 }
+
+export const ShopifyProducts: Story = {
+  parameters: { msw: { handlers: shopify.handlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole("option", { name: "Search products" })
+    await userEvent.selectOptions(
+      canvas.getByLabelText("App action"),
+      "SHOPIFY_SEARCH_PRODUCTS"
+    )
+    const stock = canvas.getByRole("switch", {
+      name: "Exclude out-of-stock products",
+    })
+    await expect(stock).not.toBeChecked()
+    await userEvent.click(stock)
+    await expect(stock).toBeChecked()
+  },
+}

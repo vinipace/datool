@@ -475,3 +475,150 @@ export const CartReceiptFailure: Story = {
     await waitFor(() => expect(canvas.getAllByRole("article")).toHaveLength(1))
   },
 }
+
+let productSelection: Record<string, unknown> | null = null
+export const ProductCards: Story = {
+  render: () => <StoreSessionFixture />,
+  beforeEach: () => {
+    productSelection = null
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        handlers[0],
+        http.get("https://store.example/product.webp", async () => {
+          const image = await fetch("/widget-template-assets/sneaker.webp")
+          return new HttpResponse(await image.arrayBuffer(), {
+            headers: { "Content-Type": "image/webp" },
+          })
+        }),
+        http.get("*/api/build-public/:channel/conversation/:conversation", () =>
+          HttpResponse.json({
+            data: [
+              {
+                id: "product-result",
+                direction: "outbound",
+                text: "",
+                metadata: {
+                  shopifyProducts: {
+                    currency: "USD",
+                    pricing:
+                      "Store base currency; checkout prices may vary by market.",
+                    nextCursor: null,
+                    products: [
+                      {
+                        id: "gid://shopify/Product/1",
+                        title: "Trail shoe",
+                        description: "For everyday trails.",
+                        imageUrl: "https://store.example/product.webp",
+                        imageAlt: "Trail shoe",
+                        priceMin: "25",
+                        priceMax: "30",
+                        url: "https://store.example/products/board",
+                        optionsTruncated: true,
+                        variants: [
+                          {
+                            id: "gid://shopify/ProductVariant/125",
+                            cartVariantId: "125",
+                            title: "Red / large",
+                            price: "30",
+                            availableForSale: true,
+                          },
+                          {
+                            id: "gid://shopify/ProductVariant/123",
+                            cartVariantId: "123",
+                            title: "Blue / large",
+                            price: "25",
+                            availableForSale: true,
+                          },
+                          {
+                            id: "gid://shopify/ProductVariant/124",
+                            cartVariantId: "124",
+                            title: "Blue / small",
+                            price: "25",
+                            availableForSale: false,
+                          },
+                        ],
+                        cartInteraction: {
+                          actionId: "update-cart",
+                          continuationId: "product-selection-1234",
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+              ...(productSelection
+                ? [
+                    {
+                      id: "selection-received",
+                      direction: "outbound",
+                      text: "Review the cart update.",
+                      metadata: {
+                        completedContinuationId: "product-selection-1234",
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          })
+        ),
+        http.post(
+          "*/api/build-public/:channel/conversation/:conversation",
+          async ({ request }) => {
+            productSelection = (await request.json()) as Record<string, unknown>
+            return HttpResponse.json({ data: { status: "queued" } })
+          }
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const card = within(
+      await canvas.findByRole("region", { name: "Trail shoe" })
+    )
+    const options = card.getByRole("combobox", { name: "Options" })
+    await expect(
+      card.getByRole("option", { name: /Blue \/ small/ })
+    ).toBeDisabled()
+    await userEvent.selectOptions(options, "123")
+    await expect(
+      card.getByRole("link", { name: "See all options in the store" })
+    ).toHaveAttribute(
+      "href",
+      "https://store.example/products/board?variant=123"
+    )
+    const quantity = card.getByRole("spinbutton", { name: "Quantity" })
+    await userEvent.clear(quantity)
+    await userEvent.type(quantity, "0")
+    await expect(
+      card.getByRole("button", { name: "Add to cart" })
+    ).toBeDisabled()
+    await userEvent.clear(quantity)
+    await userEvent.type(quantity, "2")
+    await userEvent.tab()
+    await expect(
+      card.getByRole("button", { name: "Add to cart" })
+    ).toHaveFocus()
+    await userEvent.click(card.getByRole("button", { name: "Add to cart" }))
+    await waitFor(() =>
+      expect(
+        card.getByRole("button", { name: "Selection sent" })
+      ).toBeDisabled()
+    )
+    await expect(productSelection).toMatchObject({
+      metadata: {
+        widgetInteraction: {
+          actionId: "update-cart",
+          continuationId: "product-selection-1234",
+          input: { variantId: "123", quantity: 2 },
+        },
+      },
+    })
+    await waitFor(() => {
+      for (const article of canvas.getAllByRole("article"))
+        expect(getComputedStyle(article).opacity).toBe("1")
+    })
+  },
+}

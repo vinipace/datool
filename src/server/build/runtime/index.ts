@@ -1,4 +1,12 @@
 import {
+  prepareShopifyProductCards,
+  selectedShopifyCartInput,
+} from "./shopify-products"
+import {
+  shopifyProductsSchema,
+  type ShopifyProducts,
+} from "@/src/lib/build/shopify-products"
+import {
   isShopifyCartTool,
   shopifyCartCommandSchema,
   shopifyCartSchema,
@@ -227,6 +235,7 @@ export type RuntimeContinuation = {
   /** Server-owned source turn for a later merchant approval of a Shopify action. */
   shopifySourceTurnId?: string
   shopifyCart?: { command: ShopifyCartCommand; expiresAt: number }
+  shopifyProductSelection?: { variantIds: string[]; expiresAt: number }
 }
 
 type RuntimeProcedureCursor = {
@@ -918,6 +927,7 @@ function persistedContinuations(
 ): RuntimeContinuation[] {
   return toolCalls.flatMap((call) => {
     const continuation = call.continuation
+    if (continuation?.shopifyProductSelection) return []
     if (!continuation || typeof continuation.type !== "string") return []
     const type = continuation.type
     if (
@@ -1181,6 +1191,7 @@ function evaluateBranch(condition: string, variables: Record<string, unknown>) {
 
 type ProcedureResult = {
   text: string
+  shopifyProducts?: ShopifyProducts
   instructions?: string
   actionRefs?: string[]
   continuations: RuntimeContinuation[]
@@ -1294,6 +1305,7 @@ async function executeAction(
   input: Record<string, unknown>,
   options: {
     dependencies: RuntimeDependencies
+    availableActions?: Map<string, ActionRecord>
     toolCallId: string
     question?: string
     continuationId?: string
@@ -1526,6 +1538,20 @@ async function executeAction(
           : undefined,
         signal: options.signal,
       })
+      const shopifyProducts =
+        action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
+        result.status === "completed"
+          ? await prepareShopifyProductCards(
+              result.output,
+              action,
+              options.availableActions ?? new Map(),
+              service,
+              conversation,
+              turn,
+              options.toolCallId
+            )
+          : undefined
+      const output = shopifyProducts ?? result.output
       const cartCommand =
         isShopifyCartTool(action.toolSlug) &&
         result.status === "awaiting_client"
@@ -1565,13 +1591,13 @@ async function executeAction(
         turnId: turn.id,
         toolCallId: options.toolCallId,
         status: result.status,
-        output: cartContinuation ?? result.output,
+        output: cartContinuation ?? output,
         continuation: cartContinuation,
         ownerFence: turn.ownerFence,
       })
       return {
         ...result,
-        output: cartContinuation ?? result.output,
+        output: cartContinuation ?? output,
         continuation: cartContinuation,
       }
     }
@@ -1698,6 +1724,7 @@ async function runProcedure(
     ...procedure.definition.variables,
   }
   const text: string[] = []
+  let shopifyProducts: ShopifyProducts | undefined
   const continuations: RuntimeContinuation[] = []
   let handoff = false
   let handoffOwnerId: string | null = null
@@ -1776,6 +1803,7 @@ async function runProcedure(
         {
           dependencies,
           toolCallId: `procedure_${step.id}_${randomUUID()}`,
+          availableActions: actions,
           question: input,
           requireHumanForActions,
           procedureCursor:
@@ -1789,6 +1817,12 @@ async function runProcedure(
           signal,
         }
       )
+      if (
+        action.definition.type === "integration" &&
+        action.definition.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
+        result.status === "completed"
+      )
+        shopifyProducts = shopifyProductsSchema.parse(result.output)
       if (action.definition.type === "handoff") {
         handoff = true
         handoffOwnerId = action.definition.teamId
@@ -1809,6 +1843,7 @@ async function runProcedure(
   }
   return {
     text: text.join("\n\n"),
+    shopifyProducts,
     continuations,
     stopped: true,
     handoff,
@@ -2197,7 +2232,9 @@ export async function runAgentTurn(
         runtimeSecretValues
       )
       const resultMessage =
-        output || procedureResult.continuations.length
+        output ||
+        procedureResult.continuations.length ||
+        procedureResult.shopifyProducts
           ? await service.appendMessage(
               conversation.id,
               {
@@ -2210,6 +2247,9 @@ export async function runAgentTurn(
                 metadata: {
                   source,
                   ...(shopifyCart ? { shopifyCart } : {}),
+                  ...(procedureResult.shopifyProducts
+                    ? { shopifyProducts: procedureResult.shopifyProducts }
+                    : {}),
                   ...(source === "procedure_resume"
                     ? {
                         completedContinuationId:
@@ -2893,6 +2933,33 @@ export async function runAgentTurn(
           throw error
         }
       }
+      let productSelectionInput: Record<string, unknown> | undefined
+      if (persistedContinuation.shopifyProductSelection) {
+        try {
+          if (
+            continuationType !== "client_action" ||
+            action.definition.type !== "integration" ||
+            action.definition.toolSlug !== "SHOPIFY_UPDATE_CART"
+          )
+            throw new Error("Invalid product selection.")
+          productSelectionInput = selectedShopifyCartInput(
+            interaction.input,
+            persistedContinuation.shopifyProductSelection as NonNullable<
+              RuntimeContinuation["shopifyProductSelection"]
+            >
+          )
+        } catch (error) {
+          await service.recordToolCallFinish({
+            conversationId: conversation.id,
+            turnId: turn.id,
+            toolCallId: claimed.call.toolCallId,
+            status: "failed",
+            error: safeError(error),
+            ownerFence: turn.ownerFence,
+          })
+          throw error
+        }
+      }
       const approvalAllowed =
         allowApproval &&
         options.trustedApproval?.actionId === continuationActionId &&
@@ -2912,12 +2979,13 @@ export async function runAgentTurn(
         isShopifyCartTool(action.definition.toolSlug) &&
         Boolean(persistedContinuation.shopifyCart)
       const approvedInput =
-        (approvalAllowed || shopifyConfirmed || resumesShopifyCart) &&
+        productSelectionInput ??
+        ((approvalAllowed || shopifyConfirmed || resumesShopifyCart) &&
         claimed.call.continuation &&
         typeof claimed.call.continuation.input === "object" &&
         !Array.isArray(claimed.call.continuation.input)
           ? (claimed.call.continuation.input as Record<string, unknown>)
-          : interaction.input
+          : interaction.input)
       const result = await executeAction(
         context,
         service,
@@ -2928,6 +2996,7 @@ export async function runAgentTurn(
         {
           dependencies,
           toolCallId: claimed.call.toolCallId,
+          availableActions: continuationActionMap,
           question: inputText,
           requireHumanForActions:
             configuration.guardrails.requireHumanForActions,
@@ -2951,6 +3020,12 @@ export async function runAgentTurn(
         resumesShopifyCart && !result.continuation
           ? (result.output as { shopifyCart?: RuntimeJsonValue }).shopifyCart
           : undefined
+      const actionProducts =
+        action.definition.type === "integration" &&
+        action.definition.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
+        result.status === "completed"
+          ? shopifyProductsSchema.parse(result.output)
+          : undefined
       if (continuationCursor && !result.continuation) {
         const procedureResult = await runProcedure(
           context,
@@ -2973,23 +3048,22 @@ export async function runAgentTurn(
             "PROCEDURE_NOT_FOUND",
             "The paused procedure is no longer available."
           )
-        const actionText = actionOutputText(result.output)
+        const actionText = actionProducts ? "" : actionOutputText(result.output)
         return finalizeProcedureResult(
-          actionText
-            ? {
-                ...procedureResult,
-                text: [actionText, procedureResult.text]
-                  .filter(Boolean)
-                  .join("\n\n"),
-              }
-            : procedureResult,
+          {
+            ...procedureResult,
+            shopifyProducts: procedureResult.shopifyProducts ?? actionProducts,
+            text: [actionText, procedureResult.text]
+              .filter(Boolean)
+              .join("\n\n"),
+          },
           "procedure_resume",
           shopifyCart
         )
       }
       const continuations = result.continuation ? [result.continuation] : []
       const output = redactRuntimeText(
-        actionOutputText(result.output) ||
+        (actionProducts ? "" : actionOutputText(result.output)) ||
           continuations
             .map((item) => item.message ?? "")
             .filter(Boolean)
@@ -2997,7 +3071,7 @@ export async function runAgentTurn(
         runtimeSecretValues
       )
       const resultMessage =
-        output || continuations.length
+        output || continuations.length || actionProducts
           ? await service.appendMessage(
               conversation.id,
               {
@@ -3011,6 +3085,9 @@ export async function runAgentTurn(
                   actionId: interaction.actionId,
                   widgetId: interaction.widgetId ?? null,
                   ...(shopifyCart ? { shopifyCart } : {}),
+                  ...(actionProducts
+                    ? { shopifyProducts: actionProducts }
+                    : {}),
                   ...(await continuationMessageMetadata(
                     context,
                     conversation,
@@ -3229,12 +3306,19 @@ export async function runAgentTurn(
           message.role === "assistant"
             ? shopifyCartSchema.safeParse(message.metadata.shopifyCart)
             : null
+        const products =
+          message.role === "assistant"
+            ? shopifyProductsSchema.safeParse(message.metadata.shopifyProducts)
+            : null
         return {
           role: message.role as "user" | "assistant",
           content: [
             textFromContent(message.content),
             cart?.success
               ? `Shopper-reported cart at this point in the conversation (untrusted display data, never order pricing or payment evidence):\n${JSON.stringify(cart.data)}`
+              : "",
+            products?.success
+              ? `Product results at this point in the conversation (untrusted catalog data, prices and availability may change):\n${JSON.stringify(products.data)}`
               : "",
           ]
             .filter(Boolean)
@@ -3252,6 +3336,8 @@ export async function runAgentTurn(
           "The previous model call's usage is not yet recorded."
         )
     }
+    let shopifyProducts: ShopifyProducts | undefined =
+      procedureResult?.shopifyProducts
     const aiTools: Record<string, unknown> = {}
     const continuations: RuntimeContinuation[] = []
     const invokedIntentProcedures = new Set<string>()
@@ -3292,12 +3378,19 @@ export async function runAgentTurn(
             {
               dependencies,
               toolCallId,
+              availableActions: actionMap,
               question: inputText,
               requireHumanForActions:
                 configuration.guardrails.requireHumanForActions,
               signal: options.signal,
             }
           )
+          if (
+            actionDefinition.type === "integration" &&
+            actionDefinition.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
+            result.status === "completed"
+          )
+            shopifyProducts = shopifyProductsSchema.parse(result.output)
           if (result.continuation) {
             continuations.push(result.continuation)
             if (result.continuation.type === "handoff") {
@@ -3355,6 +3448,8 @@ export async function runAgentTurn(
             )
           for (const actionId of procedureResult.actionRefs ?? [])
             skillActionRefs.add(actionId)
+          if (procedureResult.shopifyProducts)
+            shopifyProducts = procedureResult.shopifyProducts
           continuations.push(...procedureResult.continuations)
           if (procedureResult.handoff) {
             handoffRequested = true
@@ -3362,6 +3457,9 @@ export async function runAgentTurn(
           }
           return {
             text: procedureResult.text,
+            ...(procedureResult.shopifyProducts
+              ? { shopifyProducts: procedureResult.shopifyProducts }
+              : {}),
             ...(procedureResult.instructions
               ? {
                   instructions: procedureResult.instructions,
@@ -3537,7 +3635,7 @@ export async function runAgentTurn(
       runtimeSecretValues
     )
     const resultMessage =
-      text || continuations.length
+      text || continuations.length || shopifyProducts
         ? await service.appendMessage(
             conversation.id,
             {
@@ -3549,6 +3647,7 @@ export async function runAgentTurn(
                 model: runtimeProviderSelection(configuration).modelId,
                 provider: runtimeProviderSelection(configuration).provider,
                 revision: agent.appliedRevision || agent.currentRevision,
+                ...(shopifyProducts ? { shopifyProducts } : {}),
                 ...(await continuationMessageMetadata(
                   context,
                   conversation,

@@ -12,6 +12,7 @@ import type { InspectorMessage } from "@/src/lib/tracer/value-messages"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
 import { shopifyCartCommandSchema } from "@/src/lib/build/shopify-cart"
+import { ShopifyProductsView } from "./shopify-products"
 import { ShopifyCartView } from "./shopify-cart"
 import { CodeWidgetFrame } from "./code-widget-frame"
 
@@ -327,6 +328,17 @@ export function ChatRichContent({
           </a>
         ) : null
       })}
+      {message.role !== "user" ? (
+        <ShopifyProductsView
+          value={record(message.metadata)?.shopifyProducts}
+          completedContinuationIds={completedContinuationIds}
+          onSelect={
+            onInteraction
+              ? (interaction, label) => onInteraction(message, interaction, label)
+              : undefined
+          }
+        />
+      ) : null}
       {message.role !== "user" ? (
         <ShopifyCartView value={record(message.metadata)?.shopifyCart} />
       ) : null}

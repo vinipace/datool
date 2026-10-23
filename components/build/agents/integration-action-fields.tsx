@@ -203,6 +203,29 @@ export function IntegrationActionFields({
                   }
                 />
               </FormRow>
+              {draft.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" && (
+                <FormRow
+                  label="Exclude out-of-stock products"
+                  htmlFor="shopify-exclude-stock"
+                  description="Only show products with an available variant. Prices and availability are read live from Shopify. Enable one Update shopping cart action for this store and channel to add cart buttons to product cards."
+                  layout="vertical"
+                  variant="plain"
+                >
+                  <Switch
+                    id="shopify-exclude-stock"
+                    checked={shopifySettings.excludeOutOfStock}
+                    onCheckedChange={(excludeOutOfStock) =>
+                      onChange({
+                        ...draft,
+                        shopifySettings: {
+                          ...shopifySettings,
+                          excludeOutOfStock,
+                        },
+                      })
+                    }
+                  />
+                </FormRow>
+              )}
               {draft.toolSlug === "SHOPIFY_TAG_ORDER" && (
                 <FormRow
                   label="Allowed order tags"

@@ -101,6 +101,12 @@ export function appIntegrationScenario(
               initial === "shopify-active"
                 ? [
                     {
+                      slug: "SHOPIFY_SEARCH_PRODUCTS",
+                      name: "Search products",
+                      description: "Show live store products.",
+                      inputSchema: {},
+                    },
+                    {
                       slug: "SHOPIFY_TAG_ORDER",
                       name: "Tag an order",
                       description:
