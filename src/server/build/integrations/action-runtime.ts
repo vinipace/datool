@@ -1,4 +1,3 @@
-import { z } from "zod"
 import type { ActionDefinition, ActionRecord } from "@/src/lib/build/contracts"
 import {
   shopifyOrderQuoteSchema,
@@ -10,7 +9,6 @@ import {
   shopifyReturnSummary,
   type ShopifyReturnQuote,
 } from "@/src/lib/build/shopify-return"
-import { shopifyProductSearchSchema } from "@/src/lib/build/shopify-products"
 import {
   isShopifyCartTool,
   shopifyCartCommandSchema,
@@ -28,8 +26,7 @@ import {
 } from "./shopify-products"
 import { shopifyApprovalNeedsVerification } from "./shopify-identity"
 import { executeAppAction } from "./service"
-import { shopifyCartToolInputSchema } from "./shopify-cart"
-import { shopifyReturnToolInputSchema } from "./shopify-return-process"
+import { shopifyTools } from "./shopify-tools"
 
 export type IntegrationExecutionOptions = {
   toolCallId: string
@@ -48,12 +45,11 @@ export type IntegrationExecutionOptions = {
 
 export function integrationInputSchema(action: ActionDefinition) {
   if (action.type === "integration") {
-    if (action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS")
-      return z.toJSONSchema(shopifyProductSearchSchema, { target: "draft-7" })
-    if (action.toolSlug === "SHOPIFY_UPDATE_CART")
-      return shopifyCartToolInputSchema
-    if (action.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE")
-      return shopifyReturnToolInputSchema
+    // Saved actions can predate schema repairs; native execution owns the contract.
+    const nativeTool = shopifyTools.find(
+      (tool) => tool.slug === action.toolSlug
+    )
+    if (nativeTool) return nativeTool.inputSchema
   }
   return action.inputSchema
 }

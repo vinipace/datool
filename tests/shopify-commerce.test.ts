@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import Ajv from "ajv"
 import { rejects } from "node:assert/strict"
 import { readShopifyOrders } from "@/src/server/build/integrations/shopify-orders"
 import type { ShopifyGraphqlClient } from "@/src/server/build/integrations/shopify-catalog"
@@ -442,6 +443,13 @@ test("published Shopify tool schemas meet provider contracts and accept document
     for (const keyword of ["oneOf", "anyOf", "allOf", "enum", "const", "not"])
       expect(tool.inputSchema[keyword]).toBeUndefined()
   }
+  // Providers consume JSON Schema without JavaScript's Unicode regex flag.
+  const providerValidator = new Ajv({
+    strict: false,
+    validateFormats: false,
+    unicodeRegExp: false,
+    addUsedSchema: false,
+  })
   const examples = [
     [
       "SHOPIFY_SEARCH_PRODUCTS",
@@ -483,6 +491,29 @@ test("published Shopify tool schemas meet provider contracts and accept document
       target: "draft-7",
     }),
   })
+  const { orderLookupSchema } = await import("@/src/lib/build/shopify-order")
+  const legacyOrder = actionDefinitionSchema.parse({
+    id: "order-action",
+    type: "integration",
+    name: "Get orders",
+    connectionId: "11111111-1111-4111-8111-111111111111",
+    toolSlug: "SHOPIFY_GET_ORDERS",
+    inputSchema: {
+      type: "object",
+      properties: {
+        orderNumber: { type: "string", pattern: "^#?[\\p{L}\\p{N}_-]{1,64}$" },
+      },
+    },
+  })
+  for (const orderNumber of ["#1001", "#注文-123", "#PEDIDO_123"]) {
+    const input = { orderNumber, email: "buyer@example.test" }
+    expect(
+      providerValidator.compile(integrationInputSchema(legacyOrder))(input)
+    ).toBe(true)
+    expect(orderLookupSchema.parse(input)).toEqual(input)
+  }
+  for (const orderNumber of ["", "*", "1001 OR name:*", "a".repeat(65)])
+    expect(() => orderLookupSchema.parse({ orderNumber })).toThrow()
   const returnSchema = integrationInputSchema(legacyReturn)
   expect(returnSchema.type).toBe("object")
   expect(returnSchema.anyOf).toBeUndefined()
@@ -495,6 +526,7 @@ test("published Shopify tool schemas meet provider contracts and accept document
     const tool = shopifyTools.find((tool) => tool.slug === slug)
     if (!tool) throw new Error(`Missing native tool ${slug}`)
     expect(() => validateSchema(tool.inputSchema, input)).not.toThrow()
+    expect(providerValidator.compile(tool.inputSchema)(input)).toBe(true)
   }
 })
 
