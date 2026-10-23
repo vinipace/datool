@@ -293,6 +293,8 @@ export async function executeAppAction(
     arguments: Record<string, unknown>
     shopifyConfirmed?: boolean
     shopifyCartResult?: unknown
+    shopifyPrepareReturn?: boolean
+    shopifyReturnQuote?: import("@/src/lib/build/shopify-return").ShopifyReturnQuote
     shopifyPrepareOrder?: boolean
     shopifyOrderQuote?: import("@/src/lib/build/shopify-order").ShopifyOrderQuote
     shopifySourceTurnId?: string
@@ -330,7 +332,10 @@ export async function executeAppAction(
     native &&
     ((isShopifyCartTool(input.toolSlug) &&
       input.shopifyCartResult === undefined) ||
-      (input.toolSlug === "SHOPIFY_CREATE_ORDER" && input.shopifyPrepareOrder))
+      (input.toolSlug === "SHOPIFY_CREATE_ORDER" &&
+        input.shopifyPrepareOrder) ||
+      (input.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE" &&
+        input.shopifyPrepareReturn))
   ) {
     const output = await executeShopifyTool(
       ctx,
@@ -342,6 +347,7 @@ export async function executeAppAction(
         conversationId: input.conversationId,
         turnId: input.shopifySourceTurnId ?? input.turnId,
         prepareOrder: input.shopifyPrepareOrder,
+        prepareReturn: input.shopifyPrepareReturn,
         cartResult: input.shopifyCartResult,
         settings: input.shopifySettings,
       }
@@ -358,9 +364,10 @@ export async function executeAppAction(
       "VALIDATION_ERROR",
       "This app action was already attempted. Inspect its result before retrying."
     )
-  if (native && input.shopifyOrderQuote)
+  const commerceQuote = input.shopifyOrderQuote ?? input.shopifyReturnQuote
+  if (native && commerceQuote)
     await ctx.database.execute(sql`
-      UPDATE build_usage_event SET provider_session_id=${input.shopifyOrderQuote.operationId}
+      UPDATE build_usage_event SET provider_session_id=${commerceQuote.operationId}
       WHERE id=${id}::uuid
     `)
   if (native) {
@@ -377,6 +384,7 @@ export async function executeAppAction(
           confirmed: input.shopifyConfirmed,
           cartResult: input.shopifyCartResult,
           orderQuote: input.shopifyOrderQuote,
+          returnQuote: input.shopifyReturnQuote,
           recordDraft: async (draftId) => {
             await ctx.database.execute(
               sql`UPDATE build_usage_event SET provider_log_id=${draftId} WHERE id=${id}::uuid`
@@ -386,8 +394,9 @@ export async function executeAppAction(
         }
       )
       const needsReview =
-        input.toolSlug === "SHOPIFY_CREATE_ORDER" &&
-        (output as { status?: string }).status === "needs_review"
+        ["SHOPIFY_CREATE_ORDER", "SHOPIFY_RETURN_OR_EXCHANGE"].includes(
+          input.toolSlug
+        ) && (output as { status?: string }).status === "needs_review"
       await ctx.database.execute(
         sql`UPDATE build_usage_event SET status=${needsReview ? "uncertain" : "completed"},cost_nano_usd=0 WHERE id=${id}::uuid`
       )

@@ -1,3 +1,4 @@
+import { type ShopifyReturnQuote } from "@/src/lib/build/shopify-return"
 import { sql } from "drizzle-orm"
 import type { BuildContext } from "../context"
 import { TracerError } from "@/src/server/tracer/errors"
@@ -34,7 +35,7 @@ const unresolvedMessage =
   "The previous order's outcome is unresolved. Use Check checkout to recover its status before creating another order."
 
 /** Commerce state is owned by the verified conversation, never a model-supplied shop or customer ID. */
-export class ShopifyOrderStore {
+export class ShopifyOperationStore {
   constructor(
     private context: BuildContext,
     private connectionId: string,
@@ -49,7 +50,7 @@ export class ShopifyOrderStore {
 
   async assertNoUnresolved() {
     const result = await this.context.database.execute(sql`
-      SELECT 1 FROM build_shopify_order_operations WHERE ${this.scope()}
+      SELECT 1 FROM build_shopify_order_operations WHERE ${this.scope()} AND kind='order'
       AND status IN ('pending','draft','uncertain','needs_review') LIMIT 1
     `)
     if (result.rows.length)
@@ -68,7 +69,7 @@ export class ShopifyOrderStore {
         sql`SELECT pg_advisory_xact_lock(hashtextextended(${`shopify-order:${this.context.projectId}:${this.connectionId}:${this.conversationId}`},0))`
       )
       const previous = await tx.execute(sql`
-        SELECT 1 FROM build_shopify_order_operations WHERE ${this.scope()}
+        SELECT 1 FROM build_shopify_order_operations WHERE ${this.scope()} AND kind='order'
         AND (id=${quote.operationId}::uuid OR status IN ('pending','draft','uncertain','needs_review')) LIMIT 1
       `)
       if (previous.rows.length)
@@ -80,10 +81,72 @@ export class ShopifyOrderStore {
     })
   }
 
+  async beginReturn(
+    quote: ShopifyReturnQuote,
+    settings: ShopifyActionSettings
+  ) {
+    if (quote.customerId !== this.shopper.customerId)
+      throw new TracerError(
+        "VALIDATION_ERROR",
+        "Your customer account changed. Review the return again."
+      )
+    await this.context.database.transaction(async (tx) => {
+      // A shopper can open several conversations. Serialize returns for the order,
+      // not just the conversation, so they cannot spend the same return credit twice.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`shopify-return:${this.context.projectId}:${this.connectionId}:${quote.input.orderId}`},0))`
+      )
+      const previous = await tx.execute(sql`
+        SELECT 1 FROM build_shopify_order_operations
+        WHERE project_id=${this.context.projectId} AND connection_id=${this.connectionId}::uuid
+        AND kind='return' AND source_order_id=${quote.input.orderId}
+        AND (id=${quote.operationId}::uuid OR status IN ('pending','return_created','processing','uncertain','needs_review')) LIMIT 1
+      `)
+      if (previous.rows.length)
+        throw new TracerError(
+          "VALIDATION_ERROR",
+          "A return for this order is still being processed or needs review. Check it with the store team before requesting another."
+        )
+      await tx.execute(sql`
+        INSERT INTO build_shopify_order_operations(id,project_id,connection_id,conversation_id,customer_id,browser_session_id,quote_json,settings_json,status,kind,source_order_id)
+        VALUES(${quote.operationId}::uuid,${this.context.projectId},${this.connectionId}::uuid,${this.conversationId},${this.shopper.customerId},${this.shopper.browserSessionId}::uuid,${JSON.stringify(quote)}::jsonb,${JSON.stringify(settings)}::jsonb,'pending','return',${quote.input.orderId})
+      `)
+    })
+  }
+
+  async recordReturn(id: string, returnId: string) {
+    const saved = await this.context.database.execute(sql`
+      UPDATE build_shopify_order_operations SET return_id=${returnId},status='return_created',updated_at=now(),revision=revision+1
+      WHERE ${this.scope()} AND id=${id}::uuid AND kind='return' AND status='pending' RETURNING id
+    `)
+    if (!saved.rows.length) throw new ShopifyWriteUncertainError()
+  }
+
+  async claimReturnProcessing(id: string) {
+    const saved = await this.context.database.execute(sql`
+      UPDATE build_shopify_order_operations SET status='processing',updated_at=now(),revision=revision+1
+      WHERE ${this.scope()} AND id=${id}::uuid AND kind='return' AND status='return_created' RETURNING id
+    `)
+    if (!saved.rows.length) throw new ShopifyWriteUncertainError()
+  }
+
+  async finishReturn<T extends { status: "return_processed" | "needs_review" }>(
+    id: string,
+    result: T
+  ) {
+    const saved = await this.context.database.execute(sql`
+      UPDATE build_shopify_order_operations SET status=${result.status},result_json=${JSON.stringify(result)}::jsonb,updated_at=now(),revision=revision+1
+      WHERE ${this.scope()} AND id=${id}::uuid AND kind='return'
+      AND status IN ('return_created','processing') RETURNING id
+    `)
+    if (!saved.rows.length) throw new ShopifyWriteUncertainError()
+    return { ...result, operationId: id }
+  }
+
   async recordDraft(id: string, draftOrderId: string) {
     const result = await this.context.database.execute(sql`
       UPDATE build_shopify_order_operations SET draft_order_id=${draftOrderId},status='draft',updated_at=now(),revision=revision+1
-      WHERE ${this.scope()} AND id=${id}::uuid AND status='pending' RETURNING id
+      WHERE ${this.scope()} AND id=${id}::uuid AND kind='order' AND status='pending' RETURNING id
     `)
     if (!result.rows.length) throw new ShopifyWriteUncertainError()
   }
@@ -106,7 +169,7 @@ export class ShopifyOrderStore {
     const saved = await this.context.database.execute(sql`
       UPDATE build_shopify_order_operations SET status=${status},result_json=${JSON.stringify(result)}::jsonb,
         draft_order_id=COALESCE(${result.draftOrderId ?? null},draft_order_id),order_id=COALESCE(${result.orderId ?? null},order_id),updated_at=now(),revision=revision+1
-      WHERE ${this.scope()} AND id=${id}::uuid
+      WHERE ${this.scope()} AND id=${id}::uuid AND kind='order'
         AND (status <> 'placed' OR ${status}='placed')
         ${expectedRevision === undefined ? sql`` : sql`AND revision=${expectedRevision}`}
       RETURNING id
@@ -124,8 +187,8 @@ export class ShopifyOrderStore {
 
   async fail(id: string, uncertain: boolean) {
     await this.context.database.execute(sql`
-      UPDATE build_shopify_order_operations SET status=CASE WHEN ${uncertain} OR draft_order_id IS NOT NULL THEN 'uncertain' ELSE 'failed' END,updated_at=now(),revision=revision+1
-      WHERE ${this.scope()} AND id=${id}::uuid AND status IN ('pending','draft')
+      UPDATE build_shopify_order_operations SET status=CASE WHEN ${uncertain} OR draft_order_id IS NOT NULL OR return_id IS NOT NULL THEN 'uncertain' ELSE 'failed' END,updated_at=now(),revision=revision+1
+      WHERE ${this.scope()} AND id=${id}::uuid AND status IN ('pending','draft','return_created','processing')
     `)
   }
 
@@ -140,7 +203,7 @@ export class ShopifyOrderStore {
       updated_at: Date
       revision: number
     }>(sql`
-      SELECT * FROM build_shopify_order_operations WHERE ${this.scope()}
+      SELECT * FROM build_shopify_order_operations WHERE ${this.scope()} AND kind='order'
         AND customer_id IS NOT DISTINCT FROM ${this.shopper.customerId}
         AND (${this.shopper.customerId !== null} OR browser_session_id=${this.shopper.browserSessionId}::uuid)
         ${id ? sql`AND id=${id}::uuid` : sql``}

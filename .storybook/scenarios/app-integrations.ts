@@ -114,6 +114,13 @@ export function appIntegrationScenario(
                       inputSchema: {},
                     },
                     {
+                      slug: "SHOPIFY_RETURN_OR_EXCHANGE",
+                      name: "Return or exchange items",
+                      description:
+                        "Prepare a return or exchange for confirmation.",
+                      inputSchema: {},
+                    },
+                    {
                       slug: "SHOPIFY_CREATE_ORDER",
                       name: "Create order",
                       description: "Prepare an order for confirmation.",

@@ -49,11 +49,22 @@ connections.
   Missing results remain unresolved; duplicate matches and changes to the buyer
   or approved total require store-team review.
 
+- `SHOPIFY_GET_RETURN_OPTIONS`: read remaining returnable quantities for an owned
+  order. Guests supply the order number and its checkout email or phone.
+- `SHOPIFY_RETURN_OR_EXCHANGE`: quote and confirm a return/refund or permitted
+  exchange on the original order. Merchant settings control the delivery-based
+  return window (30 days by default, empty for no limit), exchanges and teammate
+  approval. Shopify supplies amounts and original payment transactions. Pending
+  refunds remain pending; payable exchanges receive a Shopify invoice and remain
+  on fulfillment hold. The action never claims physical receipt or restocks goods.
+  Unknown or changed outcomes require store-team review; automatic recovery and
+  payment-verified hold release remain unfinished.
+
 Product searches render native product cards. An enabled **Update shopping cart**
 action for the same connection adds variant and quantity controls. Storefront chat
 installation is separate from the data connection. This connector does not
 install a theme embed. Automatic payment notifications, cart clearing, resolution
-of incomplete drafts and return/exchange work remain tracked in
+of incomplete drafts, return recovery and replacement-order work remain tracked in
 [the action parity checklist](shopify-action-parity.md).
 
 Customer-specific actions require a freshly verified Shopify storefront chat.
@@ -68,10 +79,15 @@ session. Neither path calls the Shopify development app or its temporary tunnel.
 Native calls record integration usage with no configured Composio charge.
 Normal agent model usage still applies.
 
-Apply migrations through 0065 before enabling order actions. Confirmed order
+Apply migrations through 0066 before enabling these actions. Confirmed order
 intent is stored separately from usage events so interrupted tool responses do
 not erase the information needed for recovery. Checkout reads require draft-order,
 order and customer access; the corresponding write scopes also grant read access.
+Returns require `write_returns`, order/customer/product reads, and `write_orders`
+for exchange invoices. Existing installations must reconnect to grant new scopes.
+Return admission uses the same commerce ledger, keyed to the original order
+across conversations. A timeout or database failure after dispatch keeps the
+operation unresolved and prevents another return attempt until reviewed.
 
 ## Billing ownership
 
@@ -102,7 +118,7 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
    `https://YOUR_DATOOL_HOST/api/shopify/callback`, and
-   `read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms`.
+   `read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms,write_returns`.
    Customer and order access must be approved for the public app. The official Shopify SDK performs the
    authorization-code flow. Do not switch an existing embedded app's flow just
    to enable this connector.

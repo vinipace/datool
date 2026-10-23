@@ -16,7 +16,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [x] Merchant-allowlisted order tags.
 - [x] Account activation and sign-in guidance appropriate to the store's account system.
 - [x] Update the authenticated customer's profile and default account address.
-- [ ] Returns/refunds and exchanges on the existing order within merchant policy.
+- [x] Confirmed original-order return/refund and exchange processing, delivery-window policy and original-payment settlement.
+- [ ] Return recovery/reconciliation, changed-balance resolution and payment-verified exchange hold release.
 - [ ] Replacement orders with mandatory human approval and original-order credit accounting.
 - [ ] Action settings, confirmations, error states and reusable chat controls.
 - [ ] Delayed teammate approval and customer re-verification when the Shopify session has expired.
@@ -74,6 +75,46 @@ Order creation has six real-runtime database cases spanning all three payment mo
 
 The same runtime cases exercise checkout recovery through an enabled native action: unknown and other-customer/browser operation IDs cause no Shopify read; a customer's second verified device can read the same conversation; pending, paid and refunded payment responses stay distinct. Missing search results, partial tags, duplicate matches and mismatched buyers do not clear an uncertain order. Lost online create responses recover the original checkout link, and lost completion responses recover the original order without another create/complete mutation. A database fault after Shopify success originally surfaced as a failed action; the regression demonstrated that failure before the repair and now requires an uncertain outcome and recovery without another write. Recovery queries validate against Shopify Admin GraphQL 2026-10. These provider responses are fixtures, not live payment evidence.
 
+## Return processing
+
+Returns use the same order-ownership check as order lookup. A signed-in customer
+must own the order; a guest supplies its number and checkout email or phone.
+Returnable fulfillment lines are paginated and checked against remaining
+quantities and the merchant's delivery-based window. Missing delivery dates
+require store-team review when a window is set. Replacement stock is checked
+live. Shopify calculates the quote, which is refreshed before the approved
+operation starts. The shared chat confirmation and Inbox approval paths retain
+server-owned input; altered or expired quotes require consent again.
+
+The existing commerce ledger now records return intent and the external return
+ID. Admission is serialized by original order across conversations, without
+holding a database transaction during Shopify requests. Processing uses only
+Shopify's suggested original payment transactions, the approved exact balance,
+and `allowOverRefunding: false`. The optional maximum-refund field is checked
+when supplied; its documented absence does not reject an otherwise valid refund.
+No model-supplied amount, refund destination, physical receipt or restocking
+instruction is accepted. Pending refunds and successful provider transactions
+remain distinct. Payable exchanges send a Shopify invoice and retain Shopify's
+fulfillment hold. The final outstanding order balance must match the approved
+exchange amount before sending an invoice, so an unrelated unpaid balance is
+not silently added to the payment request.
+
+The current runtime checks cover five settlement modes, guest proof, teammate
+approval, quote changes, pinned input, changed owner/balance/payment suggestions,
+lost create/process/invoice responses, and database failure before recording a
+return ID or final result. A second conversation cannot repeat an unresolved
+return. Adapter checks cover pagination, return-window and quantity validation,
+stock/exchange policy, exact decimal amounts and currency consistency. Browser
+stories cover the shared confirmation and merchant settings. The generated
+queries validate against Shopify Admin GraphQL 2026-10. These are local tests
+with stubbed provider responses, not live refunds or payments.
+
+Apply migration 0066 and obtain `write_returns` plus the invoice/order scopes
+before enabling the action. Remaining return work includes recovering unresolved
+operations, re-confirming a balance changed after return creation, payment
+webhooks and verified hold release. Separate replacement orders and their credit
+accounting are not implemented. Full after-sales parity remains incomplete.
+
 ## Design review
 
 The implementation deliberately reuses the Shopify SDK, Datool's action runtime, durable tool records, existing continuation storage and Inbox approvals. Customer confirmation and teammate approval now share one persistence path while retaining separate authorization rules. The mutation helper owns common Shopify error handling; callers describe only their action-specific response. The simplification is covered by four commerce tests and seven runtime tests for confirmation, approval, continuation and handoff behavior.
@@ -82,6 +123,6 @@ Order recovery uses one commerce record per approved intent because a terminal t
 
 Keep the server-owned message identity record and the ownership recheck immediately before writes. Removing those checks would let untrusted chat input or stale account identity influence customer access. Keep ambiguous writes distinguishable from failures; a shorter automatic retry path could repeat a change that Shopify already applied.
 
-For the remaining actions, Shopify remains responsible for prices, discounts, shipping, tax and payment state. Use the existing continuation mechanism for storefront interactions instead of introducing another queue or workflow engine. Order creation now consumes its merchant settings; return settings remain reserved for unfinished actions and do not establish return policy enforcement.
+For the remaining actions, Shopify remains responsible for prices, discounts, shipping, tax and payment state. Use the existing continuation mechanism for storefront interactions instead of introducing another queue or workflow engine. Order and return processing consume the same merchant settings and confirmation infrastructure. Return and order intent share the commerce ledger rather than separate queues or persistence systems.
 
 Before financial actions are considered ready, validate delayed approvals across the five-minute identity freshness boundary, provide an explicit re-verification path, and test reconciliation after ambiguous external writes. Complete privacy/uninstall handling and scope/reconnect guidance, then verify the full customer journey in the sandbox. Passing the current unit and database tests does not replace those release checks.

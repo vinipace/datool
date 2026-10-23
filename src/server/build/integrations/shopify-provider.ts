@@ -12,6 +12,7 @@ export const SHOPIFY_REQUESTED_SCOPES = [
   "write_orders",
   "write_draft_orders",
   "read_payment_terms",
+  "write_returns",
 ]
 export const SHOPIFY_CALLBACK = "/api/shopify/callback"
 

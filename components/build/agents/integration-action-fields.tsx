@@ -203,6 +203,59 @@ export function IntegrationActionFields({
                   }
                 />
               </FormRow>
+              {draft.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE" && (
+                <>
+                  <FormRow
+                    label="Return window (days)"
+                    htmlFor="shopify-return-window"
+                    description="Days after delivery. Leave empty for no time limit. Orders without a confirmed delivery date need store-team review when a window is set."
+                    layout="vertical"
+                    variant="plain"
+                  >
+                    <Input
+                      id="shopify-return-window"
+                      type="number"
+                      min={1}
+                      max={365}
+                      defaultValue={shopifySettings.returnWindowDays ?? ""}
+                      onBlur={(event) => {
+                        const value = event.currentTarget.value.trim()
+                        const parsed = shopifyActionSettingsSchema.safeParse({
+                          ...shopifySettings,
+                          returnWindowDays: value ? Number(value) : null,
+                        })
+                        if (parsed.success)
+                          onChange({ ...draft, shopifySettings: parsed.data })
+                        else
+                          event.currentTarget.value = String(
+                            shopifySettings.returnWindowDays ?? ""
+                          )
+                      }}
+                    />
+                  </FormRow>
+                  <FormRow
+                    label="Allow exchanges"
+                    htmlFor="shopify-allow-exchanges"
+                    description="Let shoppers choose replacement items on the original order. Additional balances must be paid before replacement fulfillment."
+                    layout="vertical"
+                    variant="plain"
+                  >
+                    <Switch
+                      id="shopify-allow-exchanges"
+                      checked={shopifySettings.allowExchanges}
+                      onCheckedChange={(allowExchanges) =>
+                        onChange({
+                          ...draft,
+                          shopifySettings: {
+                            ...shopifySettings,
+                            allowExchanges,
+                          },
+                        })
+                      }
+                    />
+                  </FormRow>
+                </>
+              )}
               {draft.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" && (
                 <FormRow
                   label="Exclude out-of-stock products"

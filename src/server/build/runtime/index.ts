@@ -1,4 +1,9 @@
 import {
+  shopifyReturnQuoteSchema,
+  shopifyReturnSummary,
+  type ShopifyReturnQuote,
+} from "@/src/lib/build/shopify-return"
+import {
   prepareShopifyProductCards,
   selectedShopifyCartInput,
 } from "./shopify-products"
@@ -242,6 +247,7 @@ export type RuntimeContinuation = {
   shopifySourceTurnId?: string
   shopifyCart?: { command: ShopifyCartCommand; expiresAt: number }
   shopifyProductSelection?: { variantIds: string[]; expiresAt: number }
+  shopifyReturnQuote?: ShopifyReturnQuote
   shopifyOrderQuote?: ShopifyOrderQuote
 }
 
@@ -1321,6 +1327,7 @@ async function executeAction(
     allowApproval?: boolean
     shopifyConfirmed?: boolean
     shopifyCartResult?: unknown
+    shopifyReturnQuote?: ShopifyReturnQuote
     shopifyOrderQuote?: ShopifyOrderQuote
     shopifyCartApproved?: boolean
     shopifySourceTurnId?: string
@@ -1365,6 +1372,10 @@ async function executeAction(
   const continuationId = options.continuationId ?? randomUUID()
   const orderAction =
     action.type === "integration" && action.toolSlug === "SHOPIFY_CREATE_ORDER"
+  const returnAction =
+    action.type === "integration" &&
+    action.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE"
+  let returnQuote = options.shopifyReturnQuote
   let orderQuote = options.shopifyOrderQuote
   const pendingBase = {
     actionId: action.id,
@@ -1395,7 +1406,7 @@ async function executeAction(
       status: "awaiting_client" as const,
     }
   }
-  if (orderAction && !orderQuote) {
+  if ((orderAction && !orderQuote) || (returnAction && !returnQuote)) {
     try {
       const prepared = await executeAppAction(context, {
         connectionId: action.connectionId,
@@ -1405,7 +1416,8 @@ async function executeAction(
         turnId: turn.id,
         toolCallId: options.toolCallId,
         arguments: input,
-        shopifyPrepareOrder: true,
+        shopifyPrepareOrder: orderAction,
+        shopifyPrepareReturn: returnAction,
         shopifySettings: action.shopifySettings,
         shopifyCartResult: options.shopifyCartResult,
         signal: options.signal,
@@ -1413,6 +1425,7 @@ async function executeAction(
       const output = prepared.output as {
         cartCommand?: unknown
         orderQuote?: unknown
+        returnQuote?: unknown
       }
       if (output.cartCommand)
         return await awaitInput({
@@ -1427,7 +1440,9 @@ async function executeAction(
             expiresAt: Date.now() + 60 * 60_000,
           },
         })
-      orderQuote = shopifyOrderQuoteSchema.parse(output.orderQuote)
+      if (orderAction)
+        orderQuote = shopifyOrderQuoteSchema.parse(output.orderQuote)
+      else returnQuote = shopifyReturnQuoteSchema.parse(output.returnQuote)
     } catch (error) {
       // These validation messages are authored by our native adapter. Never expose
       // an arbitrary provider exception, which can contain credentials or customer data.
@@ -1436,7 +1451,7 @@ async function executeAction(
           ? new BuildRuntimeError("ACTION_INPUT_REQUIRED", error.message)
           : new BuildRuntimeError(
               "ACTION_FAILED",
-              "The order could not be prepared. Please try again."
+              "The requested change could not be prepared. Please try again."
             )
       await service.recordToolCallFinish({
         conversationId: conversation.id,
@@ -1467,6 +1482,7 @@ async function executeAction(
       ...pendingBase,
       type: needsApproval ? "approval_required" : "client_action",
       ...(orderQuote ? { shopifyOrderQuote: orderQuote } : {}),
+      ...(returnQuote ? { shopifyReturnQuote: returnQuote } : {}),
     }
     if (needsApproval) {
       pending.message = "A teammate must approve this action before it runs."
@@ -1482,6 +1498,8 @@ async function executeAction(
     }
     if (orderQuote && needsApproval)
       pending.message += `\n\n${shopifyOrderSummary(orderQuote)}`
+    if (returnQuote && needsApproval)
+      pending.message += `\n\n${shopifyReturnSummary(returnQuote)}`
     return awaitInput(pending)
   }
   if (options.dependencies.executeAction) {
@@ -1607,6 +1625,7 @@ async function executeAction(
         shopifyConfirmed: options.shopifyConfirmed || options.allowApproval,
         shopifyCartResult: options.shopifyCartResult,
         shopifyOrderQuote: orderQuote,
+        shopifyReturnQuote: returnQuote,
         shopifySettings: action.shopifySettings,
         shopifySourceTurnId: options.allowApproval
           ? options.shopifySourceTurnId
@@ -1614,24 +1633,28 @@ async function executeAction(
         signal: options.signal,
       })
       if (
-        orderAction &&
+        (orderAction || returnAction) &&
         (result.output as { status?: string }).status === "quote_changed"
       ) {
-        const quote = shopifyOrderQuoteSchema.parse(
-          (result.output as { quote: unknown }).quote
-        )
+        const rawQuote = (result.output as { quote: unknown }).quote
+        const changedQuote = orderAction
+          ? { shopifyOrderQuote: shopifyOrderQuoteSchema.parse(rawQuote) }
+          : { shopifyReturnQuote: shopifyReturnQuoteSchema.parse(rawQuote) }
+        const summary = changedQuote.shopifyOrderQuote
+          ? shopifyOrderSummary(changedQuote.shopifyOrderQuote)
+          : shopifyReturnSummary(changedQuote.shopifyReturnQuote!)
         const approval =
           options.requireHumanForActions ||
           shopifyActionNeedsHuman(action.toolSlug, action.shopifySettings)
         return await awaitInput({
           ...pendingBase,
           type: approval ? "approval_required" : "client_action",
-          shopifyOrderQuote: quote,
+          ...changedQuote,
           title: action.name,
           ...(approval
             ? { shopifySourceTurnId: options.shopifySourceTurnId ?? turn.id }
             : { eventName: "Confirm changes" }),
-          message: `The order changed or the quote expired. Review the updated details before continuing.${approval ? `\n\n${shopifyOrderSummary(quote)}` : ""}`,
+          message: `The details changed or the quote expired. Review the updated details before continuing.${approval ? `\n\n${summary}` : ""}`,
         })
       }
       const shopifyProducts =
@@ -1758,6 +1781,14 @@ async function executeAction(
         error: safeError(error),
       },
     }).catch(() => undefined)
+    if (
+      (orderAction || returnAction) &&
+      error instanceof TracerError &&
+      error.code === "VALIDATION_ERROR"
+    )
+      // The native commerce adapters author these messages; arbitrary provider
+      // errors still use the redacted generic failure below.
+      throw new BuildRuntimeError("ACTION_INPUT_REQUIRED", error.message)
     if (error instanceof BuildActionTransportError && error.httpStatus)
       throw new BuildRuntimeError(
         "ACTION_HTTP_ERROR",
@@ -3101,6 +3132,11 @@ export async function runAgentTurn(
           shopifyConfirmed,
           shopifyCartResult: resumesShopifyCart
             ? (interaction.input.cartResult ?? null)
+            : undefined,
+          shopifyReturnQuote: persistedContinuation.shopifyReturnQuote
+            ? shopifyReturnQuoteSchema.parse(
+                persistedContinuation.shopifyReturnQuote
+              )
             : undefined,
           shopifyOrderQuote: persistedContinuation.shopifyOrderQuote
             ? shopifyOrderQuoteSchema.parse(

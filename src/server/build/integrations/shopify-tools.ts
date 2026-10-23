@@ -5,6 +5,8 @@ import { shopifyCustomerTools } from "./shopify-customers"
 import { shopifyTagTools } from "./shopify-order-tags"
 import { shopifyOrderCreationTools } from "./shopify-order-create"
 import { shopifyCheckoutTools } from "./shopify-order-status"
+import { shopifyReturnTools } from "./shopify-return-process"
+import { shopifyReturnReadTools } from "./shopify-return-options"
 
 export const shopifyTools = [
   ...catalogTools,
@@ -14,6 +16,8 @@ export const shopifyTools = [
   ...shopifyTagTools,
   ...shopifyOrderCreationTools,
   ...shopifyCheckoutTools,
+  ...shopifyReturnReadTools,
+  ...shopifyReturnTools,
 ]
 
 export const shopifyToolScopes: Record<string, string[]> = {
@@ -30,5 +34,22 @@ export const shopifyToolScopes: Record<string, string[]> = {
     "read_payment_terms",
     "read_orders",
   ],
-  SHOPIFY_CHECK_CHECKOUT: ["read_draft_orders", "read_orders", "read_customers"],
+  SHOPIFY_CHECK_CHECKOUT: [
+    "read_draft_orders",
+    "read_orders",
+    "read_customers",
+  ],
+  SHOPIFY_RETURN_OR_EXCHANGE: [
+    "write_returns",
+    "write_orders",
+    "read_orders",
+    "read_customers",
+    "read_products",
+  ],
+  SHOPIFY_GET_RETURN_OPTIONS: [
+    "read_orders",
+    "read_customers",
+    "read_returns",
+    "read_products",
+  ],
 }

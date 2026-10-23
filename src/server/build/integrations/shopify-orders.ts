@@ -2,22 +2,7 @@ import { z } from "zod"
 import type { IntegrationTool } from "@/src/lib/build/integrations"
 import { shopifyData, type ShopifyGraphqlClient } from "./shopify-catalog"
 import { requireShopifyCustomer, type ShopifyShopper } from "./shopify-identity"
-
-export const orderLookupSchema = z
-  .object({
-    orderNumber: z
-      .string()
-      .trim()
-      .regex(/^#?[\p{L}\p{N}_-]{1,64}$/u)
-      .optional(),
-    email: z.email().max(254).optional(),
-    phone: z
-      .string()
-      .regex(/^\+?[0-9 ()-]{8,30}$/)
-      .optional(),
-    after: z.string().max(512).optional(),
-  })
-  .strict()
+import { orderLookupSchema } from "@/src/lib/build/shopify-order"
 
 export const ORDERS_QUERY = `#graphql
   query DatoolShopperOrders($query: String!, $after: String) {
@@ -77,6 +62,35 @@ const orderName = (value: string) =>
   value.replace(/^#/, "").toLocaleLowerCase("en-US")
 const phoneDigits = (value: string | null | undefined) =>
   value?.replace(/\D/g, "") ?? ""
+
+/** Order lookup and after-sales mutations enforce the same proof, independently of provider search filters. */
+export function canAccessShopifyOrder(
+  order: Pick<
+    Order,
+    "name" | "email" | "phone" | "customer" | "shippingAddress"
+  >,
+  args: z.infer<typeof orderLookupSchema>,
+  shopper: ShopifyShopper
+) {
+  if (args.orderNumber && orderName(order.name) !== orderName(args.orderNumber))
+    return false
+  if (shopper.customerId)
+    return order.customer?.id === requireShopifyCustomer(shopper)
+  if (!args.orderNumber || (!args.email && !args.phone)) return false
+  const emailMatches = Boolean(
+    args.email &&
+    order.email &&
+    args.email.toLowerCase() === order.email.toLowerCase()
+  )
+  const phone = phoneDigits(args.phone)
+  const phoneMatches =
+    phone.length >= 8 &&
+    [order.phone, order.shippingAddress?.phone].some(
+      (value) => phoneDigits(value) === phone
+    )
+  // Supplying two proofs requires both to match; neither exposes which failed.
+  return (!args.email || emailMatches) && (!args.phone || phoneMatches)
+}
 const safeLink = (value: string | null) => {
   try {
     const url = new URL(value ?? "")
@@ -115,27 +129,7 @@ export async function readShopifyOrders(
     }
   }>(graphql, ORDERS_QUERY, { query, after: args.after ?? null })
   const orders = data.orders.nodes
-    .filter((order) => {
-      if (
-        args.orderNumber &&
-        orderName(order.name) !== orderName(args.orderNumber)
-      )
-        return false
-      if (customer) return order.customer?.id === customer
-      const emailMatches = Boolean(
-        args.email &&
-        order.email &&
-        args.email.toLowerCase() === order.email.toLowerCase()
-      )
-      const phone = phoneDigits(args.phone)
-      const phoneMatches =
-        phone.length >= 8 &&
-        [order.phone, order.shippingAddress?.phone].some(
-          (value) => phoneDigits(value) === phone
-        )
-      // Supplying two proofs requires both to match; neither exposes which failed.
-      return (!args.email || emailMatches) && (!args.phone || phoneMatches)
-    })
+    .filter((order) => canAccessShopifyOrder(order, args, shopper))
     .map((order) => ({
       id: order.id,
       number: order.name,

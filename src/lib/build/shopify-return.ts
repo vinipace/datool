@@ -1,0 +1,86 @@
+import { z } from "zod"
+import { orderLookupSchema } from "./shopify-order"
+
+export const shopifyReturnLookupSchema = orderLookupSchema
+  .omit({ after: true })
+  .extend({
+    orderId: z.string().regex(/^gid:\/\/shopify\/Order\/[1-9][0-9]*$/),
+  })
+export const shopifyReturnInputSchema = shopifyReturnLookupSchema.extend({
+  items: z
+    .array(
+      z
+        .object({
+          fulfillmentLineItemId: z
+            .string()
+            .regex(/^gid:\/\/shopify\/FulfillmentLineItem\/[1-9][0-9]*$/),
+          quantity: z.number().int().min(1).max(250),
+        })
+        .strict()
+    )
+    .min(1)
+    .max(100),
+  replacements: z
+    .array(
+      z
+        .object({
+          variantId: z.string().regex(/^[1-9][0-9]{0,15}$/),
+          quantity: z.number().int().min(1).max(250),
+        })
+        .strict()
+    )
+    .max(100)
+    .default([]),
+  reason: z.string().trim().min(1).max(180),
+})
+
+const money = z
+  .object({
+    amount: z
+      .string()
+      .max(40)
+      .regex(/^\d+(?:\.\d+)?$/),
+    currencyCode: z.string().regex(/^[A-Z]{3}$/),
+  })
+  .strict()
+export const shopifyReturnQuoteSchema = z
+  .object({
+    operationId: z.uuid(),
+    expiresAt: z.number().int(),
+    customerId: z.string().nullable(),
+    orderName: z.string(),
+    input: shopifyReturnInputSchema,
+    items: z
+      .array(z.object({ title: z.string(), quantity: z.number().int() }))
+      .max(100),
+    replacements: z
+      .array(z.object({ title: z.string(), quantity: z.number().int() }))
+      .max(100),
+    credit: money,
+    replacementTotal: money,
+    settlement: z
+      .object({
+        direction: z.enum(["refund", "collect", "even"]),
+        ...money.shape,
+      })
+      .strict(),
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict()
+export type ShopifyReturnInput = z.infer<typeof shopifyReturnInputSchema>
+export type ShopifyReturnQuote = z.infer<typeof shopifyReturnQuoteSchema>
+
+export function shopifyReturnSummary(quote: ShopifyReturnQuote) {
+  return [
+    `Order ${quote.orderName}`,
+    ...quote.items.map((item) => `Return: ${item.quantity} × ${item.title}`),
+    ...quote.replacements.map(
+      (item) => `Receive: ${item.quantity} × ${item.title}`
+    ),
+    `Reason: ${quote.input.reason}`,
+    quote.settlement.direction === "even"
+      ? "No payment difference."
+      : `${quote.settlement.direction === "refund" ? "Refund" : "Additional payment"}: ${quote.settlement.currencyCode} ${quote.settlement.amount}`,
+    "Shopify will recheck eligibility and amounts before processing this return.",
+  ].join("\n")
+}

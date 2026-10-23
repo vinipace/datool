@@ -1694,3 +1694,386 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
     }, 60_000)
   }
 }
+
+async function returnRuntimeFixture(
+  options: { guest?: boolean; approval?: boolean; exchange?: boolean } = {}
+) {
+  const f = await fixture({ visitorMessagesPerMinute: 120 })
+  await activateShopifyConnection(
+    f,
+    "read_products,read_legal_policies,write_app_proxy,read_orders,read_customers,write_returns,write_orders"
+  )
+  const { shopifyReturnTools } =
+    await import("@/src/server/build/integrations/shopify-return-process")
+  const { shopifyReturnFixture } = await import("./helpers/shopify-return")
+  const provider = shopifyReturnFixture()
+  const input: Record<string, unknown> = {
+    ...provider.input,
+    ...(options.guest
+      ? { orderNumber: "#1001", email: "buyer@example.test" }
+      : {}),
+    replacements: options.exchange ? [{ variantId: "60", quantity: 1 }] : [],
+  }
+  const action = await saveAction(f.context, f.agent.id, {
+    slug: "return-items",
+    definition: {
+      type: "integration",
+      name: "Return or exchange items",
+      connectionId: f.connectionId,
+      toolSlug: "SHOPIFY_RETURN_OR_EXCHANGE",
+      channels: ["web"],
+      inputSchema: shopifyReturnTools[0].inputSchema,
+      shopifySettings: {
+        requireHumanApproval: options.approval ?? false,
+        allowExchanges: options.exchange ?? false,
+      },
+    },
+  })
+  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+    url: RequestInfo | URL,
+    init?: RequestInit
+  ) => {
+    const request = new Request(url, init)
+    if (!request.url.startsWith("https://fixture.myshopify.com/admin/api/"))
+      throw new Error("Unexpected network request")
+    const { query, variables } = (await request.json()) as {
+      query: string
+      variables: Record<string, unknown>
+    }
+    return provider.graphql(query, { variables })
+  }) as typeof fetch)
+  cleanup.push(async () => {
+    fetchSpy.mockRestore()
+  })
+  const agent = await updateAgent(f.context, f.agent.id, {
+    expectedRevision: 1,
+    apply: true,
+    configuration: {
+      ...f.agent.configuration,
+      model: "test-model",
+      channelAllowlist: ["web"],
+    },
+  })
+  let session = await f.session(options.guest ? "" : "123")
+  const dependencies = {
+    generateText: (async ({
+      tools,
+    }: {
+      tools: Record<
+        string,
+        {
+          execute: (
+            args: unknown,
+            context: { toolCallId: string }
+          ) => Promise<unknown>
+        }
+      >
+    }) => {
+      await tools[action.id].execute(input, { toolCallId: "return-items" })
+      return {
+        text: "Review your return.",
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      }
+    }) as never,
+  }
+  const confirm = (continuationId: string) => ({
+    widgetInteraction: {
+      actionId: action.id,
+      continuationId,
+      input: {
+        items: [
+          {
+            fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/999",
+            quantity: 99,
+          },
+        ],
+        refundAmount: 999999,
+      },
+    },
+  })
+  async function turn(metadata: Record<string, unknown> = {}, approve = false) {
+    const queued = await enqueuePublicMessage(
+      f.context,
+      f.channel.id,
+      session.conversationId,
+      session.visitorToken,
+      {
+        text: "Return these items",
+        origin: "https://chat.example.test",
+        metadata,
+      }
+    )
+    if (!("messageId" in queued)) throw new Error("Expected admitted message")
+    const jobs = await f.database.execute<{ id: string }>(
+      sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
+    )
+    return runAgentTurn(
+      f.context,
+      {
+        agentId: f.agent.id,
+        channel: "web",
+        conversationId: session.conversationId,
+        requestKey: `channel:${jobs.rows[0].id}`,
+        message: "Return these items",
+        metadata: metadata as never,
+      },
+      {
+        agent,
+        dependencies,
+        ...(approve
+          ? {
+              trustedApproval: {
+                actionId: action.id,
+                continuationId: (
+                  metadata.widgetInteraction as { continuationId: string }
+                ).continuationId,
+              },
+            }
+          : {}),
+      }
+    )
+  }
+  return {
+    ...f,
+    provider,
+    input,
+    turn,
+    confirm,
+    newConversation: async () => {
+      const previous = session.conversationId
+      session = await f.session(options.guest ? "" : "123")
+      expect(session.conversationId).not.toBe(previous)
+    },
+  }
+}
+
+for (const scenario of [
+  "refund",
+  "pending",
+  "collect",
+  "even",
+  "exchange-refund",
+] as const) {
+  test(`Shopify return runtime confirms and processes original-order settlement (${scenario})`, async () => {
+    const exchange = ["collect", "even", "exchange-refund"].includes(scenario)
+    const approval = scenario === "even"
+    const f = await returnRuntimeFixture({
+      guest: scenario === "refund",
+      exchange,
+      approval,
+    })
+    const s = f.provider.state
+    if (scenario === "pending") s.refundStatus = "PENDING"
+    if (scenario === "collect") {
+      s.direction = "InvoiceReturnOutcome"
+      s.transferAmount = "0.4"
+    }
+    if (scenario === "even") {
+      s.replacementPrice = "19.60"
+      s.transferAmount = "0"
+    }
+    if (scenario === "exchange-refund") {
+      s.replacementPrice = "10.00"
+      s.transferAmount = "9.6"
+    }
+    let pending = await f.turn()
+    expect(pending.continuations[0].type).toBe(
+      approval ? "approval_required" : "client_action"
+    )
+    expect(pending.continuations[0].shopifyReturnQuote?.items).toEqual([
+      { title: "Board wax 101", quantity: 1 },
+    ])
+    expect(s.created).toBe(0)
+    if (scenario === "refund") {
+      s.omitMaximumRefundable = true // Shopify documents this field as nullable.
+      // Consent to the old amount cannot authorize a changed quote.
+      s.returnedPrice = "20.99"
+      s.transferAmount = "20.7"
+      pending = await f.turn(
+        f.confirm(pending.continuations[0].continuationId!)
+      )
+      expect(
+        pending.continuations[0].shopifyReturnQuote?.settlement.amount
+      ).toBe("20.7")
+      expect(s.created).toBe(0)
+    }
+    const confirmation = f.confirm(pending.continuations[0].continuationId!)
+    if (approval) {
+      expect(pending.continuations[0].message).toContain(
+        "No payment difference"
+      )
+      await assert.rejects(f.turn(confirmation), /no longer available/)
+      expect(s.created).toBe(0)
+    }
+    const result = await f.turn(confirmation, approval)
+    expect(s.created).toBe(1)
+    expect(s.processed).toBe(1)
+    expect(s.invoices).toBe(scenario === "collect" ? 1 : 0)
+    expect(result.text).toContain(
+      scenario === "pending"
+        ? "refund is pending"
+        : scenario === "collect"
+          ? "payment invoice"
+          : scenario === "even"
+            ? "no payment difference"
+            : "confirmed the refund"
+    )
+    const processing = f.provider.calls.find((call) =>
+      call.query.includes("DatoolProcessReturn")
+    )!.variables.input as Record<string, unknown>
+    expect(processing.returnLineItems).toEqual([
+      { id: "gid://shopify/ReturnLineItem/1", quantity: 1 },
+    ])
+    expect(JSON.stringify(processing)).not.toContain("999")
+    if (["refund", "pending", "exchange-refund"].includes(scenario))
+      expect(processing.financialTransfer).toEqual({
+        issueRefund: {
+          allowOverRefunding: false,
+          orderTransactions: [
+            {
+              parentId: "gid://shopify/OrderTransaction/300",
+              transactionAmount: {
+                amount: s.transferAmount,
+                currencyCode: "USD",
+              },
+            },
+          ],
+        },
+      })
+    else expect(processing.financialTransfer).toBeUndefined()
+    const saved = await f.database.execute<{
+      status: string
+      return_id: string
+      result_json: { paymentStatus: string }
+    }>(
+      sql`SELECT status,return_id,result_json FROM build_shopify_order_operations WHERE kind='return'`
+    )
+    expect(saved.rows).toHaveLength(1)
+    expect(saved.rows[0]).toMatchObject({
+      status: "return_processed",
+      return_id: "gid://shopify/Return/1",
+      result_json: {
+        paymentStatus:
+          scenario === "pending"
+            ? "refund_pending"
+            : scenario === "collect"
+              ? "payment_required"
+              : scenario === "even"
+                ? "no_payment_difference"
+                : "refunded",
+      },
+    })
+    await assert.rejects(f.turn(confirmation, approval), /no longer available/)
+    expect(s.processed).toBe(1)
+  }, 60_000)
+}
+
+for (const lost of [
+  "create",
+  "process",
+  "invoice",
+  "record",
+  "finish",
+] as const) {
+  test(`Shopify return runtime preserves uncertain ${lost} and blocks another conversation from repeating it`, async () => {
+    const f = await returnRuntimeFixture({
+      guest: true,
+      exchange: lost === "invoice",
+    })
+    const s = f.provider.state
+    if (lost === "invoice") {
+      s.direction = "InvoiceReturnOutcome"
+      s.transferAmount = "0.4"
+    }
+    const pending = await f.turn()
+    s.lost = lost === "record" || lost === "finish" ? "" : lost
+    if (lost === "record" || lost === "finish") {
+      await f.database.execute(
+        sql.raw(`
+        CREATE FUNCTION reject_return_storage() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'fixture: return storage unavailable'; END $$;
+        CREATE TRIGGER reject_return_storage BEFORE UPDATE OF ${lost === "record" ? "return_id" : "result_json"}
+        ON build_shopify_order_operations FOR EACH ROW EXECUTE FUNCTION reject_return_storage();
+      `)
+      )
+    }
+    await assert.rejects(
+      f.turn(f.confirm(pending.continuations[0].continuationId!)),
+      { code: "ACTION_UNCERTAIN" }
+    )
+    const saved = await f.database.execute<{
+      status: string
+      return_id: string | null
+    }>(
+      sql`SELECT status,return_id FROM build_shopify_order_operations WHERE kind='return'`
+    )
+    expect(saved.rows[0]).toEqual({
+      status: "uncertain",
+      return_id:
+        lost === "create" || lost === "record"
+          ? null
+          : "gid://shopify/Return/1",
+    })
+    await f.newConversation()
+    const retry = await f.turn()
+    await assert.rejects(
+      f.turn(f.confirm(retry.continuations[0].continuationId!)),
+      /still being processed|needs review/
+    )
+    expect(s.created).toBe(1)
+    expect(s.processed).toBe(lost === "create" || lost === "record" ? 0 : 1)
+    expect(s.invoices).toBe(lost === "invoice" ? 1 : 0)
+  }, 60_000)
+}
+
+for (const changed of ["owner", "balance", "transaction"] as const) {
+  test(`Shopify return runtime stops before money moves when ${changed} changes`, async () => {
+    const f = await returnRuntimeFixture()
+    const s = f.provider.state
+    const pending = await f.turn()
+    if (changed === "owner") s.foreignOutcome = true
+    if (changed === "balance") s.transferAmount = "18.00"
+    if (changed === "transaction") s.foreignTransaction = true
+    const result = await f.turn(
+      f.confirm(pending.continuations[0].continuationId!)
+    )
+    expect(result.text).toContain(
+      changed === "owner"
+        ? "Order access changed"
+        : changed === "balance"
+          ? "changed the return balance"
+          : "original payment methods"
+    )
+    expect(s.created).toBe(1)
+    expect(s.processed).toBe(0)
+    expect(
+      (
+        await f.database.execute(
+          sql`SELECT status FROM build_shopify_order_operations WHERE kind='return'`
+        )
+      ).rows[0].status
+    ).toBe("needs_review")
+  }, 60_000)
+}
+
+test("Shopify return runtime does not invoice an unapproved existing balance", async () => {
+  const f = await returnRuntimeFixture({ exchange: true })
+  const s = f.provider.state
+  s.direction = "InvoiceReturnOutcome"
+  s.transferAmount = "0.4"
+  const pending = await f.turn()
+  s.outstanding = "9.4"
+  const result = await f.turn(
+    f.confirm(pending.continuations[0].continuationId!)
+  )
+  expect(s.processed).toBe(1)
+  expect(s.invoices).toBe(0)
+  expect(result.text).toContain("outstanding balance differs")
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT status FROM build_shopify_order_operations WHERE kind='return'`
+      )
+    ).rows[0].status
+  ).toBe("needs_review")
+}, 60_000)

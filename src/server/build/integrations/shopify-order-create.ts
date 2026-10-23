@@ -12,7 +12,7 @@ import type { IntegrationTool } from "@/src/lib/build/integrations"
 import { shopifyData, type ShopifyGraphqlClient } from "./shopify-catalog"
 import type { ShopifyShopper } from "./shopify-identity"
 import { shopifyMutation, ShopifyWriteUncertainError } from "./shopify-mutation"
-import type { ShopifyOrderStore } from "./shopify-order-store"
+import type { ShopifyOperationStore } from "./shopify-operation-store"
 
 export const ORDER_VARIANTS = `#graphql
   query DatoolOrderVariants($ids: [ID!]!) {
@@ -323,7 +323,7 @@ export async function createShopifyOrder(
   shopper: ShopifyShopper,
   settings: ShopifyActionSettings,
   graphql: ShopifyGraphqlClient,
-  operations: ShopifyOrderStore,
+  operations: ShopifyOperationStore,
   beforeWrite: () => Promise<void>,
   recordDraft: (id: string) => Promise<void>
 ) {

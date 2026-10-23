@@ -154,3 +154,27 @@ export const ShopifyOrder: Story = {
     await expect(approval).toBeChecked()
   },
 }
+
+export const ShopifyReturns: Story = {
+  parameters: { msw: { handlers: shopify.handlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole("option", { name: "Return or exchange items" })
+    await userEvent.selectOptions(
+      canvas.getByLabelText("App action"),
+      "SHOPIFY_RETURN_OR_EXCHANGE"
+    )
+    const window = canvas.getByLabelText("Return window (days)")
+    await expect(window).toHaveValue(30)
+    await userEvent.clear(window)
+    await userEvent.tab()
+    await expect(window).toHaveValue(null)
+    await userEvent.type(window, "60")
+    await userEvent.tab()
+    await expect(window).toHaveValue(60)
+    const exchanges = canvas.getByRole("switch", { name: "Allow exchanges" })
+    await expect(exchanges).not.toBeChecked()
+    await userEvent.click(exchanges)
+    await expect(exchanges).toBeChecked()
+  },
+}

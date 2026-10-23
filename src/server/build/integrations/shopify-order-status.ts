@@ -10,8 +10,8 @@ import {
 } from "./shopify-order-create"
 import type {
   ShopifyOrderOperation,
-  ShopifyOrderStore,
-} from "./shopify-order-store"
+  ShopifyOperationStore,
+} from "./shopify-operation-store"
 
 const inputSchema = z.object({ operationId: z.uuid().optional() }).strict()
 const orderFields = `id name email customer { id }
@@ -76,7 +76,7 @@ function matchesBuyer(
 /** Recover only the persisted intent owned by this verified shopper. No creation or payment writes. */
 export async function checkShopifyCheckout(
   input: unknown,
-  operations: ShopifyOrderStore,
+  operations: ShopifyOperationStore,
   graphql: ShopifyGraphqlClient
 ) {
   const { operationId } = inputSchema.parse(input)

@@ -29,9 +29,16 @@ import {
   type ShopifyOrderQuote,
 } from "@/src/lib/build/shopify-order"
 import { shopifyCartResultSchema } from "@/src/lib/build/shopify-cart"
+import {
+  shopifyReturnQuoteSchema,
+  type ShopifyReturnQuote,
+} from "@/src/lib/build/shopify-return"
+import { prepareShopifyReturn } from "./shopify-return-quote"
+import { processShopifyReturn } from "./shopify-return-process"
 import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
-import { ShopifyOrderStore } from "./shopify-order-store"
+import { ShopifyOperationStore } from "./shopify-operation-store"
 import { checkShopifyCheckout } from "./shopify-order-status"
+import { getShopifyReturnOptions } from "./shopify-return-options"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
 import { readShopifyOrders } from "./shopify-orders"
 import { shopifyShopper } from "./shopify-identity"
@@ -347,6 +354,8 @@ export async function executeShopifyTool(
     turnId: string
     confirmed?: boolean
     cartResult?: unknown
+    prepareReturn?: boolean
+    returnQuote?: ShopifyReturnQuote
     prepareOrder?: boolean
     orderQuote?: ShopifyOrderQuote
     recordDraft?: (id: string) => Promise<void>
@@ -381,7 +390,8 @@ export async function executeShopifyTool(
   if (
     shopifyActionNeedsConfirmation(slug) &&
     !execution?.confirmed &&
-    !(slug === "SHOPIFY_CREATE_ORDER" && execution?.prepareOrder)
+    !(slug === "SHOPIFY_CREATE_ORDER" && execution?.prepareOrder) &&
+    !(slug === "SHOPIFY_RETURN_OR_EXCHANGE" && execution?.prepareReturn)
   )
     throw new TracerError(
       "VALIDATION_ERROR",
@@ -418,14 +428,53 @@ export async function executeShopifyTool(
         if (current.customerId !== shopper.customerId) throw unavailable()
       }
       if (orders) return await readShopifyOrders(args, shopper, graphql)
+      if (slug === "SHOPIFY_GET_RETURN_OPTIONS")
+        return await getShopifyReturnOptions(args, shopper, graphql)
       if (slug === "SHOPIFY_CHECK_CHECKOUT")
         return await checkShopifyCheckout(
           args,
-          new ShopifyOrderStore(context, id, execution.conversationId, shopper),
+          new ShopifyOperationStore(
+            context,
+            id,
+            execution.conversationId,
+            shopper
+          ),
           graphql
         )
+      if (slug === "SHOPIFY_RETURN_OR_EXCHANGE") {
+        const settings = shopifyActionSettingsSchema.parse(
+          execution.settings ?? {}
+        )
+        if (execution.prepareReturn)
+          return {
+            returnQuote: await prepareShopifyReturn(
+              args,
+              shopper,
+              settings,
+              graphql
+            ),
+          }
+        if (!execution.returnQuote)
+          throw new TracerError(
+            "VALIDATION_ERROR",
+            "Review the calculated return before confirming it."
+          )
+        return await processShopifyReturn(
+          shopifyReturnQuoteSchema.parse(execution.returnQuote),
+          shopper,
+          settings,
+          graphql,
+          new ShopifyOperationStore(
+            context,
+            id,
+            execution.conversationId,
+            shopper
+          ),
+          beforeWrite
+        )
+      }
       if (slug === "SHOPIFY_CREATE_ORDER") {
-        const operations = new ShopifyOrderStore(
+        const operations = new ShopifyOperationStore(
           context,
           id,
           execution.conversationId,

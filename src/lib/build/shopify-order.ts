@@ -1,5 +1,21 @@
 import { z } from "zod"
 
+export const orderLookupSchema = z
+  .object({
+    orderNumber: z
+      .string()
+      .trim()
+      .regex(/^#?[\p{L}\p{N}_-]{1,64}$/u)
+      .optional(),
+    email: z.email().max(254).optional(),
+    phone: z
+      .string()
+      .regex(/^\+?[0-9 ()-]{8,30}$/)
+      .optional(),
+    after: z.string().max(512).optional(),
+  })
+  .strict()
+
 export const shopifyAddressSchema = z
   .object({
     firstName: z.string().trim().max(100).optional(),

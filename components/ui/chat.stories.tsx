@@ -265,3 +265,91 @@ export const MessageWrapping: Story = {
     }
   },
 }
+
+function returnConfirmation(exchange: boolean): Story {
+  return {
+    render: (args) => (
+      <div className="h-[42rem] w-full max-w-lg">
+        <Chat {...args} />
+      </div>
+    ),
+    args: {
+      messages: [
+        {
+          role: "assistant",
+          content: "Review the return before continuing.",
+          toolCalls: [],
+          metadata: {
+            continuations: [
+              {
+                type: "client_action",
+                actionId: "return-items",
+                continuationId: "return-confirmation",
+                eventName: "Confirm changes",
+                title: "Return or exchange items",
+                input: {},
+                shopifyReturnQuote: {
+                  operationId: "aadae85e-4ed6-4dbe-9444-9ad1dfdfd3e9",
+                  expiresAt: Date.now() + 60_000,
+                  customerId: null,
+                  fingerprint: "a".repeat(64),
+                  orderName: "1001",
+                  input: {
+                    orderId: "gid://shopify/Order/10",
+                    items: [
+                      {
+                        fulfillmentLineItemId:
+                          "gid://shopify/FulfillmentLineItem/101",
+                        quantity: 1,
+                      },
+                    ],
+                    replacements: exchange
+                      ? [{ variantId: "60", quantity: 1 }]
+                      : [],
+                    reason: "Wrong size",
+                  },
+                  items: [{ title: "Board wax", quantity: 1 }],
+                  replacements: exchange
+                    ? [{ title: "Replacement wax (Large)", quantity: 1 }]
+                    : [],
+                  credit: { amount: "19.7", currencyCode: "USD" },
+                  replacementTotal: {
+                    amount: exchange ? "20.1" : "0",
+                    currencyCode: "USD",
+                  },
+                  settlement: {
+                    direction: exchange ? "collect" : "refund",
+                    amount: exchange ? "0.4" : "19.7",
+                    currencyCode: "USD",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      onWidgetInteraction: fn(),
+    },
+    play: async ({ canvasElement, args }) => {
+      const canvas = within(canvasElement)
+      await expect(canvas.getByText(/Return: 1 × Board wax/)).toBeVisible()
+      await expect(
+        canvas.getByText(
+          exchange ? /Additional payment: USD 0.4/ : /Refund: USD 19.7/
+        )
+      ).toBeVisible()
+      await expect(
+        canvas.queryByText(/fulfillmentLineItemId|fingerprint/)
+      ).not.toBeInTheDocument()
+      const button = canvas.getByRole("button", {
+        name: exchange ? "Confirm exchange" : "Confirm return",
+      })
+      button.focus()
+      await expect(button).toHaveFocus()
+      await userEvent.keyboard("{Enter}")
+      await expect(args.onWidgetInteraction).toHaveBeenCalledOnce()
+    },
+  }
+}
+export const ShopifyRefund: Story = returnConfirmation(false)
+export const ShopifyExchange: Story = returnConfirmation(true)
