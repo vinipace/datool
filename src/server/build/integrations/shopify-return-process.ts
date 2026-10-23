@@ -2,14 +2,16 @@ import { z } from "zod"
 import type { IntegrationTool } from "@/src/lib/build/integrations"
 import type { ShopifyActionSettings } from "@/src/lib/build/shopify"
 import {
-  shopifyReturnInputSchema,
+  shopifyReturnActionInputSchema,
   type ShopifyReturnQuote,
 } from "@/src/lib/build/shopify-return"
+import { prepareShopifyReturnContinuation } from "./shopify-return-resume"
+import { readReturnFinancialOutcome } from "./shopify-return-financial"
+import { CHECK_CREATED_RETURN } from "./shopify-return-status"
 import { TracerError } from "@/src/server/tracer/errors"
 import { shopifyData, type ShopifyGraphqlClient } from "./shopify-catalog"
 import type { ShopifyShopper } from "./shopify-identity"
 import type { ShopifyOperationStore } from "./shopify-operation-store"
-import { canAccessShopifyOrder } from "./shopify-orders"
 import { shopifyMutation, ShopifyWriteUncertainError } from "./shopify-mutation"
 import {
   prepareShopifyReturn,
@@ -25,17 +27,6 @@ import {
   shopifyRefundStatus,
 } from "./shopify-return-record"
 
-type FinancialTransfer = {
-  __typename: string
-  amount: { presentmentMoney: ShopifyMoney }
-  suggestedTransactions?: Array<{
-    kind: string
-    amountSet: { presentmentMoney: ShopifyMoney }
-    maximumRefundableSet: { presentmentMoney: ShopifyMoney } | null
-    parentTransaction: { id: string; kind: string } | null
-  }>
-}
-
 const money = `presentmentMoney { amount currencyCode }`
 const lines = `returnLineItems(first: 100) {
   nodes { id quantity processedQuantity ... on ReturnLineItem { fulfillmentLineItem { id } } }
@@ -48,26 +39,6 @@ export const CREATE_RETURN = `#graphql
  mutation DatoolCreateReturn($input: ReturnInput!) {
    returnCreate(returnInput: $input) {
      return { id order { id } ${lines} } userErrors { field message }
-   }
- }
-`
-export const RETURN_FINANCIAL_OUTCOME = `#graphql
- query DatoolReturnFinancialOutcome($id: ID!, $items: [SuggestedOutcomeReturnLineItemInput!]!, $replacements: [SuggestedOutcomeExchangeLineItemInput!]!) {
-   return(id: $id) {
-     id order { id name email phone customer { id } shippingAddress { phone } }
-     suggestedFinancialOutcome(returnLineItems: $items, exchangeLineItems: $replacements, refundMethodAllocation: ORIGINAL_PAYMENT_METHODS) {
-       financialTransfer {
-         __typename
-         ... on RefundReturnOutcome {
-           amount { ${money} }
-           suggestedTransactions {
-             kind amountSet { ${money} } maximumRefundableSet { ${money} }
-             parentTransaction { id kind }
-           }
-         }
-         ... on InvoiceReturnOutcome { amount { ${money} } }
-       }
-     }
    }
  }
 `
@@ -106,54 +77,73 @@ export async function processShopifyReturn(
       "VALIDATION_ERROR",
       "Your customer account changed. Review the return again."
     )
-  const refreshed = await prepareShopifyReturn(
-    quote.input,
-    shopper,
-    settings,
-    graphql,
-    quote.operationId
-  )
+  const refreshed = quote.resume
+    ? await prepareShopifyReturnContinuation(
+        { operationId: quote.operationId },
+        shopper,
+        settings,
+        graphql,
+        operations
+      )
+    : await prepareShopifyReturn(
+        quote.input,
+        shopper,
+        settings,
+        graphql,
+        quote.operationId
+      )
   if (
     quote.expiresAt <= Date.now() ||
     quote.fingerprint !== refreshed.fingerprint
   )
     return { status: "quote_changed" as const, quote: refreshed }
-  await operations.beginReturn(quote, settings)
-  let providerCreated = false
+  if (!quote.resume) await operations.beginReturn(quote, settings)
+  let providerCreated = Boolean(quote.resume)
+  let processing = false
   try {
-    const created = await shopifyMutation<{
-      return: (ReturnLines & { order: { id: string } }) | null
-    }>(
-      graphql,
-      CREATE_RETURN,
-      {
-        input: {
-          orderId: quote.input.orderId,
-          returnLineItems: quote.input.items.map((item) => ({
-            ...item,
-            returnReasonNote: `${quote.input.reason}\nDatool:${quote.operationId}`,
-          })),
-          exchangeLineItems: quote.input.replacements.map((item) => ({
-            variantId: `gid://shopify/ProductVariant/${item.variantId}`,
-            quantity: item.quantity,
-          })),
-        },
-      },
-      "returnCreate",
-      beforeWrite
-    )
+    const created = quote.resume
+      ? await shopifyData<{
+          return: (ReturnLines & { order: { id: string } }) | null
+        }>(graphql, CHECK_CREATED_RETURN, { id: quote.resume.returnId })
+      : await shopifyMutation<{
+          return: (ReturnLines & { order: { id: string } }) | null
+        }>(
+          graphql,
+          CREATE_RETURN,
+          {
+            input: {
+              orderId: quote.input.orderId,
+              returnLineItems: quote.input.items.map((item) => ({
+                ...item,
+                returnReasonNote: `${quote.input.reason}\nDatool:${quote.operationId}`,
+              })),
+              exchangeLineItems: quote.input.replacements.map((item) => ({
+                variantId: `gid://shopify/ProductVariant/${item.variantId}`,
+                quantity: item.quantity,
+              })),
+            },
+          },
+          "returnCreate",
+          beforeWrite
+        )
     providerCreated = true
     const returned = created.return
     if (!returned?.id) throw new ShopifyWriteUncertainError()
-    await operations.recordReturn(quote.operationId, returned.id)
+    if (!quote.resume)
+      await operations.recordReturn(quote.operationId, returned.id)
     const review = (message: string) =>
-      operations.finishReturn(quote.operationId, {
-        status: "needs_review" as const,
-        returnId: returned.id,
-        orderId: quote.input.orderId,
-        message,
-      })
+      operations.finishReturn(
+        quote.operationId,
+        {
+          status: "needs_review" as const,
+          returnId: quote.resume?.returnId ?? returned.id,
+          orderId: quote.input.orderId,
+          message,
+        },
+        quote.resume && !processing ? quote.resume.revision : undefined
+      )
     if (
+      (quote.resume && returned.id !== quote.resume.returnId) ||
       returned.order.id !== quote.input.orderId ||
       !matchesReturnLines(returned, quote, false)
     )
@@ -167,37 +157,20 @@ export async function processShopifyReturn(
     const replacements = returned.exchangeLineItems.nodes.map(
       ({ id, quantity }) => ({ id, quantity })
     )
-    const outcome = await shopifyData<{
-      return: {
-        id: string
-        order: {
-          id: string
-          name: string
-          email: string | null
-          phone: string | null
-          customer: { id: string } | null
-          shippingAddress: { phone: string | null } | null
-        }
-        suggestedFinancialOutcome: {
-          financialTransfer: FinancialTransfer | null
-        } | null
-      } | null
-    }>(graphql, RETURN_FINANCIAL_OUTCOME, {
-      id: returned.id,
-      items,
-      replacements,
-    })
-    const current = outcome.return
-    if (
-      !current ||
-      current.id !== returned.id ||
-      current.order.id !== quote.input.orderId ||
-      !canAccessShopifyOrder(current.order, quote.input, shopper)
-    )
-      return await review(
-        "Order access changed. The store team must review this return before processing it."
+    let outcome: Awaited<ReturnType<typeof readReturnFinancialOutcome>>
+    try {
+      outcome = await readReturnFinancialOutcome(
+        returned,
+        quote,
+        shopper,
+        graphql
       )
-    const transfer = current.suggestedFinancialOutcome?.financialTransfer
+    } catch (error) {
+      if (error instanceof TracerError && error.code === "VALIDATION_ERROR")
+        return await review(error.message)
+      throw error
+    }
+    const transfer = outcome.financialTransfer
     const expectedDirection = quote.settlement.direction
     const direction =
       transfer?.__typename === "InvoiceReturnOutcome"
@@ -206,8 +179,7 @@ export async function processShopifyReturn(
           ? "refund"
           : null
     if (
-      !current.suggestedFinancialOutcome ||
-      (expectedDirection === "even"
+      expectedDirection === "even"
         ? transfer &&
           (!direction ||
             !sameShopifyMoney(
@@ -216,7 +188,7 @@ export async function processShopifyReturn(
             ))
         : direction !== expectedDirection ||
           !transfer ||
-          !sameShopifyMoney(transfer.amount.presentmentMoney, quote.settlement))
+          !sameShopifyMoney(transfer.amount.presentmentMoney, quote.settlement)
     )
       return await review(
         "Shopify changed the return balance. No refund or exchange was processed. The store team must review the updated amount."
@@ -267,7 +239,8 @@ export async function processShopifyReturn(
         },
       }
     }
-    await operations.claimReturnProcessing(quote.operationId)
+    await operations.claimReturnProcessing(quote)
+    processing = true
     const processed = await shopifyMutation<{
       return:
         | (ReturnLines & {
@@ -378,8 +351,8 @@ export const shopifyReturnTools: IntegrationTool[] = [
     slug: "SHOPIFY_RETURN_OR_EXCHANGE",
     name: "Return or exchange items",
     description:
-      "Prepare a return/refund or permitted same-order exchange. First use Find returnable items; select fulfillment line IDs and quantities. Shopify calculates the balance for shopper confirmation or merchant approval. Guests must provide the order number and checkout email or phone. Never promise a completed refund or shipment before Shopify confirms it.",
-    inputSchema: z.toJSONSchema(shopifyReturnInputSchema, {
+      "Prepare a return/refund or permitted same-order exchange. First use Find returnable items; select fulfillment line IDs and quantities. Shopify calculates the balance for shopper confirmation or merchant approval. Guests must provide the order number and checkout email or phone. To continue an existing unprocessed return, pass only its Datool operationId; the original items and current balance require fresh approval. Never promise a completed refund or shipment before Shopify confirms it.",
+    inputSchema: z.toJSONSchema(shopifyReturnActionInputSchema, {
       target: "draft-07",
     }),
   },

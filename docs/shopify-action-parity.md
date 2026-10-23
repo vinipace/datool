@@ -18,7 +18,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [x] Update the authenticated customer's profile and default account address.
 - [x] Confirmed original-order return/refund and exchange processing, delivery-window policy and original-payment settlement.
 - [x] Recover an original return and its confirmed refund/payment status without repeating Shopify writes.
-- [ ] Reviewed continuation of unprocessed returns, changed-balance resolution and payment-verified exchange hold release.
+- [x] Freshly approved continuation of an existing never-processed return, including a changed balance.
+- [ ] Payment-verified exchange hold release.
 - [ ] Replacement orders with mandatory human approval and original-order credit accounting.
 - [ ] Action settings, confirmations, error states and reusable chat controls.
 - [ ] Delayed teammate approval and customer re-verification when the Shopify session has expired.
@@ -110,10 +111,9 @@ stories cover the shared confirmation and merchant settings. The generated
 queries validate against Shopify Admin GraphQL 2026-10. These are local tests
 with stubbed provider responses, not live refunds or payments.
 
-Apply migration 0066 and obtain `write_returns` plus the invoice/order scopes
-before enabling the action. Remaining return work includes reviewed continuation of
-unprocessed operations, re-confirming a balance changed after return creation, payment
-webhooks and verified hold release. Separate replacement orders and their credit
+Apply migrations 0066–0067 and obtain `write_returns` plus the invoice/order scopes
+before enabling the action. Remaining return work includes payment webhooks and
+verified hold release. Separate replacement orders and their credit
 accounting are not implemented. Full after-sales parity remains incomplete.
 
 ## Return recovery
@@ -142,13 +142,46 @@ saves, guest access from another conversation, changed ownership, ambiguous sear
 partial processing, pending/successful/failed refunds and payment-link recovery.
 A database lifecycle check covers an active writer and a newer reconciliation.
 These use stubbed Shopify responses; live permission grants and provider outcomes
-remain unverified. An unprocessed recovered return still requires store-team review;
-reviewed in-chat continuation and verified fulfillment-hold release are next.
+remain unverified. The existing return action can continue a recovered return that
+is known never to have started processing, after a fresh quote and approval.
+Verified fulfillment-hold release remains unfinished.
 
 The queries validate against Shopify Admin GraphQL 2026-10. Provider contracts:
 [return transactions and state](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Return),
 [processed return quantities and reason notes](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/ReturnLineItem),
 and [existing additional-payment URL](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/OrderPaymentCollectionDetails).
+
+## Reviewed return continuation
+
+The same Return or exchange items action accepts either the original item selection
+or only a Datool `operationId`. Continuation loads the saved original selection;
+it cannot switch the order, shopper or items. It verifies the existing open return
+and unprocessed quantities, rechecks live replacement stock, and obtains the
+current suggested financial outcome. A changed or expired quote needs approval
+again. Old pre-creation item-credit totals are omitted from the new quote rather
+than being presented as current financial calculations.
+
+The commerce ledger records a one-way processing marker before dispatch. A
+revision-checked claim saves the newly approved quote and admits only one processing
+attempt. A lost processing response cannot be replayed even if Shopify temporarily
+reports zero processed quantities. Migration 0067 treats legacy records without
+that history as unknown; only new admissions establish never-started status.
+Creation failures and changed balances before processing can therefore continue
+on the same return, while uncertain financial writes stay in reconciliation.
+
+The original merchant approval requirement cannot be weakened by newer action
+settings; changing the return-window policy also requests teammate review. An
+already accepted return does not consume returnable quantities twice or become
+ineligible solely because its original window elapsed while processing was delayed.
+The current exchange policy and replacement-stock check still apply. This reuses
+the action's existing confirmation/approval continuation, shared financial read,
+and the same final processing path; it introduces no second workflow system.
+
+Runtime cases cover continuation after lost creation, changed balance with a
+preserved human-approval requirement, fresh price consent, unavailable stock,
+forged confirmation fields, guest conversation isolation, one-shot processing and
+unknown legacy history. Provider responses are stubbed; live-store verification
+remains a separate release gate.
 
 ## Design review
 

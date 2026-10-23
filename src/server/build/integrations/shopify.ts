@@ -31,8 +31,10 @@ import {
 import { shopifyCartResultSchema } from "@/src/lib/build/shopify-cart"
 import {
   shopifyReturnQuoteSchema,
+  shopifyReturnActionInputSchema,
   type ShopifyReturnQuote,
 } from "@/src/lib/build/shopify-return"
+import { prepareShopifyReturnContinuation } from "./shopify-return-resume"
 import { prepareShopifyReturn } from "./shopify-return-quote"
 import { processShopifyReturn } from "./shopify-return-process"
 import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
@@ -458,15 +460,31 @@ export async function executeShopifyTool(
         const settings = shopifyActionSettingsSchema.parse(
           execution.settings ?? {}
         )
-        if (execution.prepareReturn)
+        if (execution.prepareReturn) {
+          const returnInput = shopifyReturnActionInputSchema.parse(args)
           return {
-            returnQuote: await prepareShopifyReturn(
-              args,
-              shopper,
-              settings,
-              graphql
-            ),
+            returnQuote:
+              "operationId" in returnInput
+                ? await prepareShopifyReturnContinuation(
+                    returnInput,
+                    shopper,
+                    settings,
+                    graphql,
+                    new ShopifyOperationStore(
+                      context,
+                      id,
+                      execution.conversationId,
+                      shopper
+                    )
+                  )
+                : await prepareShopifyReturn(
+                    returnInput,
+                    shopper,
+                    settings,
+                    graphql
+                  ),
           }
+        }
         if (!execution.returnQuote)
           throw new TracerError(
             "VALIDATION_ERROR",

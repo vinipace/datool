@@ -3,6 +3,7 @@ import type { ShopifyActionSettings } from "@/src/lib/build/shopify"
 import {
   shopifyReturnInputSchema,
   shopifyReturnQuoteSchema,
+  type ShopifyReturnInput,
 } from "@/src/lib/build/shopify-return"
 import { TracerError } from "@/src/server/tracer/errors"
 import { shopifyData, type ShopifyGraphqlClient } from "./shopify-catalog"
@@ -144,56 +145,13 @@ export async function prepareShopifyReturn(
     }
     return { ...line, quantity: item.quantity }
   })
-  type Variant = {
-    id: string
-    title: string
-    availableForSale: boolean
-    inventoryQuantity: number | null
-    inventoryPolicy: string
-    inventoryItem: { tracked: boolean }
-    product: {
-      title: string
-      status: string
-      publishedAt: string | null
-      requiresSellingPlan: boolean
-    }
-  }
+  const replacements = await getShopifyReplacementItems(
+    args.replacements,
+    graphql
+  )
   const variantIds = args.replacements.map(
     (item) => `gid://shopify/ProductVariant/${item.variantId}`
   )
-  const variants = variantIds.length
-    ? (
-        await shopifyData<{ nodes: Array<Variant | null> }>(
-          graphql,
-          RETURN_REPLACEMENT_VARIANTS,
-          { ids: variantIds }
-        )
-      ).nodes
-    : []
-  const replacements = args.replacements.map((item, index) => {
-    const variant = variants.find((value) => value?.id === variantIds[index])
-    if (
-      !variant ||
-      !variant.availableForSale ||
-      variant.product.status !== "ACTIVE" ||
-      !variant.product.publishedAt ||
-      !(Date.parse(variant.product.publishedAt) <= Date.now()) ||
-      variant.product.requiresSellingPlan ||
-      (variant.inventoryItem.tracked &&
-        variant.inventoryPolicy === "DENY" &&
-        (variant.inventoryQuantity ?? 0) < item.quantity)
-    )
-      invalid(
-        "A replacement is unavailable or requires the store's subscription checkout. Choose an available replacement."
-      )
-    return {
-      title:
-        variant.title && variant.title !== "Default Title"
-          ? `${variant.product.title} (${variant.title})`
-          : variant.product.title,
-      quantity: item.quantity,
-    }
-  })
   const calculationInput = {
     orderId: args.orderId,
     returnLineItems: args.items,
@@ -302,5 +260,61 @@ export async function prepareShopifyReturn(
     fingerprint: createHash("sha256")
       .update(JSON.stringify({ ...confirmed, settings }))
       .digest("hex"),
+  })
+}
+
+export async function getShopifyReplacementItems(
+  items: ShopifyReturnInput["replacements"],
+  graphql: ShopifyGraphqlClient
+) {
+  type Variant = {
+    id: string
+    title: string
+    availableForSale: boolean
+    inventoryQuantity: number | null
+    inventoryPolicy: string
+    inventoryItem: { tracked: boolean }
+    product: {
+      title: string
+      status: string
+      publishedAt: string | null
+      requiresSellingPlan: boolean
+    }
+  }
+  const variantIds = items.map(
+    (item) => `gid://shopify/ProductVariant/${item.variantId}`
+  )
+  const variants = variantIds.length
+    ? (
+        await shopifyData<{ nodes: Array<Variant | null> }>(
+          graphql,
+          RETURN_REPLACEMENT_VARIANTS,
+          { ids: variantIds }
+        )
+      ).nodes
+    : []
+  return items.map((item, index) => {
+    const variant = variants.find((value) => value?.id === variantIds[index])
+    if (
+      !variant ||
+      !variant.availableForSale ||
+      variant.product.status !== "ACTIVE" ||
+      !variant.product.publishedAt ||
+      !(Date.parse(variant.product.publishedAt) <= Date.now()) ||
+      variant.product.requiresSellingPlan ||
+      (variant.inventoryItem.tracked &&
+        variant.inventoryPolicy === "DENY" &&
+        (variant.inventoryQuantity ?? 0) < item.quantity)
+    )
+      invalid(
+        "A replacement is unavailable or requires the store's subscription checkout. Choose an available replacement."
+      )
+    return {
+      title:
+        variant.title && variant.title !== "Default Title"
+          ? `${variant.product.title} (${variant.title})`
+          : variant.product.title,
+      quantity: item.quantity,
+    }
   })
 }

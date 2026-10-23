@@ -266,7 +266,7 @@ export const MessageWrapping: Story = {
   },
 }
 
-function returnConfirmation(exchange: boolean): Story {
+function returnConfirmation(exchange: boolean, resume = false): Story {
   return {
     render: (args) => (
       <div className="h-[42rem] w-full max-w-lg">
@@ -290,6 +290,15 @@ function returnConfirmation(exchange: boolean): Story {
                 input: {},
                 shopifyReturnQuote: {
                   operationId: "aadae85e-4ed6-4dbe-9444-9ad1dfdfd3e9",
+                  ...(resume
+                    ? {
+                        resume: {
+                          returnId: "gid://shopify/Return/1",
+                          revision: 3,
+                          requireHumanApproval: false,
+                        },
+                      }
+                    : {}),
                   expiresAt: Date.now() + 60_000,
                   customerId: null,
                   fingerprint: "a".repeat(64),
@@ -333,6 +342,10 @@ function returnConfirmation(exchange: boolean): Story {
     play: async ({ canvasElement, args }) => {
       const canvas = within(canvasElement)
       await expect(canvas.getByText(/Return: 1 × Board wax/)).toBeVisible()
+      if (resume)
+        await expect(
+          canvas.getByText(/Continue the existing return/)
+        ).toBeVisible()
       await expect(
         canvas.getByText(
           exchange ? /Additional payment: USD 0.4/ : /Refund: USD 19.7/
@@ -353,3 +366,5 @@ function returnConfirmation(exchange: boolean): Story {
 }
 export const ShopifyRefund: Story = returnConfirmation(false)
 export const ShopifyExchange: Story = returnConfirmation(true)
+
+export const ShopifyResumeReturn: Story = returnConfirmation(false, true)

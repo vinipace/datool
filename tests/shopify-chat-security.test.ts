@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { afterEach, expect, spyOn, test } from "bun:test"
 import { createHmac, randomUUID } from "node:crypto"
+import { readFile } from "node:fs/promises"
 import { sql } from "drizzle-orm"
 import { configureBuildTestEnvironment } from "./helpers/build-env"
 import {
@@ -1716,7 +1717,7 @@ async function returnRuntimeFixture(
       : {}),
     replacements: options.exchange ? [{ variantId: "60", quantity: 1 }] : [],
   }
-  const action = await saveAction(f.context, f.agent.id, {
+  let action = await saveAction(f.context, f.agent.id, {
     slug: "return-items",
     definition: {
       type: "integration",
@@ -1760,7 +1761,7 @@ async function returnRuntimeFixture(
   cleanup.push(async () => {
     fetchSpy.mockRestore()
   })
-  const agent = await updateAgent(f.context, f.agent.id, {
+  let agent = await updateAgent(f.context, f.agent.id, {
     expectedRevision: 1,
     apply: true,
     configuration: {
@@ -1859,6 +1860,26 @@ async function returnRuntimeFixture(
     input,
     turn,
     confirm,
+    setSettings: async (settings: Record<string, unknown>) => {
+      if (action.definition.type !== "integration")
+        throw new Error("Expected integration")
+      action = await saveAction(f.context, f.agent.id, {
+        id: action.id,
+        expectedRevision: action.revision,
+        definition: {
+          ...action.definition,
+          shopifySettings: {
+            ...action.definition.shopifySettings,
+            ...settings,
+          },
+        },
+      })
+      agent = await updateAgent(f.context, f.agent.id, {
+        expectedRevision: agent.currentRevision,
+        apply: true,
+        configuration: agent.configuration,
+      })
+    },
     check: async (args: Record<string, unknown> = {}) => {
       checking = true
       checkInput = args
@@ -2302,4 +2323,147 @@ test("Shopify return recovery waits for an active writer and cannot overwrite a 
   ).rows[0]
   expect(saved.result_json.paymentStatus).toBe("refund_pending")
   expect(f.provider.state.processed).toBe(1)
+}, 60_000)
+
+for (const interrupted of ["create", "balance"] as const) {
+  test(`Shopify return continuation requotes and processes the existing return after ${interrupted}`, async () => {
+    const approval = interrupted === "balance"
+    const f = await returnRuntimeFixture({
+      guest: !approval,
+      approval,
+      exchange: !approval,
+    })
+    const s = f.provider.state
+    if (!approval) {
+      s.direction = "InvoiceReturnOutcome"
+      s.transferAmount = "0.4"
+    }
+    const first = await f.turn()
+    const operationId = first.continuations[0].shopifyReturnQuote!.operationId
+    const initialConfirmation = f.confirm(
+      first.continuations[0].continuationId!
+    )
+    if (interrupted === "create") {
+      s.lost = "create"
+      await assert.rejects(f.turn(initialConfirmation), {
+        code: "ACTION_UNCERTAIN",
+      })
+    } else {
+      s.transferAmount = "18.00"
+      const changed = await f.turn(initialConfirmation, true)
+      expect(changed.text).toContain("changed the return balance")
+      // The original merchant approval policy must survive a later settings relaxation.
+      await f.setSettings({ requireHumanApproval: false })
+    }
+    for (const key of Object.keys(f.input)) delete f.input[key]
+    f.input.operationId = operationId
+    if (!approval) {
+      const restore = await f.newConversation()
+      const calls = f.provider.calls.length
+      await assert.rejects(f.turn(), /no return to continue/i)
+      expect(f.provider.calls.length).toBe(calls)
+      restore()
+    }
+    let resumed = await f.turn()
+    let quote = resumed.continuations[0].shopifyReturnQuote!
+    expect(quote.resume?.returnId).toBe("gid://shopify/Return/1")
+    expect(quote.input.items).toEqual([
+      {
+        fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/101",
+        quantity: 1,
+      },
+    ])
+    expect(quote.credit).toBeUndefined()
+    expect(s.created).toBe(1)
+    expect(s.processed).toBe(0)
+    if (approval) {
+      expect(resumed.continuations[0].type).toBe("approval_required")
+      expect(quote.resume?.requireHumanApproval).toBe(true)
+      expect(quote.settlement.amount).toBe("18")
+      await assert.rejects(
+        f.turn(f.confirm(resumed.continuations[0].continuationId!)),
+        { code: "CONTINUATION_NOT_AVAILABLE" }
+      )
+    } else {
+      // A changed balance requires consent again; the confirmation cannot pin the old amount.
+      s.transferAmount = "0.5"
+      s.outstanding = "0.5"
+      resumed = await f.turn(
+        f.confirm(resumed.continuations[0].continuationId!)
+      )
+      quote = resumed.continuations[0].shopifyReturnQuote!
+      expect(quote.settlement.amount).toBe("0.5")
+      expect(s.processed).toBe(0)
+      s.stock = 0
+      await assert.rejects(
+        f.turn(f.confirm(resumed.continuations[0].continuationId!)),
+        /replacement.*unavailable/i
+      )
+      s.stock = 10
+      resumed = await f.turn()
+    }
+    s.lost = ""
+    const result = await f.turn(
+      f.confirm(resumed.continuations[0].continuationId!),
+      approval
+    )
+    expect(result.text).toContain(
+      approval ? "confirmed the refund" : "sent a payment invoice"
+    )
+    expect(s.created).toBe(1)
+    expect(s.processed).toBe(1)
+    const recorded = (
+      await f.database.execute<{
+        return_process_started: boolean
+        quote_json: { settlement: { amount: string } }
+      }>(
+        sql`SELECT return_process_started,quote_json FROM build_shopify_order_operations WHERE id=${operationId}::uuid`
+      )
+    ).rows[0]
+    expect(recorded.return_process_started).toBe(true)
+    expect(recorded.quote_json.settlement.amount).toBe(approval ? "18" : "0.5")
+    await assert.rejects(
+      f.turn(),
+      /processing already started|cannot be replayed/i
+    )
+    expect(s.processed).toBe(1)
+  }, 60_000)
+}
+
+test("Shopify return continuation rejects a lost processing response even when Shopify temporarily reports zero processed items", async () => {
+  const f = await returnRuntimeFixture()
+  const pending = await f.turn()
+  f.provider.state.lost = "process"
+  await assert.rejects(
+    f.turn(f.confirm(pending.continuations[0].continuationId!)),
+    { code: "ACTION_UNCERTAIN" }
+  )
+  const operationId = pending.continuations[0].shopifyReturnQuote!.operationId
+  const calls = f.provider.calls.length
+  f.provider.state.processed = 0
+  for (const key of Object.keys(f.input)) delete f.input[key]
+  f.input.operationId = operationId
+  await assert.rejects(
+    f.turn(),
+    /processing already started|cannot be replayed/i
+  )
+  expect(f.provider.calls.length).toBe(calls)
+  expect(f.provider.state.created).toBe(1)
+  // Upgrade an existing ledger row with no processing marker. Unknown legacy
+  // history must not be interpreted as proof that a refund never started.
+  await f.database.execute(
+    sql.raw(
+      "ALTER TABLE build_shopify_order_operations DROP COLUMN return_process_started"
+    )
+  )
+  const migration = await readFile(
+    new URL("../migrations/0067_shopify_return_processing.sql", import.meta.url),
+    "utf8"
+  )
+  await f.database.execute(sql.raw(migration))
+  await assert.rejects(
+    f.turn(),
+    /processing already started|cannot be replayed/i
+  )
+  expect(f.provider.calls.length).toBe(calls)
 }, 60_000)

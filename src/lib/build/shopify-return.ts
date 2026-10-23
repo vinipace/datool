@@ -34,6 +34,14 @@ export const shopifyReturnInputSchema = shopifyReturnLookupSchema.extend({
   reason: z.string().trim().min(1).max(180),
 })
 
+export const shopifyReturnResumeInputSchema = z
+  .object({ operationId: z.uuid() })
+  .strict()
+export const shopifyReturnActionInputSchema = z.union([
+  shopifyReturnInputSchema,
+  shopifyReturnResumeInputSchema,
+])
+
 const money = z
   .object({
     amount: z
@@ -56,8 +64,16 @@ export const shopifyReturnQuoteSchema = z
     replacements: z
       .array(z.object({ title: z.string(), quantity: z.number().int() }))
       .max(100),
-    credit: money,
-    replacementTotal: money,
+    credit: money.optional(),
+    replacementTotal: money.optional(),
+    resume: z
+      .object({
+        returnId: z.string().regex(/^gid:\/\/shopify\/Return\/[1-9][0-9]*$/),
+        revision: z.number().int().nonnegative(),
+        requireHumanApproval: z.boolean(),
+      })
+      .strict()
+      .optional(),
     settlement: z
       .object({
         direction: z.enum(["refund", "collect", "even"]),
@@ -72,6 +88,9 @@ export type ShopifyReturnQuote = z.infer<typeof shopifyReturnQuoteSchema>
 
 export function shopifyReturnSummary(quote: ShopifyReturnQuote) {
   return [
+    ...(quote.resume
+      ? ["Continue the existing return. No new return will be created."]
+      : []),
     `Order ${quote.orderName}`,
     ...quote.items.map((item) => `Return: ${item.quantity} × ${item.title}`),
     ...quote.replacements.map(
@@ -81,6 +100,8 @@ export function shopifyReturnSummary(quote: ShopifyReturnQuote) {
     quote.settlement.direction === "even"
       ? "No payment difference."
       : `${quote.settlement.direction === "refund" ? "Refund" : "Additional payment"}: ${quote.settlement.currencyCode} ${quote.settlement.amount}`,
-    "Shopify will recheck eligibility and amounts before processing this return.",
+    quote.resume
+      ? "Shopify will recheck the existing items, replacement stock and balance before continuing."
+      : "Shopify will recheck eligibility and amounts before processing this return.",
   ].join("\n")
 }

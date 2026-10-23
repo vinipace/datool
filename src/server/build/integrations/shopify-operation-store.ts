@@ -45,6 +45,7 @@ export type ShopifyReturnOperation = {
     | "needs_review"
     | "failed"
   returnId: string | null
+  processingStarted: boolean
   quote: ShopifyReturnQuote
   settings: ShopifyActionSettings
   updatedAt: Date
@@ -128,8 +129,8 @@ export class ShopifyOperationStore {
           "A return for this order is still being processed or needs review. Use Check return to recover its status before requesting another."
         )
       await tx.execute(sql`
-        INSERT INTO build_shopify_order_operations(id,project_id,connection_id,conversation_id,customer_id,browser_session_id,quote_json,settings_json,status,kind,source_order_id)
-        VALUES(${quote.operationId}::uuid,${this.context.projectId},${this.connectionId}::uuid,${this.conversationId},${this.shopper.customerId},${this.shopper.browserSessionId}::uuid,${JSON.stringify(quote)}::jsonb,${JSON.stringify(settings)}::jsonb,'pending','return',${quote.input.orderId})
+        INSERT INTO build_shopify_order_operations(id,project_id,connection_id,conversation_id,customer_id,browser_session_id,quote_json,settings_json,status,kind,source_order_id,return_process_started)
+        VALUES(${quote.operationId}::uuid,${this.context.projectId},${this.connectionId}::uuid,${this.conversationId},${this.shopper.customerId},${this.shopper.browserSessionId}::uuid,${JSON.stringify(quote)}::jsonb,${JSON.stringify(settings)}::jsonb,'pending','return',${quote.input.orderId},false)
       `)
     })
   }
@@ -142,12 +143,24 @@ export class ShopifyOperationStore {
     if (!saved.rows.length) throw new ShopifyWriteUncertainError()
   }
 
-  async claimReturnProcessing(id: string) {
+  async claimReturnProcessing(quote: ShopifyReturnQuote) {
     const saved = await this.context.database.execute(sql`
-      UPDATE build_shopify_order_operations SET status='processing',updated_at=now(),revision=revision+1
-      WHERE ${this.scope()} AND id=${id}::uuid AND kind='return' AND status='return_created' RETURNING id
+      UPDATE build_shopify_order_operations SET status='processing',return_process_started=true,
+        quote_json=${JSON.stringify(quote)}::jsonb,updated_at=now(),revision=revision+1
+      WHERE ${this.scope()} AND id=${quote.operationId}::uuid AND kind='return' AND NOT return_process_started
+        ${
+          quote.resume
+            ? sql`AND revision=${quote.resume.revision} AND return_id=${quote.resume.returnId}
+            AND status IN ('return_created','uncertain','needs_review')`
+            : sql`AND status='return_created' AND quote_json->>'fingerprint'=${quote.fingerprint}`
+        }
+      RETURNING id
     `)
-    if (!saved.rows.length) throw new ShopifyWriteUncertainError()
+    if (!saved.rows.length)
+      throw new TracerError(
+        "VALIDATION_ERROR",
+        "This return changed or processing already started. Use Check return before continuing."
+      )
   }
 
   async finishReturn<T extends { status: "return_processed" | "needs_review" }>(
@@ -183,6 +196,7 @@ export class ShopifyOperationStore {
       id: string
       status: ShopifyReturnOperation["status"]
       return_id: string | null
+      return_process_started: boolean
       quote_json: unknown
       settings_json: unknown
       updated_at: Date
@@ -200,6 +214,7 @@ export class ShopifyOperationStore {
           id: row.id,
           status: row.status,
           returnId: row.return_id,
+          processingStarted: row.return_process_started,
           quote: shopifyReturnQuoteSchema.parse(row.quote_json),
           settings: shopifyActionSettingsSchema.parse(row.settings_json),
           updatedAt: new Date(row.updated_at),

@@ -1466,6 +1466,7 @@ async function executeAction(
   }
   const needsApproval =
     (options.requireHumanForActions ||
+      returnQuote?.resume?.requireHumanApproval ||
       (action.type === "integration" &&
         shopifyActionNeedsHuman(action.toolSlug, action.shopifySettings))) &&
     action.type !== "handoff" &&
@@ -1645,6 +1646,7 @@ async function executeAction(
           : shopifyReturnSummary(changedQuote.shopifyReturnQuote!)
         const approval =
           options.requireHumanForActions ||
+          changedQuote.shopifyReturnQuote?.resume?.requireHumanApproval ||
           shopifyActionNeedsHuman(action.toolSlug, action.shopifySettings)
         return await awaitInput({
           ...pendingBase,

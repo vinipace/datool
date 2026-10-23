@@ -63,7 +63,7 @@ export const CHECK_CREATED_RETURN = `#graphql
 `
 
 type OrderOwner = Parameters<typeof canAccessShopifyOrder>[0] & { id: string }
-type ReturnRecord = ReturnLines & {
+export type ReturnRecord = ReturnLines & {
   status: string
   order: OrderOwner & {
     cancelledAt: string | null
