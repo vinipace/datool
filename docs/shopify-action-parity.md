@@ -138,6 +138,40 @@ before enabling the action. Production payment webhook registration still needs 
 Separate replacement orders and their credit
 accounting are not implemented. Full after-sales parity remains incomplete.
 
+### Separate replacement exchange preflight
+
+Create replacement exchange now reaches the existing action runtime and Inbox
+approval path. It verifies the original order first, calculates the return credit
+after Shopify's fees, and calculates replacement items, shipping and tax through
+the existing order quote. A replacement is required. The separate exchange has
+no delivery-age cutoff; its original-order proof is distinct from the replacement
+contact email. Merchant-fault delivery is free without discounting the products;
+customer-requested delivery uses an available Shopify rate. Different currencies
+are rejected instead of being netted together.
+
+The stored quote and input are immutable to browser confirmation data. Teammate
+approval is mandatory even when the action's optional approval setting is off.
+Approving a changed or expired quote requests review again. These steps reuse the
+existing continuations and calculators; they add no table, worker or queue.
+
+This is explicitly a preview in the draft release. Approval cannot yet create a
+return, refund or replacement order. Separate-order credit settlement, interrupted
+write recovery, templated notes and additional collected fields remain required.
+The complete exchange checklist remains open. Calculation uses Shopify's
+[draft-order calculation](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/draftOrderCalculate);
+the calculation itself does not persist a draft order.
+
+Four runtime/database cases exercise collection, refund-difference and even quotes,
+guest proof, mandatory approval, changed prices, pinned input, unavailable
+settlement, stock shortages and currency mismatch. An input-schema regression
+demonstrated unnecessary provider reads for a quantity the order calculator could
+not accept; replacement inputs now reuse the order schema and reject it before
+provider access. Eleven existing order/return runtime cases also passed. Six
+Chromium integration-editor stories and phone/desktop visual checks passed. The
+editor explains mandatory approval and preview status instead of displaying a
+disabled switch. These checks use provider fixtures; no live financial write was
+attempted.
+
 ### Separate exchange accounting investigation
 
 Shopify's same-order return API does not automatically connect a separate replacement

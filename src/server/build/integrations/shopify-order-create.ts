@@ -123,7 +123,8 @@ export async function prepareShopifyOrder(
   shopper: ShopifyShopper,
   settings: ShopifyActionSettings,
   graphql: ShopifyGraphqlClient,
-  operationId: string = randomUUID()
+  operationId: string = randomUUID(),
+  delivery: { freeShipping?: boolean } = {}
 ) {
   const args = shopifyOrderInputSchema.parse(input)
   if (!args.items?.length)
@@ -247,19 +248,21 @@ export async function prepareShopifyOrder(
       valueType: "PERCENTAGE",
       title: "Merchant-authorized free order",
     }
-    if (needsShipping)
-      draftInput.shippingLine = {
-        title: "Free delivery",
-        priceWithCurrency: {
-          amount: "0",
-          currencyCode: data.shop.currencyCode,
-        },
-      }
   }
+  const freeShipping =
+    settings.paymentMethod === "free" || delivery.freeShipping === true
+  if (freeShipping && needsShipping)
+    draftInput.shippingLine = {
+      title: "Free delivery",
+      priceWithCurrency: {
+        amount: "0",
+        currencyCode: data.shop.currencyCode,
+      },
+    }
   let calculated = await calculate(graphql, draftInput)
   let shippingTitle: string | null =
-    needsShipping && settings.paymentMethod === "free" ? "Free delivery" : null
-  if (needsShipping && settings.paymentMethod !== "free") {
+    needsShipping && freeShipping ? "Free delivery" : null
+  if (needsShipping && !freeShipping) {
     const rates = calculated.availableShippingRates.filter(
       (rate) => rate.price.currencyCode === data.shop.currencyCode
     )

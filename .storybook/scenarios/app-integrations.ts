@@ -126,6 +126,13 @@ export function appIntegrationScenario(
                       description: "Prepare an order for confirmation.",
                       inputSchema: {},
                     },
+                    {
+                      slug: "SHOPIFY_CREATE_EXCHANGE_ORDER",
+                      name: "Create replacement exchange",
+                      description:
+                        "Prepare a replacement exchange for mandatory teammate approval.",
+                      inputSchema: {},
+                    },
                   ]
                 : [
                     {

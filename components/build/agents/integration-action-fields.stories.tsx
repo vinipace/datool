@@ -176,5 +176,27 @@ export const ShopifyReturns: Story = {
     await expect(exchanges).not.toBeChecked()
     await userEvent.click(exchanges)
     await expect(exchanges).toBeChecked()
+    await userEvent.selectOptions(
+      canvas.getByLabelText("App action"),
+      "SHOPIFY_CREATE_EXCHANGE_ORDER"
+    )
+    await expect(
+      canvas.getByText("Teammate approval is always required")
+    ).toBeVisible()
+    await expect(
+      canvas.queryByRole("switch", { name: "Require teammate approval" })
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.getByText(/Preview only: replacement exchanges/)
+    ).toBeVisible()
+    await userEvent.selectOptions(
+      canvas.getByLabelText("App action"),
+      "SHOPIFY_RETURN_OR_EXCHANGE"
+    )
+    const optionalApproval = canvas.getByRole("switch", {
+      name: "Require teammate approval",
+    })
+    await expect(optionalApproval).not.toBeDisabled()
+    await expect(optionalApproval).not.toBeChecked()
   },
 }

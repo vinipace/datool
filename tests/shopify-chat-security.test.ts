@@ -1951,18 +1951,24 @@ async function returnRuntimeFixture(
     approval?: boolean
     exchange?: boolean
     fulfillment?: boolean
+    replacementOrder?: boolean
   } = {}
 ) {
   const f = await fixture({ visitorMessagesPerMinute: 120 })
   await activateShopifyConnection(
     f,
     "read_products,read_legal_policies,write_app_proxy,read_orders,read_customers,write_returns,write_orders" +
+      (options.replacementOrder
+        ? ",write_draft_orders,read_payment_terms"
+        : "") +
       (options.fulfillment ? ",write_merchant_managed_fulfillment_orders" : "")
   )
   const { shopifyReturnTools } =
     await import("@/src/server/build/integrations/shopify-return-process")
   const { shopifyReturnStatusTools } =
     await import("@/src/server/build/integrations/shopify-return-status")
+  const { shopifyExchangeOrderTools } =
+    await import("@/src/server/build/integrations/shopify-exchange-order")
   const { shopifyReturnFixture } = await import("./helpers/shopify-return")
   const provider = shopifyReturnFixture()
   const input: Record<string, unknown> = {
@@ -1970,7 +1976,22 @@ async function returnRuntimeFixture(
     ...(options.guest
       ? { orderNumber: "#1001", email: "buyer@example.test" }
       : {}),
-    replacements: options.exchange ? [{ variantId: "60", quantity: 1 }] : [],
+    replacements:
+      options.exchange || options.replacementOrder
+        ? [{ variantId: "60", quantity: 1 }]
+        : [],
+    ...(options.replacementOrder
+      ? {
+          contactEmail: "delivery@example.test",
+          fault: "merchant",
+          shippingAddress: {
+            firstName: "Alice",
+            address1: "123 Main St",
+            city: "Austin",
+            countryCode: "US",
+          },
+        }
+      : {}),
   }
   let action = await saveAction(f.context, f.agent.id, {
     slug: "return-items",
@@ -1978,9 +1999,13 @@ async function returnRuntimeFixture(
       type: "integration",
       name: "Return or exchange items",
       connectionId: f.connectionId,
-      toolSlug: "SHOPIFY_RETURN_OR_EXCHANGE",
+      toolSlug: options.replacementOrder
+        ? "SHOPIFY_CREATE_EXCHANGE_ORDER"
+        : "SHOPIFY_RETURN_OR_EXCHANGE",
       channels: ["web"],
-      inputSchema: shopifyReturnTools[0].inputSchema,
+      inputSchema: (options.replacementOrder
+        ? shopifyExchangeOrderTools
+        : shopifyReturnTools)[0].inputSchema,
       shopifySettings: {
         requireHumanApproval: options.approval ?? false,
         allowExchanges: options.exchange ?? false,
@@ -2161,6 +2186,125 @@ async function returnRuntimeFixture(
     },
   }
 }
+
+for (const scenario of ["collect", "refund", "even"] as const) {
+  test(`Shopify replacement exchange quotes require human approval before any write (${scenario})`, async () => {
+    const f = await returnRuntimeFixture({
+      replacementOrder: true,
+      guest: scenario === "refund",
+    })
+    const state = f.provider.state
+    state.deliveredAt = "2020-01-01T00:00:00Z" // Separate replacements have no return-age window.
+    if (scenario === "refund") {
+      f.input.fault = "customer"
+      state.returnedPrice = "50.00" // 49.71 after original tax and fees; replacement costs 32.50.
+    }
+    if (scenario === "even") state.returnedPrice = "27.79" // 27.50 credit.
+    const pending = await f.turn()
+    const continuation = pending.continuations[0]
+    expect(continuation.type).toBe("approval_required")
+    const quote = continuation.shopifyExchangeOrderQuote!
+    expect(quote.input.contactEmail).toBe("delivery@example.test")
+    expect(quote.settlement).toEqual({
+      direction: scenario,
+      amount:
+        scenario === "collect" ? "7.8" : scenario === "refund" ? "17.21" : "0",
+      currencyCode: "USD",
+    })
+    expect(quote.replacement.shipping.amount).toBe(
+      scenario === "refund" ? "5" : "0"
+    )
+    expect(continuation.message).toContain("Replacement exchange for #1001")
+    expect(continuation.message).toContain(
+      scenario === "even"
+        ? "No payment difference"
+        : scenario === "refund"
+          ? "Refund difference: USD 17.21"
+          : "Additional payment: USD 7.8"
+    )
+    const calculations = f.provider.calls.filter((call) =>
+      call.query.includes("DatoolCalculateOrder")
+    )
+    const draftInput = calculations.at(-1)!.variables.input as Record<
+      string,
+      unknown
+    >
+    expect(draftInput.appliedDiscount).toBeUndefined() // Free delivery must not make the replacement itself free.
+    expect(draftInput.shippingLine).toEqual(
+      scenario === "refund"
+        ? { shippingRateHandle: "ground" }
+        : {
+            title: "Free delivery",
+            priceWithCurrency: { amount: "0", currencyCode: "USD" },
+          }
+    )
+    const confirmation = f.confirm(continuation.continuationId!)
+    await assert.rejects(f.turn(confirmation), /no longer available/)
+    // A changed price invalidates the teammate's old approval. Forged visitor items are ignored.
+    state.replacementOrderTotals = { free: "28.50", paid: "33.50" }
+    const updated = await f.turn(confirmation, true)
+    expect(updated.continuations[0].type).toBe("approval_required")
+    expect(
+      updated.continuations[0].shopifyExchangeOrderQuote?.input.items
+    ).toEqual(quote.input.items)
+    expect(
+      updated.continuations[0].shopifyExchangeOrderQuote?.operationId
+    ).toBe(quote.operationId)
+    expect(updated.continuations[0].message).toContain("details changed")
+    expect(updated.continuations[0].message).toContain("Preview only")
+    // Settlement is a remaining draft-release requirement; approval cannot silently place either order.
+    await assert.rejects(
+      f.turn(f.confirm(updated.continuations[0].continuationId!), true),
+      /Replacement-order settlement is not available/
+    )
+    expect(
+      f.provider.calls.filter(
+        (call) =>
+          /mutation\s/.test(call.query) &&
+          !call.query.includes("DatoolCalculateOrder")
+      )
+    ).toEqual([])
+    expect(
+      (
+        await f.database.execute(
+          sql`SELECT id FROM build_shopify_order_operations`
+        )
+      ).rows
+    ).toEqual([])
+  }, 60_000)
+}
+
+test("Shopify replacement exchange rejects unverified orders, absent replacements, stock shortages and mixed currencies before approval", async () => {
+  const f = await returnRuntimeFixture({ replacementOrder: true, guest: true })
+  f.input.email = "intruder@example.test"
+  await assert.rejects(f.turn(), /verify|order/i)
+  expect(
+    f.provider.calls.some((call) => call.query.includes("DatoolOrderVariants"))
+  ).toBe(false)
+  f.input.email = "buyer@example.test"
+  for (const replacements of [[], [{ variantId: "60", quantity: 100 }]]) {
+    f.input.replacements = replacements
+    const before = f.provider.calls.length
+    await assert.rejects(f.turn())
+    expect(f.provider.calls).toHaveLength(before)
+  }
+  f.input.replacements = [{ variantId: "60", quantity: 1 }]
+  f.provider.state.stock = 0
+  await assert.rejects(f.turn(), /stock/)
+  f.provider.state.stock = 10
+  f.provider.state.replacementOrderCurrency = "EUR"
+  await assert.rejects(f.turn(), /inconsistent return amounts/)
+  f.provider.state.replacementOrderCurrency = "USD"
+  const pending = await f.turn()
+  expect(pending.continuations[0].type).toBe("approval_required")
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT id FROM build_shopify_order_operations`
+      )
+    ).rows
+  ).toEqual([])
+}, 60_000)
 
 for (const scenario of [
   "refund",

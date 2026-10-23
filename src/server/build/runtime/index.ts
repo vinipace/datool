@@ -4,6 +4,11 @@ import {
   type ShopifyReturnQuote,
 } from "@/src/lib/build/shopify-return"
 import {
+  shopifyExchangeOrderQuoteSchema,
+  shopifyExchangeOrderSummary,
+  type ShopifyExchangeOrderQuote,
+} from "@/src/lib/build/shopify-exchange-order"
+import {
   prepareShopifyProductCards,
   selectedShopifyCartInput,
 } from "./shopify-products"
@@ -251,6 +256,7 @@ export type RuntimeContinuation = {
   shopifyVariantPage?: { expiresAt: number }
   shopifyReturnQuote?: ShopifyReturnQuote
   shopifyOrderQuote?: ShopifyOrderQuote
+  shopifyExchangeOrderQuote?: ShopifyExchangeOrderQuote
 }
 
 type RuntimeProcedureCursor = {
@@ -1343,6 +1349,7 @@ async function executeAction(
     shopifyCartResult?: unknown
     shopifyReturnQuote?: ShopifyReturnQuote
     shopifyOrderQuote?: ShopifyOrderQuote
+    shopifyExchangeOrderQuote?: ShopifyExchangeOrderQuote
     shopifyCartApproved?: boolean
     shopifySourceTurnId?: string
     signal?: AbortSignal
@@ -1389,8 +1396,13 @@ async function executeAction(
   const returnAction =
     action.type === "integration" &&
     action.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE"
+  const exchangeOrderAction =
+    action.type === "integration" &&
+    action.toolSlug === "SHOPIFY_CREATE_EXCHANGE_ORDER"
+  const quotedShopifyAction = orderAction || returnAction || exchangeOrderAction
   let returnQuote = options.shopifyReturnQuote
   let orderQuote = options.shopifyOrderQuote
+  let exchangeOrderQuote = options.shopifyExchangeOrderQuote
   const pendingBase = {
     actionId: action.id,
     continuationId,
@@ -1420,7 +1432,11 @@ async function executeAction(
       status: "awaiting_client" as const,
     }
   }
-  if ((orderAction && !orderQuote) || (returnAction && !returnQuote)) {
+  if (
+    (orderAction && !orderQuote) ||
+    (returnAction && !returnQuote) ||
+    (exchangeOrderAction && !exchangeOrderQuote)
+  ) {
     try {
       const prepared = await executeAppAction(context, {
         connectionId: action.connectionId,
@@ -1432,6 +1448,7 @@ async function executeAction(
         arguments: input,
         shopifyPrepareOrder: orderAction,
         shopifyPrepareReturn: returnAction,
+        shopifyPrepareExchangeOrder: exchangeOrderAction,
         shopifySettings: action.shopifySettings,
         shopifyCartResult: options.shopifyCartResult,
         signal: options.signal,
@@ -1440,6 +1457,7 @@ async function executeAction(
         cartCommand?: unknown
         orderQuote?: unknown
         returnQuote?: unknown
+        exchangeOrderQuote?: unknown
       }
       if (output.cartCommand)
         return await awaitInput({
@@ -1456,7 +1474,12 @@ async function executeAction(
         })
       if (orderAction)
         orderQuote = shopifyOrderQuoteSchema.parse(output.orderQuote)
-      else returnQuote = shopifyReturnQuoteSchema.parse(output.returnQuote)
+      else if (returnAction)
+        returnQuote = shopifyReturnQuoteSchema.parse(output.returnQuote)
+      else
+        exchangeOrderQuote = shopifyExchangeOrderQuoteSchema.parse(
+          output.exchangeOrderQuote
+        )
     } catch (error) {
       // These validation messages are authored by our native adapter. Never expose
       // an arbitrary provider exception, which can contain credentials or customer data.
@@ -1498,6 +1521,9 @@ async function executeAction(
       type: needsApproval ? "approval_required" : "client_action",
       ...(orderQuote ? { shopifyOrderQuote: orderQuote } : {}),
       ...(returnQuote ? { shopifyReturnQuote: returnQuote } : {}),
+      ...(exchangeOrderQuote
+        ? { shopifyExchangeOrderQuote: exchangeOrderQuote }
+        : {}),
     }
     if (needsApproval) {
       pending.message = "A teammate must approve this action before it runs."
@@ -1515,6 +1541,8 @@ async function executeAction(
       pending.message += `\n\n${shopifyOrderSummary(orderQuote)}`
     if (returnQuote && needsApproval)
       pending.message += `\n\n${shopifyReturnSummary(returnQuote)}`
+    if (exchangeOrderQuote && needsApproval)
+      pending.message += `\n\n${shopifyExchangeOrderSummary(exchangeOrderQuote)}`
     return awaitInput(pending)
   }
   if (options.dependencies.executeAction) {
@@ -1641,6 +1669,7 @@ async function executeAction(
         shopifyCartResult: options.shopifyCartResult,
         shopifyOrderQuote: orderQuote,
         shopifyReturnQuote: returnQuote,
+        shopifyExchangeOrderQuote: exchangeOrderQuote,
         shopifySettings: action.shopifySettings,
         shopifySourceTurnId: options.allowApproval
           ? options.shopifySourceTurnId
@@ -1648,16 +1677,30 @@ async function executeAction(
         signal: options.signal,
       })
       if (
-        (orderAction || returnAction) &&
+        quotedShopifyAction &&
         (result.output as { status?: string }).status === "quote_changed"
       ) {
         const rawQuote = (result.output as { quote: unknown }).quote
-        const changedQuote = orderAction
+        const changedQuote: Pick<
+          RuntimeContinuation,
+          | "shopifyOrderQuote"
+          | "shopifyReturnQuote"
+          | "shopifyExchangeOrderQuote"
+        > = orderAction
           ? { shopifyOrderQuote: shopifyOrderQuoteSchema.parse(rawQuote) }
-          : { shopifyReturnQuote: shopifyReturnQuoteSchema.parse(rawQuote) }
+          : returnAction
+            ? { shopifyReturnQuote: shopifyReturnQuoteSchema.parse(rawQuote) }
+            : {
+                shopifyExchangeOrderQuote:
+                  shopifyExchangeOrderQuoteSchema.parse(rawQuote),
+              }
         const summary = changedQuote.shopifyOrderQuote
           ? shopifyOrderSummary(changedQuote.shopifyOrderQuote)
-          : shopifyReturnSummary(changedQuote.shopifyReturnQuote!)
+          : changedQuote.shopifyReturnQuote
+            ? shopifyReturnSummary(changedQuote.shopifyReturnQuote)
+            : shopifyExchangeOrderSummary(
+                changedQuote.shopifyExchangeOrderQuote!
+              )
         const approval =
           options.requireHumanForActions ||
           changedQuote.shopifyReturnQuote?.resume?.requireHumanApproval ||
@@ -1799,7 +1842,7 @@ async function executeAction(
       },
     }).catch(() => undefined)
     if (
-      (orderAction || returnAction) &&
+      quotedShopifyAction &&
       error instanceof TracerError &&
       error.code === "VALIDATION_ERROR"
     )
@@ -3184,6 +3227,12 @@ export async function runAgentTurn(
                 persistedContinuation.shopifyOrderQuote
               )
             : undefined,
+          shopifyExchangeOrderQuote:
+            persistedContinuation.shopifyExchangeOrderQuote
+              ? shopifyExchangeOrderQuoteSchema.parse(
+                  persistedContinuation.shopifyExchangeOrderQuote
+                )
+              : undefined,
           // This continuation only exists after the pinned action's approval gate has passed.
           shopifyCartApproved:
             resumesShopifyCart &&
