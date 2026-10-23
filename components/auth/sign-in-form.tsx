@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { GoogleSignIn } from "@/components/auth/google-sign-in"
 import { EmailSignIn } from "@/components/auth/email-sign-in"
+import { PasswordSignIn } from "@/components/auth/password-sign-in"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/ui/notice"
@@ -40,6 +41,7 @@ export function SignInForm({
   const [config, setConfig] = useState<{
     google: boolean
     emailLink: boolean
+    password: boolean
   } | null>(null)
 
   useEffect(() => {
@@ -54,10 +56,11 @@ export function SignInForm({
           setConfig({
             google: data.google === true,
             emailLink: data.emailLink === true,
+            password: data.password === true,
           })
       })
       .catch(() => {
-        if (active) setConfig({ google: false, emailLink: false })
+        if (active) setConfig({ google: false, emailLink: false, password: false })
       })
     return () => {
       active = false
@@ -112,13 +115,14 @@ export function SignInForm({
           <span className="h-px flex-1 bg-border" />
         </div>
       )}
-      {config?.google || !config || !config.emailLink ? (
+      {config?.google || !config || (!config.emailLink && (!config.password || isSignUp)) ? (
         <GoogleSignIn
           callbackURL={callbackURL}
           errorCallbackURL={`${path}${returnQuery}`}
           enabled={config?.google ?? null}
         />
       ) : null}
+      {config?.password && !isSignUp && <PasswordSignIn callbackURL={callbackURL} />}
     </Shell>
   )
 }

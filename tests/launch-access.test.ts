@@ -134,4 +134,48 @@ describe("launch access", () => {
       expect(response.status).toBe(400)
     }
   })
+
+  test("optional password sign-in requires an existing verified account and current email policy", async () => {
+    const keys = ["AUTH_PASSWORD_SIGN_IN_ENABLED", "AUTH_ALLOWED_DOMAINS", "AUTH_ALLOW_PUBLIC_SIGNUP"] as const
+    const previous = keys.map(key => process.env[key])
+    try {
+      process.env.AUTH_PASSWORD_SIGN_IN_ENABLED = "true"
+      process.env.AUTH_ALLOWED_DOMAINS = "example.com"
+      process.env.AUTH_ALLOW_PUBLIC_SIGNUP = "false"
+      const now = new Date()
+      const records = {
+        user: [{ id: "reviewer", name: "Review account", email: "reviewer@example.com", emailVerified: true, createdAt: now, updatedAt: now }],
+        account: [] as Record<string, unknown>[], session: [], verification: [],
+      }
+      const auth = betterAuth({
+        ...organizationAuthOptions(new Pool(), {
+          baseURL: "http://localhost:3000", secret: "test-secret-at-least-thirty-two-characters",
+        }),
+        database: memoryAdapter(records), plugins: [], rateLimit: { enabled: false },
+      })
+      const password = "fixture-password-at-least-sixteen-characters"
+      records.account.push({ id: "password-account", providerId: "credential", accountId: "reviewer", userId: "reviewer", password: await (await auth.$context).password.hash(password), createdAt: now, updatedAt: now })
+      const request = (path: string, secret = password) => auth.handler(new Request(`http://localhost:3000/api/auth/${path}`, {
+        method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" },
+        body: JSON.stringify({ email: "reviewer@example.com", name: "Review account", password: secret }),
+      }))
+      const signedIn = await request("sign-in/email")
+      expect(signedIn.status).toBe(200)
+      expect(signedIn.headers.getSetCookie().length).toBeGreaterThan(0)
+      expect((await request("sign-in/email", "incorrect-password")).status).toBe(401)
+      records.user[0].emailVerified = false
+      expect((await request("sign-in/email")).status).toBe(403)
+      records.user[0].emailVerified = true
+      process.env.AUTH_ALLOWED_DOMAINS = "other.example"
+      expect((await request("sign-in/email")).status).toBe(401)
+      expect((await request("sign-up/email")).ok).toBe(false)
+      expect(records.user).toHaveLength(1)
+      expect(records.session).toHaveLength(1)
+    } finally {
+      keys.forEach((key, index) => {
+        if (previous[index] === undefined) delete process.env[key]
+        else process.env[key] = previous[index]
+      })
+    }
+  })
 })
