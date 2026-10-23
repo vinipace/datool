@@ -225,7 +225,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   const authorizeUrl = new URL(authorization.headers.get("location")!)
   expect(authorizeUrl.host).toBe(shop)
   expect(authorizeUrl.searchParams.get("scope")).toBe(
-    "read_products,read_legal_policies,write_app_proxy,write_customers,write_orders"
+    "read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms"
   )
   const cookie = authorization.headers
     .getSetCookie()
@@ -286,6 +286,17 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
     }),
   ])
   expect(refreshes).toBe(1)
+  // An existing catalog-only install keeps catalog access, but must grant the
+  // newly requested permissions before order creation can reach Shopify.
+  const readsBeforeOrder = reads
+  await rejects(
+    executeShopifyTool(ctx, started.id, "SHOPIFY_CREATE_ORDER", {
+      email: "buyer@example.test",
+      items: [{ variantId: "123", quantity: 1 }],
+    }),
+    /Reconnect Shopify.*permissions/
+  )
+  expect(reads).toBe(readsBeforeOrder)
   for (const result of results) {
     if (!("products" in result)) throw new Error("Expected product results")
     expect(result.products).toHaveLength(1)
