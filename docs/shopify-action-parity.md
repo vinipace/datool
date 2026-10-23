@@ -10,6 +10,7 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [x] Read and update the shopper's storefront cart; retain chat state during navigation.
 - [ ] Online checkout, cash on delivery and free orders, with merchant-selected payment policies.
 - [x] Shopify-calculated quotes and one-shot creation of online-payment drafts, unpaid cash-on-delivery orders and zero-total free orders.
+- [x] Durable approved order intent and on-demand checkout recovery/payment status for the verified shopper.
 - [ ] Payment completion tracking, cart clearing after confirmed placement, reconciliation of interrupted writes and messaging-channel order creation.
 - [x] Own order history, status and tracking; guest lookup by order number and checkout email or phone.
 - [x] Merchant-allowlisted order tags.
@@ -41,7 +42,11 @@ Shopify calculates prices, discounts, shipping, taxes and payment status. Browse
 
 Create order obtains its payment method, item source, phone requirement, tags and note from merchant settings. The native adapter only sends live variant IDs and quantities to Shopify's draft-order calculation; it does not accept model-supplied prices. Physical goods require an address and an available Shopify shipping rate. The confirmation shows the Shopify subtotal, shipping, tax, total and payment behavior. A changed or expired quote requires a new confirmation or teammate approval before any order write.
 
-Online payment returns Shopify's invoice checkout URL without completing or marking the order paid. Cash on delivery uses Shopify receipt payment terms and verifies the completed order remains unpaid. Free orders apply the merchant-authorized discount and free delivery, then require Shopify's total to be zero. A draft whose creation response differs from the confirmed totals is retained for review without completion. Operation tags and external draft IDs are stored for reconciliation. An interrupted or uncertain attempt blocks a new order in the same conversation; automatic reconciliation and a supported resolution workflow are still release requirements.
+Online payment returns Shopify's invoice checkout URL without completing or marking the order paid. Cash on delivery uses Shopify receipt payment terms and verifies the completed order remains unpaid. Free orders apply the merchant-authorized discount and free delivery, then require Shopify's total to be zero. A draft whose creation response differs from the confirmed totals is retained for review without completion.
+
+Approved order intent, settings, operation tags and available draft/order IDs survive failed tool responses in a dedicated commerce table. Metering remains separate. An interrupted or uncertain attempt blocks a new order in the same conversation. Check checkout reads the saved draft/order ID, or searches the exact operation tag when the create response was lost. Missing search results never authorize a new order. An unambiguous online draft with matching buyer and totals recovers its existing unpaid checkout link. A completed draft recovers the placed order and current payment status; refunded or pending orders are not reported as paid. Logged-in customers can check their conversation on another verified device; guest access remains bound to the original browser session. Arbitrary external draft/order/customer IDs are not tool arguments.
+
+Recovery performs no Shopify writes. An uncompleted cash-on-delivery/free draft, mismatched buyer/totals, or duplicate operation tag stays blocked for store-team review. A later check can recognize the original order after the store team completes it in Shopify. Supported in-chat resolution of incomplete or missing drafts, automatic payment notifications and webhook reconciliation remain release requirements. A stale read cannot overwrite a newer recorded outcome.
 
 Cart-based drafts currently support ordinary variant lines. The storefront bridge flags subscriptions, line properties and bundle relationships without sending their private contents to Datool. Those carts, and carts from an older bridge that cannot establish this flag, use the store checkout to preserve their options. The remaining journey work includes cart clearing only after verified placement and payment-completion notifications; issuing a checkout link alone cannot trigger either.
 
@@ -52,6 +57,8 @@ Existing abuse protections remain burst-oriented. This work does not add default
 Public apps require Shopify approval for protected customer/order data. Access to orders older than 60 days additionally requires `read_all_orders` approval. Added permissions require merchant consent. Development-store validation, merged code, production deployment, permission grants and end-to-end verification are separate checks.
 
 Order creation additionally requests `write_draft_orders` and `read_payment_terms`, alongside product and order reads. Existing installations must reconnect and consent; a local scope declaration does not grant access. The installation instructions list the complete configured scopes.
+
+Apply migration 0065 after 0064 for durable order operations. Check checkout requires draft-order, order and customer reads (the corresponding granted write scopes include read access). Public protected customer data approval is still required.
 
 ## Verification recorded so far
 
@@ -65,9 +72,13 @@ The product-card slice exercises seven real-runtime cart paths, including produc
 
 Order creation has six real-runtime database cases spanning all three payment modes and both item sources. They exercise guest checkout, customer-bound orders, required delivery phones, stock checks, untrusted cart totals, price changes, immutable confirmation input, merchant approval and one-shot continuation consumption. Lost create/completion responses retain uncertain state and the available external identifiers. A new model call cannot bypass that state, and a changed creation total does not complete the order. The uncertainty and custom-cart regressions were demonstrated failing before their repairs. Browser stories cover merchant order settings and all three confirmation labels and summaries. The draft-order calculation, creation and completion operations validate against Shopify Admin GraphQL 2026-10. Live-store order/payment outcomes remain unverified.
 
+The same runtime cases exercise checkout recovery through an enabled native action: unknown and other-customer/browser operation IDs cause no Shopify read; a customer's second verified device can read the same conversation; pending, paid and refunded payment responses stay distinct. Missing search results, partial tags, duplicate matches and mismatched buyers do not clear an uncertain order. Lost online create responses recover the original checkout link, and lost completion responses recover the original order without another create/complete mutation. A database fault after Shopify success originally surfaced as a failed action; the regression demonstrated that failure before the repair and now requires an uncertain outcome and recovery without another write. Recovery queries validate against Shopify Admin GraphQL 2026-10. These provider responses are fixtures, not live payment evidence.
+
 ## Design review
 
 The implementation deliberately reuses the Shopify SDK, Datool's action runtime, durable tool records, existing continuation storage and Inbox approvals. Customer confirmation and teammate approval now share one persistence path while retaining separate authorization rules. The mutation helper owns common Shopify error handling; callers describe only their action-specific response. The simplification is covered by four commerce tests and seven runtime tests for confirmation, approval, continuation and handoff behavior.
+
+Order recovery uses one commerce record per approved intent because a terminal tool result clears its continuation, while usage events deliberately exclude order arguments and customer addresses. Admission locks only the database transaction, never a network request. The creation and recovery paths share money normalization and draft totals rather than implementing different comparison rules.
 
 Keep the server-owned message identity record and the ownership recheck immediately before writes. Removing those checks would let untrusted chat input or stale account identity influence customer access. Keep ambiguous writes distinguishable from failures; a shorter automatic retry path could repeat a change that Shopify already applied.
 

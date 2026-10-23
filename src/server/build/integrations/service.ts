@@ -324,21 +324,6 @@ export async function executeAppAction(
     .execute(sql`SELECT 1 FROM build_conversation_turns t JOIN build_conversations c ON c.id=t.conversation_id AND c.project_id=t.project_id
     WHERE t.id=${input.turnId} AND t.project_id=${ctx.projectId} AND c.id=${input.conversationId} AND c.agent_id=${input.agentId}`)
   if (!ownership.rows.length) throw unavailable()
-  if (native && input.toolSlug === "SHOPIFY_CREATE_ORDER") {
-    // A fresh model call is not permission to repeat a write whose outcome is unknown.
-    // The conversation's runtime ownership serializes admission across turns.
-    const unresolved = await ctx.database.execute(sql`
-      SELECT 1 FROM build_usage_event
-      WHERE project_id=${ctx.projectId} AND conversation_id=${input.conversationId}
-        AND connection_id=${connection.id}::uuid AND tool_slug='SHOPIFY_CREATE_ORDER'
-        AND status IN ('pending','uncertain') LIMIT 1
-    `)
-    if (unresolved.rows.length)
-      throw new TracerError(
-        "VALIDATION_ERROR",
-        "The previous order's outcome is unresolved. A teammate must check the existing Shopify draft or order before another order can be created in this conversation."
-      )
-  }
   // Preparing a browser interaction has no external effect or integration usage.
   // The existing tool ledger persists the one-shot continuation before it reaches the shopper.
   if (

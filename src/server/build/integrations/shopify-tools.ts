@@ -4,6 +4,7 @@ import { shopifyOrderTools } from "./shopify-orders"
 import { shopifyCustomerTools } from "./shopify-customers"
 import { shopifyTagTools } from "./shopify-order-tags"
 import { shopifyOrderCreationTools } from "./shopify-order-create"
+import { shopifyCheckoutTools } from "./shopify-order-status"
 
 export const shopifyTools = [
   ...catalogTools,
@@ -12,6 +13,7 @@ export const shopifyTools = [
   ...shopifyCustomerTools,
   ...shopifyTagTools,
   ...shopifyOrderCreationTools,
+  ...shopifyCheckoutTools,
 ]
 
 export const shopifyToolScopes: Record<string, string[]> = {
@@ -28,4 +30,5 @@ export const shopifyToolScopes: Record<string, string[]> = {
     "read_payment_terms",
     "read_orders",
   ],
+  SHOPIFY_CHECK_CHECKOUT: ["read_draft_orders", "read_orders", "read_customers"],
 }

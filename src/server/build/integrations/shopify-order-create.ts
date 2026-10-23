@@ -12,6 +12,7 @@ import type { IntegrationTool } from "@/src/lib/build/integrations"
 import { shopifyData, type ShopifyGraphqlClient } from "./shopify-catalog"
 import type { ShopifyShopper } from "./shopify-identity"
 import { shopifyMutation, ShopifyWriteUncertainError } from "./shopify-mutation"
+import type { ShopifyOrderStore } from "./shopify-order-store"
 
 export const ORDER_VARIANTS = `#graphql
   query DatoolOrderVariants($ids: [ID!]!) {
@@ -24,7 +25,7 @@ export const ORDER_VARIANTS = `#graphql
     paymentTermsTemplates(paymentTermsType: RECEIPT) { id paymentTermsType }
   }
 `
-const totals = `subtotalPriceSet { presentmentMoney { amount currencyCode } }
+export const draftOrderTotals = `subtotalPriceSet { presentmentMoney { amount currencyCode } }
  totalShippingPriceSet { presentmentMoney { amount currencyCode } }
  totalTaxSet { presentmentMoney { amount currencyCode } }
  totalPriceSet { presentmentMoney { amount currencyCode } }`
@@ -32,7 +33,7 @@ export const ORDER_CALCULATE = `#graphql
  mutation DatoolCalculateOrder($input: DraftOrderInput!) {
    draftOrderCalculate(input: $input) {
      calculatedDraftOrder {
-       ${totals}
+       ${draftOrderTotals}
        availableShippingRates { handle title price { amount currencyCode } }
        lineItems { title variantTitle quantity }
        transformerFingerprint
@@ -44,7 +45,7 @@ export const ORDER_CALCULATE = `#graphql
 export const ORDER_CREATE = `#graphql
  mutation DatoolCreateOrder($input: DraftOrderInput!) {
    draftOrderCreate(input: $input) {
-     draftOrder { id invoiceUrl ${totals} paymentTerms { paymentTermsType } }
+     draftOrder { id invoiceUrl ${draftOrderTotals} paymentTerms { paymentTermsType } }
      userErrors { field message }
    }
  }
@@ -59,13 +60,13 @@ export const ORDER_COMPLETE = `#graphql
 `
 
 type Money = ShopifyOrderQuote["total"]
-type Totals = {
+export type DraftOrderTotals = {
   subtotalPriceSet: { presentmentMoney: Money }
   totalShippingPriceSet: { presentmentMoney: Money }
   totalTaxSet: { presentmentMoney: Money }
   totalPriceSet: { presentmentMoney: Money }
 }
-type Calculation = Totals & {
+type Calculation = DraftOrderTotals & {
   availableShippingRates: Array<{ handle: string; title: string; price: Money }>
   lineItems: Array<{
     title: string
@@ -87,7 +88,7 @@ function amount(value: string) {
 function money(value: Money): Money {
   return { ...value, amount: amount(value.amount) }
 }
-function summary(value: Totals) {
+export function draftOrderSummary(value: DraftOrderTotals) {
   return {
     subtotal: money(value.subtotalPriceSet.presentmentMoney),
     shipping: money(value.totalShippingPriceSet.presentmentMoney),
@@ -278,7 +279,7 @@ export async function prepareShopifyOrder(
   }
   if (calculated.transformerFingerprint)
     draftInput.transformerFingerprint = calculated.transformerFingerprint
-  const financials = summary(calculated)
+  const financials = draftOrderSummary(calculated)
   if (
     Object.values(financials).some(
       (value) => value.currencyCode !== data.shop.currencyCode
@@ -322,6 +323,7 @@ export async function createShopifyOrder(
   shopper: ShopifyShopper,
   settings: ShopifyActionSettings,
   graphql: ShopifyGraphqlClient,
+  operations: ShopifyOrderStore,
   beforeWrite: () => Promise<void>,
   recordDraft: (id: string) => Promise<void>
 ) {
@@ -339,9 +341,47 @@ export async function createShopifyOrder(
     quote.fingerprint !== prepared.quote.fingerprint
   )
     return { status: "quote_changed" as const, quote: prepared.quote }
+  await operations.begin(quote, settings)
+  let providerConfirmed = false
+  try {
+    const result = await placePreparedOrder(
+      quote,
+      prepared.draftInput,
+      settings,
+      graphql,
+      beforeWrite,
+      async (draftId) => {
+        await operations.recordDraft(quote.operationId, draftId)
+        await recordDraft(draftId)
+      }
+    )
+    providerConfirmed = true
+    return await operations.finish(quote.operationId, result)
+  } catch (error) {
+    try {
+      await operations.fail(
+        quote.operationId,
+        providerConfirmed || error instanceof ShopifyWriteUncertainError
+      )
+    } catch {
+      throw new ShopifyWriteUncertainError()
+    }
+    if (providerConfirmed) throw new ShopifyWriteUncertainError()
+    throw error
+  }
+}
+
+async function placePreparedOrder(
+  quote: ShopifyOrderQuote,
+  draftInput: Record<string, unknown>,
+  settings: ShopifyActionSettings,
+  graphql: ShopifyGraphqlClient,
+  beforeWrite: () => Promise<void>,
+  recordDraft: (id: string) => Promise<void>
+) {
   const result = await shopifyMutation<{
     draftOrder:
-      | (Totals & {
+      | (DraftOrderTotals & {
           id: string
           invoiceUrl: string | null
           paymentTerms: { paymentTermsType: string } | null
@@ -352,7 +392,7 @@ export async function createShopifyOrder(
     ORDER_CREATE,
     {
       input: {
-        ...prepared.draftInput,
+        ...draftInput,
         // An unpaid checkout link must not let repeated chat requests hold stock.
         // Reserve only when this action is immediately completing an order.
         ...(settings.paymentMethod !== "online"
@@ -375,9 +415,9 @@ export async function createShopifyOrder(
   } catch {
     throw new ShopifyWriteUncertainError()
   }
-  let actual: ReturnType<typeof summary>
+  let actual: ReturnType<typeof draftOrderSummary>
   try {
-    actual = summary(draft)
+    actual = draftOrderSummary(draft)
   } catch {
     // A malformed response does not undo a draft that Shopify already created.
     throw new ShopifyWriteUncertainError()
@@ -458,7 +498,7 @@ export async function createShopifyOrder(
         : `Order ${order.name} was placed for cash on delivery. Payment is still outstanding.`,
   }
 }
-function summaryFromQuote(quote: ShopifyOrderQuote) {
+export function summaryFromQuote(quote: ShopifyOrderQuote) {
   return {
     subtotal: quote.subtotal,
     shipping: quote.shipping,
@@ -472,7 +512,7 @@ export const shopifyOrderCreationTools: IntegrationTool[] = [
     slug: "SHOPIFY_CREATE_ORDER",
     name: "Create order",
     description:
-      "Prepare a Shopify-calculated order for explicit confirmation. Collect the buyer's email and delivery address (and phone when the merchant requires it). For item orders, supply numeric variant IDs and quantities from live products; for cart orders, the storefront reads the current cart. The merchant chooses online payment, cash on delivery or a free order; never promise a different payment method or invent prices. A checkout link is not proof of payment. Subscriptions use the store's checkout.",
+      "Prepare a Shopify-calculated order for explicit confirmation. Collect the buyer's email and delivery address (and phone when the merchant requires it). For item orders, supply numeric variant IDs and quantities from live products; for cart orders, the storefront reads the current cart. The merchant chooses online payment, cash on delivery or a free order; never promise a different payment method or invent prices. A checkout link is not proof of payment. Use Check checkout to recover an interrupted order or check payment; never create another order to retry an uncertain outcome. Subscriptions use the store's checkout.",
     inputSchema: z.toJSONSchema(shopifyOrderInputSchema, { target: "draft-7" }),
   },
 ]

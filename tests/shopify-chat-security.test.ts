@@ -995,16 +995,29 @@ for (const flow of [
 for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
   for (const orderSource of ["items", "cart"] as const) {
     test(`Shopify orders calculate, confirm and place exactly once (${paymentMethod}, ${orderSource})`, async () => {
-      const f = await fixture({})
+      const f = await fixture({ visitorMessagesPerMinute: 120 })
       const requireHumanApproval =
         paymentMethod === "cash_on_delivery" && orderSource === "cart"
       const requirePhone = paymentMethod === "online" && orderSource === "items"
       await activateShopifyConnection(
         f,
-        "read_products,read_legal_policies,write_app_proxy,write_draft_orders,read_payment_terms,read_orders"
+        "read_products,read_legal_policies,write_app_proxy,write_draft_orders,read_payment_terms,read_orders,read_customers"
       )
       const { shopifyOrderCreationTools } =
         await import("@/src/server/build/integrations/shopify-order-create")
+      const { shopifyCheckoutTools } =
+        await import("@/src/server/build/integrations/shopify-order-status")
+      const checkAction = await saveAction(f.context, f.agent.id, {
+        slug: "check-checkout",
+        definition: {
+          type: "integration",
+          name: "Check checkout",
+          connectionId: f.connectionId,
+          toolSlug: "SHOPIFY_CHECK_CHECKOUT",
+          channels: ["web"],
+          inputSchema: shopifyCheckoutTools[0].inputSchema,
+        },
+      })
       const action = await saveAction(f.context, f.agent.id, {
         slug: "create-order",
         definition: {
@@ -1043,6 +1056,33 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
       let created = 0
       let completed = 0
       let createdInput: Record<string, unknown> | null = null
+      let checking = false
+      let checkInput: Record<string, unknown> = {}
+      let providerPlaced = false
+      let financialStatus = paymentMethod === "free" ? "PAID" : "PENDING"
+      let indexed = true
+      let duplicateMatch = false
+      let wrongBuyer = false
+      let wrongTag = false
+      const lookups: Array<{
+        query: string
+        variables: Record<string, unknown>
+      }> = []
+      const draftId = () => `gid://shopify/DraftOrder/${98 + created}`
+      const order = () => ({
+        id: `gid://shopify/Order/${99 + created}`,
+        name: `#${99 + created}`,
+        displayFinancialStatus: financialStatus,
+        fullyPaid: financialStatus === "PAID" || financialStatus === "REFUNDED",
+        cancelledAt: null,
+        currentTotalPriceSet: totals().totalPriceSet,
+        email: wrongBuyer ? "someone-else@example.test" : input.email,
+        customer:
+          paymentMethod === "online"
+            ? null
+            : { id: `gid://shopify/Customer/${wrongBuyer ? "999" : "123"}` },
+        tags: createdInput?.tags,
+      })
       const totals = () => {
         const bag = (amount: string) => ({
           presentmentMoney: { amount, currencyCode: "USD" },
@@ -1063,6 +1103,46 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         init: RequestInit
       ) => {
         const { query, variables } = JSON.parse(String(init.body))
+        if (
+          query.includes("DatoolCheck") ||
+          query.includes("DatoolFindDraftOrder")
+        ) {
+          lookups.push({ query, variables })
+          const snapshot = {
+            id: draftId(),
+            status: providerPlaced ? "COMPLETED" : "OPEN",
+            email: order().email,
+            customer: order().customer,
+            tags: wrongTag
+              ? ["datool-operation-someone-else"]
+              : createdInput?.tags,
+            invoiceUrl:
+              "https://fixture.myshopify.com/invoices/checkout-secret",
+            ...totals(),
+            order: providerPlaced ? order() : null,
+          }
+          if (query.includes("DatoolFindDraftOrder"))
+            return Response.json({
+              data: {
+                draftOrders: {
+                  nodes: indexed
+                    ? duplicateMatch
+                      ? [
+                          snapshot,
+                          { ...snapshot, id: "gid://shopify/DraftOrder/999" },
+                        ]
+                      : [snapshot]
+                    : [],
+                  pageInfo: { hasNextPage: false },
+                },
+              },
+            })
+          return Response.json({
+            data: query.includes("DatoolCheckCreatedOrder")
+              ? { order: providerPlaced ? order() : null }
+              : { draftOrder: snapshot },
+          })
+        }
         if (query.includes("DatoolOrderVariants"))
           return Response.json({
             data: {
@@ -1120,6 +1200,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         if (query.includes("DatoolCreateOrder")) {
           created++
           createdInput = variables.input
+          providerPlaced = false
           if (loseCreateResponse)
             throw new Error("Connection lost after dispatch")
           return Response.json({
@@ -1127,7 +1208,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
               draftOrderCreate: {
                 userErrors: [],
                 draftOrder: {
-                  id: "gid://shopify/DraftOrder/99",
+                  id: draftId(),
                   invoiceUrl:
                     "https://fixture.myshopify.com/invoices/checkout-secret",
                   ...totals(),
@@ -1152,6 +1233,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         }
         if (query.includes("DatoolCompleteOrder")) {
           completed++
+          providerPlaced = true
           if (loseCompleteResponse)
             throw new Error("Connection lost after completing the draft")
           return Response.json({
@@ -1159,14 +1241,8 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
               draftOrderComplete: {
                 userErrors: [],
                 draftOrder: {
-                  id: "gid://shopify/DraftOrder/99",
-                  order: {
-                    id: "gid://shopify/Order/100",
-                    name: "#100",
-                    displayFinancialStatus:
-                      paymentMethod === "free" ? "PAID" : "PENDING",
-                    fullyPaid: paymentMethod === "free",
-                  },
+                  id: draftId(),
+                  order: order(),
                 },
               },
             },
@@ -1186,7 +1262,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
           channelAllowlist: ["web"],
         },
       })
-      const session = await f.session(paymentMethod === "online" ? "" : "123")
+      let session = await f.session(paymentMethod === "online" ? "" : "123")
       const dependencies = {
         generateText: (async (options: {
           tools: Record<
@@ -1199,9 +1275,12 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
             }
           >
         }) => {
-          await options.tools[action.id].execute(input, {
-            toolCallId: "create-order",
-          })
+          await options.tools[checking ? checkAction.id : action.id].execute(
+            checking ? checkInput : input,
+            {
+              toolCallId: checking ? "check-checkout" : "create-order",
+            }
+          )
           return {
             text: "Review your order.",
             usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
@@ -1421,6 +1500,117 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
       expect(recorded.rows).toEqual([
         { provider_log_id: "gid://shopify/DraftOrder/99" },
       ])
+      async function check(args: Record<string, unknown> = {}) {
+        checking = true
+        checkInput = args
+        try {
+          const result = await turn()
+          const call = result.toolCalls.find(
+            (entry) =>
+              entry.turnId === result.turn.id &&
+              entry.actionId === checkAction.id
+          )
+          expect(call?.status).toBe("completed")
+          // Read tools feed the model. Inspect that persisted response, not the stub model's fixed reply.
+          return {
+            ...result,
+            text: (call!.output as { message: string }).message,
+          }
+        } finally {
+          checking = false
+        }
+      }
+      const firstOperation =
+        pending.continuations[0].shopifyOrderQuote!.operationId
+      expect((await check({ operationId: randomUUID() })).text).toContain(
+        "no checkout"
+      )
+      expect(lookups).toHaveLength(0)
+      if (paymentMethod === "online") {
+        const resumed = await check()
+        expect(resumed.text).toContain("existing Shopify checkout")
+        expect(resumed.text).toContain("Payment has not been confirmed")
+        providerPlaced = true
+        expect((await check()).text).toContain("Payment status: pending")
+        financialStatus = "PAID"
+        expect((await check()).text).toContain("payment is complete")
+        financialStatus = "REFUNDED"
+        expect((await check()).text).toContain("Payment status: refunded")
+      } else {
+        expect((await check()).text).toContain("#100")
+        // Same customer on another verified device can recover the same conversation.
+        session = await f.session("123")
+        expect((await check({ operationId: firstOperation })).text).toContain(
+          "#100"
+        )
+      }
+      expect(created).toBe(1)
+      expect(completed).toBe(paymentMethod === "online" ? 0 : 1)
+      const originalSession = session
+      session = await f.session(paymentMethod === "online" ? "" : "456")
+      const readCount = lookups.length
+      expect((await check({ operationId: firstOperation })).text).toContain(
+        "no checkout"
+      )
+      expect(lookups).toHaveLength(readCount)
+      session = originalSession
+      if (paymentMethod === "online") {
+        pending = await turn()
+        if (orderSource === "cart") pending = await readCart(pending)
+        loseCreateResponse = true
+        await assert.rejects(
+          turn(confirm(pending.continuations[0].continuationId!)),
+          { code: "ACTION_UNCERTAIN" }
+        )
+        indexed = false
+        expect((await check()).text).toContain("still unresolved")
+        await assert.rejects(turn(), /previous order.*unresolved/)
+        indexed = true
+        wrongBuyer = true
+        expect((await check()).text).toContain("needs review")
+        wrongBuyer = false
+        const recovered = await check()
+        expect(recovered.text).toContain("existing Shopify checkout")
+        expect(recovered.text).toContain(
+          "https://fixture.myshopify.com/invoices/checkout-secret"
+        )
+        expect(recovered.text).toContain("Payment has not been confirmed")
+        expect(created).toBe(2)
+        expect(completed).toBe(0)
+        // Once recovered, later checks use the saved external ID, without another search or create.
+        expect((await check()).text).toContain("existing Shopify checkout")
+        expect(lookups.at(-1)?.variables.id).toBe(
+          "gid://shopify/DraftOrder/100"
+        )
+        expect(created).toBe(2)
+      }
+      if (paymentMethod === "online" && orderSource === "items") {
+        // A provider success followed by a database failure is still an uncertain write to the caller.
+        await f.database.execute(
+          sql.raw(`
+          CREATE FUNCTION reject_checkout_result() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN RAISE EXCEPTION 'fixture: result storage unavailable'; END $$;
+          CREATE TRIGGER reject_checkout_result BEFORE UPDATE OF result_json
+          ON build_shopify_order_operations FOR EACH ROW EXECUTE FUNCTION reject_checkout_result();
+        `)
+        )
+        loseCreateResponse = false
+        pending = await turn()
+        await assert.rejects(
+          turn(confirm(pending.continuations[0].continuationId!)),
+          { code: "ACTION_UNCERTAIN" }
+        )
+        expect(created).toBe(3)
+        await assert.rejects(turn(), /previous order.*unresolved/)
+        await f.database.execute(
+          sql.raw(
+            "DROP TRIGGER reject_checkout_result ON build_shopify_order_operations"
+          )
+        )
+        expect((await check()).text).toContain("existing Shopify checkout")
+        expect(created).toBe(3)
+        expect(completed).toBe(0)
+      }
       if (paymentMethod === "free") {
         pending = await turn()
         loseCreateResponse = orderSource === "items"
@@ -1442,7 +1632,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
           {
             status: "uncertain",
             provider_log_id: loseCompleteResponse
-              ? "gid://shopify/DraftOrder/99"
+              ? "gid://shopify/DraftOrder/100"
               : null,
             provider_session_id:
               pending.continuations[0].shopifyOrderQuote?.operationId,
@@ -1451,6 +1641,43 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         // A new model call must not bypass the unresolved financial write by making a new confirmation.
         await assert.rejects(turn(), /previous order.*unresolved/)
         expect(created).toBe(2)
+        if (loseCreateResponse) {
+          indexed = false
+          expect((await check()).text).toContain("still unresolved")
+          await assert.rejects(turn(), /previous order.*unresolved/)
+          indexed = true
+          wrongTag = true
+          expect((await check()).text).toContain("still unresolved")
+          wrongTag = false
+          duplicateMatch = true
+          expect((await check()).text).toContain("needs review")
+          duplicateMatch = false
+          wrongBuyer = true
+          expect((await check()).text).toContain("needs review")
+          wrongBuyer = false
+          // Finding an uncompleted free-order draft must not silently finalize it.
+          expect((await check()).text).toContain("needs review")
+          expect(completed).toBe(1)
+          providerPlaced = true // The store team completes the original draft in Shopify.
+        }
+        expect((await check()).text).toContain("Order #101 is placed")
+        expect(created).toBe(2)
+        expect(completed).toBe(loseCompleteResponse ? 2 : 1)
+        const recovered = await turn()
+        expect(recovered.continuations).toHaveLength(1)
+        expect(created).toBe(2)
+        if (loseCreateResponse)
+          expect(
+            lookups.some(
+              (lookup) =>
+                lookup.variables.query ===
+                `tag:"datool-operation-${pending.continuations[0].shopifyOrderQuote!.operationId}"`
+            )
+          ).toBe(true)
+        else
+          expect(lookups.at(-1)?.variables.id).toBe(
+            "gid://shopify/DraftOrder/100"
+          )
       }
       if (paymentMethod === "cash_on_delivery" && orderSource === "items") {
         pending = await turn()

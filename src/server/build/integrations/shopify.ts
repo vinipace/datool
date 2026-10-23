@@ -30,6 +30,8 @@ import {
 } from "@/src/lib/build/shopify-order"
 import { shopifyCartResultSchema } from "@/src/lib/build/shopify-cart"
 import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
+import { ShopifyOrderStore } from "./shopify-order-store"
+import { checkShopifyCheckout } from "./shopify-order-status"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
 import { readShopifyOrders } from "./shopify-orders"
 import { shopifyShopper } from "./shopify-identity"
@@ -416,11 +418,24 @@ export async function executeShopifyTool(
         if (current.customerId !== shopper.customerId) throw unavailable()
       }
       if (orders) return await readShopifyOrders(args, shopper, graphql)
+      if (slug === "SHOPIFY_CHECK_CHECKOUT")
+        return await checkShopifyCheckout(
+          args,
+          new ShopifyOrderStore(context, id, execution.conversationId, shopper),
+          graphql
+        )
       if (slug === "SHOPIFY_CREATE_ORDER") {
+        const operations = new ShopifyOrderStore(
+          context,
+          id,
+          execution.conversationId,
+          shopper
+        )
         const settings = shopifyActionSettingsSchema.parse(
           execution.settings ?? {}
         )
         if (execution.prepareOrder) {
+          await operations.assertNoUnresolved()
           let orderInput = args
           if (settings.orderSource === "cart") {
             if (execution.cartResult === undefined)
@@ -468,6 +483,7 @@ export async function executeShopifyTool(
           shopper,
           settings,
           graphql,
+          operations,
           beforeWrite,
           execution.recordDraft
         )

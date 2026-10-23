@@ -42,12 +42,18 @@ connections.
   online payment, cash on delivery or a free order. Online payment returns an
   unpaid Shopify checkout link; other modes validate the total and payment terms
   before completing the draft. Uncertain writes require reconciliation.
+- `SHOPIFY_CHECK_CHECKOUT`: recover the existing checkout or order and read its
+  current payment status. Enable **Check checkout** alongside **Create order**.
+  It accepts an operation ID returned by Datool, or checks the latest attempt in
+  the verified shopper's conversation. It never creates an order or takes payment.
+  Missing results remain unresolved; duplicate matches and changes to the buyer
+  or approved total require store-team review.
 
 Product searches render native product cards. An enabled **Update shopping cart**
 action for the same connection adds variant and quantity controls. Storefront chat
 installation is separate from the data connection. This connector does not
-install a theme embed. Payment tracking, cart clearing, interrupted-order
-reconciliation and return/exchange work remain tracked in
+install a theme embed. Automatic payment notifications, cart clearing, resolution
+of incomplete drafts and return/exchange work remain tracked in
 [the action parity checklist](shopify-action-parity.md).
 
 Customer-specific actions require a freshly verified Shopify storefront chat.
@@ -61,6 +67,11 @@ Shopify's Admin GraphQL API 2026-10. Cart actions use the shopper's storefront
 session. Neither path calls the Shopify development app or its temporary tunnel.
 Native calls record integration usage with no configured Composio charge.
 Normal agent model usage still applies.
+
+Apply migrations through 0065 before enabling order actions. Confirmed order
+intent is stored separately from usage events so interrupted tool responses do
+not erase the information needed for recovery. Checkout reads require draft-order,
+order and customer access; the corresponding write scopes also grant read access.
 
 ## Billing ownership
 
