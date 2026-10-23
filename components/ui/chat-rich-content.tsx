@@ -11,6 +11,8 @@ import { Textarea } from "./textarea"
 import type { InspectorMessage } from "@/src/lib/tracer/value-messages"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
+import { shopifyCartCommandSchema } from "@/src/lib/build/shopify-cart"
+import { ShopifyCartView } from "./shopify-cart"
 import { CodeWidgetFrame } from "./code-widget-frame"
 
 type ChatMessage = InspectorMessage
@@ -75,6 +77,22 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
             item?.type === "client_action"
         )
     : null
+  const cartCommand = shopifyCartCommandSchema.safeParse(
+    record(continuation?.shopifyCart)?.command
+  )
+  let cartSummary: string | null = null
+  if (cartCommand.success && cartCommand.data.operation === "add") {
+    const count = cartCommand.data.items.reduce(
+      (sum, item) => sum + item.quantity,
+      0
+    )
+    cartSummary = `Add ${count} ${count === 1 ? "item" : "items"} to your cart. You can review everything before checkout.`
+  } else if (cartCommand.success && cartCommand.data.operation === "set") {
+    cartSummary =
+      cartCommand.data.quantity === 0
+        ? "Remove this item from your cart."
+        : `Change this cart item's quantity to ${cartCommand.data.quantity}.`
+  }
   let continuationWidget: ChatWidget | null = null
   const continuationFormActionId =
     typeof continuation?.submitActionId === "string" &&
@@ -123,7 +141,7 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
           ? continuation.eventName
           : undefined,
       components: [
-        ...(continuation.eventName === "Confirm changes"
+        ...(continuation.eventName === "Confirm changes" || cartSummary
           ? [
               {
                 type: "card" as const,
@@ -131,12 +149,14 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
                   typeof continuation.title === "string"
                     ? continuation.title
                     : "Confirm change",
-                body: Object.entries(record(continuation.input) ?? {})
-                  .map(
-                    ([key, value]) =>
-                      `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
-                  )
-                  .join("\n"),
+                body:
+                  cartSummary ??
+                  Object.entries(record(continuation.input) ?? {})
+                    .map(
+                      ([key, value]) =>
+                        `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
+                    )
+                    .join("\n"),
               },
             ]
           : []),
@@ -307,6 +327,9 @@ export function ChatRichContent({
           </a>
         ) : null
       })}
+      {message.role !== "user" ? (
+        <ShopifyCartView value={record(message.metadata)?.shopifyCart} />
+      ) : null}
       {message.role !== "user" && widget ? (
         <ChatWidgetView
           widget={widget}

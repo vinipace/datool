@@ -35,6 +35,8 @@ import {
   type ShopifyActionSettings,
 } from "@/src/lib/build/shopify"
 import { ShopifyWriteUncertainError } from "./shopify-mutation"
+import { isShopifyCartTool } from "@/src/lib/build/shopify-cart"
+import { prepareShopifyCart, completeShopifyCart } from "./shopify-cart"
 import { claimShopifyInvitation } from "./shopify-invitations"
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
@@ -335,6 +337,7 @@ export async function executeShopifyTool(
     conversationId: string
     turnId: string
     confirmed?: boolean
+    cartResult?: unknown
     settings?: ShopifyActionSettings
   }
 ) {
@@ -372,6 +375,12 @@ export async function executeShopifyTool(
       "Confirm this change in the chat before it can be applied."
     )
   signal?.throwIfAborted()
+  if (isShopifyCartTool(slug)) {
+    const command = prepareShopifyCart(slug, input)
+    if (execution?.cartResult !== undefined)
+      return completeShopifyCart(execution.cartResult)
+    return { cartCommand: command }
+  }
   const client = new (nativeShopify().clients.Graphql)({ session })
   try {
     const graphql: import("./shopify-catalog").ShopifyGraphqlClient = async (

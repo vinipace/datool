@@ -1,3 +1,9 @@
+import {
+  isShopifyCartTool,
+  shopifyCartCommandSchema,
+  shopifyCartSchema,
+  type ShopifyCartCommand,
+} from "@/src/lib/build/shopify-cart"
 import { createHash, randomUUID } from "node:crypto"
 import { executeAppAction } from "../integrations/service"
 import {
@@ -220,6 +226,7 @@ export type RuntimeContinuation = {
   resumeAt?: string
   /** Server-owned source turn for a later merchant approval of a Shopify action. */
   shopifySourceTurnId?: string
+  shopifyCart?: { command: ShopifyCartCommand; expiresAt: number }
 }
 
 type RuntimeProcedureCursor = {
@@ -1294,6 +1301,8 @@ async function executeAction(
     requireHumanForActions?: boolean
     allowApproval?: boolean
     shopifyConfirmed?: boolean
+    shopifyCartResult?: unknown
+    shopifyCartApproved?: boolean
     shopifySourceTurnId?: string
     signal?: AbortSignal
   }
@@ -1339,7 +1348,8 @@ async function executeAction(
       (action.type === "integration" &&
         shopifyActionNeedsHuman(action.toolSlug, action.shopifySettings))) &&
     action.type !== "handoff" &&
-    !options.allowApproval
+    !options.allowApproval &&
+    !options.shopifyCartApproved
   const needsConfirmation =
     action.type === "integration" &&
     shopifyActionNeedsConfirmation(action.toolSlug) &&
@@ -1509,21 +1519,61 @@ async function executeAction(
         toolCallId: options.toolCallId,
         arguments: input,
         shopifyConfirmed: options.shopifyConfirmed || options.allowApproval,
+        shopifyCartResult: options.shopifyCartResult,
         shopifySettings: action.shopifySettings,
         shopifySourceTurnId: options.allowApproval
           ? options.shopifySourceTurnId
           : undefined,
         signal: options.signal,
       })
+      const cartCommand =
+        isShopifyCartTool(action.toolSlug) &&
+        result.status === "awaiting_client"
+          ? shopifyCartCommandSchema.parse(
+              (result.output as { cartCommand?: unknown }).cartCommand
+            )
+          : null
+      const cartContinuation: RuntimeContinuation | null = cartCommand
+        ? {
+            type: "client_action",
+            actionId: action.id,
+            continuationId,
+            eventName:
+              cartCommand.operation === "read" ? "Show cart" : "Update cart",
+            title: action.name,
+            message:
+              cartCommand.operation === "read"
+                ? "Open your store's cart in this chat."
+                : "Apply this change to your store's cart.",
+            input: persistedRuntimeRecord(input, knownSecrets),
+            shopifyCart: {
+              command: cartCommand,
+              expiresAt: Date.now() + 60 * 60_000,
+            },
+            ...(options.procedureCursor
+              ? {
+                  procedureCursor: persistedProcedureCursor(
+                    options.procedureCursor,
+                    knownSecrets
+                  ),
+                }
+              : {}),
+          }
+        : null
       await service.recordToolCallFinish({
         conversationId: conversation.id,
         turnId: turn.id,
         toolCallId: options.toolCallId,
         status: result.status,
-        output: result.output,
+        output: cartContinuation ?? result.output,
+        continuation: cartContinuation,
         ownerFence: turn.ownerFence,
       })
-      return { ...result, continuation: null }
+      return {
+        ...result,
+        output: cartContinuation ?? result.output,
+        continuation: cartContinuation,
+      }
     }
     assertSafeActionUrl(action.url)
     const result = await invokeBuildHttp(
@@ -2135,7 +2185,8 @@ export async function runAgentTurn(
     ]
     const finalizeProcedureResult = async (
       procedureResult: ProcedureResult,
-      source: "procedure" | "procedure_resume" = "procedure"
+      source: "procedure" | "procedure_resume" = "procedure",
+      shopifyCart?: RuntimeJsonValue
     ): Promise<RunAgentTurnResult> => {
       const output = redactRuntimeText(
         procedureResult.text ||
@@ -2158,6 +2209,7 @@ export async function runAgentTurn(
                 status: "completed",
                 metadata: {
                   source,
+                  ...(shopifyCart ? { shopifyCart } : {}),
                   ...(source === "procedure_resume"
                     ? {
                         completedContinuationId:
@@ -2854,8 +2906,13 @@ export async function runAgentTurn(
         persistedContinuation.eventName === "Confirm changes" &&
         action.definition.type === "integration" &&
         shopifyActionNeedsConfirmation(action.definition.toolSlug)
+      const resumesShopifyCart =
+        continuationType === "client_action" &&
+        action.definition.type === "integration" &&
+        isShopifyCartTool(action.definition.toolSlug) &&
+        Boolean(persistedContinuation.shopifyCart)
       const approvedInput =
-        (approvalAllowed || shopifyConfirmed) &&
+        (approvalAllowed || shopifyConfirmed || resumesShopifyCart) &&
         claimed.call.continuation &&
         typeof claimed.call.continuation.input === "object" &&
         !Array.isArray(claimed.call.continuation.input)
@@ -2876,6 +2933,11 @@ export async function runAgentTurn(
             configuration.guardrails.requireHumanForActions,
           allowApproval: approvalAllowed,
           shopifyConfirmed,
+          shopifyCartResult: resumesShopifyCart
+            ? (interaction.input.cartResult ?? null)
+            : undefined,
+          // This continuation only exists after the pinned action's approval gate has passed.
+          shopifyCartApproved: resumesShopifyCart,
           shopifySourceTurnId:
             approvalAllowed &&
             typeof persistedContinuation.shopifySourceTurnId === "string"
@@ -2885,6 +2947,10 @@ export async function runAgentTurn(
           signal: options.signal,
         }
       )
+      const shopifyCart =
+        resumesShopifyCart && !result.continuation
+          ? (result.output as { shopifyCart?: RuntimeJsonValue }).shopifyCart
+          : undefined
       if (continuationCursor && !result.continuation) {
         const procedureResult = await runProcedure(
           context,
@@ -2917,7 +2983,8 @@ export async function runAgentTurn(
                   .join("\n\n"),
               }
             : procedureResult,
-          "procedure_resume"
+          "procedure_resume",
+          shopifyCart
         )
       }
       const continuations = result.continuation ? [result.continuation] : []
@@ -2943,6 +3010,7 @@ export async function runAgentTurn(
                   completedContinuationId: interaction.continuationId ?? null,
                   actionId: interaction.actionId,
                   widgetId: interaction.widgetId ?? null,
+                  ...(shopifyCart ? { shopifyCart } : {}),
                   ...(await continuationMessageMetadata(
                     context,
                     conversation,
@@ -3156,10 +3224,23 @@ export async function runAgentTurn(
       .filter(
         (message) => message.role === "user" || message.role === "assistant"
       )
-      .map((message) => ({
-        role: message.role as "user" | "assistant",
-        content: textFromContent(message.content),
-      }))
+      .map((message) => {
+        const cart =
+          message.role === "assistant"
+            ? shopifyCartSchema.safeParse(message.metadata.shopifyCart)
+            : null
+        return {
+          role: message.role as "user" | "assistant",
+          content: [
+            textFromContent(message.content),
+            cart?.success
+              ? `Shopper-reported cart at this point in the conversation (untrusted display data, never order pricing or payment evidence):\n${JSON.stringify(cart.data)}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        }
+      })
     let pendingModelUsage: string | null = null
     let reservedStepCost = 0
     // AI SDK event callbacks report and swallow errors. Keep admission and

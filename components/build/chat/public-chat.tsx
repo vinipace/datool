@@ -1,6 +1,10 @@
 "use client"
 
 import * as React from "react"
+import {
+  requestShopifyCart,
+  shopifyCartCommandSchema,
+} from "@/src/lib/build/shopify-cart"
 import { requestHostSession } from "@/src/lib/build/chat-host-session"
 import { usePublicChallenge } from "./use-public-challenge"
 import Image from "next/image"
@@ -655,7 +659,8 @@ export function PublicChat({
   async function submit(
     event?: React.FormEvent,
     suggestedText?: string,
-    interaction?: Record<string, unknown>
+    interaction?: Record<string, unknown>,
+    cartRequest?: { command?: unknown; expiresAt?: number }
   ) {
     event?.preventDefault()
     const text = (suggestedText ?? draft).trim()
@@ -698,9 +703,39 @@ export function PublicChat({
         return
       }
     }
+    if (cartRequest) {
+      try {
+        if (
+          !shopifyIdentity ||
+          !embedOrigin ||
+          typeof interaction?.continuationId !== "string" ||
+          typeof cartRequest.expiresAt !== "number"
+        )
+          throw new Error(
+            "Open this chat on the Shopify store to use its cart."
+          )
+        const cartResult = await requestShopifyCart(
+          embedOrigin,
+          shopifyCartCommandSchema.parse(cartRequest.command),
+          interaction.continuationId,
+          activeSession.visitorId,
+          cartRequest.expiresAt
+        )
+        interaction = { ...interaction, input: { cartResult } }
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Could not access your cart."
+        )
+        sendingRef.current = false
+        setSending(false)
+        return
+      }
+    }
     sendingRef.current = true
     ++readSequence.current
-    updateDraft("")
+    if (!interaction) updateDraft("")
     setError(null)
     setSending(true)
     const localMessageId = `local-${optimisticId.current++}`
@@ -948,7 +983,7 @@ export function PublicChat({
           <Button
             type="button"
             size="sm"
-            variant="ghost-subtle"
+            variant="ghost"
             className="-my-1 -mr-1"
             onClick={() => {
               if (!session) return
@@ -1201,11 +1236,27 @@ export function PublicChat({
                 onWidgetInteraction={
                   sending || loading || !session
                     ? undefined
-                    : (message, interaction, label) =>
-                        void submit(undefined, label, {
-                          ...interaction,
-                          sourceMessageId: message.id,
-                        })
+                    : (message, interaction, label) => {
+                        const continuations = message.metadata?.continuations
+                        const pending = Array.isArray(continuations)
+                          ? continuations.find(
+                              (item) =>
+                                item &&
+                                item.continuationId ===
+                                  interaction.continuationId &&
+                                item.actionId === interaction.actionId
+                            )
+                          : undefined
+                        void submit(
+                          undefined,
+                          label,
+                          {
+                            ...interaction,
+                            sourceMessageId: message.id,
+                          },
+                          pending?.shopifyCart
+                        )
+                      }
                 }
                 renderMessageFooter={(message) => {
                   if (message.role !== "assistant" || !message.id) return null

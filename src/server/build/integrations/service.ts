@@ -1,3 +1,4 @@
+import { isShopifyCartTool } from "@/src/lib/build/shopify-cart"
 import { randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import type {
@@ -291,6 +292,7 @@ export async function executeAppAction(
     toolCallId: string
     arguments: Record<string, unknown>
     shopifyConfirmed?: boolean
+    shopifyCartResult?: unknown
     shopifySourceTurnId?: string
     shopifySettings?: import("@/src/lib/build/shopify").ShopifyActionSettings
     signal?: AbortSignal
@@ -320,6 +322,26 @@ export async function executeAppAction(
     .execute(sql`SELECT 1 FROM build_conversation_turns t JOIN build_conversations c ON c.id=t.conversation_id AND c.project_id=t.project_id
     WHERE t.id=${input.turnId} AND t.project_id=${ctx.projectId} AND c.id=${input.conversationId} AND c.agent_id=${input.agentId}`)
   if (!ownership.rows.length) throw unavailable()
+  // Preparing a browser interaction has no external effect or integration usage.
+  // The existing tool ledger persists the one-shot continuation before it reaches the shopper.
+  if (
+    native &&
+    isShopifyCartTool(input.toolSlug) &&
+    input.shopifyCartResult === undefined
+  ) {
+    const output = await executeShopifyTool(
+      ctx,
+      connection.id,
+      input.toolSlug,
+      input.arguments,
+      input.signal,
+      {
+        conversationId: input.conversationId,
+        turnId: input.shopifySourceTurnId ?? input.turnId,
+      }
+    )
+    return { output, status: "awaiting_client" as const }
+  }
   const id = randomUUID()
   const admitted = await ctx.database
     .execute(sql`INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,toolkit,tool_slug,connection_id,status,cost_source)
@@ -342,6 +364,7 @@ export async function executeAppAction(
           conversationId: input.conversationId,
           turnId: input.shopifySourceTurnId ?? input.turnId,
           confirmed: input.shopifyConfirmed,
+          cartResult: input.shopifyCartResult,
           settings: input.shopifySettings,
         }
       )

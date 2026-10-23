@@ -116,6 +116,7 @@
   }
   var browserCredential = readStored(sessionStorageKey + ":shopify-browser")
   var identityRequest = Promise.resolve()
+  var verifiedVisitorId = null
   function onMessage(event) {
     if (
       event.source !== frame.contentWindow ||
@@ -170,9 +171,10 @@
                 }
               )
               var payload = await response.json()
-              if (payload.error)
+              if (payload.error) {
+                verifiedVisitorId = null
                 result = { error: payload.error, shopify: true }
-              else if (!response.ok || !payload.data)
+              } else if (!response.ok || !payload.data)
                 throw new Error("Could not verify your store session.")
               else {
                 browserCredential = payload.data.browserToken
@@ -181,6 +183,7 @@
                   browserCredential
                 )
                 delete payload.data.browserToken
+                verifiedVisitorId = payload.data.visitorId
                 result = { session: payload.data, shopify: true }
               }
             } else
@@ -189,6 +192,7 @@
                 shopify: false,
               }
           } catch (_) {
+            verifiedVisitorId = null
             result = {
               error: {
                 message:
@@ -209,6 +213,21 @@
             )
         })
     }
+    if (event.data && event.data.type === "datool:shopify:cart-request") {
+      var cartInput = event.data
+      if (typeof cartInput.requestId !== "string") return
+      executeCart(cartInput).then(function (result) {
+        if (!disposed)
+          frame.contentWindow.postMessage(
+            {
+              type: "datool:shopify:cart-response",
+              requestId: cartInput.requestId,
+              result: result,
+            },
+            new URL(baseUrl).origin
+          )
+      })
+    }
     if (event.data && event.data.type === "datool:chat:close") close()
     if (
       event.data &&
@@ -228,6 +247,212 @@
         window.location.assign(destination.href)
       } catch (_) {
         /* Ignore invalid navigation messages. */
+      }
+    }
+  }
+
+  function cartRoot() {
+    var root =
+      window.Shopify && window.Shopify.routes && window.Shopify.routes.root
+    if (typeof root !== "string" || !/^\/(?:[a-zA-Z0-9_-]+\/)*$/.test(root))
+      throw new Error("Open this chat on the store to use its cart.")
+    return new URL(root, window.location.origin).href
+  }
+  function cartCommand(value) {
+    if (!value || typeof value !== "object")
+      throw new Error("Invalid cart command.")
+    var validQuantity = function (quantity, minimum) {
+      return Number.isInteger(quantity) && quantity >= minimum && quantity <= 99
+    }
+    if (value.operation === "read") return { operation: "read" }
+    if (
+      value.operation === "add" &&
+      Array.isArray(value.items) &&
+      value.items.length > 0 &&
+      value.items.length <= 20
+    ) {
+      var items = value.items.map(function (item) {
+        if (
+          !item ||
+          typeof item.variantId !== "string" ||
+          !/^[1-9][0-9]{0,15}$/.test(item.variantId) ||
+          !Number.isSafeInteger(Number(item.variantId)) ||
+          !validQuantity(item.quantity, 1)
+        )
+          throw new Error("Invalid cart item.")
+        return { id: item.variantId, quantity: item.quantity }
+      })
+      return { operation: "add", body: { items: items } }
+    }
+    if (
+      value.operation === "set" &&
+      typeof value.lineKey === "string" &&
+      value.lineKey.length > 0 &&
+      value.lineKey.length <= 256 &&
+      validQuantity(value.quantity, 0)
+    )
+      return {
+        operation: "set",
+        body: { id: value.lineKey, quantity: value.quantity },
+      }
+    throw new Error("Invalid cart command.")
+  }
+  function cartSnapshot(value, root) {
+    function integer(number) {
+      if (!Number.isSafeInteger(number) || number < 0)
+        throw new Error("Invalid cart response.")
+      return number
+    }
+    if (
+      !value ||
+      typeof value.currency !== "string" ||
+      !/^[A-Z]{3}$/.test(value.currency) ||
+      !Array.isArray(value.items)
+    )
+      throw new Error("Invalid cart response.")
+    return {
+      currency: value.currency,
+      totalPrice: integer(value.total_price),
+      itemCount: integer(value.item_count),
+      items: value.items.slice(0, 100).map(function (item) {
+        var url = new URL(item.url, window.location.origin)
+        var variantId = String(item.variant_id)
+        if (
+          url.origin !== window.location.origin ||
+          url.username ||
+          url.password ||
+          url.protocol !== "https:" ||
+          typeof item.key !== "string" ||
+          item.key.length > 256 ||
+          !/^[1-9][0-9]{0,15}$/.test(variantId)
+        )
+          throw new Error("Invalid cart item.")
+        return {
+          lineKey: item.key,
+          variantId: variantId,
+          title: String(item.product_title || item.title || "Item").slice(
+            0,
+            300
+          ),
+          quantity: integer(item.quantity),
+          finalLinePrice: integer(item.final_line_price),
+          url: url.href,
+        }
+      }),
+      truncated: value.items.length > 100,
+      cartUrl: root + "cart",
+      checkoutUrl: root + "checkout",
+    }
+  }
+  async function readCart(root) {
+    var response = await fetch(root + "cart.js", {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok) throw new Error("Could not read your cart.")
+    return cartSnapshot(await response.json(), root)
+  }
+  async function executeCart(input) {
+    var uncertain = {
+      status: "uncertain",
+      message:
+        "The cart change may have completed. Open your cart to check before trying again.",
+    }
+    try {
+      if (
+        !dataset.shopifyProxy ||
+        !verifiedVisitorId ||
+        input.visitorId !== verifiedVisitorId
+      )
+        throw new Error("Verify your store session before using the cart.")
+      var root = cartRoot()
+      var command = cartCommand(input.command)
+      if (command.operation === "read")
+        return { status: "completed", cart: await readCart(root) }
+      if (
+        typeof input.operationId !== "string" ||
+        !/^[a-zA-Z0-9_-]{16,120}$/.test(input.operationId) ||
+        !Number.isFinite(input.expiresAt) ||
+        input.expiresAt <= Date.now() ||
+        input.expiresAt > Date.now() + 3600000
+      )
+        throw new Error(
+          "This cart request expired. Ask the assistant for a new one."
+        )
+      if (!window.navigator.locks)
+        throw new Error("Use the store's cart directly in this browser.")
+      var receiptPrefix = "datool:cart:" + baseUrl + ":" + channelId + ":"
+      var receiptKey = receiptPrefix + input.operationId
+      var fingerprint = JSON.stringify({
+        visitor: input.visitorId,
+        command: command,
+      })
+      return await window.navigator.locks.request(
+        receiptKey,
+        async function () {
+          // A persisted pre-dispatch receipt prevents a lost response or page reload from replaying a write.
+          // Expired requests cannot execute again, so their receipts may be removed safely.
+          for (var i = window.localStorage.length - 1; i >= 0; i--) {
+            var key = window.localStorage.key(i)
+            if (key && key.indexOf(receiptPrefix) === 0) {
+              var stale = readStored(key)
+              if (stale && stale.expiresAt <= Date.now())
+                window.localStorage.removeItem(key)
+            }
+          }
+          if (
+            input.visitorId !== verifiedVisitorId ||
+            input.expiresAt <= Date.now()
+          )
+            throw new Error("Cart request expired.")
+          var receipt = readStored(receiptKey)
+          if (receipt) {
+            if (receipt.fingerprint !== fingerprint)
+              throw new Error("This cart request has already been used.")
+            if (receipt.status !== "completed") return uncertain
+            return { status: "completed", cart: await readCart(root) }
+          }
+          var pending = {
+            fingerprint: fingerprint,
+            status: "pending",
+            expiresAt: input.expiresAt,
+          }
+          // Unlike optional chat persistence, writes require durable replay protection.
+          window.localStorage.setItem(receiptKey, JSON.stringify(pending))
+          try {
+            var response = await fetch(
+              root +
+                (command.operation === "add"
+                  ? "cart/add.js"
+                  : "cart/change.js"),
+              {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(command.body),
+                signal: AbortSignal.timeout(15000),
+              }
+            )
+            // Even an inventory error can partially change quantities. Never infer no side effects.
+            if (!response.ok) return uncertain
+            pending.status = "completed"
+            window.localStorage.setItem(receiptKey, JSON.stringify(pending))
+            var cart = await readCart(root)
+            window.dispatchEvent(
+              new CustomEvent("datool:cart:updated", { detail: cart })
+            )
+            return { status: "completed", cart: cart }
+          } catch (_) {
+            return uncertain
+          }
+        }
+      )
+    } catch (_) {
+      return {
+        status: "failed",
+        message:
+          "The cart request could not be completed. Refresh the chat or open the store's cart.",
       }
     }
   }

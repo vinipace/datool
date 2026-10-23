@@ -125,7 +125,13 @@ export async function runShopifyStoreTool(
               `/products/${encodeURIComponent(product.handle)}`,
               data.shop.primaryDomain.url
             ).href,
-          variants: product.variants.nodes,
+          variants: product.variants.nodes.map((variant) => ({
+            ...variant,
+            cartVariantId:
+              variant.id?.match(
+                /^gid:\/\/shopify\/ProductVariant\/([1-9][0-9]*)$/
+              )?.[1] ?? null,
+          })),
         })),
     }
   }

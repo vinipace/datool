@@ -11,6 +11,9 @@ export function runtimeMessageMetadata(
     result.message?.metadata.completedContinuationId
   return {
     ...(continuations.length ? { continuations } : {}),
+    ...(result.message?.metadata.shopifyCart
+      ? { shopifyCart: result.message.metadata.shopifyCart }
+      : {}),
     ...(typeof completedContinuationId === "string"
       ? { completedContinuationId }
       : {}),

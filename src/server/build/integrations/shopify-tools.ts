@@ -1,3 +1,4 @@
+import { shopifyCartTools } from "./shopify-cart"
 import { shopifyTools as catalogTools } from "./shopify-catalog"
 import { shopifyOrderTools } from "./shopify-orders"
 import { shopifyCustomerTools } from "./shopify-customers"
@@ -5,12 +6,15 @@ import { shopifyTagTools } from "./shopify-order-tags"
 
 export const shopifyTools = [
   ...catalogTools,
+  ...shopifyCartTools,
   ...shopifyOrderTools,
   ...shopifyCustomerTools,
   ...shopifyTagTools,
 ]
 
 export const shopifyToolScopes: Record<string, string[]> = {
+  SHOPIFY_GET_CART: [],
+  SHOPIFY_UPDATE_CART: [],
   SHOPIFY_GET_ORDERS: ["read_orders", "read_customers"],
   SHOPIFY_UPDATE_PROFILE: ["write_customers"],
   SHOPIFY_UPDATE_ADDRESS: ["write_customers"],

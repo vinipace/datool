@@ -196,20 +196,20 @@ export const shopifyCustomerTools: IntegrationTool[] = [
     name: "Update customer profile",
     description:
       "Update the signed-in customer's own name, email or phone after their confirmation. Never accepts a customer ID. Phone numbers use international format; null removes the account phone.",
-    inputSchema: z.toJSONSchema(profileSchema),
+    inputSchema: z.toJSONSchema(profileSchema, { target: "draft-7" }),
   },
   {
     slug: "SHOPIFY_UPDATE_ADDRESS",
     name: "Update account address",
     description:
       "Update the signed-in customer's default account address after confirmation. This does not change delivery addresses on existing orders.",
-    inputSchema: z.toJSONSchema(shopifyAddressSchema),
+    inputSchema: z.toJSONSchema(shopifyAddressSchema, { target: "draft-7" }),
   },
   {
     slug: "SHOPIFY_ACTIVATE_ACCOUNT",
     name: "Activate customer account",
     description:
       "Request a legacy account activation email after confirmation, or provide sign-in guidance for new customer accounts. Does not disclose whether an email belongs to an existing customer.",
-    inputSchema: z.toJSONSchema(activationSchema),
+    inputSchema: z.toJSONSchema(activationSchema, { target: "draft-7" }),
   },
 ]

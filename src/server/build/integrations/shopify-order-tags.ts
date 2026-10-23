@@ -65,6 +65,6 @@ export const shopifyTagTools: IntegrationTool[] = [
     name: "Tag an order",
     description:
       "Apply merchant-approved tags to the signed-in customer's own order. Only tags configured by the merchant are allowed; a tag cannot authorize refunds or override store policies.",
-    inputSchema: z.toJSONSchema(tagSchema),
+    inputSchema: z.toJSONSchema(tagSchema, { target: "draft-7" }),
   },
 ]

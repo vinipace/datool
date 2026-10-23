@@ -431,3 +431,34 @@ test("order lookup verifies each returned order, isolates guest proofs and never
     )
   )
 })
+
+test("published Shopify tool schemas accept documented inputs in the runtime validator", async () => {
+  const { shopifyTools } =
+    await import("@/src/server/build/integrations/shopify-tools")
+  const { validateSchema } = await import("@/src/server/playground/schema")
+  const examples = [
+    [
+      "SHOPIFY_GET_ORDERS",
+      { orderNumber: "1001", email: "buyer@example.test" },
+    ],
+    ["SHOPIFY_UPDATE_PROFILE", { firstName: "Alice" }],
+    [
+      "SHOPIFY_UPDATE_ADDRESS",
+      { address1: "123 Main St", city: "Austin", countryCode: "US" },
+    ],
+    ["SHOPIFY_ACTIVATE_ACCOUNT", { email: "buyer@example.test" }],
+    [
+      "SHOPIFY_TAG_ORDER",
+      { orderId: "gid://shopify/Order/123", tags: ["support"] },
+    ],
+    [
+      "SHOPIFY_UPDATE_CART",
+      { operation: "add", items: [{ variantId: "123", quantity: 1 }] },
+    ],
+  ] as const
+  for (const [slug, input] of examples) {
+    const tool = shopifyTools.find((tool) => tool.slug === slug)
+    if (!tool) throw new Error(`Missing native tool ${slug}`)
+    expect(() => validateSchema(tool.inputSchema, input)).not.toThrow()
+  }
+})

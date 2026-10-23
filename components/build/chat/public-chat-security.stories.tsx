@@ -36,12 +36,35 @@ const meta = {
   title: "Build/StoreChatSecurity",
   component: PublicChat,
   args: { channelId },
+  beforeEach: () => {
+    for (const key of Object.keys(sessionStorage))
+      if (key.includes(channelId)) sessionStorage.removeItem(key)
+  },
   parameters: { msw: { handlers } },
 } satisfies Meta<typeof PublicChat>
 export default meta
 type Story = StoryObj<typeof meta>
 
-function StoreSessionFixture() {
+const cartSnapshot = {
+  currency: "BRL",
+  totalPrice: 5000,
+  itemCount: 2,
+  items: [
+    {
+      lineKey: "123:line",
+      variantId: "123",
+      title: "Board wax",
+      quantity: 2,
+      finalLinePrice: 5000,
+      url: "https://store.example/products/wax",
+    },
+  ],
+  truncated: false,
+  cartUrl: "https://store.example/cart",
+  checkoutUrl: "https://store.example/checkout",
+}
+
+function StoreSessionFixture({ cart = false }: { cart?: boolean }) {
   const [customer, setCustomer] = React.useState("customer-a")
   React.useLayoutEffect(() => {
     // Simulate the host's verified response at the browser message boundary.
@@ -50,6 +73,29 @@ function StoreSessionFixture() {
       type?: string
       requestId?: string
     }) => {
+      if (cart && data?.type === "datool:shopify:cart-request") {
+        queueMicrotask(() => {
+          for (const origin of ["https://evil.test", location.origin])
+            window.dispatchEvent(
+              new MessageEvent("message", {
+                source: window.parent,
+                origin,
+                data: {
+                  type: "datool:shopify:cart-response",
+                  requestId: data.requestId,
+                  result: {
+                    status: "completed",
+                    cart:
+                      origin === location.origin
+                        ? cartSnapshot
+                        : { ...cartSnapshot, totalPrice: 1 },
+                  },
+                },
+              })
+            )
+        })
+        return
+      }
       if (data?.type !== "datool:chat:session-request") return
       queueMicrotask(() =>
         window.dispatchEvent(
@@ -73,7 +119,7 @@ function StoreSessionFixture() {
     return () => {
       window.parent.postMessage = original
     }
-  }, [customer])
+  }, [customer, cart])
   React.useEffect(() => {
     if (customer === "guest") window.dispatchEvent(new Event("focus"))
   }, [customer])
@@ -235,5 +281,197 @@ export const Setup: Story = {
       "href",
       "https://fixture.myshopify.com/admin/themes/current/editor?context=apps"
     )
+  },
+}
+
+let cartReceipt: Record<string, unknown> | null = null
+const cartHandlers = [
+  handlers[0],
+  http.get("*/api/build-public/:channel/conversation/:conversation", () =>
+    HttpResponse.json({
+      data: [
+        cartReceipt
+          ? {
+              id: "cart-result",
+              direction: "outbound",
+              text: "Here is your current cart.",
+              metadata: {
+                shopifyCart: cartSnapshot,
+                completedContinuationId: "cart-continuation-1234",
+              },
+            }
+          : {
+              id: "cart-request",
+              direction: "outbound",
+              text: "Apply this change to your cart.",
+              metadata: {
+                continuations: [
+                  {
+                    type: "client_action",
+                    actionId: "update-cart",
+                    continuationId: "cart-continuation-1234",
+                    eventName: "Update cart",
+                    title: "Add board wax",
+                    input: {
+                      operation: "add",
+                      items: [{ variantId: "123", quantity: 2 }],
+                    },
+                    shopifyCart: {
+                      command: {
+                        operation: "add",
+                        items: [{ variantId: "123", quantity: 2 }],
+                      },
+                      expiresAt: Date.now() + 60_000,
+                    },
+                  },
+                ],
+              },
+            },
+      ],
+    })
+  ),
+  http.post(
+    "*/api/build-public/:channel/conversation/:conversation",
+    async ({ request }) => {
+      cartReceipt = (await request.json()) as Record<string, unknown>
+      return HttpResponse.json({ data: { status: "queued" } })
+    }
+  ),
+]
+
+export const StorefrontCart: Story = {
+  beforeEach: () => {
+    cartReceipt = null
+  },
+  render: () => <StoreSessionFixture cart />,
+  parameters: {
+    viewport: { defaultViewport: "mobile1" },
+    msw: {
+      handlers: cartHandlers,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const update = await canvas.findByRole("button", { name: "Update cart" })
+    const composer = canvas.getByRole("textbox", { name: "Message" })
+    await userEvent.type(composer, "Keep my unfinished question")
+    await userEvent.click(update)
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("region", { name: "Shopping cart" })
+      ).toBeVisible()
+    )
+    await waitFor(() => {
+      for (const message of canvasElement.querySelectorAll(
+        "[data-chat-message]"
+      ))
+        expect(getComputedStyle(message).opacity).toBe("1")
+    })
+    await expect(composer).toHaveValue("Keep my unfinished question")
+    await expect(canvas.getByText("Board wax")).toBeVisible()
+    await expect(
+      canvas.getByRole("link", { name: "Checkout" })
+    ).toHaveAttribute("href", "https://store.example/checkout")
+    await expect(cartReceipt).toMatchObject({
+      metadata: {
+        widgetInteraction: {
+          actionId: "update-cart",
+          continuationId: "cart-continuation-1234",
+          input: {
+            cartResult: { status: "completed", cart: { totalPrice: 5000 } },
+          },
+        },
+      },
+    })
+  },
+}
+
+export const EmptyCart: Story = {
+  render: () => <StoreSessionFixture />,
+  parameters: {
+    msw: {
+      handlers: [
+        handlers[0],
+        http.get("*/api/build-public/:channel/conversation/:conversation", () =>
+          HttpResponse.json({
+            data: [
+              {
+                id: "empty-cart",
+                direction: "outbound",
+                text: "Your cart is empty.",
+                metadata: {
+                  shopifyCart: {
+                    ...cartSnapshot,
+                    totalPrice: 0,
+                    itemCount: 0,
+                    items: [],
+                  },
+                },
+              },
+            ],
+          })
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const cart = within(
+      await canvas.findByRole("region", { name: "Shopping cart" })
+    )
+    await waitFor(() =>
+      expect(cart.getByText("Your cart is empty.")).toBeVisible()
+    )
+    await expect(
+      cart.queryByRole("link", { name: "Checkout" })
+    ).not.toBeInTheDocument()
+    await userEvent.click(cart.getByRole("heading"))
+    await userEvent.tab()
+    await expect(cart.getByRole("link", { name: "Edit cart" })).toHaveFocus()
+    await waitFor(() =>
+      expect(
+        getComputedStyle(canvasElement.querySelector("article")!).opacity
+      ).toBe("1")
+    )
+  },
+}
+
+export const CartReceiptFailure: Story = {
+  ...StorefrontCart,
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(
+          "*/api/build-public/:channel/conversation/:conversation",
+          () =>
+            HttpResponse.json(
+              {
+                error: {
+                  message:
+                    "Connection interrupted. Check your cart before trying again.",
+                },
+              },
+              { status: 503 }
+            )
+        ),
+        ...cartHandlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const update = await canvas.findByRole("button", { name: "Update cart" })
+    const composer = canvas.getByRole("textbox", { name: "Message" })
+    await userEvent.type(composer, "Keep my unfinished question")
+    await userEvent.click(update)
+    await expect(
+      canvas.findByText(
+        "Connection interrupted. Check your cart before trying again."
+      )
+    ).resolves.toBeVisible()
+    await expect(composer).toHaveValue("Keep my unfinished question")
+    await expect(update).toBeEnabled()
+    await expect(cartReceipt).toBeNull()
+    await waitFor(() => expect(canvas.getAllByRole("article")).toHaveLength(1))
   },
 }

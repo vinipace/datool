@@ -8,17 +8,32 @@ import { ChatNavigationContext } from "./chat-navigation-context"
 export function ChatLink({
   href,
   children,
-}: React.PropsWithChildren<{ href?: string }>) {
+  onClick,
+  ...props
+}: React.ComponentPropsWithRef<"a">) {
   const navigation = React.useContext(ChatNavigationContext)
-  if (!href) return <a>{children}</a>
-  if (!navigation) return <a href={href}>{children}</a>
+  if (!href)
+    return (
+      <a {...props} onClick={onClick}>
+        {children}
+      </a>
+    )
+  if (!navigation)
+    return (
+      <a {...props} href={href} onClick={onClick}>
+        {children}
+      </a>
+    )
   return (
     <a
+      {...props}
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(event) => {
+        onClick?.(event)
         if (
+          !event.defaultPrevented &&
           event.button === 0 &&
           !event.metaKey &&
           !event.ctrlKey &&

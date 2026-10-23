@@ -13,7 +13,13 @@ import {
   closeTracerDatabase,
 } from "@/src/server/tracer/db"
 import { createBuildContext } from "@/src/server/build/context"
-import { createAgent } from "@/src/server/build/agents"
+import { composioUserId } from "@/src/server/build/integrations/provider"
+import { Session } from "@shopify/shopify-api"
+import { encryptProviderKey } from "@/src/server/model-providers/secrets"
+import { saveAction, saveProcedure } from "@/src/server/build/definitions"
+import { runAgentTurn } from "@/src/server/build/runtime"
+import { shopifyCartTools } from "@/src/server/build/integrations/shopify-cart"
+import { createAgent, updateAgent } from "@/src/server/build/agents"
 import { ConversationService } from "@/src/server/build/conversations"
 import { shopifyShopper } from "@/src/server/build/integrations/shopify-identity"
 import { claimShopifyInvitation } from "@/src/server/build/integrations/shopify-invitations"
@@ -21,6 +27,7 @@ import {
   createChannelConnection,
   createPublicSession,
   enqueuePublicMessage,
+  enqueueAgentTurnResult,
   readPublicConversation,
   PublicAdmissionRateLimitError,
   updateChannelConnection,
@@ -121,7 +128,7 @@ async function fixture(
   }
   const session = (customer: string, body: unknown = {}) =>
     shopifyStorefrontSession(context, channel.id, request(customer), body)
-  return { context, database, channel, session, request, connectionId }
+  return { context, database, channel, session, request, connectionId, agent }
 }
 
 test("commerce authorization uses admitted Shopify identity and rejects forged metadata, wrong stores and revoked sessions", async () => {
@@ -541,3 +548,256 @@ test("Turnstile requires provider verification, correct hostname, action and dep
     globalThis.fetch = original
   }
 })
+
+for (const flow of ["model", "procedure"])
+  test(`native cart actions preserve merchant approval and deliver a one-shot browser result to the storefront (${flow})`, async () => {
+    const f = await fixture({})
+    const providerSession = new Session({
+      id: "offline_fixture",
+      shop: "fixture.myshopify.com",
+      state: "",
+      isOnline: false,
+      scope: "read_products,read_legal_policies,write_app_proxy",
+      accessToken: "private-fixture-token",
+      expires: new Date(Date.now() + 3600000),
+    })
+    const encrypted = encryptProviderKey(
+      JSON.stringify(providerSession.toPropertyArray()),
+      f.context.projectId,
+      `shopify:${f.connectionId}`
+    )
+    await f.database.execute(
+      sql`UPDATE build_shopify_connections SET session_encrypted=${encrypted} WHERE connection_id=${f.connectionId}::uuid`
+    )
+    await f.database.execute(
+      sql`UPDATE build_app_connections SET provider_user_id=${composioUserId(f.context.organizationId!, f.context.projectId)} WHERE id=${f.connectionId}::uuid`
+    )
+    const action = await saveAction(f.context, f.agent.id, {
+      slug: "update-cart",
+      definition: {
+        type: "integration",
+        name: "Update cart",
+        connectionId: f.connectionId,
+        toolSlug: "SHOPIFY_UPDATE_CART",
+        channels: ["web"],
+        inputSchema: shopifyCartTools.find(
+          (tool) => tool.slug === "SHOPIFY_UPDATE_CART"
+        )!.inputSchema,
+        shopifySettings: { requireHumanApproval: true },
+      },
+    })
+    const nativeInput = {
+      operation: "add",
+      items: [{ variantId: "123", quantity: 2 }],
+    }
+    if (flow === "procedure")
+      await saveProcedure(f.context, f.agent.id, {
+        slug: "cart-flow",
+        definition: {
+          name: "Cart flow",
+          trigger: { type: "keyword", value: "Update cart" },
+          steps: [
+            {
+              id: "cart",
+              kind: "action",
+              actionId: action.id,
+              input: nativeInput,
+            },
+            {
+              id: "next",
+              kind: "message",
+              content: "Continue to checkout when you are ready.",
+            },
+          ],
+        },
+      })
+    const agent = await updateAgent(f.context, f.agent.id, {
+      expectedRevision: 1,
+      apply: true,
+      configuration: {
+        ...f.agent.configuration,
+        model: "test-model",
+        channelAllowlist: ["web"],
+      },
+    })
+    const session = await f.session("")
+    const dependencies = {
+      generateText: (async (options: {
+        tools: Record<
+          string,
+          {
+            execute: (
+              input: unknown,
+              context: { toolCallId: string }
+            ) => Promise<unknown>
+          }
+        >
+      }) => {
+        await options.tools[action.id].execute(nativeInput, {
+          toolCallId: "cart-call",
+        })
+        return {
+          text: "Review your cart request.",
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        }
+      }) as never,
+    }
+    async function admittedTurn(metadata: Record<string, unknown> = {}) {
+      const queued = await enqueuePublicMessage(
+        f.context,
+        f.channel.id,
+        session.conversationId,
+        session.visitorToken,
+        {
+          text: "Update cart",
+          origin: "https://chat.example.test",
+          metadata,
+        }
+      )
+      if (!("messageId" in queued))
+        throw new Error("Expected admitted customer message")
+      const jobs = await f.database.execute<{ id: string }>(
+        sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
+      )
+      return {
+        agentId: f.agent.id,
+        channel: "web" as const,
+        conversationId: session.conversationId,
+        requestKey: `channel:${jobs.rows[0].id}`,
+        message: "Update cart",
+        metadata: metadata as never,
+      }
+    }
+    const pending = await runAgentTurn(
+      f.context,
+      await admittedTurn({ shopifyCartApproved: true }),
+      { agent, dependencies }
+    )
+    expect(pending.continuations[0]?.type).toBe("approval_required")
+    const approvalId = pending.continuations[0].continuationId
+    if (!approvalId) throw new Error("Expected approval capability")
+    const approved = await runAgentTurn(
+      f.context,
+      {
+        agentId: f.agent.id,
+        channel: "web",
+        conversationId: session.conversationId,
+        requestKey: "trusted-cart-approval",
+        message: "Approve cart request",
+        metadata: {
+          widgetInteraction: {
+            actionId: action.id,
+            continuationId: approvalId,
+            input: { operation: "set", quantity: 99 },
+          },
+        },
+      },
+      {
+        agent,
+        dependencies,
+        trustedApproval: {
+          actionId: action.id,
+          continuationId: approvalId,
+        },
+      }
+    )
+    expect(approved.continuations[0]).toMatchObject({
+      type: "client_action",
+      shopifyCart: { command: nativeInput },
+    })
+    await enqueueAgentTurnResult(f.context, approved, "cart-prompt")
+    const browserMessages = await readPublicConversation(
+      f.context,
+      f.channel.id,
+      session.conversationId,
+      session.visitorToken,
+      "https://chat.example.test"
+    )
+    const publicContinuations = browserMessages.at(-1)?.metadata.continuations
+    if (!Array.isArray(publicContinuations))
+      throw new Error("Expected public cart control")
+    expect(publicContinuations[0]).toMatchObject({
+      shopifyCart: { command: nativeInput },
+    })
+    const cart = {
+      currency: "BRL",
+      totalPrice: 5000,
+      itemCount: 2,
+      items: [
+        {
+          lineKey: "123:line",
+          variantId: "123",
+          title: "Board wax",
+          quantity: 2,
+          finalLinePrice: 5000,
+          url: "https://fixture.myshopify.com/products/wax",
+        },
+      ],
+      truncated: false,
+      cartUrl: "https://fixture.myshopify.com/cart",
+      checkoutUrl: "https://fixture.myshopify.com/checkout",
+    }
+    const interaction = {
+      widgetInteraction: {
+        actionId: action.id,
+        continuationId: approved.continuations[0].continuationId,
+        input: {
+          cartResult: { status: "completed", cart },
+          operation: "set",
+          quantity: 99,
+        },
+      },
+    }
+    const result = await runAgentTurn(
+      f.context,
+      await admittedTurn(interaction),
+      { agent, dependencies }
+    )
+    expect(result.status).toBe("completed")
+    expect(result.continuations).toEqual([])
+    if (flow === "procedure")
+      expect(result.text).toContain("Continue to checkout")
+    expect(result.message?.metadata.shopifyCart).toEqual(cart)
+    await enqueueAgentTurnResult(f.context, result, "cart-result")
+    const publicMessages = await readPublicConversation(
+      f.context,
+      f.channel.id,
+      session.conversationId,
+      session.visitorToken,
+      "https://chat.example.test"
+    )
+    expect(publicMessages.at(-1)?.metadata.shopifyCart).toEqual(cart)
+    if (flow === "model") {
+      let nextMessages: Array<{ role: string; content: string }> = []
+      await runAgentTurn(f.context, await admittedTurn(), {
+        agent,
+        dependencies: {
+          generateText: (async (options: { messages: typeof nextMessages }) => {
+            nextMessages = options.messages
+            return {
+              text: "I can help with that cart.",
+              usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            }
+          }) as never,
+        },
+      })
+      // The next model turn needs the line key to remove/update the item the shopper just shared.
+      expect(
+        nextMessages.find(
+          (message) =>
+            message.role === "assistant" && message.content.includes("123:line")
+        )?.content
+      ).toContain("Board wax")
+    }
+    const usage = await f.database.execute<{ status: string }>(
+      sql`SELECT status FROM build_usage_event WHERE connection_id=${f.connectionId}::uuid`
+    )
+    expect(usage.rows).toEqual([{ status: "completed" }])
+    await assert.rejects(
+      runAgentTurn(f.context, await admittedTurn(interaction), {
+        agent,
+        dependencies,
+      }),
+      /no longer available/
+    )
+  }, 60_000)
