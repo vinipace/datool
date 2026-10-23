@@ -20,18 +20,9 @@ export const shopifyTools = [
   ...shopifyReturnReadTools,
   ...shopifyReturnTools,
   ...shopifyReturnStatusTools,
-  // Separate replacement orders remain unavailable until settlement is implemented.
 ]
 
 export const shopifyToolScopes: Record<string, string[]> = {
-  SHOPIFY_CREATE_EXCHANGE_ORDER: [
-    "write_draft_orders",
-    "read_payment_terms",
-    "read_products",
-    "read_returns",
-    "read_orders",
-    "read_customers",
-  ],
   SHOPIFY_GET_CART: [],
   SHOPIFY_UPDATE_CART: [],
   SHOPIFY_GET_ORDERS: ["read_orders", "read_customers"],

@@ -22,10 +22,6 @@ import {
   shopifyReturnSummary,
 } from "@/src/lib/build/shopify-return"
 import { ShopifyCartView } from "./shopify-cart"
-import {
-  shopifyExchangeOrderQuoteSchema,
-  shopifyExchangeOrderSummary,
-} from "@/src/lib/build/shopify-exchange-order"
 import { CodeWidgetFrame } from "./code-widget-frame"
 
 type ChatMessage = InspectorMessage
@@ -98,9 +94,6 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
   )
   const returnQuote = shopifyReturnQuoteSchema.safeParse(
     continuation?.shopifyReturnQuote
-  )
-  const exchangeQuote = shopifyExchangeOrderQuoteSchema.safeParse(
-    continuation?.shopifyExchangeOrderQuote
   )
   const reverify = continuation?.eventName === "Continue approved change"
   let cartSummary: string | null = null
@@ -178,15 +171,13 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
                   ? shopifyOrderSummary(orderQuote.data)
                   : returnQuote.success
                     ? shopifyReturnSummary(returnQuote.data)
-                    : exchangeQuote.success
-                      ? shopifyExchangeOrderSummary(exchangeQuote.data)
-                      : (cartSummary ??
-                        Object.entries(record(continuation.input) ?? {})
-                          .map(
-                            ([key, value]) =>
-                              `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
-                          )
-                          .join("\n")),
+                    : (cartSummary ??
+                      Object.entries(record(continuation.input) ?? {})
+                        .map(
+                          ([key, value]) =>
+                            `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
+                        )
+                        .join("\n")),
               },
             ]
           : []),

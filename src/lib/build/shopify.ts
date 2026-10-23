@@ -29,19 +29,8 @@ const confirmationActions = new Set([
   "SHOPIFY_ACTIVATE_ACCOUNT",
   "SHOPIFY_CREATE_ORDER",
   "SHOPIFY_RETURN_OR_EXCHANGE",
-  "SHOPIFY_CREATE_EXCHANGE_ORDER",
 ])
 
 export function shopifyActionNeedsConfirmation(slug: string) {
   return confirmationActions.has(slug)
-}
-
-export function shopifyActionNeedsHuman(
-  slug: string,
-  settings?: ShopifyActionSettings
-) {
-  return (
-    slug === "SHOPIFY_CREATE_EXCHANGE_ORDER" ||
-    Boolean(settings?.requireHumanApproval)
-  )
 }

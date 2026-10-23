@@ -12,10 +12,6 @@ export function shopifyReturnFixture() {
     currency: "USD",
     returnedPrice: "19.99",
     replacementPrice: "20.00",
-    replacementOrderSubtotal: "25.00",
-    replacementOrderTax: "2.50",
-    replacementOrderTotals: { free: "27.50", paid: "32.50" },
-    replacementOrderCurrency: "USD",
     transferAmount: "19.7",
     outstanding: "0.4",
     direction: "RefundReturnOutcome",
@@ -156,74 +152,6 @@ export function shopifyReturnFixture() {
   const graphql: ShopifyGraphqlClient = async (query, options) => {
     const variables = options?.variables ?? {}
     calls.push({ query, variables })
-    if (query.includes("DatoolOrderVariants"))
-      return Response.json({
-        data: {
-          nodes: [
-            {
-              id: "gid://shopify/ProductVariant/60",
-              title: "Large",
-              availableForSale: true,
-              inventoryQuantity: state.stock,
-              inventoryPolicy: "DENY",
-              inventoryItem: { tracked: true, requiresShipping: true },
-              product: {
-                title: "Replacement wax",
-                status: "ACTIVE",
-                publishedAt: "2020-01-01T00:00:00Z",
-                requiresSellingPlan: false,
-              },
-            },
-          ],
-          shop: { currencyCode: state.replacementOrderCurrency },
-          paymentTermsTemplates: [],
-        },
-      })
-    if (query.includes("DatoolCalculateOrder")) {
-      const input = variables.input as {
-        shippingLine?: { shippingRateHandle?: string }
-      }
-      const paidShipping = input.shippingLine?.shippingRateHandle === "ground"
-      const orderBag = (amount: string) => ({
-        presentmentMoney: {
-          amount,
-          currencyCode: state.replacementOrderCurrency,
-        },
-      })
-      return Response.json({
-        data: {
-          draftOrderCalculate: {
-            userErrors: [],
-            calculatedDraftOrder: {
-              subtotalPriceSet: orderBag(state.replacementOrderSubtotal),
-              totalShippingPriceSet: orderBag(paidShipping ? "5.00" : "0.00"),
-              totalTaxSet: orderBag(state.replacementOrderTax),
-              totalPriceSet: orderBag(
-                state.replacementOrderTotals[paidShipping ? "paid" : "free"]
-              ),
-              availableShippingRates: [
-                {
-                  handle: "ground",
-                  title: "Ground",
-                  price: {
-                    amount: "5.00",
-                    currencyCode: state.replacementOrderCurrency,
-                  },
-                },
-              ],
-              lineItems: [
-                {
-                  title: "Replacement wax",
-                  variantTitle: "Large",
-                  quantity: 1,
-                },
-              ],
-              transformerFingerprint: null,
-            },
-          },
-        },
-      })
-    }
     if (query.includes("DatoolExchangeFulfillment")) {
       const match = returned()
       const exchangeLines = match.exchangeLineItems.nodes.map((line, i) => ({

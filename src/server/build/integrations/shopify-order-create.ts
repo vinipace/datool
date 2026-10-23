@@ -123,8 +123,7 @@ export async function prepareShopifyOrder(
   shopper: ShopifyShopper,
   settings: ShopifyActionSettings,
   graphql: ShopifyGraphqlClient,
-  operationId: string = randomUUID(),
-  delivery: { freeShipping?: boolean } = {}
+  operationId: string = randomUUID()
 ) {
   const args = shopifyOrderInputSchema.parse(input)
   if (!args.items?.length)
@@ -249,8 +248,7 @@ export async function prepareShopifyOrder(
       title: "Merchant-authorized free order",
     }
   }
-  const freeShipping =
-    settings.paymentMethod === "free" || delivery.freeShipping === true
+  const freeShipping = settings.paymentMethod === "free"
   if (freeShipping && needsShipping)
     draftInput.shippingLine = {
       title: "Free delivery",

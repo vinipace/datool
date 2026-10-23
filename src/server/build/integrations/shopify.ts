@@ -37,11 +37,6 @@ import {
 } from "@/src/lib/build/shopify-return"
 import { prepareShopifyReturnContinuation } from "./shopify-return-resume"
 import { prepareShopifyReturn } from "./shopify-return-quote"
-import { prepareShopifyExchangeOrder } from "./shopify-exchange-order"
-import {
-  shopifyExchangeOrderQuoteSchema,
-  type ShopifyExchangeOrderQuote,
-} from "@/src/lib/build/shopify-exchange-order"
 import { processShopifyReturn } from "./shopify-return-process"
 import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
 import { ShopifyOperationStore } from "./shopify-operation-store"
@@ -370,8 +365,6 @@ export async function executeShopifyTool(
     returnQuote?: ShopifyReturnQuote
     prepareOrder?: boolean
     orderQuote?: ShopifyOrderQuote
-    prepareExchangeOrder?: boolean
-    exchangeOrderQuote?: ShopifyExchangeOrderQuote
     recordDraft?: (id: string) => Promise<void>
     settings?: ShopifyActionSettings
   }
@@ -405,11 +398,7 @@ export async function executeShopifyTool(
     shopifyActionNeedsConfirmation(slug) &&
     !execution?.confirmed &&
     !(slug === "SHOPIFY_CREATE_ORDER" && execution?.prepareOrder) &&
-    !(slug === "SHOPIFY_RETURN_OR_EXCHANGE" && execution?.prepareReturn) &&
-    !(
-      slug === "SHOPIFY_CREATE_EXCHANGE_ORDER" &&
-      execution?.prepareExchangeOrder
-    )
+    !(slug === "SHOPIFY_RETURN_OR_EXCHANGE" && execution?.prepareReturn)
   )
     throw new TracerError(
       "VALIDATION_ERROR",
@@ -479,51 +468,6 @@ export async function executeShopifyTool(
         )
       }
 
-      if (slug === "SHOPIFY_CREATE_EXCHANGE_ORDER") {
-        const settings = shopifyActionSettingsSchema.parse(
-          execution.settings ?? {}
-        )
-        if (execution.prepareExchangeOrder)
-          return {
-            exchangeOrderQuote: await prepareShopifyExchangeOrder(
-              args,
-              shopper,
-              settings,
-              graphql
-            ),
-          }
-        if (!execution.exchangeOrderQuote)
-          throw new TracerError(
-            "VALIDATION_ERROR",
-            "Review the calculated replacement exchange before approving it."
-          )
-        const quote = shopifyExchangeOrderQuoteSchema.parse(
-          execution.exchangeOrderQuote
-        )
-        if (quote.returned.customerId !== shopper.customerId)
-          throw new TracerError(
-            "VALIDATION_ERROR",
-            "Your customer account changed. Review the exchange again."
-          )
-        const current = await prepareShopifyExchangeOrder(
-          quote.input,
-          shopper,
-          settings,
-          graphql,
-          quote.operationId
-        )
-        if (
-          quote.expiresAt <= Date.now() ||
-          quote.fingerprint !== current.fingerprint
-        )
-          return { status: "quote_changed" as const, quote: current }
-        // This draft release implements the review flow, not the separate-order
-        // financial transfer. Never report a quote or approval as a placed exchange.
-        throw new TracerError(
-          "VALIDATION_ERROR",
-          "Replacement-order settlement is not available yet. No return, refund or replacement order was created."
-        )
-      }
       if (slug === "SHOPIFY_RETURN_OR_EXCHANGE") {
         const settings = shopifyActionSettingsSchema.parse(
           execution.settings ?? {}

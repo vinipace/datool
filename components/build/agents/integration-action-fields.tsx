@@ -178,34 +178,27 @@ export function IntegrationActionFields({
           )}
           {selected?.toolkit === "shopify_native" && draft.toolSlug && (
             <>
-              {draft.toolSlug === "SHOPIFY_CREATE_EXCHANGE_ORDER" ? (
-                <Notice title="Teammate approval is always required">
-                  Preview only: replacement exchanges can be quoted but cannot
-                  be placed yet.
-                </Notice>
-              ) : (
-                <FormRow
-                  label="Require teammate approval"
-                  htmlFor="shopify-human-approval"
-                  description="Pause this action until a teammate approves it in Inbox."
-                  layout="vertical"
-                  variant="plain"
-                >
-                  <Switch
-                    id="shopify-human-approval"
-                    checked={shopifySettings.requireHumanApproval}
-                    onCheckedChange={(requireHumanApproval) =>
-                      onChange({
-                        ...draft,
-                        shopifySettings: {
-                          ...shopifySettings,
-                          requireHumanApproval,
-                        },
-                      })
-                    }
-                  />
-                </FormRow>
-              )}
+              <FormRow
+                label="Require teammate approval"
+                htmlFor="shopify-human-approval"
+                description="Pause this action until a teammate approves it in Inbox."
+                layout="vertical"
+                variant="plain"
+              >
+                <Switch
+                  id="shopify-human-approval"
+                  checked={shopifySettings.requireHumanApproval}
+                  onCheckedChange={(requireHumanApproval) =>
+                    onChange({
+                      ...draft,
+                      shopifySettings: {
+                        ...shopifySettings,
+                        requireHumanApproval,
+                      },
+                    })
+                  }
+                />
+              </FormRow>
               {draft.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE" && (
                 <>
                   <FormRow
