@@ -3,8 +3,6 @@
 import * as React from "react"
 import { ArrowRight, Plus, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Card,
   CardHeader,
@@ -68,7 +66,6 @@ export function IntegrationsTab({
     { enabled: active }
   )
   const [appSlug, setAppSlug] = React.useState<string | null>(null)
-  const [shop, setShop] = React.useState("")
   const [disconnectId, setDisconnectId] = React.useState<string | null>(null)
   const disconnectTrigger = React.useRef<HTMLButtonElement | null>(null)
   const cancelDisconnectButton = React.useRef<HTMLButtonElement | null>(null)
@@ -136,7 +133,6 @@ export function IntegrationsTab({
         "build_connect_app",
         {
           toolkit: slug,
-          ...(app?.connectionMethod === "shopify" ? { shop } : {}),
         }
       )
       setAuthorization({ id: result.id, url: result.redirectUrl })
@@ -283,7 +279,6 @@ export function IntegrationsTab({
                     onClick={(event) => {
                       trigger.current = event.currentTarget
                       setAppSlug(item.slug)
-                      setShop("")
                       setError(null)
                       if (
                         !manage &&
@@ -370,40 +365,26 @@ export function IntegrationsTab({
                       connect an account.
                     </Notice>
                   ) : app.connectionMethod === "shopify" ? (
-                    <form
-                      className="space-y-3"
-                      onSubmit={(event) => {
-                        event.preventDefault()
-                        void connect(app.slug)
-                      }}
-                    >
-                      <div className="space-y-2">
-                        <Label htmlFor="shopify-store-domain">
-                          Store address
-                        </Label>
-                        <Input
-                          id="shopify-store-domain"
-                          autoComplete="off"
-                          placeholder="your-store.myshopify.com"
-                          value={shop}
-                          onChange={(event) => setShop(event.target.value)}
-                          disabled={busy}
-                          required
-                        />
-                      </div>
+                    <div className="space-y-3">
                       <p className="text-sm text-foreground-muted">
-                        Authorize read access to products and store policies in
-                        Shopify. Orders, customers and payments are not
-                        requested.
+                        Choose your store and authorize product and policy
+                        access in Shopify. Your existing Datool billing stays in
+                        place.
                       </p>
-                      <Button
-                        type="submit"
-                        loading={busy}
-                        disabled={!shop.trim() || busy}
-                      >
-                        Connect store
-                      </Button>
-                    </form>
+                      {authorization ? (
+                        <Button asChild>
+                          <a href={authorization.url}>Continue to Shopify</a>
+                        </Button>
+                      ) : (
+                        <Button
+                          loading={busy}
+                          disabled={busy}
+                          onClick={() => void connect(app.slug)}
+                        >
+                          Connect store
+                        </Button>
+                      )}
+                    </div>
                   ) : null}
                   <div className="flex items-center justify-between gap-3">
                     <h3

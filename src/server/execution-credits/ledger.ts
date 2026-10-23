@@ -15,9 +15,10 @@ export class ExecutionCreditError extends Error {
     super(message)
   }
 }
-export type PaidPeriod = {
+export type SubscriptionCreditPeriod = {
   organizationId: string
   subscriptionId: string
+  // Stripe invoice ID or a namespaced Shopify billing-cycle key.
   invoiceId: string
   start: Date
   end: Date
@@ -39,8 +40,8 @@ export class ExecutionCreditStore {
       client.release()
     }
   }
-  /** Called only with an authoritative paid, non-prorated recurring invoice. */
-  async grant(period: PaidPeriod, client?: PoolClient) {
+  /** Provider-verified recurring allowance; the durable cycle key makes retries idempotent. */
+  async grant(period: SubscriptionCreditPeriod, client?: PoolClient) {
     const apply = async (connection: PoolClient) => {
       const result = await connection.query(
         `INSERT INTO execution_credit_period(id,organization_id,subscription_id,invoice_id,period_start,period_end,plan,allowance)

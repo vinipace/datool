@@ -77,7 +77,8 @@ export async function listAppConnections(
         slug: SHOPIFY_TOOLKIT,
         name: "Shopify",
         connectionMethod: "shopify",
-        available: shopifyConfigured(),
+        available:
+          shopifyConfigured() && Boolean(process.env.DATOOL_SHOPIFY_APP_HANDLE),
       },
       ...Object.entries(config).map(([slug, app]) => ({
         slug,

@@ -19,6 +19,8 @@ import {
 } from "@/src/lib/billing"
 
 type Status = {
+  provider?: "stripe" | "shopify"
+  shop?: string | null
   status: string
   plan: CloudPlan | null
   active: boolean
@@ -79,7 +81,7 @@ export function BillingPage({
       setError(
         error instanceof Error
           ? error.message
-          : "Unable to open Stripe. Try again."
+          : "Unable to open billing. Try again."
       )
       setBusy(null)
     }
@@ -103,8 +105,9 @@ export function BillingPage({
       ) : null}
       {checkout === "success" && status && !status.active ? (
         <Notice variant="info">
-          We’re confirming your subscription with Stripe. This page updates
-          automatically; you don’t need to pay again.
+          We’re confirming your subscription with{" "}
+          {status.provider === "shopify" ? "Shopify" : "Stripe"}. This page
+          updates automatically; you don’t need to pay again.
         </Notice>
       ) : null}
       {loading && !status ? (
@@ -226,11 +229,27 @@ export function BillingPage({
           </p>
         </section>
       ) : null}
+      {status?.provider === "shopify" ? (
+        <Notice>
+          Billing is managed through Shopify for {status.shop}. Your plan and
+          any changes are confirmed in Shopify.
+        </Notice>
+      ) : null}
       {!canManage ? (
         <Notice>
           Only organization owners and admins can start or manage a
           subscription.
         </Notice>
+      ) : status?.provider === "shopify" ? (
+        <Button
+          loading={busy === "portal"}
+          disabled={!!busy || loading}
+          onClick={() => void open("portal")}
+        >
+          {status.active
+            ? "Manage plan in Shopify"
+            : "Choose a plan in Shopify"}
+        </Button>
       ) : (
         <>
           {status &&
@@ -314,12 +333,14 @@ export function BillingPage({
         </Button>
       ) : null}
       <div className="flex flex-wrap gap-4 text-sm">
-        <Link
-          className="text-foreground-muted hover:text-foreground"
-          href="/pricing"
-        >
-          View pricing
-        </Link>
+        {status && status.provider !== "shopify" ? (
+          <Link
+            className="text-foreground-muted hover:text-foreground"
+            href="/pricing"
+          >
+            View pricing
+          </Link>
+        ) : null}
         <Link
           className="text-foreground-muted hover:text-foreground"
           href={`/?${new URLSearchParams({ returnTo: billingPath(plan) })}`}

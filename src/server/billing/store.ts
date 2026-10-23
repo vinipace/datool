@@ -1,3 +1,4 @@
+import { shopifyPricingUrl, syncShopifyBilling } from "./shopify"
 import { syncExecutionGrant } from "@/src/server/execution-credits/grants"
 import {
   emitProductEvent,
@@ -23,6 +24,10 @@ import {
 
 export type BillingRow = {
   organization_id: string
+  provider: "stripe" | "shopify"
+  shopify_shop: string | null
+  shopify_shop_id: string | null
+  shopify_client_id: string | null
   customer_id: string | null
   subscription_id: string | null
   price_id: string | null
@@ -48,16 +53,16 @@ type BillingAction<T> = (client: PoolClient, row: BillingRow) => Promise<T>
 
 /** Session locks serialize Stripe requests, while each database write is durable
  * before the next network call. Stable attempt IDs survive timeouts and retries. */
-async function locked<T>(
+export async function withBillingLock<T>(
   organizationId: string,
   action: BillingAction<T>
 ): Promise<T>
-async function locked<T>(
+export async function withBillingLock<T>(
   organizationId: string,
   action: BillingAction<T>,
   skipLocked: true
 ): Promise<T | undefined>
-async function locked<T>(
+export async function withBillingLock<T>(
   organizationId: string,
   action: BillingAction<T>,
   skipLocked = false
@@ -104,10 +109,22 @@ async function locked<T>(
 export function hasSubscriptionAccess(
   row:
     | (Pick<BillingRow, "status" | "current_period_end" | "price_id"> &
-        Partial<Pick<BillingRow, "grace_until">>)
+        Partial<
+          Pick<BillingRow, "grace_until" | "provider" | "plan" | "access_until">
+        >)
     | null,
   now = Date.now()
 ) {
+  if (row?.provider === "shopify")
+    return (
+      !!row.plan &&
+      ["core", "pro"].includes(row.plan) &&
+      ["active", "trialing"].includes(row.status) &&
+      !!row.access_until &&
+      row.access_until.getTime() > now &&
+      !!row.current_period_end &&
+      row.current_period_end.getTime() > now
+    )
   return (
     !!row &&
     Object.values(billingConfig().prices).includes(row.price_id ?? "") &&
@@ -167,6 +184,7 @@ async function paymentRecovery(subscription: Stripe.Subscription | undefined) {
 }
 
 async function sync(client: PoolClient, row: BillingRow) {
+  if (row.provider === "shopify") return syncShopifyBilling(client, row)
   if (!row.customer_id) return row
   const subscriptions: Stripe.Subscription[] = []
   for await (const subscription of getStripe().subscriptions.list({
@@ -258,10 +276,14 @@ async function sync(client: PoolClient, row: BillingRow) {
  * Busy organizations are skipped, so background work cannot queue behind them. */
 export async function reconcileBillingOrganization(organizationId: string) {
   if (!billingEnabled()) return
-  return locked(
+  return withBillingLock(
     organizationId,
     async (client, row) => {
-      if (!row.customer_id || row.reconcile_after.getTime() > Date.now()) return
+      if (
+        (!row.customer_id && row.provider !== "shopify") ||
+        row.reconcile_after.getTime() > Date.now()
+      )
+        return
       try {
         await sync(client, row)
         return { status: "synced" as const }
@@ -284,13 +306,21 @@ export async function reconcileBillingOrganization(organizationId: string) {
   )
 }
 
-export async function getBilling(organizationId: string, refresh = false) {
+export async function readBilling(organizationId: string) {
   const result = await db.query<BillingRow>(
     "SELECT * FROM organization_billing WHERE organization_id=$1",
     [organizationId]
   )
-  const row = result.rows[0] ?? null
+  return result.rows[0] ?? null
+}
+
+export async function getBilling(organizationId: string, refresh = false) {
+  const row = await readBilling(organizationId)
   const needsSync = (value: BillingRow) =>
+    (value.provider === "shopify" &&
+      (!value.access_until ||
+        value.access_until.getTime() <= Date.now() ||
+        value.reconcile_after.getTime() <= Date.now())) ||
     !value.synced_at ||
     Date.now() - value.synced_at.getTime() > 300_000 ||
     (value.status === "past_due" &&
@@ -299,8 +329,12 @@ export async function getBilling(organizationId: string, refresh = false) {
     (["active", "trialing"].includes(value.status) &&
       !!value.current_period_end &&
       value.current_period_end.getTime() <= Date.now())
-  if (row?.customer_id && (refresh || needsSync(row)))
-    return locked(organizationId, (client, current) =>
+  if (
+    row &&
+    (row.customer_id || row.provider === "shopify") &&
+    (refresh || needsSync(row))
+  )
+    return withBillingLock(organizationId, (client, current) =>
       refresh || needsSync(current)
         ? sync(client, current)
         : Promise.resolve(current)
@@ -330,9 +364,10 @@ export async function createCheckout(
   plan: BillingPlan,
   email: string
 ) {
-  const config = billingConfig()
-  await cloudPrice(plan)
-  return locked(organizationId, async (client, row) => {
+  return withBillingLock(organizationId, async (client, row) => {
+    if (row.provider === "shopify") return shopifyPricingUrl(row.shopify_shop!)
+    const config = billingConfig()
+    await cloudPrice(plan)
     const stripe = getStripe()
     if (!row.customer_id) {
       const customer = await stripe.customers.create(
@@ -452,7 +487,8 @@ export async function createCheckout(
 }
 
 export async function createPortal(organizationId: string) {
-  const row = await getBilling(organizationId)
+  const row = await readBilling(organizationId)
+  if (row?.provider === "shopify") return shopifyPricingUrl(row.shopify_shop!)
   if (!row?.customer_id)
     throw new TracerError(
       "VALIDATION_ERROR",
@@ -482,36 +518,39 @@ export async function processBillingEvent(event: Stripe.Event) {
     typeof object.customer === "string" ? object.customer : object.customer?.id
   if (!customerId) return
   const mapping = await db.query<{ organization_id: string }>(
-    "SELECT organization_id FROM organization_billing WHERE customer_id=$1",
+    "SELECT organization_id FROM organization_billing WHERE customer_id=$1 AND provider='stripe'",
     [customerId]
   )
   if (!mapping.rows[0]) return
-  await locked(mapping.rows[0].organization_id, async (client, row) => {
-    const receipt = await client.query(
-      "SELECT event_id FROM billing_webhook_receipt WHERE event_id=$1",
-      [event.id]
-    )
-    if (receipt.rowCount) return
-    const current = await sync(client, row)
-    const productEvent = await subscriptionActivatedEvent(
-      client,
-      current,
-      event
-    )
-    await client.query(
-      "INSERT INTO billing_webhook_receipt(event_id) VALUES ($1) ON CONFLICT DO NOTHING",
-      [event.id]
-    )
-    if (productEvent) {
-      // Stripe can generate distinct Event IDs for the same invoice. Record the
-      // logical activation as well, using the existing billing receipt store.
+  await withBillingLock(
+    mapping.rows[0].organization_id,
+    async (client, row) => {
       const receipt = await client.query(
-        "INSERT INTO billing_webhook_receipt(event_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING event_id",
-        [`subscription.activated:${productEvent.subscriptionId}`]
+        "SELECT event_id FROM billing_webhook_receipt WHERE event_id=$1",
+        [event.id]
       )
-      if (receipt.rowCount) await emitProductEvent(productEvent)
+      if (receipt.rowCount) return
+      const current = await sync(client, row)
+      const productEvent = await subscriptionActivatedEvent(
+        client,
+        current,
+        event
+      )
+      await client.query(
+        "INSERT INTO billing_webhook_receipt(event_id) VALUES ($1) ON CONFLICT DO NOTHING",
+        [event.id]
+      )
+      if (productEvent) {
+        // Stripe can generate distinct Event IDs for the same invoice. Record the
+        // logical activation as well, using the existing billing receipt store.
+        const receipt = await client.query(
+          "INSERT INTO billing_webhook_receipt(event_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING event_id",
+          [`subscription.activated:${productEvent.subscriptionId}`]
+        )
+        if (receipt.rowCount) await emitProductEvent(productEvent)
+      }
     }
-  })
+  )
 }
 
 async function subscriptionActivatedEvent(

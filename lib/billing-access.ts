@@ -5,7 +5,11 @@ import { getBilling, hasSubscriptionAccess } from "@/src/server/billing/store"
 /** New organizations choose a plan; existing subscriptions keep payment recovery. */
 export const getBillingRedirect = cache(async (organizationId: string) => {
   if (!billingEnabled()) return null
-  const billing = await getBilling(organizationId)
+  // Keep the recovery page reachable during a payment-provider outage.
+  const billing = await getBilling(organizationId).catch(() => undefined)
+  if (billing === undefined) return "/billing"
   if (hasSubscriptionAccess(billing)) return null
-  return billing?.subscription_id ? "/billing" : "/pricing"
+  return billing?.provider === "shopify" || billing?.subscription_id
+    ? "/billing"
+    : "/pricing"
 })

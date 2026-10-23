@@ -221,6 +221,7 @@ jobs:
                 tests/organization-auth.test.ts tests/project-api-response.test.ts \
                 tests/ingestion-http.test.ts tests/ingestion-sequence.test.ts \
                 tests/execution-credits.test.ts tests/build-integrations.test.ts tests/build-shopify.test.ts \
+                tests/shopify-billing.test.ts \
                 tests/build-feature-gate.test.ts tests/build-api.test.ts \
                 tests/build-mcp.test.ts tests/build-organization-worker.test.ts
               bun run test:build:access

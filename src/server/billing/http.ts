@@ -44,11 +44,16 @@ export async function billingRequest(
         {
           status: row?.status ?? "none",
           active: hasSubscriptionAccess(row),
-          plan: row?.price_id
-            ? (Object.entries(billingConfig().prices).find(
-                ([, price]) => price === row.price_id
-              )?.[0] ?? null)
-            : null,
+          provider: row?.provider ?? "stripe",
+          shop: row?.shopify_shop ?? null,
+          plan:
+            row?.provider === "shopify"
+              ? row.plan
+              : row?.price_id
+                ? (Object.entries(billingConfig().prices).find(
+                    ([, price]) => price === row.price_id
+                  )?.[0] ?? null)
+                : null,
           currentPeriodEnd: row?.current_period_end?.toISOString() ?? null,
           cancelAtPeriodEnd: row?.cancel_at_period_end ?? false,
           hasCustomer: !!row?.customer_id,
