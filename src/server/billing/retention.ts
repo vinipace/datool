@@ -22,7 +22,7 @@ export async function expireCloudTraces(batchSize = 500) {
         SELECT t.id,t.project_id FROM traces t
         JOIN project p ON p.id=t.project_id
         JOIN organization_billing b ON b.organization_id=p.organization_id
-        WHERE b.customer_id IS NOT NULL
+        WHERE (b.customer_id IS NOT NULL OR b.provider='shopify')
           AND t.stored_at < now() - make_interval(days => b.retention_days)
           AND NOT EXISTS (SELECT 1 FROM eval_run_targets e WHERE e.project_id=t.project_id AND e.trace_id=t.id)
           AND NOT EXISTS (SELECT 1 FROM review_items r WHERE r.project_id=t.project_id AND r.trace_id=t.id)

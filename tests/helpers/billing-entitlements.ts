@@ -226,6 +226,30 @@ export async function verifyCloudEntitlements(
     ).rowCount,
     0
   )
+  // Shopify subscriptions have no Stripe customer id but the same retention.
+  const stripeCustomer = (await db.query(
+    "SELECT customer_id FROM organization_billing WHERE organization_id=$1",
+    [organizationId]
+  )).rows[0].customer_id
+  await db.query(
+    `UPDATE organization_billing SET provider='shopify',customer_id=NULL,
+      shopify_shop='retention.myshopify.com',shopify_shop_id='789',shopify_client_id='fixture'
+      WHERE organization_id=$1`, [organizationId]
+  )
+  await db.query(
+    `INSERT INTO traces(id,project_id,name,operation,status,started_at,stored_at)
+      VALUES('shopify-expired',$1,'Old Shopify trace','test','completed',now()::text,now()-interval '400 days')`,
+    [projectId]
+  )
+  assert.equal(await expireCloudTraces(), 1, "Shopify-only subscriptions expire old traces without a Stripe customer id")
+  assert.equal((await db.query("SELECT id FROM traces WHERE id='shopify-expired'")).rowCount, 0)
+  assert.equal((await db.query("SELECT id FROM traces WHERE id=$1", [pinned.id])).rowCount, 1, "Pinned evidence keeps its separate retention lifecycle")
+  await db.query(
+    `UPDATE organization_billing SET provider='stripe',customer_id=$2,
+      shopify_shop=NULL,shopify_shop_id=NULL,shopify_client_id=NULL WHERE organization_id=$1`,
+    [organizationId, stripeCustomer]
+  )
+
   await db.query(
     "UPDATE organization_billing SET status='past_due',access_until=now()-interval '1 second',grace_until=now()-interval '1 second' WHERE organization_id=$1",
     [organizationId]
