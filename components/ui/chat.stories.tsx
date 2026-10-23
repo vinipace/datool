@@ -64,6 +64,39 @@ export const Compose: Story = {
   },
 }
 
+export const ShopifyConfirmation: Story = {
+  args: {
+    messages: [
+      {
+        role: "assistant",
+        content: "Review this change.",
+        toolCalls: [],
+        metadata: {
+          continuations: [
+            {
+              type: "client_action",
+              actionId: "profile",
+              continuationId: "one-shot-confirmation",
+              eventName: "Confirm changes",
+              title: "Update profile",
+              input: { firstName: "Alice", email: "alice@example.test" },
+            },
+          ],
+        },
+      },
+    ],
+    onWidgetInteraction: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText(/first Name: Alice/)).toBeVisible()
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Confirm changes" })
+    )
+    await expect(args.onWidgetInteraction).toHaveBeenCalledOnce()
+  },
+}
+
 export const Waiting: Story = {
   args: {
     messages: [{ role: "user", content: "Hello", toolCalls: [] }],

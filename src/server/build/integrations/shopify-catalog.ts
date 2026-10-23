@@ -27,10 +27,10 @@ export const PRODUCTS_QUERY = `#graphql
   query DatoolProducts($query: String!) {
     products(first: 8, query: $query) {
       nodes {
-        title description handle status publishedAt onlineStoreUrl
+        id title description handle status publishedAt onlineStoreUrl
         featuredMedia { preview { image { url(transform: {maxWidth: 480}) altText } } }
         priceRangeV2 { minVariantPrice { amount } maxVariantPrice { amount } }
-        variants(first: 5) { nodes { title price availableForSale } }
+        variants(first: 20) { nodes { id title price availableForSale } }
       }
     }
     shop { currencyCode primaryDomain { url } }
@@ -43,12 +43,12 @@ export const POLICIES_QUERY = `#graphql
     }
   }
 `
-type GraphqlClient = (
+export type ShopifyGraphqlClient = (
   query: string,
   options?: { variables?: Record<string, unknown> }
 ) => Promise<Response>
 export async function shopifyData<T>(
-  graphql: GraphqlClient,
+  graphql: ShopifyGraphqlClient,
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {
@@ -64,11 +64,12 @@ export async function shopifyData<T>(
 export async function runShopifyStoreTool(
   tool: string,
   input: unknown,
-  graphql: GraphqlClient
+  graphql: ShopifyGraphqlClient
 ) {
   if (tool === "products") {
     const query = productSearch((input as { query?: unknown } | null)?.query)
     type Product = {
+      id: string
       title: string
       description: string
       handle: string
@@ -85,7 +86,12 @@ export async function runShopifyStoreTool(
         maxVariantPrice: { amount: string }
       }
       variants: {
-        nodes: { title: string; price: string; availableForSale: boolean }[]
+        nodes: {
+          id: string
+          title: string
+          price: string
+          availableForSale: boolean
+        }[]
       }
     }
     const data = await shopifyData<{
@@ -104,6 +110,7 @@ export async function runShopifyStoreTool(
             Date.parse(product.publishedAt) <= Date.now()
         )
         .map((product) => ({
+          id: product.id,
           title: product.title,
           description: product.description.slice(0, 2000),
           imageUrl: product.featuredMedia?.preview?.image?.url ?? null,

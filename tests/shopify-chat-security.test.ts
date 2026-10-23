@@ -14,6 +14,9 @@ import {
 } from "@/src/server/tracer/db"
 import { createBuildContext } from "@/src/server/build/context"
 import { createAgent } from "@/src/server/build/agents"
+import { ConversationService } from "@/src/server/build/conversations"
+import { shopifyShopper } from "@/src/server/build/integrations/shopify-identity"
+import { claimShopifyInvitation } from "@/src/server/build/integrations/shopify-invitations"
 import {
   createChannelConnection,
   createPublicSession,
@@ -120,6 +123,110 @@ async function fixture(
     shopifyStorefrontSession(context, channel.id, request(customer), body)
   return { context, database, channel, session, request, connectionId }
 }
+
+test("commerce authorization uses admitted Shopify identity and rejects forged metadata, wrong stores and revoked sessions", async () => {
+  const f = await fixture()
+  const attempts = await Promise.all(
+    Array.from({ length: 5 }, () =>
+      claimShopifyInvitation(f.context, f.connectionId, "Buyer@example.test")
+    )
+  )
+  expect(attempts.filter(Boolean)).toHaveLength(1)
+  expect(
+    await claimShopifyInvitation(
+      f.context,
+      f.connectionId,
+      "buyer@example.test"
+    )
+  ).toBe(false)
+  expect(
+    await claimShopifyInvitation(
+      f.context,
+      f.connectionId,
+      "neighbor@example.test"
+    )
+  ).toBe(true)
+  await f.database.execute(
+    sql`UPDATE build_shopify_invitation_cooldown SET attempted_at=now()-interval '11 minutes' WHERE project_id=${f.context.projectId}`
+  )
+  expect(
+    await claimShopifyInvitation(
+      f.context,
+      f.connectionId,
+      "buyer@example.test"
+    )
+  ).toBe(true)
+  const session = await f.session("123")
+  const message = await enqueuePublicMessage(
+    f.context,
+    f.channel.id,
+    session.conversationId,
+    session.visitorToken,
+    {
+      text: "Where is my order?",
+      origin: "https://chat.example.test",
+      metadata: {
+        customerId: "999",
+        shop: "other.myshopify.com",
+        visitorId: "forged",
+      },
+    }
+  )
+  if (!("messageId" in message)) throw new Error("Expected admitted message")
+  const jobs = await f.database.execute<{ id: string }>(
+    sql`SELECT id FROM build_channel_job WHERE message_id=${message.messageId}`
+  )
+  const conversations = new ConversationService(f.context)
+  const admitted = await conversations.startTurn(session.conversationId, {
+    requestKey: `channel:${jobs.rows[0].id}`,
+    input: "Where is my order?",
+    metadata: {},
+    snapshot: {},
+  })
+  const input = {
+    connectionId: f.connectionId,
+    conversationId: session.conversationId,
+    turnId: admitted.turn.id,
+    shop: "fixture.myshopify.com",
+  }
+  expect(await shopifyShopper(f.context, input)).toMatchObject({
+    customerId: "123",
+    shop: "fixture.myshopify.com",
+  })
+  await assert.rejects(
+    shopifyShopper(f.context, { ...input, shop: "other.myshopify.com" }),
+    /Reconnect/
+  )
+  await assert.rejects(
+    shopifyShopper(f.context, { ...input, connectionId: randomUUID() }),
+    /Reconnect/
+  )
+  await assert.rejects(
+    shopifyShopper(f.context, {
+      ...input,
+      conversationId: "other-conversation",
+    }),
+    /Reconnect/
+  )
+  await f.database.execute(
+    sql`UPDATE build_app_connections SET status='disconnected' WHERE id=${f.connectionId}::uuid`
+  )
+  await assert.rejects(shopifyShopper(f.context, input), /Reconnect/)
+  await f.database.execute(
+    sql`UPDATE build_app_connections SET status='active' WHERE id=${f.connectionId}::uuid`
+  )
+  expect((await shopifyShopper(f.context, input)).customerId).toBe("123")
+  await f.database.execute(
+    sql`UPDATE build_shopify_visitor_sessions SET verified_at=now()-interval '6 minutes' WHERE project_id=${f.context.projectId}`
+  )
+  await assert.rejects(shopifyShopper(f.context, input), /Reconnect/)
+  const refreshed = await f.session("123", {
+    browserToken: session.browserToken,
+  })
+  expect((await shopifyShopper(f.context, input)).customerId).toBe("123")
+  await f.session("456", { browserToken: refreshed.browserToken })
+  await assert.rejects(shopifyShopper(f.context, input), /Reconnect/)
+}, 30_000)
 
 test("Shopify identity shares a customer's threads across devices and revokes a browser on logout or account switch", async () => {
   const f = await fixture()

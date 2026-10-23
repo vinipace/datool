@@ -24,6 +24,18 @@ import {
   shopifyOrigin,
 } from "./shopify-provider"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
+import { readShopifyOrders } from "./shopify-orders"
+import { shopifyShopper } from "./shopify-identity"
+import { shopifyToolScopes } from "./shopify-tools"
+import { runShopifyCustomerTool } from "./shopify-customers"
+import { tagShopifyOrder } from "./shopify-order-tags"
+import {
+  shopifyActionNeedsConfirmation,
+  shopifyActionSettingsSchema,
+  type ShopifyActionSettings,
+} from "@/src/lib/build/shopify"
+import { ShopifyWriteUncertainError } from "./shopify-mutation"
+import { claimShopifyInvitation } from "./shopify-invitations"
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const unavailable = () =>
@@ -318,33 +330,100 @@ export async function executeShopifyTool(
   id: string,
   slug: string,
   input: Record<string, unknown>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  execution?: {
+    conversationId: string
+    turnId: string
+    confirmed?: boolean
+    settings?: ShopifyActionSettings
+  }
 ) {
   const product = slug === "SHOPIFY_SEARCH_PRODUCTS"
-  if (!product && slug !== "SHOPIFY_READ_POLICIES") throw unavailable()
+  const orders = slug === "SHOPIFY_GET_ORDERS"
+  const commerce = slug in shopifyToolScopes
+  if (!product && !commerce && slug !== "SHOPIFY_READ_POLICIES")
+    throw unavailable()
   const args = product
     ? z
         .object({ query: z.string().max(160) })
         .strict()
         .parse(input)
-    : z.object({}).strict().parse(input)
+    : commerce
+      ? input
+      : z.object({}).strict().parse(input)
   const session = await authorizedSession(context, id)
+  if (commerce && !session.isScopeIncluded(shopifyToolScopes[slug]))
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Reconnect Shopify in Integrations and grant the permissions required by this action."
+    )
+  const shopper =
+    commerce && execution
+      ? await shopifyShopper(context, {
+          ...execution,
+          connectionId: id,
+          shop: session.shop,
+        })
+      : null
+  if (commerce && !shopper) throw unavailable()
+  if (shopifyActionNeedsConfirmation(slug) && !execution?.confirmed)
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Confirm this change in the chat before it can be applied."
+    )
   signal?.throwIfAborted()
   const client = new (nativeShopify().clients.Graphql)({ session })
   try {
+    const graphql: import("./shopify-catalog").ShopifyGraphqlClient = async (
+      query,
+      options
+    ) => {
+      signal?.throwIfAborted()
+      const result = await client.request(query, {
+        variables: options?.variables,
+        retries: 0,
+      })
+      return Response.json(result)
+    }
+    if (commerce && shopper && execution) {
+      const beforeWrite = async () => {
+        signal?.throwIfAborted()
+        const current = await shopifyShopper(context, {
+          ...execution,
+          connectionId: id,
+          shop: session.shop,
+        })
+        if (current.customerId !== shopper.customerId) throw unavailable()
+      }
+      if (orders) return await readShopifyOrders(args, shopper, graphql)
+      if (slug === "SHOPIFY_TAG_ORDER")
+        return await tagShopifyOrder(
+          args,
+          shopper,
+          shopifyActionSettingsSchema.parse(execution.settings ?? {}),
+          graphql,
+          beforeWrite
+        )
+      return await runShopifyCustomerTool(
+        slug,
+        args,
+        shopper,
+        graphql,
+        beforeWrite,
+        (email) => claimShopifyInvitation(context, id, email)
+      )
+    }
     return await runShopifyStoreTool(
       product ? "products" : "policies",
       args,
-      async (query, options) => {
-        signal?.throwIfAborted()
-        const result = await client.request(query, {
-          variables: options?.variables,
-          retries: 0,
-        })
-        return Response.json(result)
-      }
+      graphql
     )
-  } catch {
+  } catch (error) {
+    if (
+      error instanceof ShopifyWriteUncertainError ||
+      error instanceof TracerError
+    )
+      throw error
     throw new TracerError(
       "VALIDATION_ERROR",
       "Shopify could not read the store data. Check app permissions or reconnect in Integrations."

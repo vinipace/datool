@@ -5,6 +5,9 @@ import { Select } from "@/components/ui/select"
 import { Notice } from "@/components/ui/notice"
 import { FormRow } from "@/components/ui/form-row"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { shopifyActionSettingsSchema } from "@/src/lib/build/shopify"
 import { useRemote } from "@/components/tracer/hooks"
 import { buildApi } from "@/components/build/operations/build-api"
 import type { ActionDefinition } from "@/src/lib/build/contracts"
@@ -34,6 +37,9 @@ export function IntegrationActionFields({
   )
   const selected = connections.data?.connections.find(
     (item) => item.id === draft.connectionId
+  )
+  const shopifySettings = shopifyActionSettingsSchema.parse(
+    draft.shopifySettings ?? {}
   )
   const tools = useRemote(
     (signal) =>
@@ -169,6 +175,62 @@ export function IntegrationActionFields({
                 Retry actions
               </Button>
             </Notice>
+          )}
+          {selected?.toolkit === "shopify_native" && draft.toolSlug && (
+            <>
+              <FormRow
+                label="Require teammate approval"
+                htmlFor="shopify-human-approval"
+                description="Pause this action until a teammate approves it in Inbox."
+                layout="vertical"
+                variant="plain"
+              >
+                <Switch
+                  id="shopify-human-approval"
+                  checked={
+                    shopifySettings.requireHumanApproval ||
+                    draft.toolSlug === "SHOPIFY_CREATE_EXCHANGE_ORDER"
+                  }
+                  disabled={draft.toolSlug === "SHOPIFY_CREATE_EXCHANGE_ORDER"}
+                  onCheckedChange={(requireHumanApproval) =>
+                    onChange({
+                      ...draft,
+                      shopifySettings: {
+                        ...shopifySettings,
+                        requireHumanApproval,
+                      },
+                    })
+                  }
+                />
+              </FormRow>
+              {draft.toolSlug === "SHOPIFY_TAG_ORDER" && (
+                <FormRow
+                  label="Allowed order tags"
+                  htmlFor="shopify-allowed-tags"
+                  description="Separate tags with commas. The agent can only add these tags to the customer's own orders."
+                  layout="vertical"
+                  variant="plain"
+                >
+                  <Input
+                    id="shopify-allowed-tags"
+                    key={`${draft.id}:${draft.connectionId}`}
+                    defaultValue={shopifySettings.allowedOrderTags.join(", ")}
+                    onBlur={(event) =>
+                      onChange({
+                        ...draft,
+                        shopifySettings: {
+                          ...shopifySettings,
+                          allowedOrderTags: event.target.value
+                            .split(",")
+                            .map((tag) => tag.trim())
+                            .filter(Boolean),
+                        },
+                      })
+                    }
+                  />
+                </FormRow>
+              )}
+            </>
           )}
         </>
       )}

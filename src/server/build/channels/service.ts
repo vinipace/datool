@@ -890,7 +890,8 @@ async function updateInboundTicket(
 
 export async function enqueueInboundEnvelope(
   context: BuildContext,
-  envelope: InboundEnvelope
+  envelope: InboundEnvelope,
+  shopifyIdentity?: { browserSessionId: string; identityVersion: number }
 ) {
   const connection = await getChannelConnection(context, envelope.connectionId)
   if (connection.connection.channel !== envelope.channel)
@@ -918,6 +919,20 @@ export async function enqueueInboundEnvelope(
       RETURNING id
     `)
     if (!inserted.rows.length) return { inserted: false }
+    if (shopifyIdentity) {
+      const bound = await tx.execute(sql`
+        INSERT INTO build_shopify_message_identity (project_id,message_id,browser_session_id,identity_version)
+        SELECT ${context.projectId},${messageId},id,identity_version
+        FROM build_shopify_visitor_sessions
+        WHERE project_id=${context.projectId} AND connection_id=${envelope.connectionId}::uuid
+          AND id=${shopifyIdentity.browserSessionId}::uuid AND identity_version=${shopifyIdentity.identityVersion}
+          AND visitor_id=${envelope.externalContactId} AND expires_at>now()
+          AND verified_at>now()-interval '5 minutes'
+        RETURNING message_id
+      `)
+      if (!bound.rows.length)
+        throw new Error("Shopify session changed. Reconnect the chat.")
+    }
     await tx.execute(sql`
       INSERT INTO build_channel_job
         (id, project_id, connection_id, kind, message_id, payload_json, idempotency_key)
@@ -2919,12 +2934,21 @@ export async function enqueuePublicMessage(
     attachments: input.attachments ?? [],
     contact: { externalId: visitor.visitorId, metadata: { origin } },
     metadata: {
+      ...jsonObject(input.metadata),
       visitorId: visitor.visitorId,
       origin,
-      ...jsonObject(input.metadata),
     },
   }
-  return enqueueInboundEnvelope(context, envelope)
+  return enqueueInboundEnvelope(
+    context,
+    envelope,
+    visitor.browserSessionId && visitor.identityVersion
+      ? {
+          browserSessionId: visitor.browserSessionId,
+          identityVersion: visitor.identityVersion,
+        }
+      : undefined
+  )
 }
 
 export async function readPublicConversation(

@@ -30,6 +30,7 @@ function Editor(args: {
 }
 const connected = appIntegrationScenario()
 const empty = appIntegrationScenario("empty")
+const shopify = appIntegrationScenario("shopify-active")
 const meta = {
   title: "Build/IntegrationActionFields",
   component: Editor,
@@ -65,5 +66,29 @@ export const Empty: Story = {
       canvas.getByRole("button", { name: "Manage integrations" })
     )
     await expect(args.onManageIntegrations).toHaveBeenCalledOnce()
+  },
+}
+
+export const ShopifyTags: Story = {
+  parameters: {
+    msw: { handlers: shopify.handlers },
+    viewport: { defaultViewport: "mobile1" },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole("option", { name: "Tag an order" })
+    await userEvent.selectOptions(
+      canvas.getByLabelText("App action"),
+      "SHOPIFY_TAG_ORDER"
+    )
+    const tags = canvas.getByLabelText("Allowed order tags")
+    await userEvent.type(tags, "support-requested, follow-up")
+    await userEvent.tab()
+    await expect(tags).toHaveValue("support-requested, follow-up")
+    const approval = canvas.getByRole("switch", {
+      name: "Require teammate approval",
+    })
+    await userEvent.click(approval)
+    await expect(approval).toBeChecked()
   },
 }

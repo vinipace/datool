@@ -78,12 +78,13 @@ export async function issueShopifyVisitor(
   const result = await context.database.execute<{
     identity_version: number
   }>(sql`
-    INSERT INTO build_shopify_visitor_sessions (id,project_id,connection_id,visitor_id,expires_at)
-    VALUES (${id}::uuid,${context.projectId},${input.connectionId}::uuid,${visitorId},${new Date(expiresAt * 1000)})
+    INSERT INTO build_shopify_visitor_sessions (id,project_id,connection_id,visitor_id,expires_at,shop,customer_id,verified_at)
+    VALUES (${id}::uuid,${context.projectId},${input.connectionId}::uuid,${visitorId},${new Date(expiresAt * 1000)},${input.shop},${input.customerId || null},now())
     ON CONFLICT (id) DO UPDATE SET
       identity_version = build_shopify_visitor_sessions.identity_version +
         CASE WHEN build_shopify_visitor_sessions.visitor_id = EXCLUDED.visitor_id THEN 0 ELSE 1 END,
-      visitor_id = EXCLUDED.visitor_id, expires_at = EXCLUDED.expires_at, updated_at = now()
+      visitor_id = EXCLUDED.visitor_id, expires_at = EXCLUDED.expires_at, updated_at = now(),
+      shop=EXCLUDED.shop, customer_id=EXCLUDED.customer_id, verified_at=now()
     WHERE build_shopify_visitor_sessions.project_id = EXCLUDED.project_id
       AND build_shopify_visitor_sessions.connection_id = EXCLUDED.connection_id
       AND (build_shopify_visitor_sessions.visitor_id=EXCLUDED.visitor_id OR build_shopify_visitor_sessions.identity_version=${version})

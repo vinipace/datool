@@ -16,7 +16,7 @@ import {
   executeShopifyTool,
   refreshShopifyConnection,
 } from "./shopify"
-import { shopifyTools } from "./shopify-catalog"
+import { shopifyTools } from "./shopify-tools"
 import {
   authorizeSession,
   executeSession,
@@ -290,6 +290,9 @@ export async function executeAppAction(
     turnId: string
     toolCallId: string
     arguments: Record<string, unknown>
+    shopifyConfirmed?: boolean
+    shopifySourceTurnId?: string
+    shopifySettings?: import("@/src/lib/build/shopify").ShopifyActionSettings
     signal?: AbortSignal
   }
 ) {
@@ -334,7 +337,13 @@ export async function executeAppAction(
         connection.id,
         input.toolSlug,
         input.arguments,
-        input.signal
+        input.signal,
+        {
+          conversationId: input.conversationId,
+          turnId: input.shopifySourceTurnId ?? input.turnId,
+          confirmed: input.shopifyConfirmed,
+          settings: input.shopifySettings,
+        }
       )
       await ctx.database.execute(
         sql`UPDATE build_usage_event SET status='completed',cost_nano_usd=0 WHERE id=${id}::uuid`
@@ -342,7 +351,7 @@ export async function executeAppAction(
       return { output, status: "completed" as const }
     } catch (error) {
       await ctx.database.execute(
-        sql`UPDATE build_usage_event SET status='failed',cost_nano_usd=0 WHERE id=${id}::uuid`
+        sql`UPDATE build_usage_event SET status=${(error as { uncertain?: boolean })?.uncertain ? "uncertain" : "failed"},cost_nano_usd=0 WHERE id=${id}::uuid`
       )
       throw error
     }

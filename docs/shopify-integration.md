@@ -22,15 +22,30 @@ connections.
 
 - `SHOPIFY_SEARCH_PRODUCTS`: an empty query browses up to eight published,
   active products. Non-empty queries search titles using escaped terms.
-  Results include images, product URLs, base-currency prices and up to five
+  Results include product/variant IDs, images, URLs, base-currency prices and up to twenty
   variants. Draft, unpublished and future-published products are excluded.
 - `SHOPIFY_READ_POLICIES`: published legal, shipping and return policies.
   Missing policies remain missing; truncated bodies are explicitly labelled.
+- `SHOPIFY_GET_ORDERS`: verified customer order history, status and tracking.
+  Guests can look up one order using its number and exact checkout email or phone.
+- `SHOPIFY_UPDATE_PROFILE` and `SHOPIFY_UPDATE_ADDRESS`: change the verified
+  customer's own account after one-shot confirmation. An account address update
+  does not change delivery addresses on placed orders.
+- `SHOPIFY_ACTIVATE_ACCOUNT`: legacy account invitations, with a ten-minute
+  per-recipient cooldown, or sign-in guidance for new customer accounts.
+- `SHOPIFY_TAG_ORDER`: merchant-allowlisted tags on the verified customer's own order.
 
 Product results use the same shape as the pilot's product-card widget. Keep
 the `show_products` widget action enabled to display cards. Storefront chat
 installation is separate from the data connection. This connector does not
-install a theme embed, modify carts, read orders/customers or issue refunds.
+install a theme embed. Cart, checkout and return/exchange work is tracked in
+[the action parity checklist](shopify-action-parity.md).
+
+Customer-specific actions require a freshly verified Shopify storefront chat.
+Customer IDs in messages, tool arguments, contact fields or browser metadata
+never authorize access. Newly added customer/order actions require merchant
+consent and Shopify protected customer data approval before a public launch.
+Existing catalog-only installs can continue using product and policy reads.
 
 Execution runs directly from the Datool worker to Shopify's Admin GraphQL API
 2026-10; it does not call the Shopify development app or its temporary tunnel.
@@ -61,12 +76,13 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 
 ## Installation setup
 
-1. Apply migrations through `0063_shopify_visitor_sessions.sql` using the normal release
+1. Apply migrations through `0064_shopify_commerce_identity.sql` using the normal release
    flow. Existing organizations retain Stripe ownership.
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
    `https://YOUR_DATOOL_HOST/api/shopify/callback`, and
-   `read_products,read_legal_policies,write_app_proxy`. The official Shopify SDK performs the
+   `read_products,read_legal_policies,write_app_proxy,write_customers,write_orders`.
+   Customer and order access must be approved for the public app. The official Shopify SDK performs the
    authorization-code flow. Do not switch an existing embedded app's flow just
    to enable this connector.
 3. Set the following server-only variables on web and buildworker:
@@ -122,7 +138,7 @@ catalog, actions or traces. Shopify requests require an exact `myshopify.com`
 hostname over HTTPS, disallow redirects and bound response size and duration.
 Provider errors are sanitized; an expired/revoked authorization needs reconnection.
 
-The native tool allowlist contains only the two reads above. Visitor arguments
+The native tool allowlist contains only the actions described above. Visitor arguments
 cannot choose a different store or supply arbitrary GraphQL. Existing agent
 approval and channel restrictions still apply to connected-app actions.
 

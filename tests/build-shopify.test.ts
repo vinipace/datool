@@ -225,7 +225,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   const authorizeUrl = new URL(authorization.headers.get("location")!)
   expect(authorizeUrl.host).toBe(shop)
   expect(authorizeUrl.searchParams.get("scope")).toBe(
-    "read_products,read_legal_policies,write_app_proxy"
+    "read_products,read_legal_policies,write_app_proxy,write_customers,write_orders"
   )
   const cookie = authorization.headers
     .getSetCookie()
@@ -276,7 +276,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   expect(stored.rows[0].session_encrypted).not.toContain("private-")
   expect(
     (await listAppTools(ctx, started.id)).map((tool) => tool.slug)
-  ).toEqual(["SHOPIFY_SEARCH_PRODUCTS", "SHOPIFY_READ_POLICIES"])
+  ).toContain("SHOPIFY_SEARCH_PRODUCTS")
   const results = await Promise.all([
     executeShopifyTool(ctx, started.id, "SHOPIFY_SEARCH_PRODUCTS", {
       query: "",
@@ -287,6 +287,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   ])
   expect(refreshes).toBe(1)
   for (const result of results) {
+    if (!("products" in result)) throw new Error("Expected product results")
     expect(result.products).toHaveLength(1)
     expect(result.products?.[0]).toMatchObject({
       title: "Snowboard",

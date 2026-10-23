@@ -5,6 +5,12 @@ import { TracerError } from "@/src/server/tracer/errors"
 
 export const SHOPIFY_TOOLKIT = "shopify_native"
 export const SHOPIFY_SCOPES = ["read_products", "read_legal_policies"]
+export const SHOPIFY_REQUESTED_SCOPES = [
+  ...SHOPIFY_SCOPES,
+  "write_app_proxy",
+  "write_customers",
+  "write_orders",
+]
 export const SHOPIFY_CALLBACK = "/api/shopify/callback"
 
 // Keep OAuth credentials on Shopify HTTPS endpoints; bound request duration
@@ -94,9 +100,9 @@ export function nativeShopify() {
     apiKey: process.env.DATOOL_SHOPIFY_CLIENT_ID!,
     apiSecretKey: process.env.DATOOL_SHOPIFY_CLIENT_SECRET!,
     apiVersion: ApiVersion.October26,
-    // Existing catalog connections remain valid; new authorizations also enable
-    // the storefront identity proxy.
-    scopes: [...SHOPIFY_SCOPES, "write_app_proxy"],
+    // Keep catalog-only installations usable; individual commerce actions
+    // enforce their additional grants and require a merchant reconnect.
+    scopes: SHOPIFY_REQUESTED_SCOPES,
     hostName: origin.host,
     hostScheme: "https",
     isEmbeddedApp: false,

@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from "node:crypto"
 import { executeAppAction } from "../integrations/service"
+import {
+  shopifyActionNeedsConfirmation,
+  shopifyActionNeedsHuman,
+} from "@/src/lib/build/shopify"
 import { beginModelUsage, finishModelUsage } from "../usage"
 
 import { createGateway } from "@ai-sdk/gateway"
@@ -214,6 +218,8 @@ export type RuntimeContinuation = {
   procedureCursor?: RuntimeProcedureCursor
   /** Earliest time an authenticated wait resume may claim this continuation. */
   resumeAt?: string
+  /** Server-owned source turn for a later merchant approval of a Shopify action. */
+  shopifySourceTurnId?: string
 }
 
 type RuntimeProcedureCursor = {
@@ -1287,6 +1293,8 @@ async function executeAction(
     procedureCursor?: RuntimeProcedureCursor
     requireHumanForActions?: boolean
     allowApproval?: boolean
+    shopifyConfirmed?: boolean
+    shopifySourceTurnId?: string
     signal?: AbortSignal
   }
 ) {
@@ -1327,7 +1335,9 @@ async function executeAction(
   }
   const continuationId = options.continuationId ?? randomUUID()
   if (
-    options.requireHumanForActions &&
+    (options.requireHumanForActions ||
+      (action.type === "integration" &&
+        shopifyActionNeedsHuman(action.toolSlug, action.shopifySettings))) &&
     action.type !== "handoff" &&
     !options.allowApproval
   ) {
@@ -1337,6 +1347,10 @@ async function executeAction(
       continuationId,
       input: persistedRuntimeRecord(input, knownSecrets),
       message: "A teammate must approve this action before it runs.",
+      ...(action.type === "integration" &&
+      action.toolSlug.startsWith("SHOPIFY_")
+        ? { shopifySourceTurnId: turn.id }
+        : {}),
       ...(options.procedureCursor
         ? {
             procedureCursor: persistedProcedureCursor(
@@ -1358,6 +1372,44 @@ async function executeAction(
     return {
       output: approval,
       continuation: approval,
+      status: "awaiting_client" as const,
+    }
+  }
+  if (
+    action.type === "integration" &&
+    shopifyActionNeedsConfirmation(action.toolSlug) &&
+    !options.shopifyConfirmed &&
+    !options.allowApproval
+  ) {
+    const confirmation: RuntimeContinuation = {
+      type: "client_action",
+      actionId: action.id,
+      continuationId,
+      eventName: "Confirm changes",
+      title: action.name,
+      message: "Review the details and confirm to apply this change.",
+      input: persistedRuntimeRecord(input, knownSecrets),
+      ...(options.procedureCursor
+        ? {
+            procedureCursor: persistedProcedureCursor(
+              options.procedureCursor,
+              knownSecrets
+            ),
+          }
+        : {}),
+    }
+    await service.recordToolCallFinish({
+      conversationId: conversation.id,
+      turnId: turn.id,
+      toolCallId: options.toolCallId,
+      status: "awaiting_client",
+      output: confirmation,
+      continuation: confirmation,
+      ownerFence: turn.ownerFence,
+    })
+    return {
+      output: confirmation,
+      continuation: confirmation,
       status: "awaiting_client" as const,
     }
   }
@@ -1481,6 +1533,11 @@ async function executeAction(
         turnId: turn.id,
         toolCallId: options.toolCallId,
         arguments: input,
+        shopifyConfirmed: options.shopifyConfirmed || options.allowApproval,
+        shopifySettings: action.shopifySettings,
+        shopifySourceTurnId: options.allowApproval
+          ? options.shopifySourceTurnId
+          : undefined,
         signal: options.signal,
       })
       await service.recordToolCallFinish({
@@ -2817,8 +2874,13 @@ export async function runAgentTurn(
             (typeof claimed.call.continuation?.continuationId === "string"
               ? claimed.call.continuation.continuationId
               : undefined))
+      const shopifyConfirmed =
+        continuationType === "client_action" &&
+        persistedContinuation.eventName === "Confirm changes" &&
+        action.definition.type === "integration" &&
+        shopifyActionNeedsConfirmation(action.definition.toolSlug)
       const approvedInput =
-        approvalAllowed &&
+        (approvalAllowed || shopifyConfirmed) &&
         claimed.call.continuation &&
         typeof claimed.call.continuation.input === "object" &&
         !Array.isArray(claimed.call.continuation.input)
@@ -2838,6 +2900,12 @@ export async function runAgentTurn(
           requireHumanForActions:
             configuration.guardrails.requireHumanForActions,
           allowApproval: approvalAllowed,
+          shopifyConfirmed,
+          shopifySourceTurnId:
+            approvalAllowed &&
+            typeof persistedContinuation.shopifySourceTurnId === "string"
+              ? persistedContinuation.shopifySourceTurnId
+              : undefined,
           procedureCursor: continuationCursor ?? undefined,
           signal: options.signal,
         }

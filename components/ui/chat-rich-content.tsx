@@ -123,6 +123,23 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
           ? continuation.eventName
           : undefined,
       components: [
+        ...(continuation.eventName === "Confirm changes"
+          ? [
+              {
+                type: "card" as const,
+                title:
+                  typeof continuation.title === "string"
+                    ? continuation.title
+                    : "Confirm change",
+                body: Object.entries(record(continuation.input) ?? {})
+                  .map(
+                    ([key, value]) =>
+                      `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
+                  )
+                  .join("\n"),
+              },
+            ]
+          : []),
         {
           type: "button",
           label:

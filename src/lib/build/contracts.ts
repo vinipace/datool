@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { shopifyActionSettingsSchema } from "./shopify"
 
 import type { JsonValue } from "@/src/lib/tracer/contracts"
 import { safeHttpUrlSchema } from "@/src/lib/build/urls"
@@ -211,7 +212,11 @@ export const actionDefinitionSchema = z.discriminatedUnion("type", [
   actionBaseSchema.extend({
     type: z.literal("integration"),
     connectionId: z.string().uuid(),
-    toolSlug: z.string().regex(/^[A-Z][A-Z0-9_]+$/).max(200),
+    toolSlug: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]+$/)
+      .max(200),
+    shopifySettings: shopifyActionSettingsSchema.optional(),
   }),
   actionBaseSchema.extend({
     type: z.literal("http"),
