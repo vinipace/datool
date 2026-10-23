@@ -2265,6 +2265,8 @@ export async function processChannelJob(
       throw error
     }
   }
+  if (String(message.status) === "ignored")
+    return { ignored: true, reason: "human_ownership" }
   if (String(message.owner_type) === "human") {
     await assertChannelJobReady(database, job, {
       agentId: String(message.agent_id),
@@ -2285,9 +2287,36 @@ export async function processChannelJob(
       }
     )
     if (recovered) return recovered
-    await database.execute(
-      sql`UPDATE build_channel_message SET status = 'ignored' WHERE project_id = ${job.projectId} AND id = ${job.messageId}`
-    )
+    await database.transaction(async (tx) => {
+      // Keep customer messages visible to support without starting an AI turn.
+      // The conversation lock serializes this with a concurrent turn admission.
+      await tx.execute(sql`
+        SELECT id FROM build_conversations
+        WHERE project_id=${job.projectId} AND id=${String(message.conversation_id)}
+        FOR UPDATE
+      `)
+      await tx.execute(sql`
+        INSERT INTO build_conversation_messages
+          (id,project_id,conversation_id,role,content_json,status,metadata_json,created_at,completed_at)
+        SELECT 'channel:' || m.id, m.project_id, m.conversation_id, 'user',
+          COALESCE(m.content_json->'text','""'::jsonb), 'completed',
+          jsonb_build_object('source','channel','channelMessageId',m.id,
+            'attachments',COALESCE(m.content_json->'attachments','[]'::jsonb)),
+          m.created_at, now()
+        FROM build_channel_message m
+        WHERE m.project_id=${job.projectId} AND m.id=${job.messageId}
+          AND NOT EXISTS (
+            SELECT 1 FROM build_conversation_turns t
+            WHERE t.project_id=m.project_id AND t.conversation_id=m.conversation_id
+              AND t.request_key=${`channel:${job.id}`}
+          )
+        ON CONFLICT (id) DO NOTHING
+      `)
+      await tx.execute(sql`
+        UPDATE build_channel_message SET status='ignored'
+        WHERE project_id=${job.projectId} AND id=${job.messageId}
+      `)
+    })
     return { ignored: true, reason: "human_ownership" }
   }
   const ownerFence = Number(message.owner_fence ?? 0)

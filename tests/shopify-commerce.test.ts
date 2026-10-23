@@ -432,10 +432,16 @@ test("order lookup verifies each returned order, isolates guest proofs and never
   )
 })
 
-test("published Shopify tool schemas accept documented inputs in the runtime validator", async () => {
+test("published Shopify tool schemas meet provider contracts and accept documented inputs", async () => {
   const { shopifyTools } =
     await import("@/src/server/build/integrations/shopify-tools")
   const { validateSchema } = await import("@/src/server/playground/schema")
+  // OpenAI rejects root-level unions before it executes any tool.
+  for (const tool of shopifyTools) {
+    expect(tool.inputSchema.type).toBe("object")
+    for (const keyword of ["oneOf", "anyOf", "allOf", "enum", "const", "not"])
+      expect(tool.inputSchema[keyword]).toBeUndefined()
+  }
   const examples = [
     [
       "SHOPIFY_SEARCH_PRODUCTS",
@@ -460,11 +466,81 @@ test("published Shopify tool schemas accept documented inputs in the runtime val
       { operation: "add", items: [{ variantId: "123", quantity: 1 }] },
     ],
   ] as const
+  const { shopifyReturnActionInputSchema } =
+    await import("@/src/lib/build/shopify-return")
+  const { z } = await import("zod")
+  const { integrationInputSchema } =
+    await import("@/src/server/build/integrations/action-runtime")
+  const { actionDefinitionSchema } = await import("@/src/lib/build/contracts")
+  const resume = { operationId: "11111111-1111-4111-8111-111111111111" }
+  const legacyReturn = actionDefinitionSchema.parse({
+    id: "return-action",
+    type: "integration",
+    name: "Return items",
+    connectionId: "11111111-1111-4111-8111-111111111111",
+    toolSlug: "SHOPIFY_RETURN_OR_EXCHANGE",
+    inputSchema: z.toJSONSchema(shopifyReturnActionInputSchema, {
+      target: "draft-7",
+    }),
+  })
+  const returnSchema = integrationInputSchema(legacyReturn)
+  expect(returnSchema.type).toBe("object")
+  expect(returnSchema.anyOf).toBeUndefined()
+  expect(() => validateSchema(returnSchema, resume)).not.toThrow()
+  expect(shopifyReturnActionInputSchema.parse(resume)).toEqual(resume)
+  expect(() =>
+    shopifyReturnActionInputSchema.parse({ ...resume, reason: "Mixed modes" })
+  ).toThrow()
   for (const [slug, input] of examples) {
     const tool = shopifyTools.find((tool) => tool.slug === slug)
     if (!tool) throw new Error(`Missing native tool ${slug}`)
     expect(() => validateSchema(tool.inputSchema, input)).not.toThrow()
   }
+})
+
+test("saved cart actions use a provider-compatible schema while cart commands remain strict", async () => {
+  const { z } = await import("zod")
+  const { actionDefinitionSchema } = await import("@/src/lib/build/contracts")
+  const { shopifyCartUpdateSchema } =
+    await import("@/src/lib/build/shopify-cart")
+  const { integrationInputSchema } =
+    await import("@/src/server/build/integrations/action-runtime")
+  const { prepareShopifyCart } =
+    await import("@/src/server/build/integrations/shopify-cart")
+  const { validateSchema } = await import("@/src/server/playground/schema")
+  const savedAction = actionDefinitionSchema.parse({
+    id: "cart-action",
+    type: "integration",
+    name: "Update cart",
+    connectionId: "11111111-1111-4111-8111-111111111111",
+    toolSlug: "SHOPIFY_UPDATE_CART",
+    inputSchema: {
+      ...z.toJSONSchema(shopifyCartUpdateSchema, { target: "draft-7" }),
+      type: "object",
+    },
+  })
+  const schema = integrationInputSchema(savedAction)
+  expect(schema.type).toBe("object")
+  expect(schema.anyOf).toBeUndefined()
+  expect(schema.oneOf).toBeUndefined()
+  for (const command of [
+    { operation: "add", items: [{ variantId: "123", quantity: 1 }] },
+    { operation: "set", lineKey: "123", quantity: 0 },
+  ]) {
+    expect(() => validateSchema(schema, command)).not.toThrow()
+    expect(prepareShopifyCart("SHOPIFY_UPDATE_CART", command)).toEqual(command)
+  }
+  for (const command of [
+    { operation: "add" },
+    { operation: "set", quantity: 1 },
+    {
+      operation: "add",
+      items: [{ variantId: "123", quantity: 1 }],
+      lineKey: "123",
+    },
+    { operation: "set", lineKey: "123", quantity: -1 },
+  ])
+    expect(() => prepareShopifyCart("SHOPIFY_UPDATE_CART", command)).toThrow()
 })
 
 test("live product search filters published products and finds available matching variants beyond the first page", async () => {

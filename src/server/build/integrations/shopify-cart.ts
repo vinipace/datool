@@ -7,6 +7,26 @@ import {
 import { TracerError } from "@/src/server/tracer/errors"
 import { ShopifyWriteUncertainError } from "./shopify-mutation"
 
+// Function-calling providers require a root object, not a discriminated union.
+// Keep operation-specific validation in prepareShopifyCart before any mutation.
+export const shopifyCartToolInputSchema = z.toJSONSchema(
+  z
+    .object({
+      operation: z.enum(["add", "set"]),
+      items: shopifyCartUpdateSchema.options[0].shape.items
+        .optional()
+        .describe("Required for add. Omit for set."),
+      lineKey: shopifyCartUpdateSchema.options[1].shape.lineKey
+        .optional()
+        .describe("Required for set. Use the lineKey returned by Get cart."),
+      quantity: shopifyCartUpdateSchema.options[1].shape.quantity
+        .optional()
+        .describe("Required for set. Zero removes the line."),
+    })
+    .strict(),
+  { target: "draft-7" }
+)
+
 export function prepareShopifyCart(
   slug: string,
   input: Record<string, unknown>
@@ -55,9 +75,6 @@ export const shopifyCartTools: IntegrationTool[] = [
     name: "Update shopping cart",
     description:
       "Add variants or set an existing line's quantity in the shopper's cart (browser cart on the storefront, conversation cart on messaging channels). Use numeric variant IDs from product results; use lineKey from Get cart to update a line. Quantity zero removes a line. Storefront shoppers use the cart control; messaging shoppers receive a checkout link. Never creates an order or takes payment.",
-    inputSchema: {
-      ...z.toJSONSchema(shopifyCartUpdateSchema, { target: "draft-7" }),
-      type: "object",
-    },
+    inputSchema: shopifyCartToolInputSchema,
   },
 ]

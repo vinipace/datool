@@ -1046,6 +1046,35 @@ describe("durable Build channel delivery", () => {
       },
       database
     )
+    expect(
+      (
+        await new ConversationService(context).listMessages(
+          session.conversationId
+        )
+      ).items.map(({ role, content }) => ({ role, content }))
+    ).toEqual([
+      { role: "user", content: "I still need help from the support team." },
+    ])
+    // Retry after AI resumes must not replay a message already left for a human.
+    await database.execute(sql`
+      UPDATE build_conversations SET owner_type='ai', owner_id=NULL, status='active'
+      WHERE project_id=${context.projectId} AND id=${session.conversationId}
+    `)
+    await processChannelJob(
+      job,
+      async () => {
+        runnerCalls += 1
+        return { messages: [] }
+      },
+      database
+    )
+    expect(
+      (
+        await new ConversationService(context).listMessages(
+          session.conversationId
+        )
+      ).items
+    ).toHaveLength(1)
     await completeChannelJob(database, job)
     expect(result).toEqual({ ignored: true, reason: "human_ownership" })
     expect(runnerCalls).toBe(0)
@@ -1118,6 +1147,28 @@ describe("durable Build channel delivery", () => {
       },
       database
     )
+    expect(
+      (
+        await new ConversationService(context).listMessages(conversationId)
+      ).items.map(({ role, content }) => ({ role, content }))
+    ).toEqual([{ role: "user", content: "Another question" }])
+    // Retry after AI resumes must not replay a message already left for a human.
+    await database.execute(sql`
+      UPDATE build_conversations SET owner_type='ai', owner_id=NULL, status='active'
+      WHERE project_id=${context.projectId} AND id=${conversationId}
+    `)
+    await processChannelJob(
+      job,
+      async () => {
+        runnerCalls += 1
+        return { messages: [] }
+      },
+      database
+    )
+    expect(
+      (await new ConversationService(context).listMessages(conversationId))
+        .items
+    ).toHaveLength(1)
     await completeChannelJob(database, job)
     expect(result).toEqual({ ignored: true, reason: "human_ownership" })
     expect(runnerCalls).toBe(0)

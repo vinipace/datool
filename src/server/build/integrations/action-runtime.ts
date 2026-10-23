@@ -28,6 +28,8 @@ import {
 } from "./shopify-products"
 import { shopifyApprovalNeedsVerification } from "./shopify-identity"
 import { executeAppAction } from "./service"
+import { shopifyCartToolInputSchema } from "./shopify-cart"
+import { shopifyReturnToolInputSchema } from "./shopify-return-process"
 
 export type IntegrationExecutionOptions = {
   toolCallId: string
@@ -45,10 +47,15 @@ export type IntegrationExecutionOptions = {
 }
 
 export function integrationInputSchema(action: ActionDefinition) {
-  return action.type === "integration" &&
-    action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS"
-    ? z.toJSONSchema(shopifyProductSearchSchema, { target: "draft-7" })
-    : action.inputSchema
+  if (action.type === "integration") {
+    if (action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS")
+      return z.toJSONSchema(shopifyProductSearchSchema, { target: "draft-7" })
+    if (action.toolSlug === "SHOPIFY_UPDATE_CART")
+      return shopifyCartToolInputSchema
+    if (action.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE")
+      return shopifyReturnToolInputSchema
+  }
+  return action.inputSchema
 }
 
 export function integrationInputError(
