@@ -1071,6 +1071,9 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
       let duplicateMatch = false
       let wrongBuyer = false
       let wrongTag = false
+      let orderQuantity = 2
+      let orderVariant = "123"
+      let moreOrderItems = false
       const lookups: Array<{
         query: string
         variables: Record<string, unknown>
@@ -1089,6 +1092,15 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
             ? null
             : { id: `gid://shopify/Customer/${wrongBuyer ? "999" : "123"}` },
         tags: createdInput?.tags,
+        lineItems: {
+          nodes: [
+            {
+              variant: { id: `gid://shopify/ProductVariant/${orderVariant}` },
+              currentQuantity: orderQuantity,
+            },
+          ],
+          pageInfo: { hasNextPage: moreOrderItems },
+        },
       })
       const totals = () => {
         const bag = (amount: string) => ({
@@ -1539,6 +1551,17 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
       const firstOperation =
         pending.continuations[0].shopifyOrderQuote!.operationId
       async function reconcileCheckout() {
+        const response = await handleShopifyCommerceWebhook(
+          commerceWebhook(
+            {
+              admin_graphql_api_id: providerPlaced ? order().id : draftId(),
+              tags: `datool-operation-${firstOperation}`,
+            },
+            { topic: providerPlaced ? "orders/updated" : "draft_orders/update" }
+          ),
+          f.database
+        )
+        expect(response.status).toBe(204)
         const job = await reconciliationJob(f)
         await processChannelJob(job, noModel, f.database)
         await completeChannelJob(f.database, job)
@@ -1573,6 +1596,22 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         providerPlaced = true
         expect((await check()).text).toContain("Payment status: pending")
         financialStatus = "PAID"
+        if (orderSource === "cart") {
+          // Payment does not prove that the quoted cart was purchased: a merchant
+          // may have edited the order, or the provider read may be incomplete.
+          for (const changed of ["quantity", "variant", "page"]) {
+            orderQuantity = changed === "quantity" ? 1 : 2
+            orderVariant = changed === "variant" ? "999" : "123"
+            moreOrderItems = changed === "page"
+            const altered = await reconcileCheckout()
+            expect(
+              altered.filter((m) => m.metadata.shopifyCartCleanup)
+            ).toHaveLength(0)
+          }
+          orderQuantity = 2
+          orderVariant = "123"
+          moreOrderItems = false
+        }
         {
           await f.database.execute(
             sql`UPDATE build_shopify_order_operations SET reconcile_after=NULL WHERE id=${firstOperation}::uuid`

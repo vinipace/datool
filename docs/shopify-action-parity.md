@@ -285,6 +285,10 @@ ledger. It is not a model argument. Item-based orders never capture or clean a c
 The existing payment worker sends a cleanup directive only after it verifies the
 original placed order. Online orders require confirmed payment; cash-on-delivery
 orders can clean up while payment is pending, and free orders after placement.
+The order's current variant quantities must match the approved cart; merchant
+edits, deleted variants and incomplete item reads leave the cart alone. Payment
+and cleanup have separate delivery keys, so a later corrected order can permit
+cleanup without repeating the payment message.
 The chat reverifies the storefront identity before sending the directive to the
 host. Only outbound, delivered controls can trigger cleanup; inbound metadata is
 ignored. No extra model call, public endpoint or persistence table is introduced.
@@ -305,7 +309,8 @@ uses one batch update by line key; it never calls cart clear or changes notes,
 attributes, options or other lines. See the [Ajax Cart API](https://shopify.dev/docs/api/ajax/reference/cart).
 
 The existing six order runtime cases cover all payment modes and item/cart sources,
-including changed quotes, human approval, forged snapshot input, unpaid checkout
+including changed quotes, human approval, forged snapshot input, unpaid checkout,
+edited order quantities/variants, incomplete provider reads, a later correction
 and delivery through the public conversation. The browser bridge test covers
 extra items/quantities, cross-tab deduplication, lost replies, snapshot reuse and a
 different cart/device. Two chat stories cover automatic dispatch after identity

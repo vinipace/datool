@@ -173,6 +173,8 @@ export async function processShopifyReconciliation(
     if (
       settings.orderSource === "cart" &&
       placed &&
+      "cartMatchesOrder" in result &&
+      result.cartMatchesOrder === true &&
       snapshot &&
       snapshot.expiresAt > Date.now() &&
       snapshot.expiresAt <= Date.now() + 30 * 86400000
@@ -191,8 +193,11 @@ export async function processShopifyReconciliation(
     (fulfillment === null || fulfillment === "permission_required")
   )
     milestone = payment
-  if (!milestone && cartCleanup) milestone = "cart_cleanup"
-  if (milestone) {
+  // Payment and cart delivery have separate keys: a later corrected order can
+  // permit cleanup without repeating an already-delivered payment notification.
+  for (const key of [milestone, cartCleanup ? "cart_cleanup" : null]) {
+    if (!key) continue
+    const isCartCleanup = key === "cart_cleanup"
     await enqueueOutboundEnvelope(
       context,
       {
@@ -200,16 +205,16 @@ export async function processShopifyReconciliation(
         conversationId: row.conversation_id,
         contactId: row.contact_id ?? undefined,
         channel: "web",
-        idempotencyKey: `shopify:${operationId}:${milestone}`,
-        text: milestone === "cart_cleanup" ? "" : result.message,
+        idempotencyKey: `shopify:${operationId}:${key}`,
+        text: isCartCleanup ? "" : result.message,
         metadata: {
           shopifyOperationId: operationId,
           source: "shopify_reconciliation",
-          ...(cartCleanup ? { shopifyCartCleanup: cartCleanup } : {}),
+          ...(isCartCleanup ? { shopifyCartCleanup: cartCleanup } : {}),
         },
       },
       row.external_conversation_id,
-      { recordRuntimeMessage: milestone !== "cart_cleanup" }
+      { recordRuntimeMessage: !isCartCleanup }
     )
   }
   await assertLease()

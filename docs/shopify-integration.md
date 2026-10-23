@@ -374,6 +374,9 @@ first-party browser storage and shares only an opaque reference. Once the worker
 verifies placement (and payment for online checkout), it sends a directive through
 the existing public conversation. The chat verifies the store session again; the
 host removes the purchased quantities from matching lines in the same cart.
+The provider's current order items must still match the approved cart. If a
+merchant edits them or Shopify cannot return the complete item list, the cart
+stays unchanged while payment status remains available.
 New quantities and unrelated items observed at cleanup remain. Another device,
 a changed cart token or changed line keys cannot cause removal from another cart.
 Item-based orders leave the cart untouched.

@@ -16,6 +16,7 @@ import type {
 const inputSchema = z.object({ operationId: z.uuid().optional() }).strict()
 const orderFields = `id name email customer { id }
  displayFinancialStatus fullyPaid cancelledAt
+ lineItems(first: 100) { nodes { variant { id } currentQuantity } pageInfo { hasNextPage } }
  currentTotalPriceSet { presentmentMoney { amount currencyCode } }`
 const draftFields = `id tags email customer { id } status invoiceUrl
  ${draftOrderTotals}
@@ -48,6 +49,10 @@ type Order = {
   displayFinancialStatus: string | null
   fullyPaid: boolean
   cancelledAt: string | null
+  lineItems: {
+    nodes: Array<{ variant: { id: string } | null; currentQuantity: number }>
+    pageInfo: { hasNextPage: boolean }
+  }
   currentTotalPriceSet: {
     presentmentMoney: { amount: string; currencyCode: string }
   }
@@ -71,6 +76,36 @@ function matchesBuyer(
         `gid://shopify/Customer/${operation.quote.customerId}`
     : record.email?.trim().toLowerCase() ===
         operation.quote.input.email.toLowerCase()
+}
+
+function matchesPurchasedCart(order: Order, operation: ShopifyOrderOperation) {
+  const expected = operation.quote.input.items
+  if (
+    operation.settings.orderSource !== "cart" ||
+    !operation.quote.purchaseSnapshot ||
+    !expected?.length ||
+    order.lineItems.pageInfo.hasNextPage
+  )
+    return false
+  const quantities = new Map<string, number>()
+  for (const item of order.lineItems.nodes) {
+    if (!Number.isSafeInteger(item.currentQuantity) || item.currentQuantity < 0)
+      return false
+    if (item.currentQuantity === 0) continue
+    if (!item.variant) return false
+    quantities.set(
+      item.variant.id,
+      (quantities.get(item.variant.id) ?? 0) + item.currentQuantity
+    )
+  }
+  return (
+    quantities.size === expected.length &&
+    expected.every(
+      (item) =>
+        quantities.get(`gid://shopify/ProductVariant/${item.variantId}`) ===
+        item.quantity
+    )
+  )
 }
 
 /** Recover only the persisted intent owned by this verified shopper. No creation or payment writes. */
@@ -171,6 +206,7 @@ export async function checkShopifyCheckout(
         orderName: order.name,
         financialStatus: order.displayFinancialStatus,
         paid,
+        cartMatchesOrder: matchesPurchasedCart(order, operation),
         total: order.currentTotalPriceSet.presentmentMoney,
         message: `Order ${order.name} ${order.cancelledAt ? "was cancelled" : "is placed"}. ${payment}`,
       },
