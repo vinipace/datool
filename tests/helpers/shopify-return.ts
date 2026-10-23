@@ -34,6 +34,36 @@ export function shopifyReturnFixture() {
     partialProcessing: false,
     moreTransactions: false,
     guestEmail: "buyer@example.test",
+    holds: [
+      {
+        id: "gid://shopify/FulfillmentHold/501",
+        reason: "AWAITING_PAYMENT",
+        heldByRequestingApp: false,
+        heldByApp: null,
+      },
+      {
+        id: "gid://shopify/FulfillmentHold/502",
+        reason: "INVENTORY_OUT_OF_STOCK",
+        heldByRequestingApp: false,
+        heldByApp: null,
+      },
+      {
+        id: "gid://shopify/FulfillmentHold/503",
+        reason: "AWAITING_PAYMENT",
+        heldByRequestingApp: false,
+        heldByApp: { id: "gid://shopify/App/999" },
+      },
+    ] as Array<{
+      id: string
+      reason: string
+      heldByRequestingApp: boolean
+      heldByApp: { id: string } | null
+    }>,
+    holdReleases: 0,
+    loseHoldRelease: false,
+    fulfillmentMode: "normal" as
+      "normal" | "mixed" | "missing" | "repeat_cursor" | "expanded",
+    changeAfterFulfillmentRead: "" as "" | "balance" | "owner",
   }
   const bag = (amount: string) => ({
     presentmentMoney: { amount, currencyCode: state.currency },
@@ -122,6 +152,112 @@ export function shopifyReturnFixture() {
   const graphql: ShopifyGraphqlClient = async (query, options) => {
     const variables = options?.variables ?? {}
     calls.push({ query, variables })
+    if (query.includes("DatoolExchangeFulfillment")) {
+      const match = returned()
+      const exchangeLines = match.exchangeLineItems.nodes.map((line, i) => ({
+        ...line,
+        lineItems: [
+          { id: `gid://shopify/LineItem/${501 + i}`, quantity: line.quantity },
+        ],
+      }))
+      const lines = exchangeLines.map((line) => ({
+        lineItem: { id: line.lineItems[0].id },
+        totalQuantity: line.quantity,
+        remainingQuantity: line.quantity,
+      }))
+      if (state.fulfillmentMode === "mixed")
+        lines.push({
+          lineItem: { id: "gid://shopify/LineItem/999" },
+          totalQuantity: 1,
+          remainingQuantity: 1,
+        })
+      const unrelated = {
+        id: "gid://shopify/FulfillmentOrder/902",
+        status: "ON_HOLD",
+        fulfillmentHolds: [
+          {
+            id: "gid://shopify/FulfillmentHold/504",
+            reason: "AWAITING_PAYMENT",
+            heldByRequestingApp: false,
+            heldByApp: null,
+          },
+        ],
+        lineItems: {
+          nodes: [
+            {
+              lineItem: { id: "gid://shopify/LineItem/999" },
+              totalQuantity: 1,
+              remainingQuantity: 1,
+            },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+      }
+      const relevant = {
+        id: "gid://shopify/FulfillmentOrder/901",
+        status: state.holds.length ? "ON_HOLD" : "OPEN",
+        fulfillmentHolds: [...state.holds],
+        lineItems: { nodes: lines, pageInfo: { hasNextPage: false } },
+      }
+      if (state.changeAfterFulfillmentRead === "balance") {
+        state.outstanding = "0.4"
+        state.fullyPaid = false
+        state.financialStatus = "PENDING"
+      } else if (state.changeAfterFulfillmentRead === "owner")
+        state.foreignReturn = true
+      return Response.json({
+        data: {
+          return: {
+            ...match,
+            exchangeLineItems: {
+              nodes: exchangeLines,
+              pageInfo: { hasNextPage: false },
+            },
+            order: {
+              ...match.order,
+              fulfillmentOrders: {
+                nodes: !variables.after
+                  ? [unrelated]
+                  : state.fulfillmentMode === "missing"
+                    ? []
+                    : state.fulfillmentMode === "expanded"
+                      ? [
+                          relevant,
+                          {
+                            ...relevant,
+                            id: "gid://shopify/FulfillmentOrder/903",
+                          },
+                        ]
+                      : [relevant],
+                pageInfo: {
+                  hasNextPage:
+                    !variables.after ||
+                    state.fulfillmentMode === "repeat_cursor",
+                  endCursor: "exchange-page",
+                },
+              },
+            },
+          },
+        },
+      })
+    }
+    if (query.includes("DatoolReleaseExchangeHolds")) {
+      state.holdReleases++
+      const ids = variables.holdIds as string[]
+      state.holds = state.holds.filter((hold) => !ids.includes(hold.id))
+      if (state.loseHoldRelease) throw new Error("Lost release response")
+      return Response.json({
+        data: {
+          fulfillmentOrderReleaseHold: {
+            fulfillmentOrder: {
+              id: variables.id,
+              fulfillmentHolds: state.holds,
+            },
+            userErrors: [],
+          },
+        },
+      })
+    }
     if (query.includes("DatoolFindCreatedReturn")) {
       const match = returned()
       const candidate = { id: match.id, returnLineItems: match.returnLineItems }

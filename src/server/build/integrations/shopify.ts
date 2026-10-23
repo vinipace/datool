@@ -19,6 +19,7 @@ import {
   nativeShopify,
   SHOPIFY_CALLBACK,
   SHOPIFY_SCOPES,
+  SHOPIFY_EXCHANGE_FULFILLMENT_SCOPES,
   SHOPIFY_TOOLKIT,
   shopifyDomain,
   shopifyOrigin,
@@ -40,6 +41,7 @@ import { processShopifyReturn } from "./shopify-return-process"
 import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
 import { ShopifyOperationStore } from "./shopify-operation-store"
 import { checkShopifyReturn } from "./shopify-return-status"
+import { reconcileShopifyExchangeFulfillment } from "./shopify-exchange-fulfillment"
 import { checkShopifyCheckout } from "./shopify-order-status"
 import { getShopifyReturnOptions } from "./shopify-return-options"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
@@ -421,6 +423,9 @@ export async function executeShopifyTool(
       return Response.json(result)
     }
     if (commerce && shopper && execution) {
+      const manageExchangeHolds = SHOPIFY_EXCHANGE_FULFILLMENT_SCOPES.some(
+        (scope) => session.isScopeIncluded([scope])
+      )
       const beforeWrite = async () => {
         signal?.throwIfAborted()
         const current = await shopifyShopper(context, {
@@ -444,18 +449,43 @@ export async function executeShopifyTool(
           ),
           graphql
         )
-      if (slug === "SHOPIFY_CHECK_RETURN")
-        return await checkShopifyReturn(
+      if (slug === "SHOPIFY_CHECK_RETURN") {
+        const operations = new ShopifyOperationStore(
+          context,
+          id,
+          execution.conversationId,
+          shopper
+        )
+        const result = await checkShopifyReturn(
           args,
           shopper,
-          new ShopifyOperationStore(
-            context,
-            id,
-            execution.conversationId,
-            shopper
-          ),
+          operations,
           graphql
         )
+        if (
+          !("paymentStatus" in result) ||
+          !["payment_required", "paid"].includes(result.paymentStatus)
+        )
+          return result
+        const fulfillment = manageExchangeHolds
+          ? await reconcileShopifyExchangeFulfillment(
+              result.operationId,
+              shopper,
+              operations,
+              graphql,
+              beforeWrite
+            )
+          : {
+              fulfillmentStatus: "permission_required",
+              message:
+                "The store team must grant fulfillment access before Datool can release the exchange payment holds. Return and payment status remain available.",
+            }
+        return {
+          ...result,
+          fulfillmentStatus: fulfillment.fulfillmentStatus,
+          message: `${result.message} ${fulfillment.message}`,
+        }
+      }
       if (slug === "SHOPIFY_RETURN_OR_EXCHANGE") {
         const settings = shopifyActionSettingsSchema.parse(
           execution.settings ?? {}
@@ -501,7 +531,8 @@ export async function executeShopifyTool(
             execution.conversationId,
             shopper
           ),
-          beforeWrite
+          beforeWrite,
+          manageExchangeHolds
         )
       }
       if (slug === "SHOPIFY_CREATE_ORDER") {

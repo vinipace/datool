@@ -1,5 +1,7 @@
 import {
   shopifyReturnQuoteSchema,
+  shopifyExchangeHoldPlanSchema,
+  type ShopifyExchangeHoldPlan,
   type ShopifyReturnQuote,
 } from "@/src/lib/build/shopify-return"
 import { sql } from "drizzle-orm"
@@ -46,6 +48,7 @@ export type ShopifyReturnOperation = {
     | "failed"
   returnId: string | null
   processingStarted: boolean
+  holdPlan: ShopifyExchangeHoldPlan | null
   quote: ShopifyReturnQuote
   settings: ShopifyActionSettings
   updatedAt: Date
@@ -197,6 +200,7 @@ export class ShopifyOperationStore {
       status: ShopifyReturnOperation["status"]
       return_id: string | null
       return_process_started: boolean
+      return_hold_plan: unknown
       quote_json: unknown
       settings_json: unknown
       updated_at: Date
@@ -215,12 +219,33 @@ export class ShopifyOperationStore {
           status: row.status,
           returnId: row.return_id,
           processingStarted: row.return_process_started,
+          holdPlan:
+            row.return_hold_plan === null
+              ? null
+              : shopifyExchangeHoldPlanSchema.parse(row.return_hold_plan),
           quote: shopifyReturnQuoteSchema.parse(row.quote_json),
           settings: shopifyActionSettingsSchema.parse(row.settings_json),
           updatedAt: new Date(row.updated_at),
           revision: row.revision,
         }
       : null
+  }
+
+  async recordReturnHolds(
+    operation: ShopifyReturnOperation,
+    plan: ShopifyExchangeHoldPlan
+  ) {
+    const saved = await this.context.database.execute(sql`
+      UPDATE build_shopify_order_operations SET return_hold_plan=${JSON.stringify(plan)}::jsonb,revision=revision+1
+      WHERE ${this.scope()} AND kind='return' AND id=${operation.id}::uuid
+        AND return_id=${plan.returnId} AND revision=${operation.revision} AND return_hold_plan IS NULL
+      RETURNING id
+    `)
+    if (!saved.rows.length)
+      throw new TracerError(
+        "VALIDATION_ERROR",
+        "The exchange changed while recording its payment holds. Check return again."
+      )
   }
 
   async recordDraft(id: string, draftOrderId: string) {

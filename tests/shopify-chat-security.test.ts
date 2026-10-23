@@ -1697,12 +1697,18 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
 }
 
 async function returnRuntimeFixture(
-  options: { guest?: boolean; approval?: boolean; exchange?: boolean } = {}
+  options: {
+    guest?: boolean
+    approval?: boolean
+    exchange?: boolean
+    fulfillment?: boolean
+  } = {}
 ) {
   const f = await fixture({ visitorMessagesPerMinute: 120 })
   await activateShopifyConnection(
     f,
-    "read_products,read_legal_policies,write_app_proxy,read_orders,read_customers,write_returns,write_orders"
+    "read_products,read_legal_policies,write_app_proxy,read_orders,read_customers,write_returns,write_orders" +
+      (options.fulfillment ? ",write_merchant_managed_fulfillment_orders" : "")
   )
   const { shopifyReturnTools } =
     await import("@/src/server/build/integrations/shopify-return-process")
@@ -2457,7 +2463,10 @@ test("Shopify return continuation rejects a lost processing response even when S
     )
   )
   const migration = await readFile(
-    new URL("../migrations/0067_shopify_return_processing.sql", import.meta.url),
+    new URL(
+      "../migrations/0067_shopify_return_processing.sql",
+      import.meta.url
+    ),
     "utf8"
   )
   await f.database.execute(sql.raw(migration))
@@ -2466,4 +2475,164 @@ test("Shopify return continuation rejects a lost processing response even when S
     /processing already started|cannot be replayed/i
   )
   expect(f.provider.calls.length).toBe(calls)
+}, 60_000)
+
+test("Shopify exchange releases only recorded payment holds after payment and recovers a lost release response", async () => {
+  const f = await returnRuntimeFixture({ exchange: true, fulfillment: true })
+  const s = f.provider.state
+  s.direction = "InvoiceReturnOutcome"
+  s.transferAmount = "0.4"
+  const pending = await f.turn()
+  const operationId = pending.continuations[0].shopifyReturnQuote!.operationId
+  await f.turn(f.confirm(pending.continuations[0].continuationId!))
+  const plan = (
+    await f.database.execute<{
+      return_hold_plan: { orders: Array<{ id: string; holdIds: string[] }> }
+    }>(
+      sql`SELECT return_hold_plan FROM build_shopify_order_operations WHERE id=${operationId}::uuid`
+    )
+  ).rows[0].return_hold_plan
+  expect(
+    plan.orders.map((order) => ({ id: order.id, holdIds: order.holdIds }))
+  ).toEqual([
+    {
+      id: "gid://shopify/FulfillmentOrder/901",
+      holdIds: ["gid://shopify/FulfillmentHold/501"],
+    },
+  ])
+  expect((await f.check()).message).toContain("remain until payment")
+  expect(s.holdReleases).toBe(0)
+  s.outstanding = "0"
+  s.financialStatus = "AUTHORIZED"
+  expect((await f.check()).message).toContain(
+    "not confirmed a completed payment"
+  )
+  expect(s.holdReleases).toBe(0)
+  s.financialStatus = "PAID"
+  s.fullyPaid = true
+  // A new hold after payment is not part of the earlier approval, even with the same reason.
+  s.holds.push({
+    id: "gid://shopify/FulfillmentHold/505",
+    reason: "AWAITING_PAYMENT",
+    heldByRequestingApp: true,
+    heldByApp: null,
+  })
+  s.loseHoldRelease = true
+  await assert.rejects(f.check(), { code: "ACTION_UNCERTAIN" })
+  const released = f.provider.calls.filter((call) =>
+    call.query.includes("DatoolReleaseExchangeHolds")
+  )
+  expect(released.map((call) => call.variables)).toEqual([
+    {
+      id: "gid://shopify/FulfillmentOrder/901",
+      holdIds: ["gid://shopify/FulfillmentHold/501"],
+      externalId: `datool-return-${operationId}`,
+    },
+  ])
+  expect(s.holds.map((hold) => hold.id)).toEqual([
+    "gid://shopify/FulfillmentHold/502",
+    "gid://shopify/FulfillmentHold/503",
+    "gid://shopify/FulfillmentHold/505",
+  ])
+  const recovered = await f.check()
+  expect(recovered.message).toContain("payment holds are cleared")
+  expect(recovered.message).toContain("Other fulfillment holds remain")
+  expect(s.holdReleases).toBe(1)
+  expect(s.created).toBe(1)
+  expect(s.processed).toBe(1)
+  expect(s.invoices).toBe(1)
+}, 60_000)
+
+for (const changed of [
+  "balance",
+  "owner",
+  "lines",
+  "hold",
+  "routing",
+] as const) {
+  test(`Shopify exchange preserves holds when ${changed} changes before release`, async () => {
+    const f = await returnRuntimeFixture({ exchange: true, fulfillment: true })
+    const s = f.provider.state
+    s.direction = "InvoiceReturnOutcome"
+    s.transferAmount = "0.4"
+    const pending = await f.turn()
+    await f.turn(f.confirm(pending.continuations[0].continuationId!))
+    s.outstanding = "0"
+    s.financialStatus = "PAID"
+    s.fullyPaid = true
+    if (changed === "balance" || changed === "owner")
+      s.changeAfterFulfillmentRead = changed
+    else if (changed === "lines") s.fulfillmentMode = "mixed"
+    else if (changed === "routing") s.fulfillmentMode = "expanded"
+    else s.holds[0].reason = "HIGH_RISK_OF_FRAUD"
+    if (changed === "owner")
+      await assert.rejects(f.check(), { code: "ACTION_FAILED" })
+    else assert.match(String((await f.check()).message), /changed|preserved/i)
+    expect(s.holdReleases).toBe(0)
+    expect(s.holds).toHaveLength(3)
+  }, 60_000)
+}
+
+test("Shopify exchange requires a pre-payment hold record and complete fulfillment visibility", async () => {
+  const f = await returnRuntimeFixture({ exchange: true, fulfillment: true })
+  const s = f.provider.state
+  s.direction = "InvoiceReturnOutcome"
+  s.transferAmount = "0.4"
+  s.fulfillmentMode = "repeat_cursor"
+  const pending = await f.turn()
+  await f.turn(f.confirm(pending.continuations[0].continuationId!))
+  expect((await f.check()).message).toContain("complete exchange fulfillment")
+  s.fulfillmentMode = "mixed"
+  expect((await f.check()).message).toContain("shares or changed")
+  s.fulfillmentMode = "missing"
+  expect((await f.check()).message).toContain("after routing completes")
+  s.fulfillmentMode = "normal"
+  s.outstanding = "0"
+  s.financialStatus = "PAID"
+  s.fullyPaid = true
+  expect((await f.check()).message).toContain("not recorded before payment")
+  expect(s.holdReleases).toBe(0)
+}, 60_000)
+
+test("Shopify exchange recovers a failed hold-plan save without repeating processing or invoicing", async () => {
+  const f = await returnRuntimeFixture({ exchange: true, fulfillment: true })
+  const s = f.provider.state
+  s.direction = "InvoiceReturnOutcome"
+  s.transferAmount = "0.4"
+  const pending = await f.turn()
+  await f.database.execute(
+    sql.raw(`
+    CREATE FUNCTION reject_hold_storage() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'fixture: hold storage unavailable'; END $$;
+    CREATE TRIGGER reject_hold_storage BEFORE UPDATE OF return_hold_plan
+    ON build_shopify_order_operations FOR EACH ROW EXECUTE FUNCTION reject_hold_storage();
+  `)
+  )
+  await assert.rejects(
+    f.turn(f.confirm(pending.continuations[0].continuationId!)),
+    { code: "ACTION_UNCERTAIN" }
+  )
+  expect(
+    (
+      await f.database.execute<{ return_hold_plan: unknown }>(
+        sql`SELECT return_hold_plan FROM build_shopify_order_operations WHERE kind='return'`
+      )
+    ).rows[0].return_hold_plan
+  ).toBeNull()
+  expect(s.invoices).toBe(0)
+  expect(s.holdReleases).toBe(0)
+  await f.database.execute(
+    sql.raw(
+      "DROP TRIGGER reject_hold_storage ON build_shopify_order_operations"
+    )
+  )
+  expect((await f.check()).message).toContain("payment holds are recorded")
+  s.outstanding = "0"
+  s.financialStatus = "PAID"
+  s.fullyPaid = true
+  expect((await f.check()).fulfillmentStatus).toBe("payment_holds_cleared")
+  expect(s.created).toBe(1)
+  expect(s.processed).toBe(1)
+  expect(s.invoices).toBe(0)
+  expect(s.holdReleases).toBe(1)
 }, 60_000)

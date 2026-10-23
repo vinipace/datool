@@ -273,7 +273,7 @@ export async function checkShopifyReturn(
       "The original exchange was processed and still requires payment. Use its existing Shopify payment page if available; no invoice was resent. Replacement fulfillment remains on hold until payment is verified.",
     payment_pending:
       "Shopify has not confirmed a completed payment for this exchange. Do not pay again while it is being verified. Replacement fulfillment remains on hold.",
-    paid: "Shopify confirms the exchange order is paid. This check did not release fulfillment holds or mark replacements shipped.",
+    paid: "Shopify confirms the exchange order is paid. This does not mean replacements shipped.",
     no_payment_difference:
       "Shopify processed the original exchange with no payment difference. This does not mean the replacement has shipped.",
   }
@@ -299,7 +299,7 @@ export const shopifyReturnStatusTools: IntegrationTool[] = [
     slug: "SHOPIFY_CHECK_RETURN",
     name: "Check return",
     description:
-      "Recover the original return, refund or exchange after an interrupted response and check its actual payment status. Uses this shopper's saved operation, never an arbitrary return ID. Does not create or repeat refunds, invoices or returns. Pending or unverified results must not be described as completed.",
+      "Recover the original return, refund or exchange and check its actual payment status. After verified payment, release only the original exchange payment holds recorded before payment, when fulfillment permissions are granted. Uses this shopper's saved operation, never arbitrary return or fulfillment IDs. Does not repeat refunds, invoices or returns, remove other holds or mark items shipped. Pending or unverified results must not be described as completed.",
     inputSchema: z.toJSONSchema(inputSchema, { target: "draft-07" }),
   },
 ]

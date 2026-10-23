@@ -86,6 +86,26 @@ export const shopifyReturnQuoteSchema = z
 export type ShopifyReturnInput = z.infer<typeof shopifyReturnInputSchema>
 export type ShopifyReturnQuote = z.infer<typeof shopifyReturnQuoteSchema>
 
+export const shopifyExchangeHoldPlanSchema = z.object({
+  returnId: z.string(),
+  orders: z
+    .array(
+      z.object({
+        id: z.string(),
+        holdIds: z.array(z.string()).min(1),
+        items: z
+          .array(
+            z.object({ id: z.string(), quantity: z.number().int().positive() })
+          )
+          .min(1),
+      })
+    )
+    .min(1),
+})
+export type ShopifyExchangeHoldPlan = z.infer<
+  typeof shopifyExchangeHoldPlanSchema
+>
+
 export function shopifyReturnSummary(quote: ShopifyReturnQuote) {
   return [
     ...(quote.resume

@@ -19,7 +19,7 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [x] Confirmed original-order return/refund and exchange processing, delivery-window policy and original-payment settlement.
 - [x] Recover an original return and its confirmed refund/payment status without repeating Shopify writes.
 - [x] Freshly approved continuation of an existing never-processed return, including a changed balance.
-- [ ] Payment-verified exchange hold release.
+- [x] On-demand payment-verified release of the original recorded exchange payment holds.
 - [ ] Replacement orders with mandatory human approval and original-order credit accounting.
 - [ ] Action settings, confirmations, error states and reusable chat controls.
 - [ ] Delayed teammate approval and customer re-verification when the Shopify session has expired.
@@ -111,9 +111,9 @@ stories cover the shared confirmation and merchant settings. The generated
 queries validate against Shopify Admin GraphQL 2026-10. These are local tests
 with stubbed provider responses, not live refunds or payments.
 
-Apply migrations 0066–0067 and obtain `write_returns` plus the invoice/order scopes
-before enabling the action. Remaining return work includes payment webhooks and
-verified hold release. Separate replacement orders and their credit
+Apply migrations 0066–0068 and obtain `write_returns` plus the invoice/order scopes
+before enabling the action. Remaining return work includes payment webhooks.
+Separate replacement orders and their credit
 accounting are not implemented. Full after-sales parity remains incomplete.
 
 ## Return recovery
@@ -130,7 +130,8 @@ processed quantities. It confirms only the approved refund amount with successfu
 or pending transactions; failed, incomplete or conflicting transactions require
 review. Unpaid exchanges recover Shopify's existing additional-payment URL only
 for the approved outstanding amount. Zero outstanding alone does not establish a
-completed payment. The check sends no invoice and changes no fulfillment hold.
+completed payment. The check sends no invoice. With fulfillment permissions it can release the
+original recorded exchange payment holds after verifying payment.
 
 The recovered ID and financial outcome use the existing commerce ledger with a
 revision check; a stale read cannot overwrite a newer reconciliation. The original
@@ -144,7 +145,8 @@ A database lifecycle check covers an active writer and a newer reconciliation.
 These use stubbed Shopify responses; live permission grants and provider outcomes
 remain unverified. The existing return action can continue a recovered return that
 is known never to have started processing, after a fresh quote and approval.
-Verified fulfillment-hold release remains unfinished.
+Check return can release recorded exchange payment holds after verified payment,
+as described below; its recovery of refunds and invoices still performs no such writes.
 
 The queries validate against Shopify Admin GraphQL 2026-10. Provider contracts:
 [return transactions and state](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Return),
@@ -182,6 +184,43 @@ preserved human-approval requirement, fresh price consent, unavailable stock,
 forged confirmation fields, guest conversation isolation, one-shot processing and
 unknown legacy history. Provider responses are stubbed; live-store verification
 remains a separate release gate.
+
+## Exchange payment holds
+
+Before the invoice is sent, Datool records the exact payment-hold IDs on the
+exchange's new fulfillment lines in the existing commerce ledger (migration 0068).
+It reads all accessible fulfillment pages, maps the return's exchange order-line
+IDs and quantities, and rejects mixed, incomplete or changed membership. Only
+`AWAITING_PAYMENT` holds from Shopify or this app are eligible; another app's
+holds are preserved. An unpaid Check return can finish recording after an
+interrupted response or delayed routing. A paid exchange with no earlier plan
+requires store-team review rather than adopting whatever holds exist later.
+
+When Check return sees zero outstanding, `fullyPaid` and financial status `PAID`,
+it rechecks ownership, the original processed items, refund activity and payment
+before releasing each recorded hold. `AUTHORIZED` is insufficient. Every mutation
+supplies explicit `holdIds`; omitting them would release unrelated holds. New
+manual holds, fraud/inventory holds and other apps' holds remain untouched. A lost
+release response is reconciled by reading the same immutable IDs. The code never
+fulfills, restocks or marks replacements shipped, and does not repeat the return,
+refund or invoice.
+
+This reuses the existing commerce record and action, with no new queue or workflow.
+Required grants are `write_merchant_managed_fulfillment_orders`, plus
+`write_third_party_fulfillment_orders` for third-party locations, and the Shopify
+user's `fulfill_and_ship_orders` permission. Incomplete visibility cannot authorize
+a release. Existing catalog/payment reads remain usable without these grants.
+Automatic payment webhooks and customer notifications are still unfinished.
+
+The focused runtime cases cover explicit hold IDs, paginated membership, missing
+or mixed fulfillment, pending authorization, changed ownership/balance/holds,
+new holds after payment, lost release responses and failed hold-plan persistence.
+Responses are stubbed. Shopify schema validation does not establish real permission
+grants or fulfillment outcomes; live sandbox verification remains required.
+
+Provider contracts: [managing exchanges](https://shopify.dev/docs/apps/build/orders-fulfillment/returns-apps/manage-exchanges),
+[hold release and explicit IDs](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/fulfillmentOrderReleaseHold),
+and [exchange order-line membership](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/ExchangeLineItem).
 
 ## Design review
 

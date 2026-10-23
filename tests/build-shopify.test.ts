@@ -225,7 +225,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   const authorizeUrl = new URL(authorization.headers.get("location")!)
   expect(authorizeUrl.host).toBe(shop)
   expect(authorizeUrl.searchParams.get("scope")).toBe(
-    "read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms,write_returns"
+    "read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms,write_returns,write_merchant_managed_fulfillment_orders,write_third_party_fulfillment_orders"
   )
   const cookie = authorization.headers
     .getSetCookie()

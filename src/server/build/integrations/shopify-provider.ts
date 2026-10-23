@@ -5,6 +5,10 @@ import { TracerError } from "@/src/server/tracer/errors"
 
 export const SHOPIFY_TOOLKIT = "shopify_native"
 export const SHOPIFY_SCOPES = ["read_products", "read_legal_policies"]
+export const SHOPIFY_EXCHANGE_FULFILLMENT_SCOPES = [
+  "write_merchant_managed_fulfillment_orders",
+  "write_third_party_fulfillment_orders",
+]
 export const SHOPIFY_REQUESTED_SCOPES = [
   ...SHOPIFY_SCOPES,
   "write_app_proxy",
@@ -13,6 +17,7 @@ export const SHOPIFY_REQUESTED_SCOPES = [
   "write_draft_orders",
   "read_payment_terms",
   "write_returns",
+  ...SHOPIFY_EXCHANGE_FULFILLMENT_SCOPES,
 ]
 export const SHOPIFY_CALLBACK = "/api/shopify/callback"
 

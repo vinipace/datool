@@ -62,7 +62,7 @@ connections.
   obtains the current Shopify balance, and requests fresh confirmation or teammate
   approval. It rechecks replacement stock and preserves the original approval
   requirement even if the action settings were later relaxed. An attempted refund
-  or exchange is never replayed. Payment-verified hold release remains unfinished.
+  or exchange is never replayed.
 - `SHOPIFY_CHECK_RETURN`: recover the original return after a lost response or
   database-save failure and check refund/payment status. Enable **Check return**
   alongside **Return or exchange items**. It accepts Datool's operation ID, or
@@ -72,8 +72,10 @@ connections.
   Pending refunds stay pending. An unpaid exchange can recover its existing
   Shopify payment link only when the outstanding balance matches the approved
   amount. Paid status requires Shopify's paid flag and zero outstanding balance;
-  it does not release fulfillment holds or prove shipment. Missing/ambiguous
-  matches, changed ownership or unmatched processed amounts require review.
+  with fulfillment permissions, this check releases only the exchange payment
+  holds recorded before payment. Other holds remain. This never marks an item
+  shipped. Missing/ambiguous matches, changed ownership or unmatched processed
+  amounts require review.
   Unprocessed returns can use the existing return action's continuation flow.
 
 Product searches render native product cards. An enabled **Update shopping cart**
@@ -95,18 +97,28 @@ session. Neither path calls the Shopify development app or its temporary tunnel.
 Native calls record integration usage with no configured Composio charge.
 Normal agent model usage still applies.
 
-Apply migrations through 0067 before enabling these actions. Confirmed order
+Apply migrations through 0068 before enabling these actions. Confirmed order
 intent is stored separately from usage events so interrupted tool responses do
 not erase the information needed for recovery. Checkout reads require draft-order,
 order and customer access; the corresponding write scopes also grant read access.
 Returns require `write_returns`, order/customer/product reads, and `write_orders`
-for exchange invoices. Existing installations must reconnect to grant new scopes.
+for exchange invoices. Automatic payment-hold release also needs
+`write_merchant_managed_fulfillment_orders` and, for external fulfillment locations,
+`write_third_party_fulfillment_orders`. The Shopify user must be allowed to fulfill
+and ship orders. Existing installations must reconnect to grant new scopes.
+Without those grants, return/payment reads remain usable and identify the missing
+permission; they never claim a hold was released.
 Return admission uses the same commerce ledger, keyed to the original order
 across conversations. A timeout or database failure after dispatch keeps the
 operation unresolved and prevents another return attempt until reviewed.
 Migration 0067 records whether processing has ever started. Existing records without
 that history are conservatively treated as unknown, so they can be reconciled but
 not replayed. Only a recorded never-started operation may continue in chat.
+Migration 0068 stores the exact exchange payment-hold IDs and fulfillment lines
+observed before payment. A paid exchange with no saved hold plan requires review.
+A lost hold-release response is recovered by reading those same IDs; no refund,
+invoice, newly added hold or shipment is repeated. Payment reconciliation is
+currently on demand through Check return; webhook notifications remain unfinished.
 
 ## Billing ownership
 
@@ -137,7 +149,7 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
    `https://YOUR_DATOOL_HOST/api/shopify/callback`, and
-   `read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms,write_returns`.
+   `read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms,write_returns,write_merchant_managed_fulfillment_orders,write_third_party_fulfillment_orders`.
    Customer and order access must be approved for the public app. The official Shopify SDK performs the
    authorization-code flow. Do not switch an existing embedded app's flow just
    to enable this connector.

@@ -8,6 +8,7 @@ import {
 import { prepareShopifyReturnContinuation } from "./shopify-return-resume"
 import { readReturnFinancialOutcome } from "./shopify-return-financial"
 import { CHECK_CREATED_RETURN } from "./shopify-return-status"
+import { reconcileShopifyExchangeFulfillment } from "./shopify-exchange-fulfillment"
 import { TracerError } from "@/src/server/tracer/errors"
 import { shopifyData, type ShopifyGraphqlClient } from "./shopify-catalog"
 import type { ShopifyShopper } from "./shopify-identity"
@@ -70,7 +71,8 @@ export async function processShopifyReturn(
   settings: ShopifyActionSettings,
   graphql: ShopifyGraphqlClient,
   operations: ShopifyOperationStore,
-  beforeWrite: () => Promise<void>
+  beforeWrite: () => Promise<void>,
+  manageExchangeHolds = false
 ) {
   if (quote.customerId !== shopper.customerId)
     throw new TracerError(
@@ -304,6 +306,13 @@ export async function processShopifyReturn(
       )
         return await review(
           "The exchange was processed, but the order's outstanding balance differs from the approved amount. No invoice was sent; the store team must review the balance before collecting payment."
+        )
+      if (manageExchangeHolds)
+        await reconcileShopifyExchangeFulfillment(
+          quote.operationId,
+          shopper,
+          operations,
+          graphql
         )
       const invoice = await shopifyMutation<{ order: { id: string } | null }>(
         graphql,
