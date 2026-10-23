@@ -1,3 +1,4 @@
+import { createShopifyInstallIntent } from "./shopify-install"
 import { createHash, randomBytes, randomUUID } from "node:crypto"
 import type { Pool } from "pg"
 import { Session } from "@shopify/shopify-api"
@@ -54,6 +55,7 @@ function decrypt(row: StoreRow) {
 }
 
 export async function connectShopify(context: BuildContext, store: string) {
+  if (!store) return createShopifyInstallIntent(context)
   const ctx = await assertBuildProject(context)
   const api = nativeShopify()
   const shop = shopifyDomain(store)

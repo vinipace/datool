@@ -1,3 +1,4 @@
+import { readBilling } from "@/src/server/billing/store"
 import { BillingPage } from "@/components/workspace/billing-page"
 import { Notice } from "@/components/ui/notice"
 import { requireActiveOrganization } from "@/lib/workspace-access"
@@ -41,13 +42,16 @@ export default async function Page({
       </Notice>
     )
   const role = await memberRole(db, userId, organization.id)
+  const billing = await readBilling(organization.id)
   let prices: CloudPrices | null = null
   try {
-    const [core, pro] = await Promise.all([
-      cloudPrice("core"),
-      cloudPrice("pro"),
-    ])
-    prices = { core, pro }
+    if (billing?.provider !== "shopify") {
+      const [core, pro] = await Promise.all([
+        cloudPrice("core"),
+        cloudPrice("pro"),
+      ])
+      prices = { core, pro }
+    }
   } catch {
     /* The page remains usable for existing customers when prices fail. */
   }

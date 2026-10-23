@@ -32,37 +32,15 @@ export const Shopify: Story = {
       })
     )
     await expect(
-      dialog.getByRole("button", { name: "Connect store" })
-    ).toBeDisabled()
-    await userEvent.type(
-      dialog.getByLabelText("Store address"),
-      "invalid.example"
-    )
-    await userEvent.click(dialog.getByRole("button", { name: "Connect store" }))
-    await expect(dialog.findByRole("alert")).resolves.toHaveTextContent(
-      "myshopify.com"
-    )
-    await userEvent.clear(dialog.getByLabelText("Store address"))
-    await userEvent.type(
-      dialog.getByLabelText("Store address"),
-      "sample.myshopify.com"
-    )
+      dialog.queryByLabelText("Store address")
+    ).not.toBeInTheDocument()
     await userEvent.click(dialog.getByRole("button", { name: "Connect store" }))
     await expect(
-      dialog.findByRole("link", { name: "Authorize account" })
+      dialog.findByRole("link", { name: "Continue to Shopify" })
     ).resolves.toHaveAttribute(
       "href",
-      "https://datool.example/api/shopify/connect?token=fixture"
+      "https://datool.example/api/shopify/install?intent=fixture"
     )
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Check connection" })
-    )
-    await expect(
-      dialog.findByText("Connected", { exact: true })
-    ).resolves.toBeVisible()
-    await expect(
-      dialog.getByRole("button", { name: "Open Actions" })
-    ).toBeVisible()
   },
 }
 export const ShopifySetupRequired: Story = {

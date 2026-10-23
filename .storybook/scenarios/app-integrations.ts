@@ -30,7 +30,7 @@ export function appIntegrationScenario(
   return {
     reset,
     handlers: [
-      http.post("*/api/build/:operation", async ({ params, request }) => {
+      http.post("*/api/build/:operation", async ({ params }) => {
         if (initial === "loading") await delay("infinite")
         if (initial === "error")
           return HttpResponse.json(
@@ -109,26 +109,18 @@ export function appIntegrationScenario(
             ],
           })
         if (params.operation === "build_connect_app") {
-          if (initial === "shopify") {
-            const input = (await request.json()) as { shop?: string }
-            if (input.shop !== "sample.myshopify.com")
-              return HttpResponse.json(
-                { error: { message: "Enter a myshopify.com store address." } },
-                { status: 400 }
-              )
-          }
           if (initial === "connect-error" && connectAttempts++ === 0)
             return HttpResponse.json(
               { error: { message: "Unable to start authorization." } },
               { status: 503 }
             )
-          status = "pending"
+          if (initial !== "shopify") status = "pending"
           return HttpResponse.json({
             data: {
               id: connectionId,
               redirectUrl:
                 initial === "shopify"
-                  ? "https://datool.example/api/shopify/connect?token=fixture"
+                  ? "https://datool.example/api/shopify/install?intent=fixture"
                   : "https://connect.composio.dev/fixture",
             },
           })
