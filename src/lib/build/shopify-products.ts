@@ -14,8 +14,21 @@ export const shopifyProductSearchSchema = z
     maxPrice: z.number().min(0).max(1_000_000_000).optional(),
     inStockOnly: z.boolean().optional(),
     after: z.string().min(1).max(2048).optional(),
+    productId: z
+      .string()
+      .regex(/^gid:\/\/shopify\/Product\/[1-9][0-9]*$/)
+      .optional(),
+    variantAfter: z.string().min(1).max(2048).optional(),
   })
   .strict()
+  .refine(
+    (value) => !value.variantAfter || Boolean(value.productId),
+    "Variant pagination requires a product ID."
+  )
+  .refine(
+    (value) => !value.productId || !value.after,
+    "Product and variant pagination cannot be combined."
+  )
   .refine(
     (value) =>
       value.minPrice === undefined ||
@@ -40,6 +53,10 @@ export const shopifyProductsSchema = z.object({
         priceMax: z.string().nullable(),
         url,
         optionsTruncated: z.boolean(),
+        variantsNextCursor: z.string().min(1).max(2048).nullable().optional(),
+        variantInteraction: z
+          .object({ actionId: z.string(), continuationId: z.string() })
+          .optional(),
         variants: z
           .array(
             z.object({

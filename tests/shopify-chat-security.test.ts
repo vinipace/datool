@@ -586,6 +586,7 @@ for (const flow of [
   "model",
   "procedure",
   "products",
+  "products-variants",
   "products-procedure",
   "products-intent",
   "products-approved",
@@ -641,6 +642,12 @@ for (const flow of [
         const body = JSON.parse(String(init.body))
         if (!body.query.includes("DatoolProducts"))
           throw new Error("Unexpected external request")
+        const variantPage =
+          flow === "products-variants" && body.variables.variantAfter
+        if (variantPage) {
+          expect(body.variables.query).toContain("id:123")
+          expect(body.variables.variantAfter).toBe("more-options")
+        }
         return Response.json({
           data: {
             shop: {
@@ -649,7 +656,7 @@ for (const flow of [
             },
             products: {
               pageInfo: { hasNextPage: false, endCursor: null },
-              nodes: ["123", "456"].map((id) => ({
+              nodes: (variantPage ? ["123"] : ["123", "456"]).map((id) => ({
                 id: `gid://shopify/Product/${id}`,
                 title: id === "123" ? "Board wax" : "Helmet",
                 description: "Live product",
@@ -662,10 +669,16 @@ for (const flow of [
                   maxVariantPrice: { amount: "25" },
                 },
                 variants: {
-                  pageInfo: { hasNextPage: false, endCursor: null },
+                  pageInfo: {
+                    hasNextPage: flow === "products-variants" && !variantPage,
+                    endCursor:
+                      flow === "products-variants" && !variantPage
+                        ? "more-options"
+                        : null,
+                  },
                   nodes: [
                     {
-                      id: `gid://shopify/ProductVariant/${id}`,
+                      id: `gid://shopify/ProductVariant/${flow === "products-variants" && !variantPage && id === "123" ? "124" : id}`,
                       title: "Default Title",
                       price: "25",
                       availableForSale: true,
@@ -717,6 +730,12 @@ for (const flow of [
       },
     })
     const session = await f.session("")
+    if (flow === "products-variants") {
+      // An installed action keeps its old saved schema across application upgrades.
+      await f.database.execute(sql`UPDATE build_action_revisions
+        SET definition_json=jsonb_set(definition_json, '{inputSchema}', ${JSON.stringify({ type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false })}::jsonb)
+        WHERE action_id=${searchAction.id}`)
+    }
     const dependencies = {
       generateText: (async (options: {
         tools: Record<
@@ -825,9 +844,54 @@ for (const flow of [
       const catalog = shopifyProductsSchema.parse(
         projected.at(-1)?.metadata.shopifyProducts
       )
-      const first = catalog.products[0].cartInteraction!
+      let first = catalog.products[0].cartInteraction!
       const second = catalog.products[1].cartInteraction!
       expect(first.actionId).toBe(action.id)
+      if (flow === "products-variants") {
+        expect(catalog.products[0].variants[0].cartVariantId).toBe("124")
+        const page = catalog.products[0].variantInteraction
+        expect(page).toBeDefined()
+        const loaded = await runAgentTurn(
+          f.context,
+          await admittedTurn({
+            widgetInteraction: {
+              ...page,
+              input: {
+                query: "different",
+                productId: "gid://shopify/Product/456",
+                variantAfter: "forged",
+              },
+            },
+          }),
+          { agent, dependencies }
+        )
+        await enqueueAgentTurnResult(f.context, loaded, "variant-page")
+        const messages = await readPublicConversation(
+          f.context,
+          f.channel.id,
+          session.conversationId,
+          session.visitorToken,
+          "https://chat.example.test"
+        )
+        const next = shopifyProductsSchema.parse(
+          messages.at(-1)?.metadata.shopifyProducts
+        )
+        expect(next.products).toHaveLength(1)
+        expect(next.products[0].id).toBe("gid://shopify/Product/123")
+        expect(next.products[0].variants[0].cartVariantId).toBe("123")
+        expect(next.products[0].variantInteraction).toBeUndefined()
+        first = next.products[0].cartInteraction!
+        await assert.rejects(
+          runAgentTurn(
+            f.context,
+            await admittedTurn({
+              widgetInteraction: { ...page, input: {} },
+            }),
+            { agent, dependencies }
+          ),
+          /no longer available/
+        )
+      }
       await assert.rejects(
         runAgentTurn(
           f.context,
@@ -986,9 +1050,12 @@ for (const flow of [
       sql`SELECT status FROM build_usage_event WHERE connection_id=${f.connectionId}::uuid`
     )
     expect(usage.rows).toEqual(
-      Array.from({ length: productsFlow ? 2 : 1 }, () => ({
-        status: "completed",
-      }))
+      Array.from(
+        { length: flow === "products-variants" ? 3 : productsFlow ? 2 : 1 },
+        () => ({
+          status: "completed",
+        })
+      )
     )
     await assert.rejects(
       runAgentTurn(f.context, await admittedTurn(interaction), {

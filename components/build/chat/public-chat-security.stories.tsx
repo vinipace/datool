@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { PublicChat } from "./public-chat"
 import { chatBubbleSettingsSchema } from "@/src/lib/build/chat-bubble"
 import { ShopifyChatSetup } from "../agents/shopify-chat-setup"
+import type { ShopifyProducts } from "@/src/lib/build/shopify-products"
 
 const channelId = "11111111-1111-4111-8111-111111111111"
 const appearance = chatBubbleSettingsSchema.parse({
@@ -602,11 +603,13 @@ export const CartReceiptFailure: Story = {
   },
 }
 
+let productPageRequest: Record<string, unknown> | null = null
 let productSelection: Record<string, unknown> | null = null
 export const ProductCards: Story = {
   render: () => <StoreSessionFixture />,
   beforeEach: () => {
     productSelection = null
+    productPageRequest = null
   },
   parameters: {
     msw: {
@@ -618,9 +621,18 @@ export const ProductCards: Story = {
             headers: { "Content-Type": "image/webp" },
           })
         }),
-        http.get("*/api/build-public/:channel/conversation/:conversation", () =>
-          HttpResponse.json({
-            data: [
+        http.get(
+          "*/api/build-public/:channel/conversation/:conversation",
+          () => {
+            const data: Array<{
+              id: string
+              direction: string
+              text: string
+              metadata: {
+                shopifyProducts?: ShopifyProducts
+                completedContinuationId?: string
+              }
+            }> = [
               {
                 id: "product-result",
                 direction: "outbound",
@@ -642,6 +654,10 @@ export const ProductCards: Story = {
                         priceMax: "30",
                         url: "https://store.example/products/board",
                         optionsTruncated: true,
+                        variantInteraction: {
+                          actionId: "search-products",
+                          continuationId: "variant-page-1234",
+                        },
                         variants: [
                           {
                             id: "gid://shopify/ProductVariant/125",
@@ -686,13 +702,53 @@ export const ProductCards: Story = {
                     },
                   ]
                 : []),
-            ],
-          })
+            ]
+            if (productPageRequest) {
+              const catalog = data[0].metadata.shopifyProducts!
+              data.push({
+                id: "variant-page-result",
+                direction: "outbound",
+                text: "",
+                metadata: {
+                  completedContinuationId: "variant-page-1234",
+                  shopifyProducts: {
+                    ...catalog,
+                    products: [
+                      {
+                        ...catalog.products[0],
+                        optionsTruncated: false,
+                        variantInteraction: undefined,
+                        variants: [
+                          {
+                            id: "gid://shopify/ProductVariant/126",
+                            cartVariantId: "126",
+                            title: "Green / medium",
+                            price: "28",
+                            availableForSale: true,
+                          },
+                        ],
+                        cartInteraction: {
+                          actionId: "update-cart",
+                          continuationId: "product-selection-5678",
+                        },
+                      },
+                    ],
+                  },
+                },
+              })
+            }
+            return HttpResponse.json({ data })
+          }
         ),
         http.post(
           "*/api/build-public/:channel/conversation/:conversation",
           async ({ request }) => {
-            productSelection = (await request.json()) as Record<string, unknown>
+            const body = (await request.json()) as {
+              metadata: { widgetInteraction: { actionId: string } }
+            }
+            if (body.metadata.widgetInteraction.actionId === "search-products")
+              productPageRequest = body
+            else productSelection = body
             return HttpResponse.json({ data: { status: "queued" } })
           }
         ),
@@ -702,7 +758,7 @@ export const ProductCards: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const card = within(
-      await canvas.findByRole("region", { name: "Trail shoe" })
+      await canvas.findByRole("group", { name: "Trail shoe" })
     )
     const options = card.getByRole("combobox", { name: "Options" })
     await expect(
@@ -742,6 +798,30 @@ export const ProductCards: Story = {
         },
       },
     })
+    const composer = canvas.getByRole("textbox", { name: "Message" })
+    await userEvent.type(composer, "Keep my next question")
+    const more = card.getByRole("button", { name: "Show more options" })
+    more.focus()
+    await expect(more).toHaveFocus()
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() =>
+      expect(productPageRequest).toMatchObject({
+        metadata: {
+          widgetInteraction: {
+            actionId: "search-products",
+            continuationId: "variant-page-1234",
+            input: {},
+          },
+        },
+      })
+    )
+    await expect(
+      canvas.findByRole("option", { name: /Green \/ medium/ })
+    ).resolves.toBeInTheDocument()
+    await expect(
+      card.getByRole("button", { name: "More options requested" })
+    ).toBeDisabled()
+    await expect(composer).toHaveValue("Keep my next question")
     await waitFor(() => {
       for (const article of canvas.getAllByRole("article"))
         expect(getComputedStyle(article).opacity).toBe("1")

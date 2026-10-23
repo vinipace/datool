@@ -6,7 +6,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 
 - [x] Bind customer authorization to authenticated channel messages and recheck identity before each action.
 - [x] Product discovery, variant IDs, stock filtering and product cards with cart controls.
-- [ ] Catalog image search, complete variant browsing and messaging-channel cart support from Chatbase's documented action matrix.
+- [x] Complete variant browsing through live product-card pages in storefront chat.
+- [ ] Catalog image search and messaging-channel cart support from Chatbase's documented action matrix.
 - [x] Read and update the shopper's storefront cart; retain chat state during navigation.
 - [ ] Online checkout, cash on delivery and free orders, with merchant-selected payment policies.
 - [x] Shopify-calculated quotes and one-shot creation of online-payment drafts, unpaid cash-on-delivery orders and zero-total free orders.
@@ -41,7 +42,16 @@ Cart writes require browser storage and Web Locks. A receipt is saved before dis
 
 Product cards use live catalog results, including product type/vendor/price filters, stock availability and product-page cursors. The merchant's stock exclusion setting cannot be weakened by model arguments. A card can offer cart selection only when exactly one enabled, non-private Update shopping cart action is available for the same store and channel. Its saved, expiring selection permits only the variants actually shown; selecting it runs the existing cart action and merchant approval path. It does not itself claim the cart was changed. Card selection, approval and browser cart completion reuse the existing tool records, without another queue or persistence table.
 
-Large variant collections currently show the first matching page and link to the store's complete options. Full in-chat variant browsing, catalog image search and messaging-channel cart support remain unfinished. Prices use the store's base currency and are re-evaluated by Shopify when the cart changes.
+Large variant collections offer Show more options in chat. Each click reads the next
+matching page of the same product with the original filters, using a saved one-hour
+continuation. Browser arguments cannot replace the product, cursor or filters.
+Each page rechecks publication and current merchant stock policy; empty filtered
+variant pages are skipped. The returned page gets its own cart selection and retains
+the cart action's approval policy. Browsing also works without a cart action.
+Earlier pages remain in the conversation. Previously saved product actions use the
+current native input schema without needing to be recreated. Catalog image search
+and messaging-channel cart support remain unfinished. Prices use the store's base
+currency and are re-evaluated by Shopify when the cart changes.
 
 Shopify calculates prices, discounts, shipping, taxes and payment status. Browser cart totals are untrusted display data and must never authorize refunds, order prices or payment. The cart's Checkout link navigates to Shopify checkout; it does not create or prove a completed/paid order. Updating an account address does not change a placed order's delivery address.
 
@@ -72,6 +82,16 @@ The first implementation slice has six behavioral tests covering message-bound i
 The cart slice adds real-runtime database tests for both model calls and multi-step procedures: merchant approval precedes the browser command, replacement input is ignored, one usage record is produced on completion, and a consumed continuation cannot be reused. The host-script test covers origin/source checks, localization, private-field removal, duplicate/reload protection and ambiguous writes. Eighteen focused Shopify/bridge tests and ten Chromium chat stories pass locally. Cart populated, empty, keyboard-focus and error states were inspected at mobile and desktop widths; the draft message survives cart interactions.
 
 Those full-path tests exposed an incompatible JSON Schema dialect in the new native customer/order tools. Their published schemas now target Draft 7, matching Datool's runtime validator. Regression checks demonstrated failures before the schema, composer-draft, procedure-cart and next-turn model-context fixes, then passed after repair. The existing generic approval/continuation checks remain required. No new Shopify GraphQL operations were introduced by the cart slice, and live-store cart verification is still pending release.
+
+Variant paging extends those runtime cases through the public conversation: the
+next page returns a previously unseen option, ignores forged product/cursor input,
+works with the pre-upgrade saved action schema, and preserves cart approval and
+one-shot consumption. Eight cart/product runtime cases and six commerce adapter
+cases pass. Nine Chromium stories pass, including keyboard paging and an unchanged
+composer draft. Showing multiple pages exposed duplicate landmark labels; product
+collections now use labelled groups inside the conversation instead. Phone and
+desktop checks found no horizontal overflow. The updated product query validates
+against Shopify Admin GraphQL 2026-10. Provider responses remain test fixtures.
 
 The product-card slice exercises seven real-runtime cart paths, including product searches through model tools, keyword procedures, intent procedures and approved reads. They verify public card delivery, allowed variant selection, preserved merchant approval and one-shot completion. The regressions exposed missing procedure metadata, raw catalog JSON in approved replies and dropped card-only outbound messages; each failed before its repair. Six commerce tests cover Shopify adapters and published input schemas, including stock/price filtering across variant pages. Fifteen Chromium stories cover the chat and integration controls. Product images, mobile/desktop layout, keyboard focus, empty results and network errors were inspected. The product and variant GraphQL queries validate against Shopify 2026-10. These checks do not establish a live Shopify installation.
 
@@ -117,6 +137,26 @@ Apply migrations 0066–0069 and obtain `write_returns` plus the invoice/order s
 before enabling the action. Production payment webhook registration still needs verification.
 Separate replacement orders and their credit
 accounting are not implemented. Full after-sales parity remains incomplete.
+
+### Separate exchange accounting investigation
+
+Shopify's same-order return API does not automatically connect a separate replacement
+draft to the original return. Processing the return without a financial transfer can
+leave Shopify reporting a refund owed even after a replacement is supplied.
+[Shopify's developer response](https://community.shopify.dev/t/request-to-waive-refund-for-merchants-who-cant-use-exchange-api/25601)
+describes a tested workaround: add a tax-exempt custom adjustment line to the original
+order for the exchanged value and document the linkage in order notes. The response
+also calls out tax-treatment limits; its example does not prove the complete
+collect/refund, multi-currency or partial-return flow required here.
+
+This remains an implementation and live-verification requirement, not a claim that
+separate exchanges are impossible. The next slice must validate the original-order
+adjustment, replacement pricing/tax, net collection/refund, and recovery between
+writes before exposing it. Mandatory Inbox approval and guest order proof remain
+required. [Refunding to Shopify store credit](https://shopify.dev/changelog/refund-to-store-credit)
+is another supported settlement mechanism but requires new customer accounts and an
+order associated with a customer; it is not a complete substitute for the documented
+guest exchange journey.
 
 ## Return recovery
 

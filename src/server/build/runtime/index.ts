@@ -14,6 +14,7 @@ import {
 } from "@/src/lib/build/shopify-order"
 import {
   shopifyProductsSchema,
+  shopifyProductSearchSchema,
   type ShopifyProducts,
 } from "@/src/lib/build/shopify-products"
 import {
@@ -247,6 +248,7 @@ export type RuntimeContinuation = {
   shopifySourceTurnId?: string
   shopifyCart?: { command: ShopifyCartCommand; expiresAt: number }
   shopifyProductSelection?: { variantIds: string[]; expiresAt: number }
+  shopifyVariantPage?: { expiresAt: number }
   shopifyReturnQuote?: ShopifyReturnQuote
   shopifyOrderQuote?: ShopifyOrderQuote
 }
@@ -713,14 +715,22 @@ function usageCostUsd(result: unknown): number | null {
   return cost ?? null
 }
 
+function actionInputSchema(action: ActionDefinition) {
+  // Native catalog input evolves with the adapter, including for previously saved actions.
+  return action.type === "integration" &&
+    action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS"
+    ? z.toJSONSchema(shopifyProductSearchSchema, { target: "draft-7" })
+    : action.inputSchema
+}
+
 function validateActionInput(action: ActionDefinition, input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new BuildRuntimeError(
       "INVALID_TOOL_INPUT",
       "Action input must be an object."
     )
-  if (Object.keys(action.inputSchema).length)
-    validateSchema(action.inputSchema, input)
+  const schema = actionInputSchema(action)
+  if (Object.keys(schema).length) validateSchema(schema, input)
 }
 
 function assertSafeActionUrl(raw: string) {
@@ -940,7 +950,11 @@ function persistedContinuations(
 ): RuntimeContinuation[] {
   return toolCalls.flatMap((call) => {
     const continuation = call.continuation
-    if (continuation?.shopifyProductSelection) return []
+    if (
+      continuation?.shopifyProductSelection ||
+      continuation?.shopifyVariantPage
+    )
+      return []
     if (!continuation || typeof continuation.type !== "string") return []
     const type = continuation.type
     if (
@@ -1669,7 +1683,8 @@ async function executeAction(
               service,
               conversation,
               turn,
-              options.toolCallId
+              options.toolCallId,
+              input
             )
           : undefined
       const output = shopifyProducts ?? result.output
@@ -3063,20 +3078,44 @@ export async function runAgentTurn(
         }
       }
       let productSelectionInput: Record<string, unknown> | undefined
-      if (persistedContinuation.shopifyProductSelection) {
+      if (
+        persistedContinuation.shopifyProductSelection ||
+        persistedContinuation.shopifyVariantPage
+      ) {
         try {
-          if (
-            continuationType !== "client_action" ||
-            action.definition.type !== "integration" ||
-            action.definition.toolSlug !== "SHOPIFY_UPDATE_CART"
-          )
-            throw new Error("Invalid product selection.")
-          productSelectionInput = selectedShopifyCartInput(
-            interaction.input,
-            persistedContinuation.shopifyProductSelection as NonNullable<
-              RuntimeContinuation["shopifyProductSelection"]
+          if (persistedContinuation.shopifyVariantPage) {
+            const page =
+              persistedContinuation.shopifyVariantPage as NonNullable<
+                RuntimeContinuation["shopifyVariantPage"]
+              >
+            if (
+              continuationType !== "client_action" ||
+              action.definition.type !== "integration" ||
+              action.definition.toolSlug !== "SHOPIFY_SEARCH_PRODUCTS" ||
+              !Number.isFinite(page.expiresAt) ||
+              page.expiresAt <= Date.now()
+            )
+              throw new Error(
+                "This product page is no longer available. Search for the product again."
+              )
+            productSelectionInput = persistedContinuation.input as Record<
+              string,
+              unknown
             >
-          )
+          } else {
+            if (
+              continuationType !== "client_action" ||
+              action.definition.type !== "integration" ||
+              action.definition.toolSlug !== "SHOPIFY_UPDATE_CART"
+            )
+              throw new Error("Invalid product selection.")
+            productSelectionInput = selectedShopifyCartInput(
+              interaction.input,
+              persistedContinuation.shopifyProductSelection as NonNullable<
+                RuntimeContinuation["shopifyProductSelection"]
+              >
+            )
+          }
         } catch (error) {
           await service.recordToolCallFinish({
             conversationId: conversation.id,
@@ -3498,7 +3537,7 @@ export async function runAgentTurn(
       aiTools[action.id] = tool({
         description: actionDefinition.description || actionDefinition.name,
         inputSchema: jsonSchema<Record<string, unknown>>(
-          actionDefinition.inputSchema as Record<string, unknown>
+          actionInputSchema(actionDefinition) as Record<string, unknown>
         ),
         execute: async (
           args: Record<string, unknown>,

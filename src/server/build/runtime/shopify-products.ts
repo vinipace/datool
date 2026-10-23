@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { ActionDefinition, ActionRecord } from "@/src/lib/build/contracts"
 import {
   shopifyProductsSchema,
+  shopifyProductSearchSchema,
   shopifyProductSelectionSchema,
   type ShopifyProducts,
 } from "@/src/lib/build/shopify-products"
@@ -17,7 +18,8 @@ export async function prepareShopifyProductCards(
   service: ConversationService,
   conversation: Conversation,
   turn: ConversationTurn,
-  toolCallId: string
+  toolCallId: string,
+  input: Record<string, unknown>
 ): Promise<ShopifyProducts> {
   const catalog = shopifyProductsSchema.parse(output)
   const cartActions = [...actions.values()].filter(
@@ -34,8 +36,45 @@ export async function prepareShopifyProductCards(
     conversation.channel === "web" && cartActions.length === 1
       ? cartActions[0]
       : null
-  if (!cartAction) return catalog
   for (const product of catalog.products) {
+    if (product.variantsNextCursor && conversation.channel === "web") {
+      const pageInput = shopifyProductSearchSchema.parse(input)
+      delete pageInput.after
+      const continuation: RuntimeContinuation = {
+        type: "client_action",
+        actionId: action.id,
+        continuationId: randomUUID(),
+        input: {
+          ...pageInput,
+          productId: product.id,
+          variantAfter: product.variantsNextCursor,
+        },
+        shopifyVariantPage: { expiresAt: Date.now() + 60 * 60_000 },
+      }
+      const pageCallId = `variants:${randomUUID()}`
+      await service.recordToolCallStart({
+        conversationId: conversation.id,
+        turnId: turn.id,
+        ownerFence: turn.ownerFence,
+        toolCallId: pageCallId,
+        actionId: action.id,
+        args: { productId: product.id },
+      })
+      await service.recordToolCallFinish({
+        conversationId: conversation.id,
+        turnId: turn.id,
+        ownerFence: turn.ownerFence,
+        toolCallId: pageCallId,
+        status: "awaiting_client",
+        output: continuation,
+        continuation,
+      })
+      product.variantInteraction = {
+        actionId: action.id,
+        continuationId: continuation.continuationId!,
+      }
+    }
+    if (!cartAction) continue
     const variantIds = product.variants
       .filter((variant) => variant.availableForSale && variant.cartVariantId)
       .map((variant) => variant.cartVariantId!)

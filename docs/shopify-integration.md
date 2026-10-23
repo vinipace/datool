@@ -22,8 +22,12 @@ connections.
 
 - `SHOPIFY_SEARCH_PRODUCTS`: an empty query browses up to eight published,
   active products. Non-empty queries search titles using escaped terms.
-  Results include product/variant IDs, images, URLs, base-currency prices and up to twenty
-  variants. Draft, unpublished and future-published products are excluded.
+  Results include product/variant IDs, images, URLs and base-currency prices.
+  Product cards page through all variants with **Show more options**, retaining
+  the original filters. The first page reads 50 variants; later internal reads
+  may return up to 100 matching options. Model calls can continue with `productId`
+  and `variantAfter`, omitting the product-list `after` cursor. Draft, unpublished
+  and future-published products are excluded on every page.
 - `SHOPIFY_READ_POLICIES`: published legal, shipping and return policies.
   Missing policies remain missing; truncated bodies are explicitly labelled.
 - `SHOPIFY_GET_ORDERS`: verified customer order history, status and tracking.

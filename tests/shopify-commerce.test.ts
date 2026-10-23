@@ -552,6 +552,41 @@ test("live product search filters published products and finds available matchin
   expect(calls[0]).toMatchObject({ after: "previous-page" })
   expect(calls[0].query).toContain('product_type:"Boards\\" OR status:draft"')
   expect(calls[0].query).toContain("price:<=50")
+  const pages = await runShopifyStoreTool(
+    "products",
+    {
+      query: "board",
+      productId: product.id,
+      variantAfter: "previous-variants",
+      maxPrice: 50,
+    },
+    graphql,
+    { excludeOutOfStock: true }
+  )
+  expect(pages.products?.map((p) => p.id)).toEqual([product.id])
+  expect(calls[2]).toMatchObject({
+    after: null,
+    variantAfter: "previous-variants",
+  })
+  expect(calls[2].query).toContain("id:10")
+  expect(pages.products?.[0].variantsNextCursor).toBeNull()
+  expect(pages.products?.[0].variants.map((v) => v.cartVariantId)).toEqual([
+    "12",
+  ])
+  await rejects(
+    runShopifyStoreTool(
+      "products",
+      { query: "", variantAfter: "cursor" },
+      graphql
+    )
+  )
+  await rejects(
+    runShopifyStoreTool(
+      "products",
+      { query: "", productId: product.id, after: "cursor" },
+      graphql
+    )
+  )
   await rejects(
     runShopifyStoreTool(
       "products",

@@ -22,11 +22,13 @@ function ProductCard({
   currency,
   onSelect,
   completed,
+  variantsCompleted,
 }: {
   product: ShopifyProducts["products"][number]
   currency: string
   onSelect?: SelectionHandler
   completed: boolean
+  variantsCompleted: boolean
 }) {
   const id = React.useId()
   const [variantId, setVariantId] = React.useState(
@@ -49,6 +51,7 @@ function ProductCard({
   if (variantId) link.searchParams.set("variant", variantId)
   return (
     <section
+      role="group"
       aria-label={product.title}
       className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-background p-3 text-foreground"
     >
@@ -151,6 +154,20 @@ function ProductCard({
           </Button>
         </div>
       ) : null}
+      {product.variantInteraction ? (
+        <Button
+          variant="outline"
+          disabled={!onSelect || variantsCompleted}
+          onClick={() =>
+            onSelect?.(
+              { ...product.variantInteraction, input: {} },
+              `Show more options for ${product.title}`
+            )
+          }
+        >
+          {variantsCompleted ? "More options requested" : "Show more options"}
+        </Button>
+      ) : null}
       <ChatLink
         href={link.href}
         className="text-xs underline underline-offset-2"
@@ -177,7 +194,11 @@ export function ShopifyProductsView({
   if (!parsed.success) return null
   const catalog = parsed.data
   return (
-    <section aria-label="Products" className="mt-2 min-w-0 space-y-3">
+    <section
+      role="group"
+      aria-label="Products"
+      className="mt-2 min-w-0 space-y-3"
+    >
       <h2 className="text-sm font-medium">Products</h2>
       <p className="text-xs text-foreground-muted">{catalog.pricing}</p>
       {catalog.products.length ? (
@@ -192,6 +213,12 @@ export function ShopifyProductsView({
                 product.cartInteraction &&
                 completedContinuationIds?.has(
                   product.cartInteraction.continuationId
+                )
+              )}
+              variantsCompleted={Boolean(
+                product.variantInteraction &&
+                completedContinuationIds?.has(
+                  product.variantInteraction.continuationId
                 )
               )}
             />
