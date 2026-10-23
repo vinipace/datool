@@ -108,6 +108,18 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
       })
     }
     expect(url.pathname).toBe("/admin/api/2026-10/graphql.json")
+    if (body.query.includes("DatoolWebhookSubscriptions"))
+      return Response.json({ data: { webhookSubscriptions: {
+        nodes: [], pageInfo: { endCursor: null, hasNextPage: false },
+      } } })
+    if (body.query.includes("DatoolWebhookCreate")) {
+      expect(body.variables).toEqual({ topic: "APP_UNINSTALLED", subscription: {
+        uri: "https://datool.example/api/shopify/webhooks/commerce", format: "JSON",
+      } })
+      return Response.json({ data: { webhookSubscriptionCreate: {
+        webhookSubscription: { id: "gid://shopify/WebhookSubscription/1" }, userErrors: [],
+      } } })
+    }
     reads++
     expect(new Headers(init?.headers).get("X-Shopify-Access-Token")).toBe(
       "private-refreshed-access"

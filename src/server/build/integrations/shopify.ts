@@ -1,4 +1,5 @@
 import { shopifyChannelCart } from "./shopify-channel-cart"
+import { registerShopifySubscriptions } from "./shopify-subscriptions"
 import {
   getChannelConnection,
   updateChannelConnection,
@@ -236,6 +237,7 @@ export async function completeShopifyAuthorization(
     !session.isScopeIncluded(SHOPIFY_SCOPES)
   )
     throw unavailable()
+  await registerShopifySubscriptions(api, session)
   const client = await pool.connect()
   try {
     await client.query("BEGIN")

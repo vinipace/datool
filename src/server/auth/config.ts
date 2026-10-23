@@ -77,12 +77,27 @@ export function organizationAuthOptions(
     )
   return {
     database,
-    emailAndPassword: { enabled: false },
+    emailAndPassword: {
+      enabled: process.env.AUTH_PASSWORD_SIGN_IN_ENABLED === "true",
+      disableSignUp: true,
+      requireEmailVerification: true,
+      minPasswordLength: 16,
+      maxPasswordLength: 128,
+    },
     baseURL,
     secret,
     trustedOrigins: [baseURL],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (process.env.AUTH_PASSWORD_SIGN_IN_ENABLED === "true" &&
+          ctx.path === "/sign-in/email" && typeof ctx.body?.email === "string") {
+          const email = ctx.body.email.trim().toLowerCase()
+          if (!isAllowedEmail(email))
+            throw new APIError("UNAUTHORIZED", {
+              message: "Invalid email or password.",
+            })
+          ctx.body.email = email
+        }
         if (ctx.path === "/organization/invite-member") {
           const session = await getSessionFromCtx(ctx)
           const organizationId =

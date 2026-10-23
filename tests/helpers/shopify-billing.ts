@@ -39,6 +39,9 @@ let partnerCalls = 0,
   trial = false
 let amount = "29.00",
   priceActive = true
+const webhookSubscriptions = new Map<string, { topic: string; uri: string }[]>()
+let webhookError = false
+let grantedScopes = "read_products,read_legal_policies"
 const periodStart = new Date(Date.now() - 1000).toISOString()
 const periodEnd = new Date(Date.now() + 30 * 86400_000).toISOString()
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -91,13 +94,47 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     })
   }
   assert(url.hostname.endsWith(".myshopify.com"))
+  if (body.query?.includes("DatoolWebhookSubscriptions"))
+    return Response.json({
+      data: {
+        webhookSubscriptions: {
+          nodes: webhookSubscriptions.get(url.hostname) ?? [],
+          pageInfo: { endCursor: null, hasNextPage: false },
+        },
+      },
+    })
+  if (body.query?.includes("DatoolWebhookCreate")) {
+    if (webhookError)
+      return Response.json({
+        data: {
+          webhookSubscriptionCreate: {
+            webhookSubscription: null,
+            userErrors: [{ message: "fixture failure" }],
+          },
+        },
+      })
+    const subscriptions = webhookSubscriptions.get(url.hostname) ?? []
+    subscriptions.push({
+      topic: body.variables.topic,
+      uri: body.variables.subscription.uri,
+    })
+    webhookSubscriptions.set(url.hostname, subscriptions)
+    return Response.json({
+      data: {
+        webhookSubscriptionCreate: {
+          webhookSubscription: { id: "gid://shopify/WebhookSubscription/1" },
+          userErrors: [],
+        },
+      },
+    })
+  }
   if (url.pathname === "/admin/oauth/access_token")
     return Response.json({
       access_token: "private-oauth-access",
       refresh_token: "private-oauth-refresh",
       expires_in: 3600,
       refresh_token_expires_in: 7776000,
-      scope: "read_products,read_legal_policies",
+      scope: grantedScopes,
     })
   if (body.query.includes("DatoolBillingShop"))
     return Response.json({ data: { shop: { id: "gid://shopify/Shop/789" } } })
@@ -137,7 +174,11 @@ const cookies = (response: Response) =>
     .getSetCookie()
     .map((v) => v.split(";")[0])
     .join("; ")
-async function install(shop: string, startCookie = "") {
+async function install(
+  shop: string,
+  startCookie = "",
+  expectedTopics = ["APP_UNINSTALLED"]
+) {
   const begin = await beginShopifyInstall(
     db,
     new Request(signedUrl("/api/shopify/install", { shop }), {
@@ -153,6 +194,14 @@ async function install(shop: string, startCookie = "") {
   const complete = await completeShopifyInstall(db, callback)
   assert.equal(complete?.status, 303)
   assert.equal(complete.headers.get("location"), `${origin}/shopify/connect`)
+  assert.deepEqual(
+    webhookSubscriptions.get(shop),
+    expectedTopics.map((topic) => ({
+      topic,
+      uri: `${origin}/api/shopify/webhooks/commerce`,
+    })),
+    "A completed install must register permitted events without duplicating them on reinstall"
+  )
   assert.equal(await completeShopifyInstall(db, callback), null)
   return cookies(complete)
 }
@@ -175,6 +224,36 @@ const database = createTracerDatabase(process.env.DATABASE_URL, {
   projectId: project,
 })
 try {
+  webhookError = true
+  await assert.rejects(
+    install("webhook-retry.myshopify.com"),
+    /Shopify webhook registration failed/
+  )
+  assert.equal(
+    (
+      await db.query(
+        "SELECT session_encrypted FROM shopify_install_intent WHERE shop=$1",
+        ["webhook-retry.myshopify.com"]
+      )
+    ).rows[0].session_encrypted,
+    null
+  )
+  webhookError = false
+  await install("webhook-retry.myshopify.com")
+  grantedScopes +=
+    ",write_orders,write_draft_orders,write_returns,write_merchant_managed_fulfillment_orders"
+  await install("commerce.myshopify.com", "", [
+    "APP_UNINSTALLED",
+    "ORDERS_CREATE",
+    "ORDERS_PAID",
+    "ORDERS_UPDATED",
+    "ORDERS_CANCELLED",
+    "DRAFT_ORDERS_UPDATE",
+    "RETURNS_PROCESS",
+    "RETURNS_UPDATE",
+    "FULFILLMENT_ORDERS_ORDER_ROUTING_COMPLETE",
+  ])
+  grantedScopes = "read_products,read_legal_policies"
   await assert.rejects(
     beginShopifyInstall(
       db,

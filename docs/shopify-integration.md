@@ -348,21 +348,22 @@ Challenge reference: [Turnstile server validation](https://developers.cloudflare
 ## Automatic payment updates
 
 The web process accepts Shopify deliveries at
-`https://YOUR_DATOOL_HOST/api/shopify/webhooks/commerce`. Configure the production
-app's webhook subscriptions with API version **2026-10** for these topics:
+`https://YOUR_DATOOL_HOST/api/shopify/webhooks/commerce`. OAuth completion registers
+store subscriptions with API version **2026-10**, limited to granted scopes:
 
 - `orders/create`, `orders/paid`, `orders/updated`, `orders/cancelled`
 - `draft_orders/update`
 - `returns/process`, `returns/update`
 - `fulfillment_orders/order_routing_complete`
 
-Use the app configuration or Dev Dashboard, then release that Shopify app
-configuration. Declaring an endpoint in Datool does not register subscriptions.
+Reconnect existing stores after deploying the registration step. Failed
+registration stops OAuth completion so a connection cannot silently miss events.
+Reconnecting reuses matching subscriptions and preserves unrelated subscriptions.
 The return topic is `returns/process`, not `returns/processed`. See Shopify's
 [topic reference](https://shopify.dev/docs/api/admin-graphql/2026-10/enums/WebhookSubscriptionTopic)
 and [delivery verification](https://shopify.dev/docs/apps/build/webhooks/verify-deliveries).
-The same endpoint also receives uninstall and mandatory privacy topics; register
-those subscriptions separately as described in the [privacy runbook](shopify-privacy.md).
+The same endpoint receives uninstall events registered during OAuth and mandatory
+privacy topics configured separately in the [privacy runbook](shopify-privacy.md).
 
 Apply migration 0069 and run the updated **web and buildworker** releases. The
 receiver uses the official SDK to verify the signature over the original body,

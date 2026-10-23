@@ -3,6 +3,7 @@ import type { Pool } from "pg"
 import { Session } from "@shopify/shopify-api"
 import { assertBuildProject, type BuildContext } from "../context"
 import { getTracerWritePool } from "@/src/server/tracer/db"
+import { registerShopifySubscriptions } from "./shopify-subscriptions"
 import {
   encryptProviderKey,
   decryptProviderKey,
@@ -180,6 +181,7 @@ export async function completeShopifyInstall(
     !session.isScopeIncluded(SHOPIFY_SCOPES)
   )
     throw unavailable()
+  await registerShopifySubscriptions(api, session)
   const client = new api.clients.Graphql({ session })
   const result = await client.request<{ shop: { id: string } }>(
     "query DatoolBillingShop { shop { id } }",

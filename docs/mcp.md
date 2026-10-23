@@ -21,7 +21,20 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
 
-Register the exact redirect URI `<BETTER_AUTH_URL>/api/auth/callback/google` in Google Cloud. For the default local origin this is `http://localhost:3000/api/auth/callback/google`. Passwordless email links are also available when `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set; password sign-in is disabled. Both methods require an email domain in `AUTH_ALLOWED_DOMAINS`. Google credentials are optional for running the app, but Google login is unavailable until both are set. Restart the server after configuration changes.
+Register the exact redirect URI `<BETTER_AUTH_URL>/api/auth/callback/google` in Google Cloud. For the default local origin this is `http://localhost:3000/api/auth/callback/google`. Passwordless email links are also available when `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set. Both methods require an email domain in `AUTH_ALLOWED_DOMAINS` unless public signup is enabled. Google credentials are optional for running the app, but Google login is unavailable until both are set. Restart the server after configuration changes.
+
+`AUTH_PASSWORD_SIGN_IN_ENABLED=true` optionally enables password sign-in for
+existing verified accounts, including isolated app-review accounts. It uses
+Better Auth's password hashing, session handling and database-backed rate limits.
+The current email-domain/public-signup policy still applies, and password signup
+stays disabled. This flag does not create an account or set a password; provision
+credentials through Better Auth's server API after verifying account ownership.
+New passwords require 16–128 characters. Keep reviewer accounts in a separate
+organization with synthetic data and restricted provider credentials. Never
+give reviewers an operator's account or access to real merchant workspaces.
+Google and email-link sign-in remain available when configured. Password reset
+is not exposed in the UI; the operator manages credential recovery after
+verifying account ownership.
 
 Run `bun run db:migrate` against the intended application database before starting the updated app. The checked-in migrations add hashed organization keys, OAuth clients/consent/grants/signing keys, and a key-creation policy. Deployment already runs migrations via the existing Vercel build script. Implementation/testing does not itself migrate a deployed database or create a Google Cloud client.
 

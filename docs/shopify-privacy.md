@@ -1,11 +1,24 @@
 # Shopify lifecycle and privacy operations
 
 Apply migration `0070_shopify_install_lifecycle.sql` before deploying the web
-release. Register `app/uninstalled`, `customers/data_request`,
-`customers/redact` and `shop/redact` on the production app, all pointing to
-`https://YOUR_DATOOL_HOST/api/shopify/webhooks/commerce`. The three privacy
-topics must be registered as compliance subscriptions. Endpoint deployment alone
-does not register them.
+release. OAuth completion registers `app/uninstalled` for each store and the
+commerce events allowed by its granted scopes. Reconnect existing stores after
+deploying this registration step. It preserves unrelated subscriptions and
+does not duplicate matching registrations.
+
+Register `customers/data_request`, `customers/redact` and `shop/redact` in the
+released production app configuration:
+
+```toml
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://YOUR_DATOOL_HOST/api/shopify/webhooks/commerce"
+```
+
+Datool's standalone app uses the legacy OAuth grant flow. Shopify rejects
+ordinary app-specific `topics` subscriptions in that configuration; those are
+registered per store by the installation handler instead. Compliance
+subscriptions remain app-wide. Endpoint deployment alone does not register them.
 
 The existing receiver verifies the original body through Shopify's official SDK.
 Invalid signatures return 401; database failures return 503 for retry. Uninstall
