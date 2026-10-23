@@ -322,8 +322,9 @@ export async function executeAppAction(
     !app.tools.includes(input.toolSlug)
   )
     throw unavailable()
-  const ownership = await ctx.database
-    .execute(sql`SELECT 1 FROM build_conversation_turns t JOIN build_conversations c ON c.id=t.conversation_id AND c.project_id=t.project_id
+  const ownership = await ctx.database.execute<{
+    channel: string
+  }>(sql`SELECT c.channel FROM build_conversation_turns t JOIN build_conversations c ON c.id=t.conversation_id AND c.project_id=t.project_id
     WHERE t.id=${input.turnId} AND t.project_id=${ctx.projectId} AND c.id=${input.conversationId} AND c.agent_id=${input.agentId}`)
   if (!ownership.rows.length) throw unavailable()
   // Preparing a browser interaction has no external effect or integration usage.
@@ -331,7 +332,8 @@ export async function executeAppAction(
   if (
     native &&
     ((isShopifyCartTool(input.toolSlug) &&
-      input.shopifyCartResult === undefined) ||
+      input.shopifyCartResult === undefined &&
+      ownership.rows[0].channel === "web") ||
       (input.toolSlug === "SHOPIFY_CREATE_ORDER" &&
         input.shopifyPrepareOrder) ||
       (input.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE" &&
@@ -345,14 +347,24 @@ export async function executeAppAction(
       input.signal,
       {
         conversationId: input.conversationId,
-        turnId: input.shopifySourceTurnId ?? input.turnId,
+        confirmed: input.shopifyConfirmed,
+        turnId: input.turnId,
+        identityTurnId: input.shopifySourceTurnId,
         prepareOrder: input.shopifyPrepareOrder,
         prepareReturn: input.shopifyPrepareReturn,
         cartResult: input.shopifyCartResult,
         settings: input.shopifySettings,
       }
     )
-    return { output, status: "awaiting_client" as const }
+    return {
+      output,
+      status:
+        "cartCommand" in output ||
+        input.shopifyPrepareOrder ||
+        input.shopifyPrepareReturn
+          ? ("awaiting_client" as const)
+          : ("completed" as const),
+    }
   }
   const id = randomUUID()
   const admitted = await ctx.database
@@ -380,7 +392,8 @@ export async function executeAppAction(
         input.signal,
         {
           conversationId: input.conversationId,
-          turnId: input.shopifySourceTurnId ?? input.turnId,
+          turnId: input.turnId,
+          identityTurnId: input.shopifySourceTurnId,
           confirmed: input.shopifyConfirmed,
           cartResult: input.shopifyCartResult,
           orderQuote: input.shopifyOrderQuote,

@@ -136,8 +136,7 @@ export async function runShopifyCustomerTool(
       return {
         status: "sign_in",
         url: loginUrl,
-        message:
-          "Use the store's sign-in page. New Shopify accounts use a verification code rather than an activation email.",
+        message: `Use the store's sign-in page. New Shopify accounts use a verification code rather than an activation email.\n\n${loginUrl}`,
       }
     const result = await shopifyData<{
       customers: {
@@ -169,8 +168,7 @@ export async function runShopifyCustomerTool(
     return {
       status: "requested",
       url: loginUrl,
-      message:
-        "If this email belongs to an account awaiting activation, Shopify will send an invitation. Otherwise use the store's sign-in page.",
+      message: `If this email belongs to an account awaiting activation, Shopify will send an invitation. Otherwise use the store's sign-in page.\n\n${loginUrl}`,
     }
   }
   throw new Error("Unknown Shopify customer action.")

@@ -7,7 +7,7 @@ import {
 } from "../src/server/build/runtime"
 import {
   pinContinuationWidgets,
-  runtimeMessageMetadata,
+  runtimeChannelMessage,
 } from "../src/server/build/runtime/continuations"
 import {
   claimNextChannelJob,
@@ -140,12 +140,7 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
       agentRevision: result.turn.snapshot.agentRevision,
       continuations: result.continuations,
     })
-    const continuationText = continuations
-      .map((item) => item.message ?? item.submitLabel ?? item.eventName ?? "")
-      .filter(Boolean)
-      .join("\n")
-    const text =
-      result.text || (input.channel === "web" ? "" : continuationText)
+    const message = runtimeChannelMessage(result, continuations)
     const handedOff =
       result.status === "handed_off" &&
       result.conversation.ownerType === "human"
@@ -158,16 +153,7 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
         : result.turn.ownerFence,
       ownerType: handedOff ? "human" : "ai",
       messages:
-        text || continuations.length
-          ? [
-              {
-                text,
-                ...(input.channel === "web"
-                  ? { metadata: runtimeMessageMetadata(result, continuations) }
-                  : {}),
-              },
-            ]
-          : [],
+        message.text || Object.keys(message.metadata).length ? [message] : [],
       ownership: handedOff ? "human" : undefined,
       metadata: {
         traceId: result.traceId,

@@ -31,6 +31,7 @@ import { ConversationService } from "@/src/server/build/conversations"
 import { shopifyShopper } from "@/src/server/build/integrations/shopify-identity"
 import { claimShopifyInvitation } from "@/src/server/build/integrations/shopify-invitations"
 import {
+  enqueueInboundEnvelope,
   createChannelConnection,
   createPublicSession,
   enqueuePublicMessage,
@@ -177,6 +178,400 @@ async function activateShopifyConnection(
   await f.database.execute(
     sql`UPDATE build_app_connections SET provider_user_id=${composioUserId(f.context.organizationId!, f.context.projectId)} WHERE id=${f.connectionId}::uuid`
   )
+}
+
+test("messaging commerce admits guests without trusting profile metadata or another conversation", async () => {
+  const f = await fixture({})
+  const channel = await createChannelConnection(f.context, {
+    agentId: f.agent.id,
+    channel: "whatsapp",
+    label: "Shop support",
+  })
+  await f.database.execute(
+    sql`UPDATE build_channel_connection SET status='connected' WHERE id=${channel.id}::uuid`
+  )
+  const sender = "5511999999999"
+  const admitted = await enqueueInboundEnvelope(f.context, {
+    connectionId: channel.id,
+    channel: "whatsapp",
+    providerEventId: "message-1",
+    providerMessageId: "message-1",
+    externalConversationId: `123:${sender}`,
+    externalContactId: sender,
+    receivedAt: new Date().toISOString(),
+    text: "Where is order 1001?",
+    attachments: [],
+    contact: { externalId: sender, phone: `+${sender}` },
+    metadata: { customerId: "123", shop: "forged.myshopify.com" },
+  })
+  assert("messageId" in admitted)
+  const jobs = await f.database.execute<{ id: string }>(
+    sql`SELECT id FROM build_channel_job WHERE message_id=${admitted.messageId}`
+  )
+  const service = new ConversationService(f.context)
+  const { turn } = await service.startTurn(admitted.conversationId, {
+    requestKey: `channel:${jobs.rows[0].id}`,
+    input: "Where is order 1001?",
+    metadata: {},
+    snapshot: {},
+  })
+  const input = {
+    connectionId: f.connectionId,
+    conversationId: admitted.conversationId,
+    turnId: turn.id,
+    shop: "fixture.myshopify.com",
+  }
+  expect(await shopifyShopper(f.context, input)).toMatchObject({
+    shop: "fixture.myshopify.com",
+    customerId: null,
+    browserSessionId: null,
+  })
+  await assert.rejects(
+    shopifyShopper(f.context, { ...input, conversationId: randomUUID() })
+  )
+  await assert.rejects(
+    shopifyShopper(f.context, { ...input, shop: "forged.myshopify.com" })
+  )
+  await f.database.execute(
+    sql`UPDATE build_channel_connection SET status='disconnected' WHERE id=${channel.id}::uuid`
+  )
+  await assert.rejects(shopifyShopper(f.context, input))
+})
+
+for (const channelType of ["whatsapp", "telegram"] as const) {
+  test(`Shopify products, carts, order proof and one-shot confirmations use the shared runtime on ${channelType}`, async () => {
+    const f = await fixture({})
+    await activateShopifyConnection(
+      f,
+      "read_products,read_legal_policies,write_app_proxy,read_orders,read_customers,write_customers"
+    )
+    const { shopifyTools } =
+      await import("@/src/server/build/integrations/shopify-tools")
+    const channel = await createChannelConnection(f.context, {
+      agentId: f.agent.id,
+      channel: channelType,
+      label: "Shop support",
+    })
+    await f.database.execute(
+      sql`UPDATE build_channel_connection SET status='connected' WHERE id=${channel.id}::uuid`
+    )
+    const actions = new Map<string, Awaited<ReturnType<typeof saveAction>>>()
+    for (const slug of [
+      "SHOPIFY_SEARCH_PRODUCTS",
+      "SHOPIFY_GET_CART",
+      "SHOPIFY_UPDATE_CART",
+      "SHOPIFY_GET_ORDERS",
+      "SHOPIFY_ACTIVATE_ACCOUNT",
+    ]) {
+      const tool = shopifyTools.find((item) => item.slug === slug)!
+      actions.set(
+        slug,
+        await saveAction(f.context, f.agent.id, {
+          slug: slug.toLowerCase().replaceAll("_", "-"),
+          definition: {
+            type: "integration",
+            name: tool.name,
+            connectionId: f.connectionId,
+            toolSlug: slug,
+            channels: [channelType],
+            inputSchema: tool.inputSchema,
+          },
+        })
+      )
+    }
+    const agent = await updateAgent(f.context, f.agent.id, {
+      expectedRevision: 1,
+      apply: true,
+      configuration: {
+        ...f.agent.configuration,
+        model: "test-model",
+        channelAllowlist: [channelType],
+      },
+    })
+    let invitations = 0
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+      _url: unknown,
+      init: RequestInit
+    ) => {
+      const { query, variables } = JSON.parse(String(init.body))
+      if (query.includes("DatoolProducts"))
+        return Response.json({
+          data: {
+            shop: {
+              currencyCode: "USD",
+              primaryDomain: { url: "https://fixture.myshopify.com" },
+            },
+            products: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [
+                {
+                  id: "gid://shopify/Product/111",
+                  title: "Board wax",
+                  description: "Wax",
+                  handle: "wax",
+                  status: "ACTIVE",
+                  publishedAt: "2020-01-01T00:00:00Z",
+                  onlineStoreUrl: "https://fixture.myshopify.com/products/wax",
+                  priceRangeV2: {
+                    minVariantPrice: { amount: "25.00" },
+                    maxVariantPrice: { amount: "25.00" },
+                  },
+                  featuredMedia: null,
+                  variants: {
+                    pageInfo: { hasNextPage: false, endCursor: null },
+                    nodes: [
+                      {
+                        id: "gid://shopify/ProductVariant/123",
+                        title: "Default",
+                        price: "25.00",
+                        availableForSale: true,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        })
+      if (query.includes("DatoolChannelCart"))
+        return Response.json({
+          data: {
+            shop: { currencyCode: "USD" },
+            nodes: variables.ids.map((id: string) => ({
+              id,
+              title: "Default",
+              price: "25.00",
+              availableForSale: true,
+              product: {
+                title: "Board wax",
+                status: "ACTIVE",
+                publishedAt: "2020-01-01T00:00:00Z",
+                requiresSellingPlan: false,
+                handle: "wax",
+              },
+            })),
+          },
+        })
+      if (query.includes("DatoolShopperOrders"))
+        return Response.json({
+          data: {
+            orders: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [
+                {
+                  id: "gid://shopify/Order/1001",
+                  name: "#1001",
+                  createdAt: "2026-10-22T12:00:00Z",
+                  displayFinancialStatus: "PAID",
+                  displayFulfillmentStatus: "FULFILLED",
+                  email: "buyer@example.test",
+                  phone: null,
+                  customer: { id: "gid://shopify/Customer/123" },
+                  shippingAddress: null,
+                  currentTotalPriceSet: {
+                    presentmentMoney: { amount: "50.00", currencyCode: "USD" },
+                  },
+                  lineItems: { nodes: [], pageInfo: { hasNextPage: false } },
+                  fulfillments: [
+                    {
+                      status: "SUCCESS",
+                      deliveredAt: null,
+                      trackingInfo: [
+                        {
+                          number: "TRACK123",
+                          url: "https://tracking.example.test/123",
+                          company: "Carrier",
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        })
+      if (query.includes("DatoolAccountSettings"))
+        return Response.json({
+          data: {
+            shop: {
+              customerAccounts: "OPTIONAL",
+              customerAccountsV2: {
+                customerAccountsVersion: "CLASSIC",
+                url: null,
+              },
+              primaryDomain: { url: "https://fixture.myshopify.com" },
+            },
+          },
+        })
+      if (query.includes("DatoolAccountLookup")) {
+        expect(variables.query).toBe('email:"buyer@example.test"')
+        return Response.json({
+          data: {
+            customers: {
+              nodes: [
+                {
+                  id: "gid://shopify/Customer/123",
+                  defaultEmailAddress: { emailAddress: "buyer@example.test" },
+                  state: "DISABLED",
+                },
+              ],
+            },
+          },
+        })
+      }
+      if (query.includes("DatoolActivateAccount")) {
+        invitations++
+        return Response.json({
+          data: {
+            customerSendAccountInviteEmail: {
+              customer: { id: "gid://shopify/Customer/123" },
+              userErrors: [],
+            },
+          },
+        })
+      }
+      throw new Error("Unexpected Shopify request")
+    }) as typeof fetch)
+    cleanup.push(async () => {
+      fetchSpy.mockRestore()
+    })
+    let chosen = "SHOPIFY_SEARCH_PRODUCTS"
+    let args: Record<string, unknown> = { query: "wax" }
+    let toolOutput: unknown
+    const dependencies = {
+      generateText: (async (input: {
+        tools: Record<
+          string,
+          {
+            execute: (
+              args: unknown,
+              options: { toolCallId: string }
+            ) => Promise<unknown>
+          }
+        >
+      }) => {
+        toolOutput = await input.tools[actions.get(chosen)!.id].execute(args, {
+          toolCallId: randomUUID(),
+        })
+        return {
+          text: "Here is the result.",
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        }
+      }) as never,
+    }
+    async function inbound(text: string, sender = "5511999999999") {
+      const eventId = randomUUID()
+      const queued = await enqueueInboundEnvelope(f.context, {
+        connectionId: channel.id,
+        channel: channelType,
+        providerEventId: eventId,
+        providerMessageId: eventId,
+        externalConversationId: `123:${sender}`,
+        externalContactId: sender,
+        receivedAt: new Date().toISOString(),
+        text,
+        attachments: [],
+        contact: { externalId: sender },
+        metadata: {},
+      })
+      assert("messageId" in queued)
+      const jobs = await f.database.execute<{ id: string }>(
+        sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
+      )
+      return {
+        agentId: agent.id,
+        channel: channelType,
+        conversationId: queued.conversationId,
+        requestKey: `channel:${jobs.rows[0].id}`,
+        message: text,
+      }
+    }
+    async function run(text = "Help me shop", sender?: string) {
+      const result = await runAgentTurn(
+        f.context,
+        await inbound(text, sender),
+        { agent, dependencies }
+      )
+      await enqueueAgentTurnResult(
+        f.context,
+        result,
+        `result:${result.turn.id}`
+      )
+      const sent = await f.database.execute<{ content: { text: string } }>(
+        sql`SELECT content_json AS content FROM build_channel_message WHERE conversation_id=${result.conversation.id} AND direction='outbound' ORDER BY created_at DESC,id DESC LIMIT 1`
+      )
+      return { result, text: sent.rows[0]?.content.text ?? "" }
+    }
+    const products = await run()
+    expect(products.text).toContain("Board wax — 25.00 USD")
+    expect(products.text).toContain(
+      "https://fixture.myshopify.com/products/wax"
+    )
+    chosen = "SHOPIFY_UPDATE_CART"
+    args = { operation: "add", items: [{ variantId: "123", quantity: 2 }] }
+    const cart = await run()
+    expect(cart.result.continuations).toEqual([])
+    expect(cart.text).toContain("2 × Board wax")
+    expect(cart.text).toContain("https://fixture.myshopify.com/cart/123:2")
+    const { executeAppAction } =
+      await import("@/src/server/build/integrations/service")
+    const cartCall = cart.result.toolCalls.find(
+      (call) =>
+        call.turnId === cart.result.turn.id &&
+        call.actionId === actions.get("SHOPIFY_UPDATE_CART")!.id
+    )!
+    await assert.rejects(
+      executeAppAction(f.context, {
+        connectionId: f.connectionId,
+        toolSlug: "SHOPIFY_UPDATE_CART",
+        agentId: agent.id,
+        conversationId: cart.result.conversation.id,
+        turnId: cart.result.turn.id,
+        toolCallId: cartCall.toolCallId,
+        arguments: args,
+      }),
+      /already attempted/
+    )
+    chosen = "SHOPIFY_GET_CART"
+    args = {}
+    expect((await run()).text).toContain("2 × Board wax")
+    expect((await run("Show cart", "5511888888888")).text).toContain(
+      "Your cart is empty"
+    )
+    chosen = "SHOPIFY_GET_ORDERS"
+    args = {}
+    await run()
+    expect(toolOutput).toMatchObject({ status: "verification_required" })
+    args = { orderNumber: "1001", email: "wrong@example.test" }
+    await run()
+    expect(toolOutput).toMatchObject({ status: "not_found", orders: [] })
+    args = { orderNumber: "1001", email: "buyer@example.test" }
+    await run()
+    expect(JSON.stringify(toolOutput)).toContain("TRACK123")
+    chosen = "SHOPIFY_ACTIVATE_ACCOUNT"
+    args = { email: "buyer@example.test" }
+    const pending = await run()
+    const confirmation = pending.result.continuations[0]
+    expect(pending.text).toContain("buyer@example.test")
+    expect(pending.text).toContain(`CONFIRM ${confirmation.continuationId}`)
+    expect(invitations).toBe(0)
+    // Another sender cannot claim this request even if they learn the code.
+    await assert.rejects(
+      run(`CONFIRM ${confirmation.continuationId}`, "5511888888888"),
+      /no longer available/
+    )
+    expect(invitations).toBe(0)
+    args = { email: "attacker@example.test" }
+    expect(
+      (await run(`CONFIRM ${confirmation.continuationId}`)).text
+    ).toContain("https://fixture.myshopify.com/account/login")
+    expect(invitations).toBe(1)
+    await assert.rejects(
+      run(`CONFIRM ${confirmation.continuationId}`),
+      /no longer available/
+    )
+    expect(invitations).toBe(1)
+  }, 90_000)
 }
 
 test("commerce authorization uses admitted Shopify identity and rejects forged metadata, wrong stores and revoked sessions", async () => {
@@ -1962,6 +2357,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
 
 async function returnRuntimeFixture(
   options: {
+    channel?: "whatsapp"
     guest?: boolean
     approval?: boolean
     exchange?: boolean
@@ -1969,6 +2365,17 @@ async function returnRuntimeFixture(
   } = {}
 ) {
   const f = await fixture({ visitorMessagesPerMinute: 120 })
+  const channel = options.channel ?? "web"
+  if (channel !== "web") {
+    f.channel = await createChannelConnection(f.context, {
+      agentId: f.agent.id,
+      channel,
+      label: "Returns support",
+    })
+    await f.database.execute(
+      sql`UPDATE build_channel_connection SET status='connected' WHERE id=${f.channel.id}::uuid`
+    )
+  }
   await activateShopifyConnection(
     f,
     "read_products,read_legal_policies,write_app_proxy,read_orders,read_customers,write_returns,write_orders" +
@@ -1994,7 +2401,7 @@ async function returnRuntimeFixture(
       name: "Return or exchange items",
       connectionId: f.connectionId,
       toolSlug: "SHOPIFY_RETURN_OR_EXCHANGE",
-      channels: ["web"],
+      channels: [channel],
       inputSchema: shopifyReturnTools[0].inputSchema,
       shopifySettings: {
         requireHumanApproval: options.approval ?? false,
@@ -2009,7 +2416,7 @@ async function returnRuntimeFixture(
       name: "Check return",
       connectionId: f.connectionId,
       toolSlug: "SHOPIFY_CHECK_RETURN",
-      channels: ["web"],
+      channels: [channel],
       inputSchema: shopifyReturnStatusTools[0].inputSchema,
     },
   })
@@ -2037,7 +2444,7 @@ async function returnRuntimeFixture(
     configuration: {
       ...f.agent.configuration,
       model: "test-model",
-      channelAllowlist: ["web"],
+      channelAllowlist: [channel],
     },
   })
   let session = await f.session(options.guest ? "" : "123")
@@ -2085,33 +2492,56 @@ async function returnRuntimeFixture(
   async function turn(metadata: Record<string, unknown> = {}, approve = false) {
     // Inbox approval is an operator turn, not a fresh storefront message.
     let requestKey = `operator:${randomUUID()}`
+    const interaction = metadata.widgetInteraction as
+      { continuationId?: string } | undefined
+    const text =
+      channel !== "web" && interaction?.continuationId
+        ? `CONFIRM ${interaction.continuationId}`
+        : "Return these items"
     if (!approve) {
-      const queued = await enqueuePublicMessage(
-        f.context,
-        f.channel.id,
-        session.conversationId,
-        session.visitorToken,
-        {
-          text: "Return these items",
-          origin: "https://chat.example.test",
-          metadata,
-        }
-      )
+      const eventId = randomUUID()
+      const queued =
+        channel !== "web"
+          ? await enqueueInboundEnvelope(f.context, {
+              connectionId: f.channel.id,
+              channel,
+              providerEventId: eventId,
+              providerMessageId: eventId,
+              externalConversationId: "123:5511999999999",
+              externalContactId: "5511999999999",
+              receivedAt: new Date().toISOString(),
+              text,
+              attachments: [],
+              contact: { externalId: "5511999999999" },
+              metadata: {},
+            })
+          : await enqueuePublicMessage(
+              f.context,
+              f.channel.id,
+              session.conversationId,
+              session.visitorToken,
+              {
+                text: "Return these items",
+                origin: "https://chat.example.test",
+                metadata,
+              }
+            )
       if (!("messageId" in queued)) throw new Error("Expected admitted message")
       const jobs = await f.database.execute<{ id: string }>(
         sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
       )
       requestKey = `channel:${jobs.rows[0].id}`
+      session = { ...session, conversationId: queued.conversationId }
     }
     return runAgentTurn(
       f.context,
       {
         agentId: f.agent.id,
-        channel: "web",
+        channel,
         conversationId: session.conversationId,
         requestKey,
-        message: "Return these items",
-        metadata: metadata as never,
+        message: text,
+        metadata: (channel === "web" || approve ? metadata : {}) as never,
       },
       {
         agent,
@@ -2187,6 +2617,64 @@ async function returnRuntimeFixture(
       }
     },
   }
+}
+
+for (const approval of [false, true]) {
+  test(`WhatsApp exchanges retain customer confirmation, merchant approval and payment reconciliation (approval: ${approval})`, async () => {
+    const f = await returnRuntimeFixture({
+      channel: "whatsapp",
+      guest: true,
+      exchange: true,
+      fulfillment: true,
+      approval,
+    })
+    const state = f.provider.state
+    state.direction = "InvoiceReturnOutcome"
+    state.transferAmount = "0.4"
+    const pending = await f.turn()
+    const continuation = pending.continuations[0]
+    expect(continuation.type).toBe(
+      approval ? "approval_required" : "client_action"
+    )
+    expect(state.processed).toBe(0)
+    if (approval)
+      await assert.rejects(
+        f.turn(f.confirm(continuation.continuationId!)),
+        /no longer available/
+      )
+    const completed = await f.turn(
+      f.confirm(continuation.continuationId!),
+      approval
+    )
+    expect(completed.status).toBe("completed")
+    expect(state.processed).toBe(1)
+    expect(state.holdReleases).toBe(0)
+    await assert.rejects(
+      f.turn(f.confirm(continuation.continuationId!)),
+      /no longer available/
+    )
+    state.outstanding = "0"
+    state.fullyPaid = true
+    state.financialStatus = "PAID"
+    await f.database.execute(
+      sql`UPDATE build_shopify_order_operations SET reconcile_after=now()-interval '1 minute' WHERE id=${continuation.shopifyReturnQuote!.operationId}::uuid`
+    )
+    const job = await reconciliationJob(f)
+    await processChannelJob(job, noModel, f.database)
+    await processChannelJob(job, noModel, f.database)
+    await completeChannelJob(f.database, job)
+    expect(state.processed).toBe(1)
+    expect(state.holdReleases).toBe(1)
+    const messages = await f.database.execute<{
+      channel: string
+      content: { text: string }
+    }>(
+      sql`SELECT c.channel,m.content_json AS content FROM build_channel_message m JOIN build_channel_connection c ON c.id=m.connection_id WHERE m.direction='outbound'`
+    )
+    expect(messages.rows).toHaveLength(1)
+    expect(messages.rows[0].channel).toBe("whatsapp")
+    expect(messages.rows[0].content.text).toContain("payment")
+  }, 90_000)
 }
 
 for (const changedQuote of [false, true]) {

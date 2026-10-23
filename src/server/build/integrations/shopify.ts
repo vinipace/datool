@@ -1,3 +1,4 @@
+import { shopifyChannelCart } from "./shopify-channel-cart"
 import {
   getChannelConnection,
   updateChannelConnection,
@@ -359,6 +360,7 @@ export async function executeShopifyTool(
   execution?: {
     conversationId: string
     turnId: string
+    identityTurnId?: string
     confirmed?: boolean
     cartResult?: unknown
     prepareReturn?: boolean
@@ -389,6 +391,7 @@ export async function executeShopifyTool(
     commerce && execution
       ? await shopifyShopper(context, {
           ...execution,
+          turnId: execution.identityTurnId ?? execution.turnId,
           connectionId: id,
           shop: session.shop,
         })
@@ -405,7 +408,7 @@ export async function executeShopifyTool(
       "Confirm this change in the chat before it can be applied."
     )
   signal?.throwIfAborted()
-  if (isShopifyCartTool(slug)) {
+  if (isShopifyCartTool(slug) && shopper?.browserSessionId) {
     const command = prepareShopifyCart(slug, input)
     if (execution?.cartResult !== undefined)
       return completeShopifyCart(execution.cartResult)
@@ -425,6 +428,16 @@ export async function executeShopifyTool(
       return Response.json(result)
     }
     if (commerce && shopper && execution) {
+      if (isShopifyCartTool(slug))
+        return await shopifyChannelCart(
+          context,
+          id,
+          execution,
+          shopper.shop,
+          prepareShopifyCart(slug, input),
+          graphql
+        )
+
       const manageExchangeHolds = SHOPIFY_EXCHANGE_FULFILLMENT_SCOPES.some(
         (scope) => session.isScopeIncluded([scope])
       )
@@ -432,6 +445,7 @@ export async function executeShopifyTool(
         signal?.throwIfAborted()
         const current = await shopifyShopper(context, {
           ...execution,
+          turnId: execution.identityTurnId ?? execution.turnId,
           connectionId: id,
           shop: session.shop,
         })
@@ -532,10 +546,24 @@ export async function executeShopifyTool(
           let orderInput = args
           let purchaseSnapshot
           if (settings.orderSource === "cart") {
-            if (execution.cartResult === undefined)
+            if (shopper.browserSessionId && execution.cartResult === undefined)
               return { cartCommand: { operation: "read" as const } }
             const cartResult = shopifyCartResultSchema.parse(
-              execution.cartResult
+              shopper.browserSessionId
+                ? execution.cartResult
+                : {
+                    status: "completed",
+                    cart: (
+                      await shopifyChannelCart(
+                        context,
+                        id,
+                        execution,
+                        shopper.shop,
+                        { operation: "read" },
+                        graphql
+                      )
+                    ).shopifyCart,
+                  }
             )
             if (cartResult.status !== "completed" || cartResult.cart.truncated)
               throw new TracerError(

@@ -1,3 +1,4 @@
+import type { BuildChannel } from "@/src/lib/build/contracts"
 import { sql } from "drizzle-orm"
 import type { TracerDatabase } from "@/src/server/tracer/db"
 import type { BuildContext } from "../context"
@@ -31,9 +32,9 @@ export async function enqueueShopifyReconciliationJobs(
       JOIN build_app_connections a ON a.project_id=s.project_id AND a.id=s.connection_id
       JOIN build_conversations c ON c.project_id=o.project_id AND c.id=o.conversation_id
       JOIN build_channel_connection ch ON ch.project_id=c.project_id AND ch.id::text=c.metadata_json->>'connectionId'
-        AND ch.agent_id=c.agent_id AND ch.channel=c.channel AND ch.config_json->>'shopifyShop'=s.shop
+        AND ch.agent_id=c.agent_id AND ch.channel=c.channel AND (ch.channel<>'web' OR ch.config_json->>'shopifyShop'=s.shop)
       WHERE o.reconcile_after<=now() AND o.status<>'failed' AND a.status='active'
-        AND ch.status='connected' AND ch.channel='web'
+        AND ch.status='connected'
         AND s.client_id=${process.env.DATOOL_SHOPIFY_CLIENT_ID ?? ""}
         AND ${enabledBuildProject(sql`o.project_id`)}
         AND NOT EXISTS (SELECT 1 FROM build_channel_job j WHERE j.project_id=o.project_id
@@ -53,6 +54,7 @@ export async function enqueueShopifyReconciliationJobs(
 }
 
 type Operation = {
+  channel: BuildChannel
   connection_id: string
   conversation_id: string
   customer_id: string | null
@@ -82,7 +84,7 @@ export async function processShopifyReconciliation(
   const load = async () => {
     await assertLease()
     const rows = await context.database.execute<Operation>(sql`
-      SELECT o.connection_id,o.conversation_id,o.customer_id,o.browser_session_id,o.kind,
+      SELECT ch.channel,o.connection_id,o.conversation_id,o.customer_id,o.browser_session_id,o.kind,
         o.reconcile_after::text,o.quote_json,o.settings_json,s.shop,c.external_conversation_id,c.metadata_json->>'contactId' AS contact_id
       FROM build_shopify_order_operations o
       JOIN build_shopify_connections s ON s.project_id=o.project_id AND s.connection_id=o.connection_id
@@ -90,9 +92,9 @@ export async function processShopifyReconciliation(
       JOIN build_conversations c ON c.project_id=o.project_id AND c.id=o.conversation_id
       JOIN build_channel_connection ch ON ch.project_id=c.project_id AND ch.id=${job.connectionId}::uuid
         AND ch.id::text=c.metadata_json->>'connectionId' AND ch.agent_id=c.agent_id
-        AND ch.channel=c.channel AND ch.config_json->>'shopifyShop'=s.shop
+        AND ch.channel=c.channel AND (ch.channel<>'web' OR ch.config_json->>'shopifyShop'=s.shop)
       WHERE o.project_id=${context.projectId} AND o.id=${operationId}::uuid AND o.status<>'failed'
-        AND ch.channel='web' AND ch.status='connected' AND a.status='active'
+        AND ch.status='connected' AND a.status='active'
         AND s.client_id=${process.env.DATOOL_SHOPIFY_CLIENT_ID ?? ""}
         AND ${enabledBuildProject(sql`o.project_id`)}
     `)
@@ -204,7 +206,7 @@ export async function processShopifyReconciliation(
         connectionId: job.connectionId,
         conversationId: row.conversation_id,
         contactId: row.contact_id ?? undefined,
-        channel: "web",
+        channel: row.channel,
         idempotencyKey: `shopify:${operationId}:${key}`,
         text: isCartCleanup ? "" : result.message,
         metadata: {

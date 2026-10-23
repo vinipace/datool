@@ -43,7 +43,7 @@ export const shopifyCartTools: IntegrationTool[] = [
     slug: "SHOPIFY_GET_CART",
     name: "Show shopping cart",
     description:
-      "Show the current contents and total of the shopper's actual storefront cart. Available in the Shopify storefront chat for guests and signed-in customers. The shopper opens the cart control to share its contents.",
+      "Show the shopper's cart and checkout link. Storefront chat uses the browser cart; messaging channels use a separate cart saved to this conversation. Shopify confirms final totals at checkout.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -54,7 +54,7 @@ export const shopifyCartTools: IntegrationTool[] = [
     slug: "SHOPIFY_UPDATE_CART",
     name: "Update shopping cart",
     description:
-      "Add variants or set an existing line's quantity in the shopper's storefront cart. Use numeric variant IDs from product results; use lineKey from Get cart to update a line. Quantity zero removes a line. The shopper clicks Update cart to apply the request. Never creates an order or takes payment.",
+      "Add variants or set an existing line's quantity in the shopper's cart (browser cart on the storefront, conversation cart on messaging channels). Use numeric variant IDs from product results; use lineKey from Get cart to update a line. Quantity zero removes a line. Storefront shoppers use the cart control; messaging shoppers receive a checkout link. Never creates an order or takes payment.",
     inputSchema: {
       ...z.toJSONSchema(shopifyCartUpdateSchema, { target: "draft-7" }),
       type: "object",

@@ -1,33 +1,18 @@
 import {
-  shopifyReturnQuoteSchema,
-  shopifyReturnSummary,
-  type ShopifyReturnQuote,
-} from "@/src/lib/build/shopify-return"
+  integrationOutputMetadata,
+  integrationModelContext,
+  integrationHasPresentation,
+} from "../integrations/presentation"
 import {
-  prepareShopifyProductCards,
-  selectedShopifyCartInput,
-} from "./shopify-products"
-import {
-  shopifyOrderQuoteSchema,
-  shopifyOrderSummary,
-  type ShopifyOrderQuote,
-} from "@/src/lib/build/shopify-order"
-import {
-  shopifyProductsSchema,
-  shopifyProductSearchSchema,
-  type ShopifyProducts,
-} from "@/src/lib/build/shopify-products"
-import {
-  isShopifyCartTool,
-  shopifyCartCommandSchema,
-  shopifyCartSchema,
-  type ShopifyCartCommand,
-} from "@/src/lib/build/shopify-cart"
+  integrationExecution,
+  integrationInteraction,
+  integrationInputError,
+  integrationInputSchema,
+  type IntegrationExecutionOptions,
+  type IntegrationContinuationState,
+  inlineIntegrationContinuation,
+} from "../integrations/action-runtime"
 import { createHash, randomUUID } from "node:crypto"
-import { executeAppAction } from "../integrations/service"
-import { TracerError } from "@/src/server/tracer/errors"
-import { shopifyActionNeedsConfirmation } from "@/src/lib/build/shopify"
-import { shopifyApprovalNeedsVerification } from "../integrations/shopify-identity"
 import { beginModelUsage, finishModelUsage } from "../usage"
 
 import { createGateway } from "@ai-sdk/gateway"
@@ -74,7 +59,7 @@ import {
   updateContact,
   upsertLead,
 } from "../operations/contacts"
-import { pinContinuationWidgets } from "./continuations"
+import { channelConfirmation, pinContinuationWidgets } from "./continuations"
 import {
   ConversationBusyError,
   ConversationBudgetExceededError,
@@ -216,7 +201,7 @@ export const runAgentTurnInputSchema = z
 
 export type RunAgentTurnInput = z.input<typeof runAgentTurnInputSchema>
 
-export type RuntimeContinuation = {
+export type RuntimeContinuation = IntegrationContinuationState & {
   type:
     | "client_action"
     | "widget"
@@ -228,6 +213,8 @@ export type RuntimeContinuation = {
   /** Opaque one-shot capability used to resume a persisted client action. */
   continuationId?: string
   eventName?: string
+  /** Customer may confirm this pinned request through any supported channel. */
+  confirmation?: boolean
   widgetId?: string
   input?: Record<string, unknown>
   fields?: unknown[]
@@ -242,15 +229,6 @@ export type RuntimeContinuation = {
   procedureCursor?: RuntimeProcedureCursor
   /** Earliest time an authenticated wait resume may claim this continuation. */
   resumeAt?: string
-  /** Server-owned source turn for a later merchant approval of a Shopify action. */
-  shopifySourceTurnId?: string
-  /** Approval already granted; only the original shopper may resume after verification. */
-  shopifyApprovedSourceTurnId?: string
-  shopifyCart?: { command: ShopifyCartCommand; expiresAt: number }
-  shopifyProductSelection?: { variantIds: string[]; expiresAt: number }
-  shopifyVariantPage?: { expiresAt: number }
-  shopifyReturnQuote?: ShopifyReturnQuote
-  shopifyOrderQuote?: ShopifyOrderQuote
 }
 
 type RuntimeProcedureCursor = {
@@ -715,21 +693,13 @@ function usageCostUsd(result: unknown): number | null {
   return cost ?? null
 }
 
-function actionInputSchema(action: ActionDefinition) {
-  // Native catalog input evolves with the adapter, including for previously saved actions.
-  return action.type === "integration" &&
-    action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS"
-    ? z.toJSONSchema(shopifyProductSearchSchema, { target: "draft-7" })
-    : action.inputSchema
-}
-
 function validateActionInput(action: ActionDefinition, input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new BuildRuntimeError(
       "INVALID_TOOL_INPUT",
       "Action input must be an object."
     )
-  const schema = actionInputSchema(action)
+  const schema = integrationInputSchema(action)
   if (Object.keys(schema).length) validateSchema(schema, input)
 }
 
@@ -950,11 +920,7 @@ function persistedContinuations(
 ): RuntimeContinuation[] {
   return toolCalls.flatMap((call) => {
     const continuation = call.continuation
-    if (
-      continuation?.shopifyProductSelection ||
-      continuation?.shopifyVariantPage
-    )
-      return []
+    if (inlineIntegrationContinuation(continuation)) return []
     if (!continuation || typeof continuation.type !== "string") return []
     const type = continuation.type
     if (
@@ -1218,7 +1184,7 @@ function evaluateBranch(condition: string, variables: Record<string, unknown>) {
 
 type ProcedureResult = {
   text: string
-  shopifyProducts?: ShopifyProducts
+  integrationMetadata?: RuntimeJsonRecord
   instructions?: string
   actionRefs?: string[]
   continuations: RuntimeContinuation[]
@@ -1339,15 +1305,8 @@ async function executeAction(
     procedureCursor?: RuntimeProcedureCursor
     requireHumanForActions?: boolean
     allowApproval?: boolean
-    shopifyConfirmed?: boolean
-    shopifyCartResult?: unknown
-    shopifyReturnQuote?: ShopifyReturnQuote
-    shopifyOrderQuote?: ShopifyOrderQuote
-    shopifyCartApproved?: boolean
-    shopifySourceTurnId?: string
-    shopifyReverification?: boolean
     signal?: AbortSignal
-  }
+  } & IntegrationExecutionOptions
 ) {
   assertNotCancelled(options.signal)
   const knownSecrets = actionSecretValues(action)
@@ -1385,14 +1344,6 @@ async function executeAction(
     throw error
   }
   const continuationId = options.continuationId ?? randomUUID()
-  const orderAction =
-    action.type === "integration" && action.toolSlug === "SHOPIFY_CREATE_ORDER"
-  const returnAction =
-    action.type === "integration" &&
-    action.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE"
-  const quotedShopifyAction = orderAction || returnAction
-  let returnQuote = options.shopifyReturnQuote
-  let orderQuote = options.shopifyOrderQuote
   const pendingBase = {
     actionId: action.id,
     continuationId,
@@ -1422,53 +1373,30 @@ async function executeAction(
       status: "awaiting_client" as const,
     }
   }
-  if ((orderAction && !orderQuote) || (returnAction && !returnQuote)) {
+  const integration =
+    action.type === "integration"
+      ? integrationExecution(
+          context,
+          service,
+          conversation,
+          turn,
+          action,
+          input,
+          pendingBase,
+          options
+        )
+      : null
+  if (integration) {
     try {
-      const prepared = await executeAppAction(context, {
-        connectionId: action.connectionId,
-        toolSlug: action.toolSlug,
-        agentId: conversation.agentId,
-        conversationId: conversation.id,
-        turnId: turn.id,
-        toolCallId: options.toolCallId,
-        arguments: input,
-        shopifyPrepareOrder: orderAction,
-        shopifyPrepareReturn: returnAction,
-        shopifySettings: action.shopifySettings,
-        shopifyCartResult: options.shopifyCartResult,
-        signal: options.signal,
-      })
-      const output = prepared.output as {
-        cartCommand?: unknown
-        orderQuote?: unknown
-        returnQuote?: unknown
-      }
-      if (output.cartCommand)
-        return await awaitInput({
-          ...pendingBase,
-          type: "client_action",
-          eventName: "Read cart for checkout",
-          title: action.name,
-          message:
-            "Read your current cart so Shopify can calculate the order. This does not place an order.",
-          shopifyCart: {
-            command: shopifyCartCommandSchema.parse(output.cartCommand),
-            expiresAt: Date.now() + 60 * 60_000,
-          },
-        })
-      if (orderAction)
-        orderQuote = shopifyOrderQuoteSchema.parse(output.orderQuote)
-      else returnQuote = shopifyReturnQuoteSchema.parse(output.returnQuote)
+      const pending = await integration.prepare()
+      if (pending) return await awaitInput(pending)
     } catch (error) {
-      // These validation messages are authored by our native adapter. Never expose
-      // an arbitrary provider exception, which can contain credentials or customer data.
-      const failure =
-        error instanceof TracerError && error.code === "VALIDATION_ERROR"
-          ? new BuildRuntimeError("ACTION_INPUT_REQUIRED", error.message)
-          : new BuildRuntimeError(
-              "ACTION_FAILED",
-              "The requested change could not be prepared. Please try again."
-            )
+      const message = integrationInputError(action, error)
+      const failure = new BuildRuntimeError(
+        message ? "ACTION_INPUT_REQUIRED" : "ACTION_FAILED",
+        message ??
+          "The requested change could not be prepared. Please try again."
+      )
       await service.recordToolCallFinish({
         conversationId: conversation.id,
         turnId: turn.id,
@@ -1480,45 +1408,24 @@ async function executeAction(
       throw failure
     }
   }
-  const needsApproval =
-    (options.requireHumanForActions ||
-      returnQuote?.resume?.requireHumanApproval ||
-      (action.type === "integration" &&
-        action.shopifySettings?.requireHumanApproval)) &&
-    action.type !== "handoff" &&
-    !options.allowApproval &&
-    !options.shopifyCartApproved
-  const needsConfirmation =
-    action.type === "integration" &&
-    shopifyActionNeedsConfirmation(action.toolSlug) &&
-    !options.shopifyConfirmed &&
-    !options.allowApproval
-  if (needsApproval || needsConfirmation) {
-    // Teammate approval takes precedence and also confirms the pinned input.
-    const pending: RuntimeContinuation = {
+  const confirmation = integration?.confirmation()
+  if (confirmation)
+    return awaitInput({
       ...pendingBase,
-      type: needsApproval ? "approval_required" : "client_action",
-      ...(orderQuote ? { shopifyOrderQuote: orderQuote } : {}),
-      ...(returnQuote ? { shopifyReturnQuote: returnQuote } : {}),
-    }
-    if (needsApproval) {
-      pending.message = "A teammate must approve this action before it runs."
-      if (
-        action.type === "integration" &&
-        action.toolSlug.startsWith("SHOPIFY_")
-      )
-        pending.shopifySourceTurnId = turn.id
-    } else {
-      pending.eventName = "Confirm changes"
-      pending.title = action.name
-      pending.message = "Review the details and confirm to apply this change."
-    }
-    if (orderQuote && needsApproval)
-      pending.message += `\n\n${shopifyOrderSummary(orderQuote)}`
-    if (returnQuote && needsApproval)
-      pending.message += `\n\n${shopifyReturnSummary(returnQuote)}`
-    return awaitInput(pending)
-  }
+      ...confirmation,
+      type: confirmation.type!,
+    })
+  if (
+    !integration &&
+    options.requireHumanForActions &&
+    action.type !== "handoff" &&
+    !options.allowApproval
+  )
+    return awaitInput({
+      ...pendingBase,
+      type: "approval_required",
+      message: "A teammate must approve this action before it runs.",
+    })
   if (options.dependencies.executeAction) {
     try {
       const result = await options.dependencies.executeAction({
@@ -1630,142 +1537,21 @@ async function executeAction(
     }
   }
   try {
-    if (action.type === "integration") {
-      if (
-        action.toolSlug.startsWith("SHOPIFY_") &&
-        options.allowApproval &&
-        options.shopifySourceTurnId &&
-        (await shopifyApprovalNeedsVerification(context, {
-          connectionId: action.connectionId,
-          conversationId: conversation.id,
-          turnId: options.shopifySourceTurnId,
-          verificationTurnId: options.shopifyReverification
-            ? turn.id
-            : undefined,
-        }))
-      )
-        return await awaitInput({
-          ...pendingBase,
-          type: "client_action",
-          eventName: "Continue approved change",
-          title: action.name,
-          message:
-            "A teammate approved this request. Continue from the store to verify your session and apply the reviewed change. Changed or expired quotes need approval again.",
-          shopifyApprovedSourceTurnId: options.shopifySourceTurnId,
-          ...(orderQuote ? { shopifyOrderQuote: orderQuote } : {}),
-          ...(returnQuote ? { shopifyReturnQuote: returnQuote } : {}),
-        })
-      const result = await executeAppAction(context, {
-        connectionId: action.connectionId,
-        toolSlug: action.toolSlug,
-        agentId: conversation.agentId,
-        conversationId: conversation.id,
-        turnId: turn.id,
-        toolCallId: options.toolCallId,
-        arguments: input,
-        shopifyConfirmed: options.shopifyConfirmed || options.allowApproval,
-        shopifyCartResult: options.shopifyCartResult,
-        shopifyOrderQuote: orderQuote,
-        shopifyReturnQuote: returnQuote,
-        shopifySettings: action.shopifySettings,
-        shopifySourceTurnId: options.allowApproval
-          ? options.shopifySourceTurnId
-          : undefined,
-        signal: options.signal,
-      })
-      if (
-        quotedShopifyAction &&
-        (result.output as { status?: string }).status === "quote_changed"
-      ) {
-        const rawQuote = (result.output as { quote: unknown }).quote
-        const changedQuote: Pick<
-          RuntimeContinuation,
-          "shopifyOrderQuote" | "shopifyReturnQuote"
-        > = orderAction
-          ? { shopifyOrderQuote: shopifyOrderQuoteSchema.parse(rawQuote) }
-          : { shopifyReturnQuote: shopifyReturnQuoteSchema.parse(rawQuote) }
-        const summary = changedQuote.shopifyOrderQuote
-          ? shopifyOrderSummary(changedQuote.shopifyOrderQuote)
-          : shopifyReturnSummary(changedQuote.shopifyReturnQuote!)
-        const approval =
-          options.requireHumanForActions ||
-          changedQuote.shopifyReturnQuote?.resume?.requireHumanApproval ||
-          action.shopifySettings?.requireHumanApproval
-        return await awaitInput({
-          ...pendingBase,
-          type: approval ? "approval_required" : "client_action",
-          ...changedQuote,
-          title: action.name,
-          ...(approval
-            ? { shopifySourceTurnId: options.shopifySourceTurnId ?? turn.id }
-            : { eventName: "Confirm changes" }),
-          message: `The details changed or the quote expired. Review the updated details before continuing.${approval ? `\n\n${summary}` : ""}`,
-        })
-      }
-      const shopifyProducts =
-        action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
-        result.status === "completed"
-          ? await prepareShopifyProductCards(
-              result.output,
-              action,
-              options.availableActions ?? new Map(),
-              service,
-              conversation,
-              turn,
-              options.toolCallId,
-              input
-            )
-          : undefined
-      const output = shopifyProducts ?? result.output
-      const cartCommand =
-        isShopifyCartTool(action.toolSlug) &&
-        result.status === "awaiting_client"
-          ? shopifyCartCommandSchema.parse(
-              (result.output as { cartCommand?: unknown }).cartCommand
-            )
-          : null
-      const cartContinuation: RuntimeContinuation | null = cartCommand
-        ? {
-            type: "client_action",
-            actionId: action.id,
-            continuationId,
-            eventName:
-              cartCommand.operation === "read" ? "Show cart" : "Update cart",
-            title: action.name,
-            message:
-              cartCommand.operation === "read"
-                ? "Open your store's cart in this chat."
-                : "Apply this change to your store's cart.",
-            input: persistedRuntimeRecord(input, knownSecrets),
-            shopifyCart: {
-              command: cartCommand,
-              expiresAt: Date.now() + 60 * 60_000,
-            },
-            ...(options.procedureCursor
-              ? {
-                  procedureCursor: persistedProcedureCursor(
-                    options.procedureCursor,
-                    knownSecrets
-                  ),
-                }
-              : {}),
-          }
-        : null
+    if (action.type === "integration" && integration) {
+      const result = await integration.execute()
+      const output = result.continuation ?? result.output
       await service.recordToolCallFinish({
         conversationId: conversation.id,
         turnId: turn.id,
         toolCallId: options.toolCallId,
         status: result.status,
-        output: cartContinuation ?? output,
-        continuation: cartContinuation,
+        output,
+        continuation: result.continuation,
         ownerFence: turn.ownerFence,
       })
-      return {
-        ...result,
-        output: cartContinuation ?? output,
-        continuation: cartContinuation,
-      }
+      return { ...result, output }
     }
+    if (action.type !== "http") throw new Error("Unsupported action.")
     assertSafeActionUrl(action.url)
     const result = await invokeBuildHttp(
       {
@@ -1827,14 +1613,9 @@ async function executeAction(
         error: safeError(error),
       },
     }).catch(() => undefined)
-    if (
-      quotedShopifyAction &&
-      error instanceof TracerError &&
-      error.code === "VALIDATION_ERROR"
-    )
-      // The native commerce adapters author these messages; arbitrary provider
-      // errors still use the redacted generic failure below.
-      throw new BuildRuntimeError("ACTION_INPUT_REQUIRED", error.message)
+    const integrationError = integrationInputError(action, error)
+    if (integrationError)
+      throw new BuildRuntimeError("ACTION_INPUT_REQUIRED", integrationError)
     if (error instanceof BuildActionTransportError && error.httpStatus)
       throw new BuildRuntimeError(
         "ACTION_HTTP_ERROR",
@@ -1897,7 +1678,7 @@ async function runProcedure(
     ...procedure.definition.variables,
   }
   const text: string[] = []
-  let shopifyProducts: ShopifyProducts | undefined
+  const integrationMetadata: RuntimeJsonRecord = {}
   const continuations: RuntimeContinuation[] = []
   let handoff = false
   let handoffOwnerId: string | null = null
@@ -1990,12 +1771,16 @@ async function runProcedure(
           signal,
         }
       )
-      if (
-        action.definition.type === "integration" &&
-        action.definition.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
-        result.status === "completed"
+      Object.assign(
+        integrationMetadata,
+        persistedRuntimeRecord(
+          integrationOutputMetadata(
+            action.definition,
+            result.status,
+            result.output
+          )
+        )
       )
-        shopifyProducts = shopifyProductsSchema.parse(result.output)
       if (action.definition.type === "handoff") {
         handoff = true
         handoffOwnerId = action.definition.teamId
@@ -2016,7 +1801,7 @@ async function runProcedure(
   }
   return {
     text: text.join("\n\n"),
-    shopifyProducts,
+    integrationMetadata,
     continuations,
     stopped: true,
     handoff,
@@ -2391,10 +2176,15 @@ export async function runAgentTurn(
         actions.flatMap((item) => actionSecretValues(item.definition))
       ),
     ]
+    const interaction: RuntimeWidgetInteraction | null =
+      widgetInteraction(parsed.metadata) ??
+      (conversation.channel !== "web"
+        ? await channelConfirmation(context, conversation.id, turn.id)
+        : null)
     const finalizeProcedureResult = async (
       procedureResult: ProcedureResult,
       source: "procedure" | "procedure_resume" = "procedure",
-      shopifyCart?: RuntimeJsonValue
+      additionalMetadata: RuntimeJsonRecord = {}
     ): Promise<RunAgentTurnResult> => {
       const output = redactRuntimeText(
         procedureResult.text ||
@@ -2407,7 +2197,7 @@ export async function runAgentTurn(
       const resultMessage =
         output ||
         procedureResult.continuations.length ||
-        procedureResult.shopifyProducts
+        Object.keys(procedureResult.integrationMetadata ?? {}).length
           ? await service.appendMessage(
               conversation.id,
               {
@@ -2419,15 +2209,12 @@ export async function runAgentTurn(
                 status: "completed",
                 metadata: {
                   source,
-                  ...(shopifyCart ? { shopifyCart } : {}),
-                  ...(procedureResult.shopifyProducts
-                    ? { shopifyProducts: procedureResult.shopifyProducts }
-                    : {}),
+                  ...additionalMetadata,
+                  ...procedureResult.integrationMetadata,
                   ...(source === "procedure_resume"
                     ? {
                         completedContinuationId:
-                          widgetInteraction(parsed.metadata)?.continuationId ??
-                          null,
+                          interaction?.continuationId ?? null,
                       }
                     : {}),
                   ...(await continuationMessageMetadata(
@@ -2513,7 +2300,6 @@ export async function runAgentTurn(
       turn.ownerFence
     )
     turn.snapshot = snapshottedTurn.snapshot
-    const interaction = widgetInteraction(parsed.metadata)
     if (interaction) {
       const isWaitInteraction = interaction.actionId === "__wait__"
       if (
@@ -3106,57 +2892,6 @@ export async function runAgentTurn(
           throw error
         }
       }
-      let productSelectionInput: Record<string, unknown> | undefined
-      if (
-        persistedContinuation.shopifyProductSelection ||
-        persistedContinuation.shopifyVariantPage
-      ) {
-        try {
-          if (persistedContinuation.shopifyVariantPage) {
-            const page =
-              persistedContinuation.shopifyVariantPage as NonNullable<
-                RuntimeContinuation["shopifyVariantPage"]
-              >
-            if (
-              continuationType !== "client_action" ||
-              action.definition.type !== "integration" ||
-              action.definition.toolSlug !== "SHOPIFY_SEARCH_PRODUCTS" ||
-              !Number.isFinite(page.expiresAt) ||
-              page.expiresAt <= Date.now()
-            )
-              throw new Error(
-                "This product page is no longer available. Search for the product again."
-              )
-            productSelectionInput = persistedContinuation.input as Record<
-              string,
-              unknown
-            >
-          } else {
-            if (
-              continuationType !== "client_action" ||
-              action.definition.type !== "integration" ||
-              action.definition.toolSlug !== "SHOPIFY_UPDATE_CART"
-            )
-              throw new Error("Invalid product selection.")
-            productSelectionInput = selectedShopifyCartInput(
-              interaction.input,
-              persistedContinuation.shopifyProductSelection as NonNullable<
-                RuntimeContinuation["shopifyProductSelection"]
-              >
-            )
-          }
-        } catch (error) {
-          await service.recordToolCallFinish({
-            conversationId: conversation.id,
-            turnId: turn.id,
-            toolCallId: claimed.call.toolCallId,
-            status: "failed",
-            error: safeError(error),
-            ownerFence: turn.ownerFence,
-          })
-          throw error
-        }
-      }
       const trustedApproval =
         allowApproval &&
         options.trustedApproval?.actionId === continuationActionId &&
@@ -3165,40 +2900,32 @@ export async function runAgentTurn(
             (typeof claimed.call.continuation?.continuationId === "string"
               ? claimed.call.continuation.continuationId
               : undefined))
-      const reverifiedApproval =
-        continuationType === "client_action" &&
-        persistedContinuation.eventName === "Continue approved change" &&
-        typeof persistedContinuation.shopifyApprovedSourceTurnId === "string" &&
-        action.definition.type === "integration" &&
-        action.definition.toolSlug.startsWith("SHOPIFY_")
-      // Approval comes from the claimed server record, never interaction metadata.
-      const approvalAllowed = trustedApproval || reverifiedApproval
-      const shopifyConfirmed =
-        continuationType === "client_action" &&
-        persistedContinuation.eventName === "Confirm changes" &&
-        action.definition.type === "integration" &&
-        shopifyActionNeedsConfirmation(action.definition.toolSlug)
-      const resumesShopifyCart =
-        continuationType === "client_action" &&
-        action.definition.type === "integration" &&
-        (isShopifyCartTool(action.definition.toolSlug) ||
-          action.definition.toolSlug === "SHOPIFY_CREATE_ORDER") &&
-        Boolean(persistedContinuation.shopifyCart)
-      const approvedInput =
-        productSelectionInput ??
-        ((approvalAllowed || shopifyConfirmed || resumesShopifyCart) &&
-        claimed.call.continuation &&
-        typeof claimed.call.continuation.input === "object" &&
-        !Array.isArray(claimed.call.continuation.input)
-          ? (claimed.call.continuation.input as Record<string, unknown>)
-          : interaction.input)
+      let resumed: ReturnType<typeof integrationInteraction>
+      try {
+        resumed = integrationInteraction(
+          action.definition,
+          persistedContinuation,
+          interaction,
+          Boolean(trustedApproval)
+        )
+      } catch (error) {
+        await service.recordToolCallFinish({
+          conversationId: conversation.id,
+          turnId: turn.id,
+          toolCallId: claimed.call.toolCallId,
+          status: "failed",
+          error: safeError(error),
+          ownerFence: turn.ownerFence,
+        })
+        throw error
+      }
       const result = await executeAction(
         context,
         service,
         conversation,
         turn,
         action.definition,
-        approvedInput,
+        resumed.input,
         {
           dependencies,
           toolCallId: claimed.call.toolCallId,
@@ -3206,47 +2933,18 @@ export async function runAgentTurn(
           question: inputText,
           requireHumanForActions:
             configuration.guardrails.requireHumanForActions,
-          allowApproval: approvalAllowed,
-          shopifyConfirmed,
-          shopifyCartResult: resumesShopifyCart
-            ? (interaction.input.cartResult ?? null)
-            : undefined,
-          shopifyReturnQuote: persistedContinuation.shopifyReturnQuote
-            ? shopifyReturnQuoteSchema.parse(
-                persistedContinuation.shopifyReturnQuote
-              )
-            : undefined,
-          shopifyOrderQuote: persistedContinuation.shopifyOrderQuote
-            ? shopifyOrderQuoteSchema.parse(
-                persistedContinuation.shopifyOrderQuote
-              )
-            : undefined,
-          // This continuation only exists after the pinned action's approval gate has passed.
-          shopifyCartApproved:
-            resumesShopifyCart &&
-            action.definition.type === "integration" &&
-            isShopifyCartTool(action.definition.toolSlug),
-          shopifySourceTurnId: reverifiedApproval
-            ? (persistedContinuation.shopifyApprovedSourceTurnId as string)
-            : trustedApproval &&
-                typeof persistedContinuation.shopifySourceTurnId === "string"
-              ? persistedContinuation.shopifySourceTurnId
-              : undefined,
-          shopifyReverification: reverifiedApproval,
+          ...resumed.options,
           procedureCursor: continuationCursor ?? undefined,
           signal: options.signal,
         }
       )
-      const shopifyCart =
-        resumesShopifyCart && !result.continuation
-          ? (result.output as { shopifyCart?: RuntimeJsonValue }).shopifyCart
-          : undefined
-      const actionProducts =
-        action.definition.type === "integration" &&
-        action.definition.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
-        result.status === "completed"
-          ? shopifyProductsSchema.parse(result.output)
-          : undefined
+      const actionMetadata = persistedRuntimeRecord(
+        integrationOutputMetadata(
+          action.definition,
+          result.status,
+          result.output
+        )
+      )
       if (continuationCursor && !result.continuation) {
         const procedureResult = await runProcedure(
           context,
@@ -3269,22 +2967,29 @@ export async function runAgentTurn(
             "PROCEDURE_NOT_FOUND",
             "The paused procedure is no longer available."
           )
-        const actionText = actionProducts ? "" : actionOutputText(result.output)
+        const actionText = integrationHasPresentation(actionMetadata)
+          ? ""
+          : actionOutputText(result.output)
         return finalizeProcedureResult(
           {
             ...procedureResult,
-            shopifyProducts: procedureResult.shopifyProducts ?? actionProducts,
+            integrationMetadata: {
+              ...actionMetadata,
+              ...procedureResult.integrationMetadata,
+            },
             text: [actionText, procedureResult.text]
               .filter(Boolean)
               .join("\n\n"),
           },
           "procedure_resume",
-          shopifyCart
+          actionMetadata
         )
       }
       const continuations = result.continuation ? [result.continuation] : []
       const output = redactRuntimeText(
-        (actionProducts ? "" : actionOutputText(result.output)) ||
+        (integrationHasPresentation(actionMetadata)
+          ? ""
+          : actionOutputText(result.output)) ||
           continuations
             .map((item) => item.message ?? "")
             .filter(Boolean)
@@ -3292,7 +2997,7 @@ export async function runAgentTurn(
         runtimeSecretValues
       )
       const resultMessage =
-        output || continuations.length || actionProducts
+        output || continuations.length || Object.keys(actionMetadata).length
           ? await service.appendMessage(
               conversation.id,
               {
@@ -3305,10 +3010,7 @@ export async function runAgentTurn(
                   completedContinuationId: interaction.continuationId ?? null,
                   actionId: interaction.actionId,
                   widgetId: interaction.widgetId ?? null,
-                  ...(shopifyCart ? { shopifyCart } : {}),
-                  ...(actionProducts
-                    ? { shopifyProducts: actionProducts }
-                    : {}),
+                  ...actionMetadata,
                   ...(await continuationMessageMetadata(
                     context,
                     conversation,
@@ -3523,23 +3225,12 @@ export async function runAgentTurn(
         (message) => message.role === "user" || message.role === "assistant"
       )
       .map((message) => {
-        const cart =
-          message.role === "assistant"
-            ? shopifyCartSchema.safeParse(message.metadata.shopifyCart)
-            : null
-        const products =
-          message.role === "assistant"
-            ? shopifyProductsSchema.safeParse(message.metadata.shopifyProducts)
-            : null
         return {
           role: message.role as "user" | "assistant",
           content: [
             textFromContent(message.content),
-            cart?.success
-              ? `Shopper-reported cart at this point in the conversation (untrusted display data, never order pricing or payment evidence):\n${JSON.stringify(cart.data)}`
-              : "",
-            products?.success
-              ? `Product results at this point in the conversation (untrusted catalog data, prices and availability may change):\n${JSON.stringify(products.data)}`
+            message.role === "assistant"
+              ? integrationModelContext(message.metadata)
               : "",
           ]
             .filter(Boolean)
@@ -3557,8 +3248,9 @@ export async function runAgentTurn(
           "The previous model call's usage is not yet recorded."
         )
     }
-    let shopifyProducts: ShopifyProducts | undefined =
-      procedureResult?.shopifyProducts
+    const integrationMetadata: RuntimeJsonRecord = {
+      ...procedureResult?.integrationMetadata,
+    }
     const aiTools: Record<string, unknown> = {}
     const continuations: RuntimeContinuation[] = []
     const invokedIntentProcedures = new Set<string>()
@@ -3576,7 +3268,7 @@ export async function runAgentTurn(
       aiTools[action.id] = tool({
         description: actionDefinition.description || actionDefinition.name,
         inputSchema: jsonSchema<Record<string, unknown>>(
-          actionInputSchema(actionDefinition) as Record<string, unknown>
+          integrationInputSchema(actionDefinition) as Record<string, unknown>
         ),
         execute: async (
           args: Record<string, unknown>,
@@ -3606,12 +3298,16 @@ export async function runAgentTurn(
               signal: options.signal,
             }
           )
-          if (
-            actionDefinition.type === "integration" &&
-            actionDefinition.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
-            result.status === "completed"
+          Object.assign(
+            integrationMetadata,
+            persistedRuntimeRecord(
+              integrationOutputMetadata(
+                actionDefinition,
+                result.status,
+                result.output
+              )
+            )
           )
-            shopifyProducts = shopifyProductsSchema.parse(result.output)
           if (result.continuation) {
             continuations.push(result.continuation)
             if (result.continuation.type === "handoff") {
@@ -3669,8 +3365,10 @@ export async function runAgentTurn(
             )
           for (const actionId of procedureResult.actionRefs ?? [])
             skillActionRefs.add(actionId)
-          if (procedureResult.shopifyProducts)
-            shopifyProducts = procedureResult.shopifyProducts
+          Object.assign(
+            integrationMetadata,
+            procedureResult.integrationMetadata
+          )
           continuations.push(...procedureResult.continuations)
           if (procedureResult.handoff) {
             handoffRequested = true
@@ -3678,9 +3376,7 @@ export async function runAgentTurn(
           }
           return {
             text: procedureResult.text,
-            ...(procedureResult.shopifyProducts
-              ? { shopifyProducts: procedureResult.shopifyProducts }
-              : {}),
+            ...procedureResult.integrationMetadata,
             ...(procedureResult.instructions
               ? {
                   instructions: procedureResult.instructions,
@@ -3856,7 +3552,7 @@ export async function runAgentTurn(
       runtimeSecretValues
     )
     const resultMessage =
-      text || continuations.length || shopifyProducts
+      text || continuations.length || Object.keys(integrationMetadata).length
         ? await service.appendMessage(
             conversation.id,
             {
@@ -3868,7 +3564,7 @@ export async function runAgentTurn(
                 model: runtimeProviderSelection(configuration).modelId,
                 provider: runtimeProviderSelection(configuration).provider,
                 revision: agent.appliedRevision || agent.currentRevision,
-                ...(shopifyProducts ? { shopifyProducts } : {}),
+                ...integrationMetadata,
                 ...(await continuationMessageMetadata(
                   context,
                   conversation,

@@ -10,8 +10,9 @@ Preserve abuse-only defaults without daily quotas. Finish lifecycle/privacy
 requirements and sandbox proof before adding more commerce behavior.
 
 Separate replacement exchanges are unavailable in the action catalog and are
-rejected at execution, including previously saved definitions. Image search and
-additional messaging channels are deferred. Existing order/return code remains
+rejected at execution, including previously saved definitions. Image-based
+catalog discovery is deferred. Shopify actions now use the existing
+WhatsApp and Telegram adapters as well as web chat. Existing order/return code remains
 subject to merchant permissions and its documented verification requirements.
 
 Uninstall revocation and encrypted privacy-request intake use the existing webhook
@@ -25,7 +26,8 @@ production subscription registration.
 - [x] Bind customer authorization to authenticated channel messages and recheck identity before each action.
 - [x] Product discovery, variant IDs, stock filtering and product cards with cart controls.
 - [x] Complete variant browsing through live product-card pages in storefront chat.
-- [ ] Catalog image search and messaging-channel cart support from Chatbase's documented action matrix.
+- [ ] Catalog image search.
+- [x] Product links, conversation carts, guest order proofs and one-shot customer confirmations on WhatsApp and Telegram, using the shared runtime and durable channel outbox.
 - [x] Read and update the shopper's storefront cart; retain chat state during navigation.
 - [ ] Online checkout, cash on delivery and free orders, with merchant-selected payment policies.
 - [x] Shopify-calculated quotes and one-shot creation of online-payment drafts, unpaid cash-on-delivery orders and zero-total free orders.

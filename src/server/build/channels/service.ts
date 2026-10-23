@@ -38,7 +38,7 @@ import { assertPublicHttpUrl } from "../http"
 import { TracerError } from "@/src/server/tracer/errors"
 import {
   pinContinuationWidgets,
-  runtimeMessageMetadata,
+  runtimeChannelMessage,
 } from "../runtime/continuations"
 import type { RunAgentTurnResult, RuntimeContinuation } from "../runtime"
 import {
@@ -1572,20 +1572,7 @@ export async function enqueueAgentTurnResult(
       "The channel conversation has no external conversation identity."
     )
   const continuations = await pinRuntimeContinuations(context, result)
-  const continuationText = continuations
-    .map(
-      (item: RuntimeContinuation) =>
-        item.message ?? item.submitLabel ?? item.eventName ?? ""
-    )
-    .filter(Boolean)
-    .join("\n")
-  const text =
-    result.text ||
-    (result.conversation.channel === "web" ? "" : continuationText)
-  const metadata =
-    result.conversation.channel === "web"
-      ? runtimeMessageMetadata(result, continuations)
-      : undefined
+  const { text, metadata } = runtimeChannelMessage(result, continuations)
   if (
     !text &&
     !continuations.length &&

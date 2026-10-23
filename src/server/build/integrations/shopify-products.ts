@@ -8,7 +8,7 @@ import {
 } from "@/src/lib/build/shopify-products"
 import type { Conversation, ConversationTurn } from "../conversation-schema"
 import type { ConversationService } from "../conversations"
-import type { RuntimeContinuation } from "./index"
+import type { RuntimeContinuation } from "../runtime"
 
 /** Product cards use the same saved cart action, approval gate and one-shot ledger as agent calls. */
 export async function prepareShopifyProductCards(

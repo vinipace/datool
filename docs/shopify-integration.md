@@ -39,8 +39,10 @@ connections.
   per-recipient cooldown, or sign-in guidance for new customer accounts.
 - `SHOPIFY_TAG_ORDER`: merchant-allowlisted tags on the verified customer's own order.
 - `SHOPIFY_GET_CART` and `SHOPIFY_UPDATE_CART`: read and update the shopper's
-  current storefront cart through the theme bridge, with merchant approval and
-  one-shot browser controls.
+  storefront cart through the theme bridge, or a separate conversation cart on
+  WhatsApp and Telegram. Messaging carts produce a Shopify checkout link;
+  Shopify validates availability and final totals at checkout. Merchant approval
+  still applies when enabled.
 - `SHOPIFY_CREATE_ORDER`: calculate a quote for selected items or ordinary cart
   lines, then require confirmation or teammate approval. Merchant settings select
   online payment, cash on delivery or a free order. Online payment returns an
@@ -82,22 +84,39 @@ connections.
   amounts require review.
   Unprocessed returns can use the existing return action's continuation flow.
 
-Product searches render native product cards. An enabled **Update shopping cart**
+Product searches render native product cards on the web and product names, prices
+and links on messaging channels. An enabled **Update shopping cart**
 action for the same connection adds variant and quantity controls. Storefront chat
 installation is separate from the data connection. This connector does not
 install a theme embed. Payment updates and purchased-cart cleanup use the existing
 channel worker. Resolution of incomplete drafts and returns, and replacement-order work remain tracked in
 [the action parity checklist](shopify-action-parity.md).
 
-Customer-specific actions require a freshly verified Shopify storefront chat.
-Customer IDs in messages, tool arguments, contact fields or browser metadata
-never authorize access. Newly added customer/order actions require merchant
+The same applied integration actions run on every enabled channel. New actions
+use the shared channel defaults; existing actions keep their configured channel
+allowlist, so enable WhatsApp in Actions before testing an older action there.
+Quotes and customer confirmations use the same persisted continuation ledger.
+Messaging customers reply `CONFIRM <code>` to the exact displayed request. Codes
+are bound to one conversation and can be consumed once; they cannot approve a
+request that requires a teammate. Payment updates use the original channel's
+outbox and its existing delivery rules (including WhatsApp's reply window).
+
+Messaging senders are admitted as guests. Order status, returns and exchanges
+still require the order number and matching checkout email or full phone number.
+A WhatsApp sender number alone never authorizes Shopify account access. Profile
+and account-address changes continue to require a freshly verified storefront
+customer session; account activation can provide a store sign-in link.
+Customer IDs in messages, tool arguments, contact fields or metadata never
+authorize access. Newly added customer/order actions require merchant
 consent and Shopify protected customer data approval before a public launch.
 Existing catalog-only installs can continue using product and policy reads.
 
 Catalog, customer and order execution runs directly from the Datool worker to
-Shopify's Admin GraphQL API 2026-10. Cart actions use the shopper's storefront
-session. Neither path calls the Shopify development app or its temporary tunnel.
+Shopify's Admin GraphQL API 2026-10. Storefront cart actions use the browser
+session; messaging carts persist variant selections in the conversation and use
+[Shopify cart permalinks](https://shopify.dev/docs/apps/build/checkout/create-cart-permalinks).
+They do not synchronize with an existing browser cart or support subscription
+products. Neither path calls the development app or its temporary tunnel.
 Native calls record integration usage with no configured Composio charge.
 Normal agent model usage still applies.
 
