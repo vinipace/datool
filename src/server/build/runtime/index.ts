@@ -1,5 +1,18 @@
+import {
+  integrationOutputMetadata,
+  integrationModelContext,
+  integrationHasPresentation,
+} from "../integrations/presentation"
+import {
+  integrationExecution,
+  integrationInteraction,
+  integrationInputError,
+  integrationInputSchema,
+  type IntegrationExecutionOptions,
+  type IntegrationContinuationState,
+  inlineIntegrationContinuation,
+} from "../integrations/action-runtime"
 import { createHash, randomUUID } from "node:crypto"
-import { executeAppAction } from "../integrations/service"
 import { beginModelUsage, finishModelUsage } from "../usage"
 
 import { createGateway } from "@ai-sdk/gateway"
@@ -46,7 +59,7 @@ import {
   updateContact,
   upsertLead,
 } from "../operations/contacts"
-import { pinContinuationWidgets } from "./continuations"
+import { channelConfirmation, pinContinuationWidgets } from "./continuations"
 import {
   ConversationBusyError,
   ConversationBudgetExceededError,
@@ -188,7 +201,7 @@ export const runAgentTurnInputSchema = z
 
 export type RunAgentTurnInput = z.input<typeof runAgentTurnInputSchema>
 
-export type RuntimeContinuation = {
+export type RuntimeContinuation = IntegrationContinuationState & {
   type:
     | "client_action"
     | "widget"
@@ -200,6 +213,8 @@ export type RuntimeContinuation = {
   /** Opaque one-shot capability used to resume a persisted client action. */
   continuationId?: string
   eventName?: string
+  /** Customer may confirm this pinned request through any supported channel. */
+  confirmation?: boolean
   widgetId?: string
   input?: Record<string, unknown>
   fields?: unknown[]
@@ -578,6 +593,7 @@ function defaultEstimateCostUsd(input: {
   channel?: string
   input: string
   maxOutputTokens: number
+  inputTokens?: number
 }): number | null {
   const configuration = input.channel
     ? runtimeConfiguration(input.agent, input.channel)
@@ -610,7 +626,8 @@ function defaultEstimateCostUsd(input: {
   const instructionTokens = Math.ceil(
     (configuration.instructions?.length ?? 0) / 4
   )
-  const inputTokens = Math.ceil(input.input.length / 4) + instructionTokens
+  const inputTokens =
+    input.inputTokens ?? Math.ceil(input.input.length / 4) + instructionTokens
   return (
     (inputTokens * inputRate + input.maxOutputTokens * outputRate) / 1_000_000
   )
@@ -682,8 +699,8 @@ function validateActionInput(action: ActionDefinition, input: unknown) {
       "INVALID_TOOL_INPUT",
       "Action input must be an object."
     )
-  if (Object.keys(action.inputSchema).length)
-    validateSchema(action.inputSchema, input)
+  const schema = integrationInputSchema(action)
+  if (Object.keys(schema).length) validateSchema(schema, input)
 }
 
 function assertSafeActionUrl(raw: string) {
@@ -903,6 +920,7 @@ function persistedContinuations(
 ): RuntimeContinuation[] {
   return toolCalls.flatMap((call) => {
     const continuation = call.continuation
+    if (inlineIntegrationContinuation(continuation)) return []
     if (!continuation || typeof continuation.type !== "string") return []
     const type = continuation.type
     if (
@@ -982,7 +1000,9 @@ function validateFormSubmission(
       const value = input[field.name]
       return (
         field.required &&
-        (value === undefined || value === null || value === "" ||
+        (value === undefined ||
+          value === null ||
+          value === "" ||
           (field.type === "checkbox" && value !== true))
       )
     })
@@ -994,7 +1014,11 @@ function validateFormSubmission(
 
   for (const field of action.fields) {
     const value = input[field.name]
-    if (field.type === "checkbox" && value !== undefined && typeof value !== "boolean")
+    if (
+      field.type === "checkbox" &&
+      value !== undefined &&
+      typeof value !== "boolean"
+    )
       throw new BuildRuntimeError(
         "INVALID_FORM_INPUT",
         "The submitted form data is invalid."
@@ -1160,6 +1184,7 @@ function evaluateBranch(condition: string, variables: Record<string, unknown>) {
 
 type ProcedureResult = {
   text: string
+  integrationMetadata?: RuntimeJsonRecord
   instructions?: string
   actionRefs?: string[]
   continuations: RuntimeContinuation[]
@@ -1273,6 +1298,7 @@ async function executeAction(
   input: Record<string, unknown>,
   options: {
     dependencies: RuntimeDependencies
+    availableActions?: Map<string, ActionRecord>
     toolCallId: string
     question?: string
     continuationId?: string
@@ -1280,7 +1306,7 @@ async function executeAction(
     requireHumanForActions?: boolean
     allowApproval?: boolean
     signal?: AbortSignal
-  }
+  } & IntegrationExecutionOptions
 ) {
   assertNotCancelled(options.signal)
   const knownSecrets = actionSecretValues(action)
@@ -1318,41 +1344,88 @@ async function executeAction(
     throw error
   }
   const continuationId = options.continuationId ?? randomUUID()
-  if (
-    options.requireHumanForActions &&
-    action.type !== "handoff" &&
-    !options.allowApproval
-  ) {
-    const approval: RuntimeContinuation = {
-      type: "approval_required",
-      actionId: action.id,
-      continuationId,
-      input: persistedRuntimeRecord(input, knownSecrets),
-      message: "A teammate must approve this action before it runs.",
-      ...(options.procedureCursor
-        ? {
-            procedureCursor: persistedProcedureCursor(
-              options.procedureCursor,
-              knownSecrets
-            ),
-          }
-        : {}),
-    }
+  const pendingBase = {
+    actionId: action.id,
+    continuationId,
+    input: persistedRuntimeRecord(input, knownSecrets),
+    ...(options.procedureCursor
+      ? {
+          procedureCursor: persistedProcedureCursor(
+            options.procedureCursor,
+            knownSecrets
+          ),
+        }
+      : {}),
+  }
+  const awaitInput = async (pending: RuntimeContinuation) => {
     await service.recordToolCallFinish({
       conversationId: conversation.id,
       turnId: turn.id,
       toolCallId: options.toolCallId,
       status: "awaiting_client",
-      output: approval,
-      continuation: approval,
+      output: pending,
+      continuation: pending,
       ownerFence: turn.ownerFence,
     })
     return {
-      output: approval,
-      continuation: approval,
+      output: pending,
+      continuation: pending,
       status: "awaiting_client" as const,
     }
   }
+  const integration =
+    action.type === "integration"
+      ? integrationExecution(
+          context,
+          service,
+          conversation,
+          turn,
+          action,
+          input,
+          pendingBase,
+          options
+        )
+      : null
+  if (integration) {
+    try {
+      const pending = await integration.prepare()
+      if (pending) return await awaitInput(pending)
+    } catch (error) {
+      const message = integrationInputError(action, error)
+      const failure = new BuildRuntimeError(
+        message ? "ACTION_INPUT_REQUIRED" : "ACTION_FAILED",
+        message ??
+          "The requested change could not be prepared. Please try again."
+      )
+      await service.recordToolCallFinish({
+        conversationId: conversation.id,
+        turnId: turn.id,
+        toolCallId: options.toolCallId,
+        status: "failed",
+        error: safeError(failure),
+        ownerFence: turn.ownerFence,
+      })
+      throw failure
+    }
+  }
+  const confirmation = integration?.confirmation()
+  if (confirmation)
+    return awaitInput({
+      ...pendingBase,
+      ...confirmation,
+      type: confirmation.type!,
+    })
+  if (
+    !integration &&
+    options.requireHumanForActions &&
+    action.type !== "handoff" &&
+    !options.allowApproval
+  )
+    return awaitInput({
+      ...pendingBase,
+      type: "approval_required",
+      message: "A teammate must approve this action before it runs.",
+    })
   if (options.dependencies.executeAction) {
     try {
       const result = await options.dependencies.executeAction({
@@ -1464,27 +1537,21 @@ async function executeAction(
     }
   }
   try {
-    if (action.type === "integration") {
-      const result = await executeAppAction(context, {
-        connectionId: action.connectionId,
-        toolSlug: action.toolSlug,
-        agentId: conversation.agentId,
-        conversationId: conversation.id,
-        turnId: turn.id,
-        toolCallId: options.toolCallId,
-        arguments: input,
-        signal: options.signal,
-      })
+    if (action.type === "integration" && integration) {
+      const result = await integration.execute()
+      const output = result.continuation ?? result.output
       await service.recordToolCallFinish({
         conversationId: conversation.id,
         turnId: turn.id,
         toolCallId: options.toolCallId,
         status: result.status,
-        output: result.output,
+        output,
+        continuation: result.continuation,
         ownerFence: turn.ownerFence,
       })
-      return { ...result, continuation: null }
+      return { ...result, output }
     }
+    if (action.type !== "http") throw new Error("Unsupported action.")
     assertSafeActionUrl(action.url)
     const result = await invokeBuildHttp(
       {
@@ -1546,6 +1613,9 @@ async function executeAction(
         error: safeError(error),
       },
     }).catch(() => undefined)
+    const integrationError = integrationInputError(action, error)
+    if (integrationError)
+      throw new BuildRuntimeError("ACTION_INPUT_REQUIRED", integrationError)
     if (error instanceof BuildActionTransportError && error.httpStatus)
       throw new BuildRuntimeError(
         "ACTION_HTTP_ERROR",
@@ -1608,6 +1678,7 @@ async function runProcedure(
     ...procedure.definition.variables,
   }
   const text: string[] = []
+  const integrationMetadata: RuntimeJsonRecord = {}
   const continuations: RuntimeContinuation[] = []
   let handoff = false
   let handoffOwnerId: string | null = null
@@ -1686,6 +1757,7 @@ async function runProcedure(
         {
           dependencies,
           toolCallId: `procedure_${step.id}_${randomUUID()}`,
+          availableActions: actions,
           question: input,
           requireHumanForActions,
           procedureCursor:
@@ -1698,6 +1770,16 @@ async function runProcedure(
               : undefined,
           signal,
         }
+      )
+      Object.assign(
+        integrationMetadata,
+        persistedRuntimeRecord(
+          integrationOutputMetadata(
+            action.definition,
+            result.status,
+            result.output
+          )
+        )
       )
       if (action.definition.type === "handoff") {
         handoff = true
@@ -1719,6 +1801,7 @@ async function runProcedure(
   }
   return {
     text: text.join("\n\n"),
+    integrationMetadata,
     continuations,
     stopped: true,
     handoff,
@@ -2093,9 +2176,15 @@ export async function runAgentTurn(
         actions.flatMap((item) => actionSecretValues(item.definition))
       ),
     ]
+    const interaction: RuntimeWidgetInteraction | null =
+      widgetInteraction(parsed.metadata) ??
+      (conversation.channel !== "web"
+        ? await channelConfirmation(context, conversation.id, turn.id)
+        : null)
     const finalizeProcedureResult = async (
       procedureResult: ProcedureResult,
-      source: "procedure" | "procedure_resume" = "procedure"
+      source: "procedure" | "procedure_resume" = "procedure",
+      additionalMetadata: RuntimeJsonRecord = {}
     ): Promise<RunAgentTurnResult> => {
       const output = redactRuntimeText(
         procedureResult.text ||
@@ -2106,7 +2195,9 @@ export async function runAgentTurn(
         runtimeSecretValues
       )
       const resultMessage =
-        output || procedureResult.continuations.length
+        output ||
+        procedureResult.continuations.length ||
+        Object.keys(procedureResult.integrationMetadata ?? {}).length
           ? await service.appendMessage(
               conversation.id,
               {
@@ -2118,11 +2209,12 @@ export async function runAgentTurn(
                 status: "completed",
                 metadata: {
                   source,
+                  ...additionalMetadata,
+                  ...procedureResult.integrationMetadata,
                   ...(source === "procedure_resume"
                     ? {
                         completedContinuationId:
-                          widgetInteraction(parsed.metadata)?.continuationId ??
-                          null,
+                          interaction?.continuationId ?? null,
                       }
                     : {}),
                   ...(await continuationMessageMetadata(
@@ -2208,7 +2300,6 @@ export async function runAgentTurn(
       turn.ownerFence
     )
     turn.snapshot = snapshottedTurn.snapshot
-    const interaction = widgetInteraction(parsed.metadata)
     if (interaction) {
       const isWaitInteraction = interaction.actionId === "__wait__"
       if (
@@ -2801,7 +2892,7 @@ export async function runAgentTurn(
           throw error
         }
       }
-      const approvalAllowed =
+      const trustedApproval =
         allowApproval &&
         options.trustedApproval?.actionId === continuationActionId &&
         (!options.trustedApproval.continuationId ||
@@ -2809,30 +2900,50 @@ export async function runAgentTurn(
             (typeof claimed.call.continuation?.continuationId === "string"
               ? claimed.call.continuation.continuationId
               : undefined))
-      const approvedInput =
-        approvalAllowed &&
-        claimed.call.continuation &&
-        typeof claimed.call.continuation.input === "object" &&
-        !Array.isArray(claimed.call.continuation.input)
-          ? (claimed.call.continuation.input as Record<string, unknown>)
-          : interaction.input
+      let resumed: ReturnType<typeof integrationInteraction>
+      try {
+        resumed = integrationInteraction(
+          action.definition,
+          persistedContinuation,
+          interaction,
+          Boolean(trustedApproval)
+        )
+      } catch (error) {
+        await service.recordToolCallFinish({
+          conversationId: conversation.id,
+          turnId: turn.id,
+          toolCallId: claimed.call.toolCallId,
+          status: "failed",
+          error: safeError(error),
+          ownerFence: turn.ownerFence,
+        })
+        throw error
+      }
       const result = await executeAction(
         context,
         service,
         conversation,
         turn,
         action.definition,
-        approvedInput,
+        resumed.input,
         {
           dependencies,
           toolCallId: claimed.call.toolCallId,
+          availableActions: continuationActionMap,
           question: inputText,
           requireHumanForActions:
             configuration.guardrails.requireHumanForActions,
-          allowApproval: approvalAllowed,
+          ...resumed.options,
           procedureCursor: continuationCursor ?? undefined,
           signal: options.signal,
         }
+      )
+      const actionMetadata = persistedRuntimeRecord(
+        integrationOutputMetadata(
+          action.definition,
+          result.status,
+          result.output
+        )
       )
       if (continuationCursor && !result.continuation) {
         const procedureResult = await runProcedure(
@@ -2856,22 +2967,29 @@ export async function runAgentTurn(
             "PROCEDURE_NOT_FOUND",
             "The paused procedure is no longer available."
           )
-        const actionText = actionOutputText(result.output)
+        const actionText = integrationHasPresentation(actionMetadata)
+          ? ""
+          : actionOutputText(result.output)
         return finalizeProcedureResult(
-          actionText
-            ? {
-                ...procedureResult,
-                text: [actionText, procedureResult.text]
-                  .filter(Boolean)
-                  .join("\n\n"),
-              }
-            : procedureResult,
-          "procedure_resume"
+          {
+            ...procedureResult,
+            integrationMetadata: {
+              ...actionMetadata,
+              ...procedureResult.integrationMetadata,
+            },
+            text: [actionText, procedureResult.text]
+              .filter(Boolean)
+              .join("\n\n"),
+          },
+          "procedure_resume",
+          actionMetadata
         )
       }
       const continuations = result.continuation ? [result.continuation] : []
       const output = redactRuntimeText(
-        actionOutputText(result.output) ||
+        (integrationHasPresentation(actionMetadata)
+          ? ""
+          : actionOutputText(result.output)) ||
           continuations
             .map((item) => item.message ?? "")
             .filter(Boolean)
@@ -2879,7 +2997,7 @@ export async function runAgentTurn(
         runtimeSecretValues
       )
       const resultMessage =
-        output || continuations.length
+        output || continuations.length || Object.keys(actionMetadata).length
           ? await service.appendMessage(
               conversation.id,
               {
@@ -2892,6 +3010,7 @@ export async function runAgentTurn(
                   completedContinuationId: interaction.continuationId ?? null,
                   actionId: interaction.actionId,
                   widgetId: interaction.widgetId ?? null,
+                  ...actionMetadata,
                   ...(await continuationMessageMetadata(
                     context,
                     conversation,
@@ -3074,7 +3193,8 @@ export async function runAgentTurn(
       configuration.instructions,
       knowledge?.text ? `Knowledge context:\n${knowledge.text}` : "",
       procedures.some(
-        (item) => item.definition.enabled && item.definition.instructions?.trim()
+        (item) =>
+          item.definition.enabled && item.definition.instructions?.trim()
       )
         ? "Skills provide reusable instructions for specific tasks. Follow any skill instructions supplied for this turn. To use another skill, load it with its procedure tool on each turn. Follow the returned instructions, use only available actions, and never claim an action succeeded without its result."
         : "",
@@ -3082,10 +3202,20 @@ export async function runAgentTurn(
         ? `Skill instructions for this turn:\n${procedureResult.instructions}`
         : "",
       procedureResult?.actionRefs?.length
-        ? `Actions mentioned in this skill:\n${JSON.stringify(procedureResult.actionRefs.flatMap(id => {
-            const action = actionMap.get(id)
-            return action ? [{ mention: `action:${action.slug}`, toolName: id, name: action.definition.name }] : []
-          }))}`
+        ? `Actions mentioned in this skill:\n${JSON.stringify(
+            procedureResult.actionRefs.flatMap((id) => {
+              const action = actionMap.get(id)
+              return action
+                ? [
+                    {
+                      mention: `action:${action.slug}`,
+                      toolName: id,
+                      name: action.definition.name,
+                    },
+                  ]
+                : []
+            })
+          )}`
         : "",
     ]
       .filter(Boolean)
@@ -3094,11 +3224,21 @@ export async function runAgentTurn(
       .filter(
         (message) => message.role === "user" || message.role === "assistant"
       )
-      .map((message) => ({
-        role: message.role as "user" | "assistant",
-        content: textFromContent(message.content),
-      }))
+      .map((message) => {
+        return {
+          role: message.role as "user" | "assistant",
+          content: [
+            textFromContent(message.content),
+            message.role === "assistant"
+              ? integrationModelContext(message.metadata)
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        }
+      })
     let pendingModelUsage: string | null = null
+    let reservedStepCost = 0
     // AI SDK event callbacks report and swallow errors. Keep admission and
     // side effects blocked if a model usage report could not be persisted.
     function assertModelUsageRecorded() {
@@ -3108,6 +3248,9 @@ export async function runAgentTurn(
           "The previous model call's usage is not yet recorded."
         )
     }
+    const integrationMetadata: RuntimeJsonRecord = {
+      ...procedureResult?.integrationMetadata,
+    }
     const aiTools: Record<string, unknown> = {}
     const continuations: RuntimeContinuation[] = []
     const invokedIntentProcedures = new Set<string>()
@@ -3115,14 +3258,17 @@ export async function runAgentTurn(
     const skillActionRefs = new Set(procedureResult?.actionRefs ?? [])
     const activeTools = () =>
       Object.keys(aiTools).filter(
-        (name) => !actionMap.has(name) || modelActionMap.has(name) || skillActionRefs.has(name)
+        (name) =>
+          !actionMap.has(name) ||
+          modelActionMap.has(name) ||
+          skillActionRefs.has(name)
       )
     for (const action of actionMap.values()) {
       const actionDefinition = action.definition
       aiTools[action.id] = tool({
         description: actionDefinition.description || actionDefinition.name,
         inputSchema: jsonSchema<Record<string, unknown>>(
-          actionDefinition.inputSchema as Record<string, unknown>
+          integrationInputSchema(actionDefinition) as Record<string, unknown>
         ),
         execute: async (
           args: Record<string, unknown>,
@@ -3145,11 +3291,22 @@ export async function runAgentTurn(
             {
               dependencies,
               toolCallId,
+              availableActions: actionMap,
               question: inputText,
               requireHumanForActions:
                 configuration.guardrails.requireHumanForActions,
               signal: options.signal,
             }
+          )
+          Object.assign(
+            integrationMetadata,
+            persistedRuntimeRecord(
+              integrationOutputMetadata(
+                actionDefinition,
+                result.status,
+                result.output
+              )
+            )
           )
           if (result.continuation) {
             continuations.push(result.continuation)
@@ -3173,8 +3330,7 @@ export async function runAgentTurn(
         continue
       const procedureToolName = `procedure_${procedure.id}`
       aiTools[procedureToolName] = tool({
-        description:
-          `Use ${procedure.definition.name} when: ${procedure.definition.trigger.value}. ${procedure.definition.description}${procedure.definition.instructions?.trim() ? " Load this skill's instructions before responding or taking its actions." : ""}`,
+        description: `Use ${procedure.definition.name} when: ${procedure.definition.trigger.value}. ${procedure.definition.description}${procedure.definition.instructions?.trim() ? " Load this skill's instructions before responding or taking its actions." : ""}`,
         inputSchema: jsonSchema<Record<string, unknown>>({
           type: "object",
           properties: {},
@@ -3209,6 +3365,10 @@ export async function runAgentTurn(
             )
           for (const actionId of procedureResult.actionRefs ?? [])
             skillActionRefs.add(actionId)
+          Object.assign(
+            integrationMetadata,
+            procedureResult.integrationMetadata
+          )
           continuations.push(...procedureResult.continuations)
           if (procedureResult.handoff) {
             handoffRequested = true
@@ -3216,13 +3376,20 @@ export async function runAgentTurn(
           }
           return {
             text: procedureResult.text,
+            ...procedureResult.integrationMetadata,
             ...(procedureResult.instructions
               ? {
                   instructions: procedureResult.instructions,
                   actions: (procedureResult.actionRefs ?? []).flatMap((id) => {
                     const action = actionMap.get(id)
                     return action
-                      ? [{ mention: `action:${action.slug}`, toolName: id, name: action.definition.name }]
+                      ? [
+                          {
+                            mention: `action:${action.slug}`,
+                            toolName: id,
+                            name: action.definition.name,
+                          },
+                        ]
                       : []
                   }),
                 }
@@ -3281,8 +3448,46 @@ export async function runAgentTurn(
             Math.max(1, Math.min(options.maxToolSteps ?? 8, 20))
           ),
           maxRetries: 0,
-          prepareStep: async () => {
+          prepareStep: async (step: { messages: unknown[] }) => {
             assertModelUsageRecorded()
+            if (budgetReservation && !dependencies.reserveBudget) {
+              // Include history, retrieved knowledge, tool schemas and prior tool
+              // results. UTF-8 bytes plus protocol overhead conservatively bound
+              // text tokens; do not assume every turn is a single model call.
+              const prompt = JSON.stringify({
+                system,
+                messages: step.messages,
+                tools: aiTools,
+              })
+              const quote = defaultEstimateCostUsd({
+                agent,
+                channel: parsed.channel,
+                input: prompt,
+                inputTokens: Buffer.byteLength(prompt, "utf8") + 1024,
+                maxOutputTokens: configuration.guardrails.maxOutputTokens,
+              })
+              if (quote === null)
+                throw new BuildRuntimeError(
+                  "BUDGET_UNAVAILABLE",
+                  "This agent's usage budget cannot be evaluated safely yet."
+                )
+              reservedStepCost += quote
+              try {
+                await service.extendBudgetReservation({
+                  agentId: agent.id,
+                  reservationId: budgetReservation.reservationId,
+                  ownerFence: turn.ownerFence,
+                  estimatedUsd: reservedStepCost,
+                  dailyLimitUsd: configuration.guardrails.dailyBudgetUsd!,
+                })
+              } catch (error) {
+                if (error instanceof ConversationBudgetExceededError)
+                  throw new GuardrailBlockedError(
+                    "This agent has reached its daily usage budget."
+                  )
+                throw error
+              }
+            }
             pendingModelUsage = await beginModelUsage(context, {
               agentId: agent.id,
               conversationId: conversation.id,
@@ -3347,7 +3552,7 @@ export async function runAgentTurn(
       runtimeSecretValues
     )
     const resultMessage =
-      text || continuations.length
+      text || continuations.length || Object.keys(integrationMetadata).length
         ? await service.appendMessage(
             conversation.id,
             {
@@ -3359,6 +3564,7 @@ export async function runAgentTurn(
                 model: runtimeProviderSelection(configuration).modelId,
                 provider: runtimeProviderSelection(configuration).provider,
                 revision: agent.appliedRevision || agent.currentRevision,
+                ...integrationMetadata,
                 ...(await continuationMessageMetadata(
                   context,
                   conversation,

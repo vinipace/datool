@@ -1,3 +1,4 @@
+import { enqueueShopifyReconciliationJobs } from "../src/server/build/integrations/shopify-reconciliation"
 import { createTracerDatabase } from "../src/server/tracer/db"
 import { createBuildContext } from "../src/server/build/context"
 import {
@@ -6,7 +7,7 @@ import {
 } from "../src/server/build/runtime"
 import {
   pinContinuationWidgets,
-  runtimeMessageMetadata,
+  runtimeChannelMessage,
 } from "../src/server/build/runtime/continuations"
 import {
   claimNextChannelJob,
@@ -38,7 +39,9 @@ import { buildAvailable } from "../lib/build/config"
 
 // Stay healthy under process supervisors without admitting or processing jobs.
 if (!buildAvailable()) {
-  console.info("[build-worker] disabled; set DATOOL_BUILD_ENABLED=true or DATOOL_BUILD_ORGANIZATION_IDS to enable")
+  console.info(
+    "[build-worker] disabled; set DATOOL_BUILD_ENABLED=true or DATOOL_BUILD_ORGANIZATION_IDS to enable"
+  )
   await new Promise<void>((resolve) => {
     const timer = setInterval(() => {}, 60_000)
     const stop = () => {
@@ -137,12 +140,7 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
       agentRevision: result.turn.snapshot.agentRevision,
       continuations: result.continuations,
     })
-    const continuationText = continuations
-      .map((item) => item.message ?? item.submitLabel ?? item.eventName ?? "")
-      .filter(Boolean)
-      .join("\n")
-    const text =
-      result.text || (input.channel === "web" ? "" : continuationText)
+    const message = runtimeChannelMessage(result, continuations)
     const handedOff =
       result.status === "handed_off" &&
       result.conversation.ownerType === "human"
@@ -155,16 +153,7 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
         : result.turn.ownerFence,
       ownerType: handedOff ? "human" : "ai",
       messages:
-        text || continuations.length
-          ? [
-              {
-                text,
-                ...(input.channel === "web"
-                  ? { metadata: runtimeMessageMetadata(result, continuations) }
-                  : {}),
-              },
-            ]
-          : [],
+        message.text || Object.keys(message.metadata).length ? [message] : [],
       ownership: handedOff ? "human" : undefined,
       metadata: {
         traceId: result.traceId,
@@ -341,6 +330,11 @@ await Promise.all([
   loop("simulation queue failed", simulationTask, 2000),
   loop("campaign queue failed", campaignTask, 2000),
   loop("conversation wait scheduler failed", waitTask, 1000),
+  loop(
+    "Shopify reconciliation scheduler failed",
+    async () => (await enqueueShopifyReconciliationJobs(workerDatabase)) > 0,
+    2000
+  ),
 ])
 const { db, analyticsDb } = await import("../lib/db")
 await Promise.all([db.end(), analyticsDb.end()])

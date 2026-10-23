@@ -12,6 +12,7 @@ export function appIntegrationScenario(
     | "loading"
     | "catalog"
     | "shopify"
+    | "shopify-active"
     | "shopify-unconfigured"
     | "connect-error" = "active"
 ) {
@@ -19,7 +20,7 @@ export function appIntegrationScenario(
   let connectAttempts = 0
   const reset = () => {
     status =
-      initial === "catalog"
+      initial === "catalog" || initial === "shopify-active"
         ? "active"
         : initial === "active" || initial === "pending"
           ? initial
@@ -96,17 +97,47 @@ export function appIntegrationScenario(
           })
         if (params.operation === "build_list_app_tools")
           return HttpResponse.json({
-            data: [
-              {
-                slug: "GOOGLECALENDAR_EVENTS_LIST",
-                name: "List calendar events",
-                description: "Look up scheduled events.",
-                inputSchema: {
-                  type: "object",
-                  properties: { calendar_id: { type: "string" } },
-                },
-              },
-            ],
+            data:
+              initial === "shopify-active"
+                ? [
+                    {
+                      slug: "SHOPIFY_SEARCH_PRODUCTS",
+                      name: "Search products",
+                      description: "Show live store products.",
+                      inputSchema: {},
+                    },
+                    {
+                      slug: "SHOPIFY_TAG_ORDER",
+                      name: "Tag an order",
+                      description:
+                        "Apply allowed tags to the customer's order.",
+                      inputSchema: {},
+                    },
+                    {
+                      slug: "SHOPIFY_RETURN_OR_EXCHANGE",
+                      name: "Return or exchange items",
+                      description:
+                        "Prepare a return or exchange for confirmation.",
+                      inputSchema: {},
+                    },
+                    {
+                      slug: "SHOPIFY_CREATE_ORDER",
+                      name: "Create order",
+                      description: "Prepare an order for confirmation.",
+                      inputSchema: {},
+                    },
+                  ]
+                : [
+                    {
+                      slug: "GOOGLECALENDAR_EVENTS_LIST",
+                      name: "List calendar events",
+                      description: "Look up scheduled events.",
+                      inputSchema: {
+                        type: "object",
+                        properties: { calendar_id: { type: "string" } },
+                      },
+                    },
+                  ],
           })
         if (params.operation === "build_connect_app") {
           if (initial === "connect-error" && connectAttempts++ === 0)

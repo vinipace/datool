@@ -148,6 +148,73 @@ const handoffAction: ActionRecord = {
 }
 
 describe("Build agent tool runtime", () => {
+  test("reserves tool-result context before a second paid model call", async () => {
+    const { context, service } = await makeContext()
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [
+          {
+            type: "tool-call" as const,
+            toolCallId: "large-result",
+            toolName: clientAction.id,
+            input: "{}",
+          },
+        ],
+        finishReason: { unified: "tool-calls" as const, raw: "stop" },
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 10, text: 10, reasoning: 0 },
+        },
+        warnings: [],
+      }),
+    })
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: "agent-a",
+        channel: "telegram",
+        requestKey: "budget-tool-context",
+        message: "Look up the store catalog",
+      },
+      {
+        conversationService: service,
+        agent: agent(context, {
+          model: "openai/gpt-4.1-mini",
+          guardrails: {
+            ...agent(context).configuration.guardrails,
+            dailyBudgetUsd: 0.005,
+            maxOutputTokens: 64,
+          },
+        }),
+        dependencies: {
+          resolveActions: async () => [
+            { ...clientAction, projectId: context.projectId },
+          ],
+          resolveProcedures: async () => [],
+          retrieveKnowledge: async () => null,
+          executeAction: async () => ({
+            output: { catalog: "Product description. ".repeat(5000) },
+          }),
+          generateText: (options) => generateText({ ...options, model }),
+        },
+      }
+    )
+    expect(result.status).toBe("blocked")
+    expect(result.text).toContain("daily usage budget")
+    expect(model.doGenerateCalls).toHaveLength(1)
+    const reservations = await context.database.execute<{
+      status: string
+      estimated_usd: string
+    }>(sql`
+      SELECT status, estimated_usd FROM build_conversation_budget_reservations WHERE project_id=${context.projectId}
+    `)
+    expect(reservations.rows[0].status).toBe("uncertain")
+    expect(Number(reservations.rows[0].estimated_usd)).toBeGreaterThan(0)
+    expect(Number(reservations.rows[0].estimated_usd)).toBeLessThanOrEqual(
+      0.005
+    )
+  }, 30_000)
+
   test("persists a client continuation and the immutable catalog snapshot", async () => {
     const { context, service } = await makeContext()
     clientAction.projectId = context.projectId
@@ -651,8 +718,7 @@ describe("Build agent tool runtime", () => {
           type: "intent",
           value: "The customer asks whether an order is refundable.",
         },
-        instructions:
-          `Ask for the order reference. Use [@Order lookup](action:${linked.slug}). Explain eligibility from the approved policy; do not invent a refund.`,
+        instructions: `Ask for the order reference. Use [@Order lookup](action:${linked.slug}). Explain eligibility from the approved policy; do not invent a refund.`,
       },
     })
     await updateAgent(context, "agent-a", {
@@ -1085,6 +1151,113 @@ describe("Build agent tool runtime", () => {
     )
     expect(resumed.status).toBe("completed")
     expect(resumed.text).toBe("after wait")
+  }, 30_000)
+
+  test("Shopify customer changes require a one-shot confirmation and ignore replacement input", async () => {
+    const { context, service } = await makeContext()
+    const profileAction: ActionRecord = {
+      ...clientAction,
+      id: "update_profile",
+      projectId: context.projectId,
+      slug: "update-profile",
+      definition: {
+        id: "update_profile",
+        name: "Update profile",
+        description: "Update your profile",
+        enabled: true,
+        channels: ["web"],
+        procedureOnly: false,
+        type: "integration",
+        connectionId: "00000000-0000-4000-8000-000000000001",
+        toolSlug: "SHOPIFY_UPDATE_PROFILE",
+        inputSchema: {
+          type: "object",
+          properties: { firstName: { type: "string" } },
+          required: ["firstName"],
+          additionalProperties: false,
+        },
+      },
+    }
+    const executeInputs: unknown[] = []
+    const dependencies = {
+      resolveActions: async () => [profileAction],
+      resolveProcedures: async () => [],
+      generateText: (async (options: {
+        tools: Record<
+          string,
+          {
+            execute: (
+              input: Record<string, unknown>,
+              options: { toolCallId: string }
+            ) => Promise<unknown>
+          }
+        >
+      }) => {
+        await options.tools.update_profile.execute(
+          { firstName: "Requested name" },
+          { toolCallId: "profile-change" }
+        )
+        return {
+          text: "Please confirm this change.",
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        }
+      }) as never,
+      executeAction: async ({ input }: { input: Record<string, unknown> }) => {
+        executeInputs.push(input)
+        return { output: { message: "Profile updated." } }
+      },
+    }
+    const options = {
+      conversationService: service,
+      agent: agent(context, { channelAllowlist: ["web"] }),
+      dependencies,
+    }
+    const pending = await runAgentTurn(
+      context,
+      {
+        agentId: "agent-a",
+        channel: "web",
+        requestKey: "profile-1",
+        message: "Change my name",
+        metadata: { shopifyConfirmed: true },
+      },
+      options
+    )
+    expect(executeInputs).toEqual([])
+    expect(pending.continuations[0]).toMatchObject({
+      type: "client_action",
+      eventName: "Confirm changes",
+      input: { firstName: "Requested name" },
+    })
+    const continuationId = pending.continuations[0].continuationId
+    if (!continuationId) throw new Error("Expected confirmation capability")
+    const response = {
+      agentId: "agent-a",
+      channel: "web" as const,
+      conversationId: pending.conversation.id,
+      requestKey: "profile-confirmed",
+      message: "Confirm",
+      metadata: {
+        widgetInteraction: {
+          actionId: "update_profile",
+          continuationId,
+          input: { firstName: "Tampered name" },
+        },
+      },
+    }
+    expect((await runAgentTurn(context, response, options)).status).toBe(
+      "completed"
+    )
+    expect(executeInputs).toEqual([{ firstName: "Requested name" }])
+    await rejects(
+      runAgentTurn(
+        context,
+        { ...response, requestKey: "profile-repeated" },
+        options
+      ),
+      /no longer available/
+    )
+    expect(executeInputs).toHaveLength(1)
   }, 30_000)
 
   test("requires a trusted approval boundary before executing guarded actions", async () => {

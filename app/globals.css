@@ -906,6 +906,9 @@
   --destructive-foreground: #ffffff;
   --destructive-background: #fee2e2;
   --destructive-border: #fecaca;
+  --warning-foreground: #78350f;
+  --warning-background: #fef3c7;
+  --warning-border: #fcd34d;
   --success: #15803d;
   /* Rebind Tailwind aliases here: inherited aliases resolve at the dashboard
      root, before this independently themed surface overrides their inputs. */
@@ -929,6 +932,9 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-background: var(--destructive-background);
   --color-destructive-border: var(--destructive-border);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-background: var(--warning-background);
+  --color-warning-border: var(--warning-border);
   --color-success: var(--success);
   background: var(--background);
   color: var(--foreground);
@@ -950,6 +956,9 @@
   --destructive-foreground: #450a0a;
   --destructive-background: rgb(127 29 29 / 0.3);
   --destructive-border: rgb(248 113 113 / 0.3);
+  --warning-foreground: #fef3c7;
+  --warning-background: rgb(69 26 3 / 0.3);
+  --warning-border: rgb(120 53 15 / 0.6);
   --success: #86efac;
 }
 .datool-chat-surface [data-bubble-header="accent"],

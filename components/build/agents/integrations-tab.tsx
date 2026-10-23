@@ -21,6 +21,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { InspectorSection } from "@/components/ui/inspector-section"
+import { ShopifyChatSetup } from "./shopify-chat-setup"
 import { IntegrationAccount } from "./integration-account"
 import { BuildStatus } from "@/components/build/shared/build-layout"
 import { useRemote } from "@/components/tracer/hooks"
@@ -156,29 +157,34 @@ export function IntegrationsTab({
 
   function renderAccount(account: IntegrationCatalog["connections"][number]) {
     return (
-      <IntegrationAccount
-        key={account.id}
-        account={account}
-        name={
-          accounts.filter(
-            (item) =>
-              item.label === account.label && item.status === account.status
-          ).length > 1
-            ? `${account.label} · Account ${accounts.filter((item) => item.status === account.status).indexOf(account) + 1}`
-            : `${account.label} account`
-        }
-        busy={busy}
-        checking={checkingId === account.id}
-        authorizationUrl={
-          authorization?.id === account.id ? authorization.url : undefined
-        }
-        onCheck={() => checkConnection(account.id)}
-        onDisconnect={(element) => {
-          disconnectTrigger.current = element
-          setError(null)
-          setDisconnectId(account.id)
-        }}
-      />
+      <div key={account.id} className="space-y-3">
+        <IntegrationAccount
+          account={account}
+          name={
+            accounts.filter(
+              (item) =>
+                item.label === account.label && item.status === account.status
+            ).length > 1
+              ? `${account.label} · Account ${accounts.filter((item) => item.status === account.status).indexOf(account) + 1}`
+              : `${account.label} account`
+          }
+          busy={busy}
+          checking={checkingId === account.id}
+          authorizationUrl={
+            authorization?.id === account.id ? authorization.url : undefined
+          }
+          onCheck={() => checkConnection(account.id)}
+          onDisconnect={(element) => {
+            disconnectTrigger.current = element
+            setError(null)
+            setDisconnectId(account.id)
+          }}
+        />
+        {account.toolkit === "shopify_native" &&
+          account.status === "active" && (
+            <ShopifyChatSetup connectionId={account.id} />
+          )}
+      </div>
     )
   }
 

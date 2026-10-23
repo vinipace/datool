@@ -1,3 +1,4 @@
+import { isShopifyCartTool } from "@/src/lib/build/shopify-cart"
 import { randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import type {
@@ -16,7 +17,7 @@ import {
   executeShopifyTool,
   refreshShopifyConnection,
 } from "./shopify"
-import { shopifyTools } from "./shopify-catalog"
+import { shopifyTools } from "./shopify-tools"
 import {
   authorizeSession,
   executeSession,
@@ -290,6 +291,14 @@ export async function executeAppAction(
     turnId: string
     toolCallId: string
     arguments: Record<string, unknown>
+    shopifyConfirmed?: boolean
+    shopifyCartResult?: unknown
+    shopifyPrepareReturn?: boolean
+    shopifyReturnQuote?: import("@/src/lib/build/shopify-return").ShopifyReturnQuote
+    shopifyPrepareOrder?: boolean
+    shopifyOrderQuote?: import("@/src/lib/build/shopify-order").ShopifyOrderQuote
+    shopifySourceTurnId?: string
+    shopifySettings?: import("@/src/lib/build/shopify").ShopifyActionSettings
     signal?: AbortSignal
   }
 ) {
@@ -313,10 +322,50 @@ export async function executeAppAction(
     !app.tools.includes(input.toolSlug)
   )
     throw unavailable()
-  const ownership = await ctx.database
-    .execute(sql`SELECT 1 FROM build_conversation_turns t JOIN build_conversations c ON c.id=t.conversation_id AND c.project_id=t.project_id
+  const ownership = await ctx.database.execute<{
+    channel: string
+  }>(sql`SELECT c.channel FROM build_conversation_turns t JOIN build_conversations c ON c.id=t.conversation_id AND c.project_id=t.project_id
     WHERE t.id=${input.turnId} AND t.project_id=${ctx.projectId} AND c.id=${input.conversationId} AND c.agent_id=${input.agentId}`)
   if (!ownership.rows.length) throw unavailable()
+  // Preparing a browser interaction has no external effect or integration usage.
+  // The existing tool ledger persists the one-shot continuation before it reaches the shopper.
+  if (
+    native &&
+    ((isShopifyCartTool(input.toolSlug) &&
+      input.shopifyCartResult === undefined &&
+      ownership.rows[0].channel === "web") ||
+      (input.toolSlug === "SHOPIFY_CREATE_ORDER" &&
+        input.shopifyPrepareOrder) ||
+      (input.toolSlug === "SHOPIFY_RETURN_OR_EXCHANGE" &&
+        input.shopifyPrepareReturn))
+  ) {
+    const output = await executeShopifyTool(
+      ctx,
+      connection.id,
+      input.toolSlug,
+      input.arguments,
+      input.signal,
+      {
+        conversationId: input.conversationId,
+        confirmed: input.shopifyConfirmed,
+        turnId: input.turnId,
+        identityTurnId: input.shopifySourceTurnId,
+        prepareOrder: input.shopifyPrepareOrder,
+        prepareReturn: input.shopifyPrepareReturn,
+        cartResult: input.shopifyCartResult,
+        settings: input.shopifySettings,
+      }
+    )
+    return {
+      output,
+      status:
+        "cartCommand" in output ||
+        input.shopifyPrepareOrder ||
+        input.shopifyPrepareReturn
+          ? ("awaiting_client" as const)
+          : ("completed" as const),
+    }
+  }
   const id = randomUUID()
   const admitted = await ctx.database
     .execute(sql`INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,toolkit,tool_slug,connection_id,status,cost_source)
@@ -327,6 +376,12 @@ export async function executeAppAction(
       "VALIDATION_ERROR",
       "This app action was already attempted. Inspect its result before retrying."
     )
+  const commerceQuote = input.shopifyOrderQuote ?? input.shopifyReturnQuote
+  if (native && commerceQuote)
+    await ctx.database.execute(sql`
+      UPDATE build_usage_event SET provider_session_id=${commerceQuote.operationId}
+      WHERE id=${id}::uuid
+    `)
   if (native) {
     try {
       const output = await executeShopifyTool(
@@ -334,15 +389,34 @@ export async function executeAppAction(
         connection.id,
         input.toolSlug,
         input.arguments,
-        input.signal
+        input.signal,
+        {
+          conversationId: input.conversationId,
+          turnId: input.turnId,
+          identityTurnId: input.shopifySourceTurnId,
+          confirmed: input.shopifyConfirmed,
+          cartResult: input.shopifyCartResult,
+          orderQuote: input.shopifyOrderQuote,
+          returnQuote: input.shopifyReturnQuote,
+          recordDraft: async (draftId) => {
+            await ctx.database.execute(
+              sql`UPDATE build_usage_event SET provider_log_id=${draftId} WHERE id=${id}::uuid`
+            )
+          },
+          settings: input.shopifySettings,
+        }
       )
+      const needsReview =
+        ["SHOPIFY_CREATE_ORDER", "SHOPIFY_RETURN_OR_EXCHANGE"].includes(
+          input.toolSlug
+        ) && (output as { status?: string }).status === "needs_review"
       await ctx.database.execute(
-        sql`UPDATE build_usage_event SET status='completed',cost_nano_usd=0 WHERE id=${id}::uuid`
+        sql`UPDATE build_usage_event SET status=${needsReview ? "uncertain" : "completed"},cost_nano_usd=0 WHERE id=${id}::uuid`
       )
       return { output, status: "completed" as const }
     } catch (error) {
       await ctx.database.execute(
-        sql`UPDATE build_usage_event SET status='failed',cost_nano_usd=0 WHERE id=${id}::uuid`
+        sql`UPDATE build_usage_event SET status=${(error as { uncertain?: boolean })?.uncertain ? "uncertain" : "failed"},cost_nano_usd=0 WHERE id=${id}::uuid`
       )
       throw error
     }

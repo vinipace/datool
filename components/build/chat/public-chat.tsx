@@ -1,10 +1,18 @@
 "use client"
 
 import * as React from "react"
+import {
+  requestShopifyCart,
+  shopifyCartCommandSchema,
+  shopifyCartCleanupSchema,
+} from "@/src/lib/build/shopify-cart"
+import { requestHostSession } from "@/src/lib/build/chat-host-session"
+import { usePublicChallenge } from "./use-public-challenge"
 import Image from "next/image"
 import datoolLogo from "@/app/icon.svg"
 import { MessageCircle, MessageCircleWarning, RefreshCw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Notice } from "@/components/ui/notice"
 import { cn } from "@/lib/utils"
 import {
   HelpPageSidebar,
@@ -65,7 +73,14 @@ function mergeAppearance(value?: Partial<Appearance>): Appearance {
   return chatBubbleSettingsSchema.parse({ ...defaultAppearance, ...value })
 }
 
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(
+  url: string,
+  init?: RequestInit,
+  challenge?: (value: {
+    siteKey: string
+    connectionId: string
+  }) => Promise<string>
+): Promise<T> {
   const response = await fetch(url, {
     ...init,
     cache: "no-store",
@@ -73,7 +88,30 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   })
   const payload = (await response.json().catch(() => ({}))) as {
     data?: T
-    error?: { message?: string }
+    error?: {
+      message?: string
+      code?: string
+      siteKey?: string
+      connectionId?: string
+    }
+  }
+  if (
+    payload.error?.code === "PUBLIC_CHALLENGE_REQUIRED" &&
+    challenge &&
+    payload.error.siteKey &&
+    payload.error.connectionId
+  ) {
+    const token = await challenge({
+      siteKey: payload.error.siteKey,
+      connectionId: payload.error.connectionId,
+    })
+    return requestJson<T>(url, {
+      ...init,
+      body: JSON.stringify({
+        ...JSON.parse(String(init?.body || "{}")),
+        challengeToken: token,
+      }),
+    })
   }
   if (!response.ok || payload.error)
     throw new Error(
@@ -89,6 +127,7 @@ function sessionKey(channelId: string, origin?: string) {
 export function PublicChat({
   channelId,
   embedded = false,
+  shopifyIdentity = false,
   context = defaultContext,
   embedOrigin,
   previewAgentId,
@@ -99,6 +138,7 @@ export function PublicChat({
 }: {
   channelId: string
   embedded?: boolean
+  shopifyIdentity?: boolean
   context?: Record<string, unknown>
   embedOrigin?: string
   previewAgentId?: string
@@ -107,6 +147,8 @@ export function PublicChat({
   onBeforeSend?: () => Promise<void>
   onClose?: () => void
 }) {
+  const { verify: verifyChallenge, element: challengeElement } =
+    usePublicChallenge()
   const [session, setSession] = React.useState<Session | null>(null)
   const [storedAppearance, setAppearance] = React.useState(
     initialAppearance ?? defaultAppearance
@@ -128,7 +170,12 @@ export function PublicChat({
   const activeConversationId = React.useRef<string | null>(null)
   const sessionRef = React.useRef<Session | null>(null)
   const readSequence = React.useRef(0)
+  const sessionSequence = React.useRef(0)
   const sendingRef = React.useRef(false)
+  const cartCleanupAttempts = React.useRef(new Set<string>())
+  const [cartCleanupWarningFor, setCartCleanupWarningFor] = React.useState<
+    string | null
+  >(null)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [draft, setDraft] = React.useState("")
   const updateDraft = React.useCallback(
@@ -281,6 +328,7 @@ export function PublicChat({
       if (
         signal?.aborted ||
         sequence !== readSequence.current ||
+        (shopifyIdentity && document.visibilityState === "hidden") ||
         activeConversationId.current !== active.conversationId
       )
         return
@@ -299,11 +347,12 @@ export function PublicChat({
         )
       }
     },
-    [channelId, embedOrigin, previewAgentId]
+    [channelId, embedOrigin, previewAgentId, shopifyIdentity]
   )
 
   const startSession = React.useCallback(
     async (reset = false, threadId?: string) => {
+      const sequence = ++sessionSequence.current
       ++readSequence.current
       setLoading(true)
       setError(null)
@@ -357,44 +406,106 @@ export function PublicChat({
           return
         }
         let stored = sessionRef.current
-        if (!stored) {
-          try {
-            const value =
-              window.sessionStorage.getItem(key) ??
-              (helpPage ? window.localStorage.getItem(key) : null)
-            stored = value ? (JSON.parse(value) as Session) : null
-            if (
-              typeof stored?.visitorToken !== "string" ||
-              typeof stored?.conversationId !== "string"
-            )
-              stored = null
-          } catch {
-            stored = null
+        let active: Session
+        if (embedded && embedOrigin && shopifyIdentity) {
+          let result = await requestHostSession<Session>(embedOrigin, {
+            newConversation: reset,
+            conversationId: threadId ?? stored?.conversationId,
+          })
+          if (
+            result.error?.code === "PUBLIC_CHALLENGE_REQUIRED" &&
+            result.error.siteKey &&
+            result.error.connectionId
+          ) {
+            const challengeToken = await verifyChallenge({
+              siteKey: result.error.siteKey,
+              connectionId: result.error.connectionId,
+            })
+            result = await requestHostSession<Session>(embedOrigin, {
+              newConversation: reset,
+              conversationId: threadId,
+              challengeToken,
+            })
           }
-        }
-        const active =
-          !reset && !threadId && stored
-            ? stored
-            : await requestJson<Session>(
-                `/api/build-public/${encodeURIComponent(channelId)}/session`,
-                {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({
-                    context,
-                    ...(helpPage && stored
-                      ? { visitorToken: stored.visitorToken }
-                      : {}),
-                    ...(threadId ? { conversationId: threadId } : {}),
-                  }),
-                }
+          if (result.error || !result.shopify || !result.session)
+            throw new Error(
+              result.error?.message || "Could not verify your store session."
+            )
+          if (sequence !== sessionSequence.current) return
+          active = result.session
+          if (stored && stored.visitorId !== active.visitorId) {
+            ++readSequence.current
+            setMessages([])
+            setThreads([])
+            setDraft("")
+            setFeedback({})
+          }
+        } else {
+          if (!stored && embedded && embedOrigin) {
+            try {
+              stored =
+                (await requestHostSession<Session>(embedOrigin)).session ?? null
+            } catch {
+              /* Older embed hosts use iframe storage. */
+            }
+          }
+          if (!stored) {
+            try {
+              const value =
+                window.localStorage.getItem(key) ??
+                window.sessionStorage.getItem(key)
+              stored = value ? (JSON.parse(value) as Session) : null
+            } catch {
+              stored = null
+            }
+          }
+          if (
+            typeof stored?.visitorToken !== "string" ||
+            typeof stored?.conversationId !== "string"
+          )
+            stored = null
+          if (stored) {
+            try {
+              const payload = JSON.parse(
+                atob(
+                  stored.visitorToken
+                    .split(".")[0]
+                    .replace(/-/g, "+")
+                    .replace(/_/g, "/")
+                )
               )
-        try {
-          window.sessionStorage.setItem(key, JSON.stringify(active))
-          if (helpPage) window.localStorage.setItem(key, JSON.stringify(active))
-        } catch {
-          /* Chat still works when browser storage is unavailable. */
+              if (payload.expiresAt <= Date.now() / 1000) stored = null
+            } catch {
+              stored = null
+            }
+          }
+          active = await requestJson<Session>(
+            `/api/build-public/${encodeURIComponent(channelId)}/session`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                context,
+                visitorToken: stored?.visitorToken,
+                conversationId:
+                  threadId ?? (!reset ? stored?.conversationId : undefined),
+              }),
+            },
+            verifyChallenge
+          )
+          try {
+            window.localStorage.setItem(key, JSON.stringify(active))
+            window.sessionStorage.setItem(key, JSON.stringify(active))
+          } catch {
+            /* Optional storage. */
+          }
+          if (embedded && embedOrigin)
+            window.parent.postMessage(
+              { type: "datool:chat:session-save", session: active },
+              embedOrigin
+            )
         }
+        if (sequence !== sessionSequence.current) return
         activeConversationId.current = active.conversationId
         sessionRef.current = active
         setSession(active)
@@ -410,17 +521,25 @@ export function PublicChat({
         const display = await requestJson<{ appearance: Appearance }>(
           `/api/build-public/${encodeURIComponent(channelId)}/appearance`
         )
+        if (sequence !== sessionSequence.current) return
         setAppearance(mergeAppearance(display.appearance))
         await loadConversation(active)
         if (helpPage) await loadHistory(active)
       } catch (reason) {
+        if (sequence !== sessionSequence.current) return
+        if (shopifyIdentity) {
+          ++readSequence.current
+          setMessages([])
+          setSession(null)
+          sessionRef.current = null
+        }
         setError(
           reason instanceof Error
             ? reason.message
             : "This chat could not be loaded."
         )
       } finally {
-        setLoading(false)
+        if (sequence === sessionSequence.current) setLoading(false)
       }
     },
     [
@@ -431,8 +550,90 @@ export function PublicChat({
       loadConversation,
       loadHistory,
       previewAgentId,
+      embedded,
+      shopifyIdentity,
+      verifyChallenge,
     ]
   )
+
+  React.useEffect(() => {
+    if (
+      !shopifyIdentity ||
+      previewAgentId ||
+      !embedOrigin ||
+      !session ||
+      loading
+    )
+      return
+    const current = () =>
+      sessionRef.current?.visitorId === session.visitorId &&
+      sessionRef.current?.conversationId === session.conversationId
+    for (const message of messages) {
+      if (
+        message.direction !== "outbound" ||
+        !["sent", "delivered"].includes(message.status ?? "")
+      )
+        continue
+      const parsed = shopifyCartCleanupSchema.safeParse(
+        message.metadata?.shopifyCartCleanup
+      )
+      if (!parsed.success || parsed.data.expiresAt <= Date.now()) continue
+      const cleanup = parsed.data
+      const key = `${session.visitorId}:${cleanup.operationId}`
+      if (cartCleanupAttempts.current.has(key)) continue
+      cartCleanupAttempts.current.add(key)
+      void (async () => {
+        // Reverify through Shopify before an automatic browser write, just as
+        // interactive cart changes do. A payment event cannot select a cart.
+        const verified = await requestHostSession<Session>(embedOrigin, {
+          conversationId: session.conversationId,
+        })
+        if (!current()) return
+        if (
+          verified.error ||
+          verified.session?.visitorId !== session.visitorId ||
+          verified.session.conversationId !== session.conversationId
+        )
+          throw new Error("Store session changed")
+        const result = await requestShopifyCart(
+          embedOrigin,
+          { operation: "complete_order", snapshotId: cleanup.snapshotId },
+          cleanup.operationId,
+          session.visitorId,
+          cleanup.expiresAt
+        )
+        if (result.status !== "completed")
+          throw new Error("Cart cleanup was not confirmed")
+      })().catch(() => {
+        if (current())
+          setCartCleanupWarningFor(
+            `${session.visitorId}:${session.conversationId}`
+          )
+      })
+    }
+  }, [embedOrigin, loading, messages, previewAgentId, session, shopifyIdentity])
+
+  React.useEffect(() => {
+    if (!shopifyIdentity || previewAgentId) return
+    const refresh = () => {
+      if (document.visibilityState !== "hidden") void startSession()
+      else {
+        ++sessionSequence.current
+        ++readSequence.current
+        setMessages([])
+        setThreads([])
+        setLoading(true)
+      }
+    }
+    window.addEventListener("focus", refresh)
+    document.addEventListener("visibilitychange", refresh)
+    const timer = window.setInterval(refresh, 60_000)
+    return () => {
+      window.removeEventListener("focus", refresh)
+      document.removeEventListener("visibilitychange", refresh)
+      window.clearInterval(timer)
+    }
+  }, [shopifyIdentity, previewAgentId, startSession])
 
   React.useEffect(() => {
     if (!previewAgentId || !session) return
@@ -456,11 +657,22 @@ export function PublicChat({
     const controller = new AbortController()
     let polling = false
     const timer = window.setInterval(() => {
-      if (polling || sendingRef.current) return
+      if (
+        polling ||
+        sendingRef.current ||
+        loading ||
+        document.visibilityState === "hidden"
+      )
+        return
       polling = true
       void loadConversation(session, controller.signal)
         .catch((reason) => {
           if (controller.signal.aborted) return
+          if (shopifyIdentity) {
+            setMessages([])
+            setThreads([])
+            void startSession()
+          }
           setError(
             reason instanceof Error
               ? reason.message
@@ -475,7 +687,14 @@ export function PublicChat({
       controller.abort()
       window.clearInterval(timer)
     }
-  }, [loadConversation, session, previewAgentId])
+  }, [
+    loadConversation,
+    session,
+    previewAgentId,
+    loading,
+    shopifyIdentity,
+    startSession,
+  ])
 
   const lastMessage = messages.at(-1)
   React.useEffect(() => {
@@ -503,14 +722,83 @@ export function PublicChat({
   async function submit(
     event?: React.FormEvent,
     suggestedText?: string,
-    interaction?: Record<string, unknown>
+    interaction?: Record<string, unknown>,
+    cartRequest?: { command?: unknown; expiresAt?: number }
   ) {
     event?.preventDefault()
     const text = (suggestedText ?? draft).trim()
-    if (!text || !session || waitingReply || loading) return
+    if (!text || !session || waitingReply || loading || sendingRef.current)
+      return
+    sendingRef.current = true
+    setSending(true)
+    let activeSession = session
+    if (shopifyIdentity && embedOrigin) {
+      const verificationSequence = sessionSequence.current
+      try {
+        const result = await requestHostSession<Session>(embedOrigin, {
+          conversationId: activeSession.conversationId,
+        })
+        if (
+          verificationSequence !== sessionSequence.current ||
+          result.error ||
+          !result.session ||
+          result.session.visitorId !== activeSession.visitorId ||
+          result.session.conversationId !== activeSession.conversationId
+        ) {
+          await startSession()
+          setError(
+            "Your store session changed. Please review the chat before sending."
+          )
+          sendingRef.current = false
+          setSending(false)
+          return
+        }
+        activeSession = result.session
+        sessionRef.current = activeSession
+        setSession(activeSession)
+      } catch {
+        setMessages([])
+        setError(
+          "Could not verify your store session. Please refresh the page."
+        )
+        sendingRef.current = false
+        setSending(false)
+        return
+      }
+    }
+    if (cartRequest) {
+      try {
+        if (
+          !shopifyIdentity ||
+          !embedOrigin ||
+          typeof interaction?.continuationId !== "string" ||
+          typeof cartRequest.expiresAt !== "number"
+        )
+          throw new Error(
+            "Open this chat on the Shopify store to use its cart."
+          )
+        const cartResult = await requestShopifyCart(
+          embedOrigin,
+          shopifyCartCommandSchema.parse(cartRequest.command),
+          interaction.continuationId,
+          activeSession.visitorId,
+          cartRequest.expiresAt
+        )
+        interaction = { ...interaction, input: { cartResult } }
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Could not access your cart."
+        )
+        sendingRef.current = false
+        setSending(false)
+        return
+      }
+    }
     sendingRef.current = true
     ++readSequence.current
-    updateDraft("")
+    if (!interaction) updateDraft("")
     setError(null)
     setSending(true)
     const localMessageId = `local-${optimisticId.current++}`
@@ -526,21 +814,23 @@ export function PublicChat({
     if (!messages.some((message) => message.direction === "inbound")) {
       setThreads((current) => [
         {
-          id: session.conversationId,
+          id: activeSession.conversationId,
           title: text.replace(/\s+/g, " ").slice(0, 120),
           updatedAt: new Date().toISOString(),
         },
-        ...current.filter((thread) => thread.id !== session.conversationId),
+        ...current.filter(
+          (thread) => thread.id !== activeSession.conversationId
+        ),
       ])
     }
     try {
-      const messageContext = { ...session.context, ...context }
+      const messageContext = { ...activeSession.context, ...context }
       if (previewAgentId) {
         await onBeforeSend?.()
         await buildApi.call("build_run_agent_turn", {
           agentId: previewAgentId,
           channel: "web",
-          conversationId: session.conversationId,
+          conversationId: activeSession.conversationId,
           requestKey: crypto.randomUUID(),
           message: text,
           metadata: {
@@ -551,12 +841,12 @@ export function PublicChat({
         })
       } else {
         await requestJson(
-          `/api/build-public/${encodeURIComponent(channelId)}/conversation/${encodeURIComponent(session.conversationId)}`,
+          `/api/build-public/${encodeURIComponent(channelId)}/conversation/${encodeURIComponent(activeSession.conversationId)}`,
           {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              "x-datool-visitor-token": session.visitorToken,
+              "x-datool-visitor-token": activeSession.visitorToken,
               ...(embedOrigin ? { "x-datool-embed-origin": embedOrigin } : {}),
             },
             body: JSON.stringify({
@@ -584,7 +874,7 @@ export function PublicChat({
       return
     }
     try {
-      await loadConversation(session)
+      await loadConversation(activeSession)
     } catch (reason) {
       setMessages((current) =>
         current.map((message) =>
@@ -747,6 +1037,26 @@ export function PublicChat({
         helpPage && !messages.length && "p-0 pb-0"
       )}
     >
+      {session &&
+      cartCleanupWarningFor ===
+        `${session.visitorId}:${session.conversationId}` ? (
+        <Notice variant="warning" role="status" className="mb-3 text-xs">
+          <div className="flex items-start justify-between gap-3">
+            <p>
+              Your order is placed, but the cart update could not be confirmed.
+              Check your cart before checking out again.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setCartCleanupWarningFor(null)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </Notice>
+      ) : null}
       {error && messages.length ? (
         <div
           className="mb-3 flex items-start justify-between gap-3 rounded-md border border-destructive-border bg-destructive-background px-3 py-2 text-xs text-destructive"
@@ -756,7 +1066,7 @@ export function PublicChat({
           <Button
             type="button"
             size="sm"
-            variant="ghost-subtle"
+            variant="ghost"
             className="-my-1 -mr-1"
             onClick={() => {
               if (!session) return
@@ -807,7 +1117,7 @@ export function PublicChat({
             href="https://trydatool.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-sm px-0.5 py-1 font-medium text-foreground outline-none transition-colors hover:text-foreground-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center gap-1 rounded-sm px-0.5 py-1 font-medium text-foreground transition-colors outline-none hover:text-foreground-muted focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Image
               src={datoolLogo}
@@ -848,6 +1158,7 @@ export function PublicChat({
 
   return (
     <ChatNavigationContext.Provider value={linkNavigation}>
+      {challengeElement}
       <main
         className={cn(
           "datool-chat-surface flex min-h-0 w-full justify-center bg-background text-foreground",
@@ -999,20 +1310,46 @@ export function PublicChat({
                   ) : undefined
                 }
                 variant="customer"
-                messages={messages.map((message) => ({
-                  ...message,
-                  role: message.direction === "inbound" ? "user" : "assistant",
-                  content: message.text ?? "",
-                  toolCalls: [],
-                }))}
+                messages={messages
+                  .filter(
+                    (message) =>
+                      message.text?.trim() ||
+                      message.attachments?.length ||
+                      !shopifyCartCleanupSchema.safeParse(
+                        message.metadata?.shopifyCartCleanup
+                      ).success
+                  )
+                  .map((message) => ({
+                    ...message,
+                    role:
+                      message.direction === "inbound" ? "user" : "assistant",
+                    content: message.text ?? "",
+                    toolCalls: [],
+                  }))}
                 onWidgetInteraction={
                   sending || loading || !session
                     ? undefined
-                    : (message, interaction, label) =>
-                        void submit(undefined, label, {
-                          ...interaction,
-                          sourceMessageId: message.id,
-                        })
+                    : (message, interaction, label) => {
+                        const continuations = message.metadata?.continuations
+                        const pending = Array.isArray(continuations)
+                          ? continuations.find(
+                              (item) =>
+                                item &&
+                                item.continuationId ===
+                                  interaction.continuationId &&
+                                item.actionId === interaction.actionId
+                            )
+                          : undefined
+                        void submit(
+                          undefined,
+                          label,
+                          {
+                            ...interaction,
+                            sourceMessageId: message.id,
+                          },
+                          pending?.shopifyCart
+                        )
+                      }
                 }
                 renderMessageFooter={(message) => {
                   if (message.role !== "assistant" || !message.id) return null

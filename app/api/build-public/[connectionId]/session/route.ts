@@ -1,3 +1,4 @@
+import { challengeResponse } from "@/src/server/build/channels/challenge"
 import { NextResponse } from "next/server"
 
 import { readJson } from "@/src/server/tracer/http"
@@ -49,6 +50,7 @@ export async function POST(request: Request, context: Context) {
     const input =
       body && typeof body === "object"
         ? (body as {
+            challengeToken?: string
             visitorToken?: string
             conversationId?: string
             context?: Record<string, unknown>
@@ -56,6 +58,7 @@ export async function POST(request: Request, context: Context) {
         : {}
     const result = await createPublicSession(build, connectionId, {
       visitorToken: input.visitorToken,
+      challengeToken: input.challengeToken,
       conversationId:
         typeof input.conversationId === "string"
           ? input.conversationId.slice(0, 200)
@@ -77,6 +80,14 @@ export async function POST(request: Request, context: Context) {
       }
     )
   } catch (error) {
+    const challenge = challengeResponse(error)
+    if (challenge) {
+      if (allowedOrigin) {
+        challenge.headers.set("Access-Control-Allow-Origin", allowedOrigin)
+        challenge.headers.set("Vary", "Origin")
+      }
+      return challenge
+    }
     if (error instanceof PublicAdmissionRateLimitError) {
       return NextResponse.json(
         { error: { message: error.message } },

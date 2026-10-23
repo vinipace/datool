@@ -52,7 +52,12 @@ export default async function PublicChatRoute({
   searchParams,
 }: {
   params: Promise<{ channelId: string }>
-  searchParams: Promise<{ embed?: string; context?: string; origin?: string }>
+  searchParams: Promise<{
+    embed?: string
+    context?: string
+    origin?: string
+    shopify?: string
+  }>
 }) {
   const [{ channelId }, query] = await Promise.all([params, searchParams])
   const initialAppearance = await readAppearance(channelId)
@@ -64,6 +69,7 @@ export default async function PublicChatRoute({
       embedded={query.embed === "1"}
       context={parseContext(query.context)}
       embedOrigin={query.origin}
+      shopifyIdentity={query.shopify === "1"}
     />
   )
 }
