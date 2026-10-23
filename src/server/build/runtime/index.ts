@@ -3423,7 +3423,7 @@ export async function runAgentTurn(
           ? createOpenAI({
               apiKey: providerKey,
               fetch: dependencies.fetch,
-            }).chat(selection.modelId)
+            }).responses(selection.modelId)
           : createGateway({
               apiKey: providerKey,
               fetch: dependencies.fetch,
@@ -3449,6 +3449,11 @@ export async function runAgentTurn(
             Math.max(1, Math.min(options.maxToolSteps ?? 8, 20))
           ),
           maxRetries: 0,
+          // Datool owns conversation persistence; keep provider-side storage off.
+          providerOptions:
+            selection.provider === OPENAI_PROVIDER
+              ? { openai: { store: false } }
+              : undefined,
           prepareStep: async (step: { messages: unknown[] }) => {
             assertModelUsageRecorded()
             if (budgetReservation && !dependencies.reserveBudget) {
