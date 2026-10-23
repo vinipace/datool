@@ -249,7 +249,7 @@ export async function completeShopifyAuthorization(
     )
     if (!active.rows.length) throw unavailable()
     await client.query(
-      "UPDATE build_shopify_connections SET session_encrypted=$1,oauth_state_hash=NULL,start_token_hash=NULL WHERE connection_id=$2 AND project_id=$3",
+      "UPDATE build_shopify_connections SET session_encrypted=$1,oauth_state_hash=NULL,start_token_hash=NULL,installed_at=now() WHERE connection_id=$2 AND project_id=$3",
       [
         encrypt(session, row.project_id, row.connection_id),
         row.connection_id,

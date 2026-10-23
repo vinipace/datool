@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { afterEach, expect, spyOn, test } from "bun:test"
 import { createHmac, randomUUID } from "node:crypto"
-import { readFile } from "node:fs/promises"
+import { readFile, mkdtemp, stat, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { spawnSync } from "node:child_process"
 import { sql } from "drizzle-orm"
 import { configureBuildTestEnvironment } from "./helpers/build-env"
 import {
@@ -16,7 +19,10 @@ import {
 import { createBuildContext } from "@/src/server/build/context"
 import { composioUserId } from "@/src/server/build/integrations/provider"
 import { Session } from "@shopify/shopify-api"
-import { encryptProviderKey } from "@/src/server/model-providers/secrets"
+import {
+  encryptProviderKey,
+  decryptProviderKey,
+} from "@/src/server/model-providers/secrets"
 import { saveAction, saveProcedure } from "@/src/server/build/definitions"
 import { runAgentTurn } from "@/src/server/build/runtime"
 import { shopifyCartTools } from "@/src/server/build/integrations/shopify-cart"
@@ -135,7 +141,16 @@ async function fixture(
   }
   const session = (customer: string, body: unknown = {}) =>
     shopifyStorefrontSession(context, channel.id, request(customer), body)
-  return { context, database, channel, session, request, connectionId, agent }
+  return {
+    context,
+    database,
+    channel,
+    session,
+    request,
+    connectionId,
+    agent,
+    testDatabaseUrl: target.databaseUrl,
+  }
 }
 
 async function activateShopifyConnection(
@@ -1951,24 +1966,18 @@ async function returnRuntimeFixture(
     approval?: boolean
     exchange?: boolean
     fulfillment?: boolean
-    replacementOrder?: boolean
   } = {}
 ) {
   const f = await fixture({ visitorMessagesPerMinute: 120 })
   await activateShopifyConnection(
     f,
     "read_products,read_legal_policies,write_app_proxy,read_orders,read_customers,write_returns,write_orders" +
-      (options.replacementOrder
-        ? ",write_draft_orders,read_payment_terms"
-        : "") +
       (options.fulfillment ? ",write_merchant_managed_fulfillment_orders" : "")
   )
   const { shopifyReturnTools } =
     await import("@/src/server/build/integrations/shopify-return-process")
   const { shopifyReturnStatusTools } =
     await import("@/src/server/build/integrations/shopify-return-status")
-  const { shopifyExchangeOrderTools } =
-    await import("@/src/server/build/integrations/shopify-exchange-order")
   const { shopifyReturnFixture } = await import("./helpers/shopify-return")
   const provider = shopifyReturnFixture()
   const input: Record<string, unknown> = {
@@ -1976,22 +1985,7 @@ async function returnRuntimeFixture(
     ...(options.guest
       ? { orderNumber: "#1001", email: "buyer@example.test" }
       : {}),
-    replacements:
-      options.exchange || options.replacementOrder
-        ? [{ variantId: "60", quantity: 1 }]
-        : [],
-    ...(options.replacementOrder
-      ? {
-          contactEmail: "delivery@example.test",
-          fault: "merchant",
-          shippingAddress: {
-            firstName: "Alice",
-            address1: "123 Main St",
-            city: "Austin",
-            countryCode: "US",
-          },
-        }
-      : {}),
+    replacements: options.exchange ? [{ variantId: "60", quantity: 1 }] : [],
   }
   let action = await saveAction(f.context, f.agent.id, {
     slug: "return-items",
@@ -1999,13 +1993,9 @@ async function returnRuntimeFixture(
       type: "integration",
       name: "Return or exchange items",
       connectionId: f.connectionId,
-      toolSlug: options.replacementOrder
-        ? "SHOPIFY_CREATE_EXCHANGE_ORDER"
-        : "SHOPIFY_RETURN_OR_EXCHANGE",
+      toolSlug: "SHOPIFY_RETURN_OR_EXCHANGE",
       channels: ["web"],
-      inputSchema: (options.replacementOrder
-        ? shopifyExchangeOrderTools
-        : shopifyReturnTools)[0].inputSchema,
+      inputSchema: shopifyReturnTools[0].inputSchema,
       shopifySettings: {
         requireHumanApproval: options.approval ?? false,
         allowExchanges: options.exchange ?? false,
@@ -2316,123 +2306,64 @@ for (const revoked of ["connection", "identity"] as const) {
   }, 60_000)
 }
 
-for (const scenario of ["collect", "refund", "even"] as const) {
-  test(`Shopify replacement exchange quotes require human approval before any write (${scenario})`, async () => {
-    const f = await returnRuntimeFixture({
-      replacementOrder: true,
-      guest: scenario === "refund",
-    })
-    const state = f.provider.state
-    state.deliveredAt = "2020-01-01T00:00:00Z" // Separate replacements have no return-age window.
-    if (scenario === "refund") {
-      f.input.fault = "customer"
-      state.returnedPrice = "50.00" // 49.71 after original tax and fees; replacement costs 32.50.
-    }
-    if (scenario === "even") state.returnedPrice = "27.79" // 27.50 credit.
-    const pending = await f.turn()
-    const continuation = pending.continuations[0]
-    expect(continuation.type).toBe("approval_required")
-    const quote = continuation.shopifyExchangeOrderQuote!
-    expect(quote.input.contactEmail).toBe("delivery@example.test")
-    expect(quote.settlement).toEqual({
-      direction: scenario,
-      amount:
-        scenario === "collect" ? "7.8" : scenario === "refund" ? "17.21" : "0",
-      currencyCode: "USD",
-    })
-    expect(quote.replacement.shipping.amount).toBe(
-      scenario === "refund" ? "5" : "0"
-    )
-    expect(continuation.message).toContain("Replacement exchange for #1001")
-    expect(continuation.message).toContain(
-      scenario === "even"
-        ? "No payment difference"
-        : scenario === "refund"
-          ? "Refund difference: USD 17.21"
-          : "Additional payment: USD 7.8"
-    )
-    const calculations = f.provider.calls.filter((call) =>
-      call.query.includes("DatoolCalculateOrder")
-    )
-    const draftInput = calculations.at(-1)!.variables.input as Record<
-      string,
-      unknown
-    >
-    expect(draftInput.appliedDiscount).toBeUndefined() // Free delivery must not make the replacement itself free.
-    expect(draftInput.shippingLine).toEqual(
-      scenario === "refund"
-        ? { shippingRateHandle: "ground" }
-        : {
-            title: "Free delivery",
-            priceWithCurrency: { amount: "0", currencyCode: "USD" },
-          }
-    )
-    const confirmation = f.confirm(continuation.continuationId!)
-    await assert.rejects(f.turn(confirmation), /no longer available/)
-    // A changed price invalidates the teammate's old approval. Forged visitor items are ignored.
-    state.replacementOrderTotals = { free: "28.50", paid: "33.50" }
-    const updated = await f.turn(confirmation, true)
-    expect(updated.continuations[0].type).toBe("approval_required")
-    expect(
-      updated.continuations[0].shopifyExchangeOrderQuote?.input.items
-    ).toEqual(quote.input.items)
-    expect(
-      updated.continuations[0].shopifyExchangeOrderQuote?.operationId
-    ).toBe(quote.operationId)
-    expect(updated.continuations[0].message).toContain("details changed")
-    expect(updated.continuations[0].message).toContain("Preview only")
-    // Settlement is a remaining draft-release requirement; approval cannot silently place either order.
-    await assert.rejects(
-      f.turn(f.confirm(updated.continuations[0].continuationId!), true),
-      /Replacement-order settlement is not available/
-    )
-    expect(
-      f.provider.calls.filter(
-        (call) =>
-          /mutation\s/.test(call.query) &&
-          !call.query.includes("DatoolCalculateOrder")
-      )
-    ).toEqual([])
-    expect(
-      (
-        await f.database.execute(
-          sql`SELECT id FROM build_shopify_order_operations`
-        )
-      ).rows
-    ).toEqual([])
-  }, 60_000)
-}
-
-test("Shopify replacement exchange rejects unverified orders, absent replacements, stock shortages and mixed currencies before approval", async () => {
-  const f = await returnRuntimeFixture({ replacementOrder: true, guest: true })
-  f.input.email = "intruder@example.test"
-  await assert.rejects(f.turn(), /verify|order/i)
+test("unfinished replacement exchanges cannot be configured or executed", async () => {
+  const f = await fixture()
+  await activateShopifyConnection(f)
+  const { listAppTools, executeAppAction } =
+    await import("@/src/server/build/integrations/service")
   expect(
-    f.provider.calls.some((call) => call.query.includes("DatoolOrderVariants"))
+    (await listAppTools(f.context, f.connectionId)).some(
+      (tool) => tool.slug === "SHOPIFY_CREATE_EXCHANGE_ORDER"
+    )
   ).toBe(false)
-  f.input.email = "buyer@example.test"
-  for (const replacements of [[], [{ variantId: "60", quantity: 100 }]]) {
-    f.input.replacements = replacements
-    const before = f.provider.calls.length
-    await assert.rejects(f.turn())
-    expect(f.provider.calls).toHaveLength(before)
+  await assert.rejects(
+    saveAction(f.context, f.agent.id, {
+      slug: "replacement",
+      definition: {
+        type: "integration",
+        name: "Replacement",
+        connectionId: f.connectionId,
+        toolSlug: "SHOPIFY_CREATE_EXCHANGE_ORDER",
+        channels: ["web"],
+        inputSchema: { type: "object", properties: {} },
+      },
+    }),
+    /Choose an enabled action/
+  )
+  const conversations = new ConversationService(f.context)
+  const conversation = await conversations.getOrCreate({
+    agentId: f.agent.id,
+    channel: "web",
+    metadata: {},
+  })
+  const { turn } = await conversations.startTurn(conversation.id, {
+    requestKey: "old-replacement",
+    input: "Exchange",
+    metadata: {},
+    snapshot: {},
+  })
+  let providerCalls = 0
+  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(async () => {
+    providerCalls++
+    throw new Error("Unexpected provider request")
+  })
+  try {
+    await assert.rejects(
+      executeAppAction(f.context, {
+        connectionId: f.connectionId,
+        toolSlug: "SHOPIFY_CREATE_EXCHANGE_ORDER",
+        agentId: f.agent.id,
+        conversationId: conversation.id,
+        turnId: turn.id,
+        toolCallId: "old-replacement",
+        arguments: {},
+      }),
+      /unavailable/i
+    )
+    expect(providerCalls).toBe(0)
+  } finally {
+    fetchSpy.mockRestore()
   }
-  f.input.replacements = [{ variantId: "60", quantity: 1 }]
-  f.provider.state.stock = 0
-  await assert.rejects(f.turn(), /stock/)
-  f.provider.state.stock = 10
-  f.provider.state.replacementOrderCurrency = "EUR"
-  await assert.rejects(f.turn(), /inconsistent return amounts/)
-  f.provider.state.replacementOrderCurrency = "USD"
-  const pending = await f.turn()
-  expect(pending.continuations[0].type).toBe("approval_required")
-  expect(
-    (
-      await f.database.execute(
-        sql`SELECT id FROM build_shopify_order_operations`
-      )
-    ).rows
-  ).toEqual([])
 }, 60_000)
 
 for (const scenario of [
@@ -3166,6 +3097,7 @@ function commerceWebhook(
     shop?: string
     id?: string
     corrupt?: boolean
+    triggeredAt?: string
   } = {}
 ) {
   const raw = JSON.stringify(body)
@@ -3179,6 +3111,8 @@ function commerceWebhook(
         "x-shopify-shop-domain": options.shop ?? "fixture.myshopify.com",
         "x-shopify-api-version": "2026-10",
         "x-shopify-webhook-id": options.id ?? randomUUID(),
+        "x-shopify-triggered-at":
+          options.triggeredAt ?? new Date().toISOString(),
         "x-shopify-hmac-sha256": createHmac("sha256", "fixture-secret")
           .update(raw)
           .digest("base64"),
@@ -3187,6 +3121,278 @@ function commerceWebhook(
     }
   )
 }
+
+test("Shopify uninstall revokes store access and browser sessions without affecting another app", async () => {
+  const f = await fixture()
+  await activateShopifyConnection(f)
+  const visitor = await f.session("42")
+  const otherId = randomUUID()
+  await f.database.execute(sql`
+    INSERT INTO build_app_connections(id,project_id,request_key,toolkit,label,provider_user_id,auth_config_id,status)
+    VALUES(${otherId}::uuid,${f.context.projectId},${otherId},'shopify_native','Other app','fixture','shopify-native-v1','active')
+  `)
+  await f.database.execute(sql`
+    INSERT INTO build_shopify_connections(connection_id,project_id,shop,client_id,authorization_expires_at,session_encrypted)
+    VALUES(${otherId}::uuid,${f.context.projectId},'fixture.myshopify.com','another-client',now(),'other-private-token')
+  `)
+  const installId = randomUUID()
+  await f.database.execute(sql`
+    INSERT INTO shopify_install_intent(id,client_id,shop,source,browser_hash,session_encrypted)
+    VALUES(${installId}::uuid,'fixture-client','fixture.myshopify.com','shopify',${installId},'pending-private-token')
+  `)
+  const request = (corrupt = false) =>
+    commerceWebhook(
+      { id: 123, myshopify_domain: "fixture.myshopify.com" },
+      { topic: "app/uninstalled", id: installId, corrupt }
+    )
+  expect(
+    (await handleShopifyCommerceWebhook(request(true), f.database)).status
+  ).toBe(401)
+  expect(
+    (await f.session("42", { browserToken: visitor.browserToken })).browserToken
+  ).toBeTruthy()
+  await f.database.execute(
+    sql.raw(`
+    CREATE FUNCTION reject_uninstall() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture rollback'; END; $$;
+    CREATE TRIGGER reject_uninstall BEFORE UPDATE ON build_app_connections
+      FOR EACH ROW WHEN (NEW.status='disconnected') EXECUTE FUNCTION reject_uninstall();
+  `)
+  )
+  expect(
+    (await handleShopifyCommerceWebhook(request(), f.database)).status
+  ).toBe(503)
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT status FROM build_app_connections WHERE id=${f.connectionId}::uuid`
+      )
+    ).rows[0].status
+  ).toBe("active")
+  await f.database.execute(
+    sql`DROP TRIGGER reject_uninstall ON build_app_connections`
+  )
+  expect(
+    (await handleShopifyCommerceWebhook(request(), f.database)).status
+  ).toBe(204)
+  const connection = (
+    await f.database.execute(sql`
+    SELECT a.status,s.session_encrypted,s.oauth_state_hash,s.start_token_hash
+    FROM build_app_connections a JOIN build_shopify_connections s ON s.connection_id=a.id
+    WHERE a.id=${f.connectionId}::uuid
+  `)
+  ).rows[0]
+  expect(connection).toEqual({
+    status: "disconnected",
+    session_encrypted: null,
+    oauth_state_hash: null,
+    start_token_hash: null,
+  })
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT id FROM build_shopify_visitor_sessions WHERE shop='fixture.myshopify.com'`
+      )
+    ).rows
+  ).toHaveLength(0)
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT id FROM shopify_install_intent WHERE id=${installId}::uuid`
+      )
+    ).rows
+  ).toHaveLength(0)
+  await assert.rejects(f.session("42", { browserToken: visitor.browserToken }))
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT status FROM build_app_connections WHERE id=${otherId}::uuid`
+      )
+    ).rows[0].status
+  ).toBe("active")
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT session_encrypted FROM build_shopify_connections WHERE connection_id=${otherId}::uuid`
+      )
+    ).rows[0].session_encrypted
+  ).toBe("other-private-token")
+  // A retry from the old uninstall must not revoke a connection established again.
+  await f.database.execute(
+    sql`UPDATE build_app_connections SET status='active' WHERE id=${f.connectionId}::uuid`
+  )
+  await activateShopifyConnection(f)
+  expect(
+    (await handleShopifyCommerceWebhook(request(), f.database)).status
+  ).toBe(204)
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT status FROM build_app_connections WHERE id=${f.connectionId}::uuid`
+      )
+    ).rows[0].status
+  ).toBe("active")
+  // First delivery can also arrive late, after a fresh installation.
+  const oldEvent = new Date(Date.now() - 60_000).toISOString()
+  await f.database.execute(
+    sql`UPDATE build_shopify_connections SET installed_at=now() WHERE connection_id=${f.connectionId}::uuid`
+  )
+  expect(
+    (
+      await handleShopifyCommerceWebhook(
+        commerceWebhook(
+          { id: 123, myshopify_domain: "fixture.myshopify.com" },
+          { topic: "app/uninstalled", triggeredAt: oldEvent }
+        ),
+        f.database
+      )
+    ).status
+  ).toBe(204)
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT status FROM build_app_connections WHERE id=${f.connectionId}::uuid`
+      )
+    ).rows[0].status
+  ).toBe("active")
+}, 60_000)
+
+test("Shopify privacy requests are encrypted and durable after uninstall, with retries on storage failure", async () => {
+  const f = await fixture()
+  await f.database.execute(
+    sql`UPDATE build_app_connections SET status='disconnected' WHERE id=${f.connectionId}::uuid`
+  )
+  env("DATOOL_BUILD_ENABLED", "false")
+  env("DATOOL_BUILD_ORGANIZATION_IDS", "")
+  const payload = {
+    shop_id: 123,
+    shop_domain: "fixture.myshopify.com",
+    customer: { id: 42, email: "buyer@example.test" },
+    orders_to_redact: [77],
+  }
+  for (const topic of [
+    "customers/data_request",
+    "customers/redact",
+    "shop/redact",
+  ]) {
+    const id = randomUUID()
+    expect(
+      (
+        await handleShopifyCommerceWebhook(
+          commerceWebhook(payload, { topic, id, corrupt: true }),
+          f.database
+        )
+      ).status
+    ).toBe(401)
+    expect(
+      (
+        await handleShopifyCommerceWebhook(
+          commerceWebhook(payload, { topic, id }),
+          f.database
+        )
+      ).status
+    ).toBe(204)
+    expect(
+      (
+        await handleShopifyCommerceWebhook(
+          commerceWebhook(payload, { topic, id }),
+          f.database
+        )
+      ).status
+    ).toBe(204)
+  }
+  const rows = (
+    await f.database.execute<{
+      id: string
+      client_id: string
+      payload_encrypted: string
+      completed_at: string | null
+      days: number
+    }>(sql`
+    SELECT id,client_id,payload_encrypted,completed_at,EXTRACT(epoch FROM due_at-received_at)/86400 AS days FROM shopify_privacy_requests
+  `)
+  ).rows
+  expect(rows).toHaveLength(3)
+  for (const row of rows) {
+    expect(row.completed_at).toBeNull()
+    expect(Number(row.days)).toBe(30)
+    expect(row.payload_encrypted).not.toContain("buyer@example.test")
+    expect(
+      JSON.parse(
+        decryptProviderKey(
+          row.payload_encrypted,
+          row.id,
+          `shopify-privacy:${row.client_id}`
+        )
+      )
+    ).toEqual(payload)
+  }
+  const missingStorage = () =>
+    commerceWebhook(payload, { topic: "customers/redact", id: "retry-storage" })
+  await f.database.execute(
+    sql`ALTER TABLE shopify_privacy_requests RENAME TO privacy_temporarily_unavailable`
+  )
+  expect(
+    (await handleShopifyCommerceWebhook(missingStorage(), f.database)).status
+  ).toBe(503)
+  await f.database.execute(
+    sql`ALTER TABLE privacy_temporarily_unavailable RENAME TO shopify_privacy_requests`
+  )
+  expect(
+    (await handleShopifyCommerceWebhook(missingStorage(), f.database)).status
+  ).toBe(204)
+  expect(
+    (await f.database.execute(sql`SELECT id FROM shopify_privacy_requests`))
+      .rows
+  ).toHaveLength(4)
+  const directory = await mkdtemp(join(tmpdir(), "datool-privacy-test-"))
+  cleanup.push(() => rm(directory, { recursive: true, force: true }))
+  const run = async (...args: string[]) => {
+    const child = spawnSync(
+      process.execPath,
+      ["--no-env-file", "scripts/shopify-privacy.ts", ...args],
+      {
+        env: { ...process.env, DATABASE_URL: f.testDatabaseUrl },
+        encoding: "utf8",
+      }
+    )
+    return { code: child.status, stdout: child.stdout, stderr: child.stderr }
+  }
+  const listed = await run("list")
+  expect(listed.code).toBe(0)
+  expect(JSON.parse(listed.stdout)).toHaveLength(4)
+  expect(listed.stdout).not.toContain("buyer@example.test")
+  const output = join(directory, "request.json")
+  expect(
+    (await run("export", "--id", rows[0].id, "--output", output)).code
+  ).toBe(0)
+  expect((await stat(output)).mode & 0o777).toBe(0o600)
+  expect(JSON.parse(await readFile(output, "utf8")).payload).toEqual(payload)
+  expect(
+    (await run("export", "--id", rows[0].id, "--output", output)).code
+  ).not.toBe(0)
+  expect((await run("complete", "--id", rows[0].id)).code).not.toBe(0)
+  expect(
+    (
+      await run(
+        "complete",
+        "--id",
+        rows[0].id,
+        "--evidence",
+        "disposable-fixture-fulfilled"
+      )
+    ).code
+  ).toBe(0)
+  const completed = (
+    await f.database.execute(
+      sql`SELECT payload_encrypted,shop,completed_at FROM shopify_privacy_requests WHERE id=${rows[0].id}`
+    )
+  ).rows[0]
+  expect(completed.payload_encrypted).toBeNull()
+  expect(completed.shop).toBeNull()
+  expect(completed.completed_at).not.toBeNull()
+  expect(JSON.parse((await run("list")).stdout)).toHaveLength(3)
+}, 60_000)
+
 async function reconciliationJob(f: Awaited<ReturnType<typeof fixture>>) {
   // These runtime fixtures execute their admitted turns directly. Finish those
   // inbound jobs before exercising the actual background worker boundary.

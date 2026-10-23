@@ -8,7 +8,6 @@ import { shopifyCheckoutTools } from "./shopify-order-status"
 import { shopifyReturnStatusTools } from "./shopify-return-status"
 import { shopifyReturnTools } from "./shopify-return-process"
 import { shopifyReturnReadTools } from "./shopify-return-options"
-import { shopifyExchangeOrderTools } from "./shopify-exchange-order"
 
 export const shopifyTools = [
   ...catalogTools,
@@ -21,7 +20,7 @@ export const shopifyTools = [
   ...shopifyReturnReadTools,
   ...shopifyReturnTools,
   ...shopifyReturnStatusTools,
-  ...shopifyExchangeOrderTools,
+  // Separate replacement orders remain unavailable until settlement is implemented.
 ]
 
 export const shopifyToolScopes: Record<string, string[]> = {

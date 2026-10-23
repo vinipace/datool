@@ -101,7 +101,7 @@ session. Neither path calls the Shopify development app or its temporary tunnel.
 Native calls record integration usage with no configured Composio charge.
 Normal agent model usage still applies.
 
-Apply migrations through 0069 before enabling these actions. Confirmed order
+Apply migrations through 0070 before enabling these actions. Confirmed order
 intent is stored separately from usage events so interrupted tool responses do
 not erase the information needed for recovery. Checkout reads require draft-order,
 order and customer access; the corresponding write scopes also grant read access.
@@ -150,7 +150,7 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 
 ## Installation setup
 
-1. Apply migrations through `0069_shopify_reconciliation.sql` using the normal release
+1. Apply migrations through `0070_shopify_install_lifecycle.sql` using the normal release
    flow. Existing organizations retain Stripe ownership.
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
@@ -188,8 +188,9 @@ The card shows setup is required when OAuth credentials or the app handle are
 missing. Partner subscription verification additionally needs the Partner API
 settings above. OAuth credentials and the Partner API token are different.
 
-Public launch still requires the listing/review process and privacy and uninstall
-webhooks. The production theme extension is maintained in
+Public launch still requires the listing/review process, registered lifecycle and
+privacy subscriptions, and verified privacy fulfillment. See the
+[privacy operations runbook](shopify-privacy.md). The production theme extension is maintained in
 `integrations/shopify/extensions/datool-chat`; it must be released on the same
 Shopify app as the OAuth connection. A local pilot extension belongs to a
 different app and does not inherit its credentials or configuration.
@@ -341,8 +342,8 @@ configuration. Declaring an endpoint in Datool does not register subscriptions.
 The return topic is `returns/process`, not `returns/processed`. See Shopify's
 [topic reference](https://shopify.dev/docs/api/admin-graphql/2026-10/enums/WebhookSubscriptionTopic)
 and [delivery verification](https://shopify.dev/docs/apps/build/webhooks/verify-deliveries).
-These subscriptions are separate from the mandatory privacy/uninstall handlers,
-which remain a public-release requirement.
+The same endpoint also receives uninstall and mandatory privacy topics; register
+those subscriptions separately as described in the [privacy runbook](shopify-privacy.md).
 
 Apply migration 0069 and run the updated **web and buildworker** releases. The
 receiver uses the official SDK to verify the signature over the original body,

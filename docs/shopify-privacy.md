@@ -1,0 +1,74 @@
+# Shopify lifecycle and privacy operations
+
+Apply migration `0070_shopify_install_lifecycle.sql` before deploying the web
+release. Register `app/uninstalled`, `customers/data_request`,
+`customers/redact` and `shop/redact` on the production app, all pointing to
+`https://YOUR_DATOOL_HOST/api/shopify/webhooks/commerce`. The three privacy
+topics must be registered as compliance subscriptions. Endpoint deployment alone
+does not register them.
+
+The existing receiver verifies the original body through Shopify's official SDK.
+Invalid signatures return 401; database failures return 503 for retry. Uninstall
+atomically disconnects the matching app/store, clears its credentials and old
+browser sessions, removes older unclaimed installation tokens, and requests a
+billing refresh. Other apps are unaffected. Receipts prevent duplicate processing;
+the recorded installation time protects a new installation from an older event.
+
+## Privacy requests require operator fulfillment
+
+The receiver stores encrypted requests with a 30-day deadline, even after
+uninstall or when Build is disabled. It does **not** automatically export or
+erase customer records. A 204 response confirms durable receipt only.
+
+Before public launch, assign an operator and verify the complete export/erasure
+workflow with disposable store data. Check the pending list daily and complete
+requests before their deadline. These commands use the deployment's database
+and existing credential-encryption key:
+
+```sh
+bun scripts/shopify-privacy.ts list
+bun scripts/shopify-privacy.ts export --id REQUEST_ID --output /private/path/request.json
+```
+
+`export` writes the **request**, not the customer's collected data. It creates
+a new file with mode 0600, refuses to overwrite existing files and never prints
+the customer payload. The list contains request IDs, topics and deadlines only.
+
+Fulfill the request using its verified store and customer/order identifiers:
+
+- For a data request, collect the relevant customer data and securely provide it
+  to the store owner. Verify the recipient independently; do not send it to an
+  address merely present in a chat message.
+- For customer redaction, remove the customer's data within that store. Include
+  guest conversations identified through the supplied order IDs or contact
+  details, as well as signed-in customer records.
+- For shop redaction, remove that store's data while preserving unrelated stores
+  and projects. Check for a newer installation before taking destructive action.
+
+The data inventory includes contacts and their Shopify metadata, visitor/message
+identity, conversations and messages, continuations and tool arguments/results,
+channel delivery jobs, commerce quotes/results, and associated traces/spans.
+Copied evaluation/review/dataset evidence, exports, ingestion queues and backups
+also need a documented disposition. Deleting only the Shopify connection is
+insufficient. Follow the installation's retention and legal-hold policy where
+applicable, and keep private fulfillment evidence outside this repository.
+
+Only after the export or erasure has actually been completed and verified:
+
+```sh
+bun scripts/shopify-privacy.ts complete --id REQUEST_ID --evidence INTERNAL_EVIDENCE_REFERENCE
+```
+
+This records the operator's completion, removes the request's encrypted payload
+and store domain, and retains a delivery tombstone so a retry cannot recreate it.
+Use a non-sensitive evidence reference; remove the private request file after
+fulfillment. The command does not itself erase customer data or send an export.
+
+Required release proof: registered subscriptions; signed delivery/retry;
+uninstall/reinstall; a complete customer export; customer and store erasure
+including copied evidence; and a monitored, staffed pending-request process.
+Until that proof exists, privacy intake alone does not make the app ready for
+public distribution.
+
+References: [Shopify compliance webhooks](https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance)
+and [delivery verification](https://shopify.dev/docs/apps/build/webhooks/verify-deliveries).

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { sql } from "drizzle-orm"
 import type { TracerDatabase } from "@/src/server/tracer/db"
+import { encryptProviderKey } from "@/src/server/model-providers/secrets"
 import { enabledBuildProject } from "../access"
 import {
   nativeShopify,
@@ -9,7 +10,14 @@ import {
 } from "./shopify-provider"
 
 const headers = { "Cache-Control": "no-store" }
+const privacyTopics = new Set([
+  "CUSTOMERS_DATA_REQUEST",
+  "CUSTOMERS_REDACT",
+  "SHOP_REDACT",
+])
 const topics = new Set([
+  ...privacyTopics,
+  "APP_UNINSTALLED",
   "ORDERS_CREATE",
   "ORDERS_PAID",
   "ORDERS_UPDATED",
@@ -74,6 +82,83 @@ export async function handleShopifyCommerceWebhook(
     } catch {
       return new Response("Invalid webhook", { status: 400, headers })
     }
+    const receipt = createHash("sha256")
+      .update(`${delivery.topic}:${delivery.webhookId}`)
+      .digest("hex")
+    if (privacyTopics.has(delivery.topic)) {
+      // Receipt is not fulfillment. Keep requests independent of paid access,
+      // installation state and the lifetime of the connected project.
+      if (payload.shop_domain !== shop || !gid(payload.shop_id, "Shop"))
+        return new Response("Invalid privacy event", { status: 400, headers })
+      const id = createHash("sha256")
+        .update(`${api.config.apiKey}:${shop}:${receipt}`)
+        .digest("hex")
+      const encrypted = encryptProviderKey(
+        JSON.stringify(payload),
+        id,
+        `shopify-privacy:${api.config.apiKey}`
+      )
+      await database.execute(sql`
+        INSERT INTO shopify_privacy_requests(id,client_id,shop,topic,payload_encrypted)
+        VALUES(${id},${api.config.apiKey},${shop},${delivery.topic},${encrypted}) ON CONFLICT DO NOTHING
+      `)
+      return new Response(null, { status: 204, headers })
+    }
+    if (delivery.topic === "APP_UNINSTALLED") {
+      const triggeredAt = new Date(
+        request.headers.get("x-shopify-triggered-at") ?? ""
+      )
+      if (
+        !Number.isFinite(triggeredAt.getTime()) ||
+        payload.myshopify_domain !== shop
+      )
+        return new Response("Invalid uninstall event", { status: 400, headers })
+      await database.transaction(async (tx) => {
+        // Lifecycle cleanup also runs for disabled projects and disconnected stores.
+        const found = await tx.execute<{
+          connection_id: string
+          project_id: string
+        }>(sql`
+          SELECT s.connection_id,s.project_id FROM build_shopify_connections s
+          JOIN build_app_connections a ON a.id=s.connection_id AND a.project_id=s.project_id
+          WHERE s.shop=${shop} AND s.client_id=${api.config.apiKey}
+            AND (s.installed_at IS NULL OR s.installed_at<=${triggeredAt})
+          FOR UPDATE OF s,a
+        `)
+        const target = found.rows[0]
+        if (target) {
+          const inserted = await tx.execute(sql`
+            INSERT INTO build_shopify_webhook_receipts(connection_id,delivery_id)
+            VALUES(${target.connection_id}::uuid,${receipt}) ON CONFLICT DO NOTHING RETURNING delivery_id
+          `)
+          if (!inserted.rowCount) return
+          await tx.execute(sql`
+            UPDATE build_app_connections SET status='disconnected',updated_at=now()
+            WHERE id=${target.connection_id}::uuid AND project_id=${target.project_id}
+          `)
+          await tx.execute(sql`
+            UPDATE build_shopify_connections SET session_encrypted=NULL,start_token_hash=NULL,oauth_state_hash=NULL
+            WHERE connection_id=${target.connection_id}::uuid AND project_id=${target.project_id}
+          `)
+          await tx.execute(sql`
+            DELETE FROM build_shopify_visitor_sessions WHERE project_id=${target.project_id} AND shop=${shop}
+          `)
+        }
+        // An unclaimed install can also hold a token. Preserve newer install attempts.
+        await tx.execute(sql`
+          DELETE FROM shopify_install_intent WHERE shop=${shop} AND client_id=${api.config.apiKey} AND created_at<=${triggeredAt}
+        `)
+        await tx.execute(sql`
+          UPDATE organization_billing SET access_until=NULL,reconcile_after=now()
+          WHERE provider='shopify' AND shopify_shop=${shop} AND shopify_client_id=${api.config.apiKey}
+            AND NOT EXISTS (
+              SELECT 1 FROM build_shopify_connections s WHERE s.shop=${shop}
+                AND s.client_id=${api.config.apiKey} AND s.installed_at>${triggeredAt}
+            )
+        `)
+      })
+      return new Response(null, { status: 204, headers })
+    }
     const draft = delivery.topic === "DRAFT_ORDERS_UPDATE"
     const returned = delivery.topic.startsWith("RETURNS_")
     const routing =
@@ -117,9 +202,6 @@ export async function handleShopifyCommerceWebhook(
       AND (return_hold_plan IS NULL OR EXISTS (
         SELECT 1 FROM jsonb_array_elements(return_hold_plan->'orders') AS held WHERE held->>'id'=${externalId}
       ))`
-    const receipt = createHash("sha256")
-      .update(`${delivery.topic}:${delivery.webhookId}`)
-      .digest("hex")
     await database.transaction(async (tx) => {
       const connection = await tx.execute<{
         connection_id: string

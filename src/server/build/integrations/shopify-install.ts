@@ -348,8 +348,8 @@ export async function claimShopifyInstall(
           ]
         )
         await client.query(
-          `INSERT INTO build_shopify_connections(connection_id,project_id,shop,client_id,authorization_expires_at,session_encrypted)
-          VALUES($1,$2,$3,$4,now(),$5) ON CONFLICT(connection_id) DO UPDATE SET session_encrypted=$5,oauth_state_hash=NULL,start_token_hash=NULL`,
+          `INSERT INTO build_shopify_connections(connection_id,project_id,shop,client_id,authorization_expires_at,session_encrypted,installed_at)
+          VALUES($1,$2,$3,$4,now(),$5,now()) ON CONFLICT(connection_id) DO UPDATE SET session_encrypted=$5,oauth_state_hash=NULL,start_token_hash=NULL,installed_at=now()`,
           [
             connectionId,
             target,

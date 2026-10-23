@@ -2,6 +2,24 @@
 
 Implementation checklist for PR #36. The reference is [Chatbase's native Shopify actions](https://www.chatbase.co/docs/user-guides/chatbot/actions/shopify-actions), checked 23 October 2026. A checked implementation item is not evidence that a production store has granted its permissions.
 
+## Immediate release scope
+
+Feature expansion is frozen. Verify connection, product/policy answers and cards,
+storefront cart/checkout navigation, verified order lookup and chat continuity.
+Preserve abuse-only defaults without daily quotas. Finish lifecycle/privacy
+requirements and sandbox proof before adding more commerce behavior.
+
+Separate replacement exchanges are unavailable in the action catalog and are
+rejected at execution, including previously saved definitions. Image search and
+additional messaging channels are deferred. Existing order/return code remains
+subject to merchant permissions and its documented verification requirements.
+
+Uninstall revocation and encrypted privacy-request intake use the existing webhook
+endpoint. Privacy fulfillment is an operator workflow, described in
+[Shopify privacy operations](shopify-privacy.md); receiving a request does not
+complete export or erasure. Public launch still requires fulfillment proof and
+production subscription registration.
+
 ## Delivery checklist
 
 - [x] Bind customer authorization to authenticated channel messages and recheck identity before each action.
@@ -140,8 +158,9 @@ accounting are not implemented. Full after-sales parity remains incomplete.
 
 ### Separate replacement exchange preflight
 
-Create replacement exchange now reaches the existing action runtime and Inbox
-approval path. It verifies the original order first, calculates the return credit
+The retained preflight implementation is deferred and not exposed in the action
+catalog or executable through saved agent actions. Its earlier prototype verified
+the original order first, calculated the return credit
 after Shopify's fees, and calculates replacement items, shipping and tax through
 the existing order quote. A replacement is required. The separate exchange has
 no delivery-age cutoff; its original-order proof is distinct from the replacement
@@ -154,14 +173,14 @@ approval is mandatory even when the action's optional approval setting is off.
 Approving a changed or expired quote requests review again. These steps reuse the
 existing continuations and calculators; they add no table, worker or queue.
 
-This is explicitly a preview in the draft release. Approval cannot yet create a
+This feature is unavailable in the release. Approval cannot create a
 return, refund or replacement order. Separate-order credit settlement, interrupted
 write recovery, templated notes and additional collected fields remain required.
 The complete exchange checklist remains open. Calculation uses Shopify's
 [draft-order calculation](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/draftOrderCalculate);
 the calculation itself does not persist a draft order.
 
-Four runtime/database cases exercise collection, refund-difference and even quotes,
+Earlier prototype tests exercised collection, refund-difference and even quotes,
 guest proof, mandatory approval, changed prices, pinned input, unavailable
 settlement, stock shortages and currency mismatch. An input-schema regression
 demonstrated unnecessary provider reads for a quantity the order calculator could
@@ -170,7 +189,8 @@ provider access. Eleven existing order/return runtime cases also passed. Six
 Chromium integration-editor stories and phone/desktop visual checks passed. The
 editor explains mandatory approval and preview status instead of displaying a
 disabled switch. These checks use provider fixtures; no live financial write was
-attempted.
+attempted. The active runtime regression now verifies that the unfinished action
+cannot be configured or executed and makes no provider call.
 
 ### Separate exchange accounting investigation
 
