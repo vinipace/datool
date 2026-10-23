@@ -2,7 +2,8 @@ import { z } from "zod"
 import type { IntegrationTool } from "@/src/lib/build/integrations"
 import type { ShopifyActionSettings } from "@/src/lib/build/shopify"
 import {
-  shopifyReturnActionInputSchema,
+  shopifyReturnInputSchema,
+  shopifyReturnResumeInputSchema,
   type ShopifyReturnQuote,
 } from "@/src/lib/build/shopify-return"
 import { prepareShopifyReturnContinuation } from "./shopify-return-resume"
@@ -355,14 +356,24 @@ export async function processShopifyReturn(
   }
 }
 
+// Match the provider's root-object contract; the executor still parses the strict union.
+export const shopifyReturnToolInputSchema = z.toJSONSchema(
+  shopifyReturnInputSchema.partial().extend({
+    operationId: shopifyReturnResumeInputSchema.shape.operationId
+      .optional()
+      .describe(
+        "To resume an existing return, provide only operationId. Otherwise provide order, items and reason."
+      ),
+  }),
+  { target: "draft-7" }
+)
+
 export const shopifyReturnTools: IntegrationTool[] = [
   {
     slug: "SHOPIFY_RETURN_OR_EXCHANGE",
     name: "Return or exchange items",
     description:
       "Prepare a return/refund or permitted same-order exchange. First use Find returnable items; select fulfillment line IDs and quantities. Shopify calculates the balance for shopper confirmation or merchant approval. Guests must provide the order number and checkout email or phone. To continue an existing unprocessed return, pass only its Datool operationId; the original items and current balance require fresh approval. Never promise a completed refund or shipment before Shopify confirms it.",
-    inputSchema: z.toJSONSchema(shopifyReturnActionInputSchema, {
-      target: "draft-07",
-    }),
+    inputSchema: shopifyReturnToolInputSchema,
   },
 ]
