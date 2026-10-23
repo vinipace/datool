@@ -6,7 +6,11 @@ export const orderLookupSchema = z
     orderNumber: z
       .string()
       .trim()
-      .regex(/^#?[\p{L}\p{N}_-]{1,64}$/u)
+      // JSON Schema cannot preserve the Unicode flag. Validate this at execution.
+      .refine(
+        (value) => /^#?[\p{L}\p{N}_-]{1,64}$/u.test(value),
+        "Invalid order number"
+      )
       .optional(),
     email: z.email().max(254).optional(),
     phone: z
