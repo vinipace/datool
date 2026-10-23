@@ -133,7 +133,6 @@ and [policy scope](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Sh
 Billing references: [Shopify App Pricing](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing)
 and [subscription verification](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing/redirect-plan-selection-page).
 
-
 ## Storefront chat and customer identity
 
 Release the server and migration before changing the Shopify extension. Copy
@@ -184,17 +183,28 @@ public launch.
 
 ## Abuse controls
 
-All public web channels default to 10 accepted message attempts per visitor per
-minute and 100 per UTC day. These quotas survive new conversations and IP changes.
-Configure `publicAdmission.visitorMessagesPerMinute` (1–120) and
-`publicAdmission.visitorMessagesPerDay` (1–10000) with `build_update_channel`.
-The existing client-IP/anonymous admission limits remain, plus channel-wide
-ceilings of 120 session requests/minute and 600 message/feedback requests/minute.
-Denied requests return HTTP 429 and Retry-After before a model job is queued.
-Only configure a trusted client-IP header when the edge proxy overwrites it and
-clients cannot reach the origin directly. Without that trust, anonymous requests
-share a conservative bucket. These controls do not replace infrastructure DDoS
-protection.
+Public web channels default to **20 message attempts per visitor per minute**.
+Exceeding this burst limit returns HTTP 429 with Retry-After (at most 60 seconds)
+before a model job is queued. The visitor can continue when the window resets;
+starting a new conversation or changing IP does not bypass it. Rejected flooding
+is checked before shared client-IP counters so it does not consume other shoppers'
+allowance.
+
+There is **no daily visitor quota by default** and no additional channel-wide
+session/message ceiling. To tune burst protection, configure
+`publicAdmission.visitorMessagesPerMinute` (1–120) with `build_update_channel`.
+A merchant can explicitly opt into `publicAdmission.visitorMessagesPerDay`
+(1–10000 per UTC day); omit it for new channels or set it to `null` to remove a
+previously configured daily quota. Security rollout must not add daily message or
+spend quotas to agents on the merchant's behalf.
+
+Existing client admission limits remain configurable through
+`publicAdmission.session`, `.message` and `.feedback`. Only configure a trusted
+client-IP header when the edge proxy overwrites it and clients cannot reach the
+origin directly. Without that trust, authenticated message/feedback requests use
+the verified visitor as their client bucket; new anonymous sessions still share a
+conservative bucket. Configure trusted edge admission for storefront traffic.
+These controls do not replace infrastructure DDoS protection.
 
 Set both `DATOOL_TURNSTILE_SITE_KEY` and `DATOOL_TURNSTILE_SECRET_KEY` on the web
 service to enable Cloudflare Managed Turnstile for new visitors. The widget must
@@ -206,8 +216,9 @@ Both variables absent disables the challenge; partial configuration fails closed
 Provider failure or cancellation shows a retryable security check rather than
 issuing a new visitor. Do not use Turnstile testing keys in production.
 
-Use agent guardrails as a second layer: daily turns, concurrent turns, input
-length, maximum output, spam checks and daily model budget. Daily model budget
+Keep input length, maximum output, spam checks and operational capacity controls
+separate from merchant-selected usage quotas. Daily turns and daily model budgets
+are optional cost controls, not requirements for abuse protection. Daily model budget
 admission grows its reservation **before each model step**, including history,
 knowledge and tool-result context. Concurrent reservations share a database lock;
 unknown cost retains the reservation. Catalog-based text estimates are

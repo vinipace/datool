@@ -264,9 +264,9 @@ function publicAdmissionKey(clientKey: string | undefined) {
 }
 
 /**
- * Atomically admits one anonymous public request before contact, conversation,
- * or channel jobs are created. The key is intentionally independent of the
- * signed visitor id so fresh visitor tokens cannot evade the guard.
+ * Atomically counts each public request before contact, conversation, or jobs
+ * are created. Verified visitors have their own burst limit; a trusted client
+ * key also protects against attempts to reset identity to evade that limit.
  */
 export async function enforcePublicAdmission(
   context: BuildContext,
@@ -276,92 +276,75 @@ export async function enforcePublicAdmission(
   visitorId?: string
 ) {
   const policy = publicAdmissionPolicy(connection, scope)
+  const limits = jsonObject(jsonObject(connection.config).publicAdmission)
+  const bounded = (value: unknown, fallback: number, max: number) =>
+    Number.isInteger(value)
+      ? Math.max(1, Math.min(max, Number(value)))
+      : fallback
+  const dailyLimit = Number.isInteger(limits.visitorMessagesPerDay)
+    ? bounded(limits.visitorMessagesPerDay, 1, 10000)
+    : null
+  // A verified visitor is a safe fallback when the edge does not supply a
+  // trusted client IP. Do not combine every returning shopper into one bucket.
+  const client = clientKey?.trim()
+  const admissionKey =
+    (!client || client === "anonymous") && visitorId
+      ? `verified-visitor:${visitorId}`
+      : client
+  const buckets = [
+    ...(scope === "message" && visitorId
+      ? [
+          {
+            key: `visitor-minute:${visitorId}`,
+            max: bounded(limits.visitorMessagesPerMinute, 20, 120),
+            seconds: 60,
+          },
+          ...(dailyLimit === null
+            ? []
+            : [
+                {
+                  key: `visitor-day:${visitorId}`,
+                  max: dailyLimit,
+                  seconds: 86400,
+                },
+              ]),
+        ]
+      : []),
+    {
+      key: admissionKey,
+      max: policy.maxRequests,
+      seconds: policy.windowSeconds,
+    },
+  ]
   const now = Date.now()
-  const windowMs = policy.windowSeconds * 1_000
-  const windowStartedAt = new Date(Math.floor(now / windowMs) * windowMs)
-  const hashedClientKey = publicAdmissionKey(clientKey)
   const databaseHandle = database(context)
-
-  // Keep the anonymous ledger bounded without requiring a separate cleanup
-  // worker. Only old buckets for this connection are touched on a request.
+  // Keep optional daily buckets until their window has expired.
   await databaseHandle.execute(sql`
     DELETE FROM build_public_admission_bucket
     WHERE project_id = ${context.projectId}
       AND connection_id = ${connection.id}::uuid
       AND window_started_at < ${new Date(now - 2 * 86_400_000)}
   `)
-  const result = await databaseHandle.execute<{
-    request_count: number | string
-    window_started_at: Date | string
-  }>(sql`
-    INSERT INTO build_public_admission_bucket
-      (project_id, connection_id, scope, client_key, window_started_at, request_count)
-    VALUES (${context.projectId}, ${connection.id}::uuid, ${scope}, ${hashedClientKey}, ${windowStartedAt}, 1)
-    ON CONFLICT (project_id, connection_id, scope, client_key, window_started_at)
-    DO UPDATE SET request_count = LEAST(build_public_admission_bucket.request_count + 1, 2147483647)
-    RETURNING request_count, window_started_at
-  `)
-  const requestCount = Number(result.rows[0]?.request_count ?? 0)
-  if (requestCount <= policy.maxRequests) {
-    const limits = jsonObject(jsonObject(connection.config).publicAdmission)
-    const bounded = (value: unknown, fallback: number, max: number) =>
-      Number.isInteger(value)
-        ? Math.max(1, Math.min(max, Number(value)))
-        : fallback
-    const buckets = [
-      { key: "channel", max: scope === "session" ? 120 : 600, seconds: 60 },
-      ...(scope === "message" && visitorId
-        ? [
-            {
-              key: `visitor-minute:${visitorId}`,
-              max: bounded(limits.visitorMessagesPerMinute, 10, 120),
-              seconds: 60,
-            },
-            {
-              key: `visitor-day:${visitorId}`,
-              max: bounded(limits.visitorMessagesPerDay, 100, 10000),
-              seconds: 86400,
-            },
-          ]
-        : []),
-    ]
-    for (const bucket of buckets) {
-      const start = new Date(
-        Math.floor(now / (bucket.seconds * 1000)) * bucket.seconds * 1000
+  // Check visitor limits first: rejected flooding must not exhaust a shared
+  // IP's allowance and stop other shoppers from getting replies.
+  for (const bucket of buckets) {
+    const windowMs = bucket.seconds * 1000
+    const start = new Date(Math.floor(now / windowMs) * windowMs)
+    const admitted = await databaseHandle.execute<{
+      request_count: number
+    }>(sql`
+      INSERT INTO build_public_admission_bucket
+        (project_id,connection_id,scope,client_key,window_started_at,request_count)
+      VALUES (${context.projectId},${connection.id}::uuid,${scope},${publicAdmissionKey(bucket.key)},${start},1)
+      ON CONFLICT (project_id,connection_id,scope,client_key,window_started_at)
+      DO UPDATE SET request_count=LEAST(build_public_admission_bucket.request_count+1,2147483647)
+      RETURNING request_count
+    `)
+    if (Number(admitted.rows[0]?.request_count) > bucket.max)
+      throw new PublicAdmissionRateLimitError(
+        Math.max(1, Math.ceil((start.getTime() + windowMs - now) / 1000))
       )
-      const admitted = await databaseHandle.execute<{
-        request_count: number
-      }>(sql`
-        INSERT INTO build_public_admission_bucket
-          (project_id,connection_id,scope,client_key,window_started_at,request_count)
-        VALUES (${context.projectId},${connection.id}::uuid,${scope},${publicAdmissionKey(bucket.key)},${start},1)
-        ON CONFLICT (project_id,connection_id,scope,client_key,window_started_at)
-        DO UPDATE SET request_count=LEAST(build_public_admission_bucket.request_count+1,2147483647)
-        RETURNING request_count
-      `)
-      if (Number(admitted.rows[0]?.request_count) > bucket.max)
-        throw new PublicAdmissionRateLimitError(
-          Math.max(
-            1,
-            Math.ceil((start.getTime() + bucket.seconds * 1000 - now) / 1000)
-          )
-        )
-    }
-    return
   }
-  const bucket =
-    result.rows[0]?.window_started_at instanceof Date
-      ? result.rows[0].window_started_at.getTime()
-      : Date.parse(
-          String(
-            result.rows[0]?.window_started_at ?? windowStartedAt.toISOString()
-          )
-        )
-  const retryAfterSeconds = Math.max(
-    1,
-    Math.ceil((bucket + windowMs - now) / 1_000)
-  )
-  throw new PublicAdmissionRateLimitError(retryAfterSeconds)
 }
 
 function connectionFromRow(row: Row): ChannelConnection {

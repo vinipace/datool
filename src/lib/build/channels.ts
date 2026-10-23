@@ -259,7 +259,13 @@ export const CHANNEL_DESCRIPTORS: Record<ChannelId, ChannelDescriptor> = {
       publicAdmission: z
         .object({
           visitorMessagesPerMinute: z.number().int().min(1).max(120).optional(),
-          visitorMessagesPerDay: z.number().int().min(1).max(10000).optional(),
+          visitorMessagesPerDay: z
+            .number()
+            .int()
+            .min(1)
+            .max(10000)
+            .nullable()
+            .optional(),
           session: z
             .object({
               maxRequests: z.number().int().min(1).max(10_000).optional(),

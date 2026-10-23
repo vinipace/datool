@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import { createHmac, randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import { configureBuildTestEnvironment } from "./helpers/build-env"
@@ -20,6 +20,7 @@ import {
   enqueuePublicMessage,
   readPublicConversation,
   PublicAdmissionRateLimitError,
+  updateChannelConnection,
 } from "@/src/server/build/channels/service"
 import { shopifyStorefrontSession } from "@/src/server/build/integrations/shopify-storefront"
 import {
@@ -43,7 +44,12 @@ afterEach(async () => {
   saved.clear()
 })
 
-async function fixture() {
+async function fixture(
+  publicAdmission: Record<string, unknown> = {
+    visitorMessagesPerMinute: 2,
+    visitorMessagesPerDay: 3,
+  }
+) {
   env("BETTER_AUTH_SECRET", "s".repeat(64))
   env("BETTER_AUTH_URL", "https://chat.example.test")
   env("DATOOL_SHOPIFY_CLIENT_ID", "fixture-client")
@@ -75,10 +81,7 @@ async function fixture() {
     config: {
       shopifyShop: shop,
       originAllowlist: [`https://${shop}`, "https://store.example.test"],
-      publicAdmission: {
-        visitorMessagesPerMinute: 2,
-        visitorMessagesPerDay: 3,
-      },
+      publicAdmission,
     },
   })
   const connectionId = randomUUID()
@@ -324,7 +327,76 @@ test("visitor limits survive conversation resets, IP changes, and minute-bucket 
     stranger.visitorToken,
     { text: "Another shopper is unaffected" }
   )
+  await updateChannelConnection(f.context, {
+    connectionId: f.channel.id,
+    publicAdmission: { visitorMessagesPerDay: null },
+  })
+  await f.database.execute(
+    sql`UPDATE build_public_admission_bucket SET window_started_at=window_started_at-interval '3 minutes' WHERE scope='message' AND window_started_at<>date_trunc('day',now())`
+  )
+  await enqueuePublicMessage(
+    f.context,
+    f.channel.id,
+    two.conversationId,
+    two.visitorToken,
+    { text: "The merchant removed the optional daily quota" }
+  )
 }, 30_000)
+
+test("public chat throttles one visitor's burst without daily quotas or blocking other shoppers", async () => {
+  const f = await fixture({})
+  let now = Date.now()
+  const clock = spyOn(Date, "now").mockImplementation(() => now)
+  try {
+    const shopper = await createPublicSession(f.context, f.channel.id)
+    let sequence = 0
+    const send = (session: typeof shopper, clientKey?: string) =>
+      enqueuePublicMessage(
+        f.context,
+        f.channel.id,
+        session.conversationId,
+        session.visitorToken,
+        {
+          text: "Product question",
+          idempotencyKey: String(sequence++),
+          clientKey,
+        }
+      )
+    for (let index = 0; index < 20; index++) await send(shopper, "ip:shared")
+    // Flooding by this visitor must not consume the shared IP's allowance.
+    await Promise.all(
+      Array.from({ length: 120 }, () =>
+        assert.rejects(send(shopper, "ip:shared"), (error: unknown) => {
+          assert(error instanceof PublicAdmissionRateLimitError)
+          assert(error.retryAfterSeconds > 0 && error.retryAfterSeconds <= 60)
+          return true
+        })
+      )
+    )
+    const neighbor = await createPublicSession(f.context, f.channel.id)
+    await send(neighbor, "ip:shared")
+    // A busy channel without a trusted client IP still isolates signed visitors.
+    await Promise.all(
+      Array.from({ length: 30 }, async (_, customer) => {
+        const other = await createPublicSession(f.context, f.channel.id, {
+          clientKey: `ip:shopper-${customer}`,
+        })
+        for (let message = 0; message < 20; message++) await send(other)
+      })
+    )
+    // Returning after the cooldown works, including beyond 100 messages/day.
+    for (let minute = 0; minute < 5; minute++) {
+      now += 60_000
+      for (let message = 0; message < 20; message++) await send(shopper)
+    }
+    const count = await f.database.execute<{ count: string }>(
+      sql`SELECT count(*)::text FROM build_channel_job WHERE kind='process_inbound'`
+    )
+    expect(count.rows[0].count).toBe("721")
+  } finally {
+    clock.mockRestore()
+  }
+}, 60_000)
 
 test("Turnstile requires provider verification, correct hostname, action and deployment binding", async () => {
   env("DATOOL_TURNSTILE_SITE_KEY", "public-site-key")
