@@ -94,7 +94,9 @@ export function nativeShopify() {
     apiKey: process.env.DATOOL_SHOPIFY_CLIENT_ID!,
     apiSecretKey: process.env.DATOOL_SHOPIFY_CLIENT_SECRET!,
     apiVersion: ApiVersion.October26,
-    scopes: SHOPIFY_SCOPES,
+    // Existing catalog connections remain valid; new authorizations also enable
+    // the storefront identity proxy.
+    scopes: [...SHOPIFY_SCOPES, "write_app_proxy"],
     hostName: origin.host,
     hostScheme: "https",
     isEmbeddedApp: false,

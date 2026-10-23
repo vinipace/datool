@@ -1,3 +1,8 @@
+import {
+  createChannelConnection,
+  updateChannelStatus,
+  getChannelConnection,
+} from "@/src/server/build/channels/service"
 import { afterEach, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { createHmac } from "node:crypto"
@@ -16,6 +21,7 @@ import {
   beginShopifyAuthorization,
   completeShopifyAuthorization,
   executeShopifyTool,
+  configureShopifyChat,
 } from "@/src/server/build/integrations/shopify"
 import { SHOPIFY_TOOLKIT } from "@/src/server/build/integrations/shopify-provider"
 import {
@@ -75,6 +81,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   let refreshes = 0
   let reads = 0
   let fail = false
+  let widgetValue: string | null = null
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input))
     expect(url.hostname).toBe(shop)
@@ -97,7 +104,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
           : "private-refresh-token",
         expires_in: refreshes ? 3600 : 30,
         refresh_token_expires_in: 7776000,
-        scope: "read_products,read_legal_policies",
+        scope: "read_products,read_legal_policies,write_app_proxy",
       })
     }
     expect(url.pathname).toBe("/admin/api/2026-10/graphql.json")
@@ -110,6 +117,26 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
         { errors: "private-provider-error-body" },
         { status: 401 }
       )
+    if (body.query.includes("DatoolChatConfigure")) {
+      expect(body.variables.metafields[0]).toMatchObject({
+        ownerId: "gid://shopify/AppInstallation/123",
+        namespace: "datool",
+        key: "widget",
+        type: "json",
+      })
+      widgetValue = body.variables.metafields[0].value
+      return Response.json({ data: { metafieldsSet: { userErrors: [] } } })
+    }
+    if (body.query.includes("DatoolChatInstallation"))
+      return Response.json({
+        data: {
+          currentAppInstallation: {
+            id: "gid://shopify/AppInstallation/123",
+            metafield: widgetValue ? { value: widgetValue } : null,
+          },
+          shop: { primaryDomain: { url: "https://custom-store.example" } },
+        },
+      })
     if (body.query.includes("DatoolStore"))
       return Response.json({ data: { shop: { myshopifyDomain: shop } } })
     if (body.query.includes("DatoolPolicies"))
@@ -198,7 +225,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   const authorizeUrl = new URL(authorization.headers.get("location")!)
   expect(authorizeUrl.host).toBe(shop)
   expect(authorizeUrl.searchParams.get("scope")).toBe(
-    "read_products,read_legal_policies"
+    "read_products,read_legal_policies,write_app_proxy"
   )
   const cookie = authorization.headers
     .getSetCookie()
@@ -273,6 +300,31 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
     id: "shopify-agent",
     name: "Shopify agent",
   })
+  const channel = await createChannelConnection(ctx, {
+    agentId: agent.id,
+    channel: "web",
+    label: "Shop chat",
+    config: {},
+  })
+  await rejects(
+    configureShopifyChat(ctx, started.id, channel.id),
+    /Enable this chat/
+  )
+  await updateChannelStatus(ctx, channel.id, "connected")
+  expect(await configureShopifyChat(ctx, started.id, channel.id)).toMatchObject(
+    { shop, channelId: channel.id }
+  )
+  expect(JSON.parse(widgetValue!)).toEqual({
+    enabled: true,
+    channelId: channel.id,
+    baseUrl: "https://datool.example",
+  })
+  const configured = (await getChannelConnection(ctx, channel.id)).connection
+  expect(configured.config.shopifyShop).toBe(shop)
+  expect(configured.config.originAllowlist).toEqual([
+    "https://custom-store.example",
+    `https://${shop}`,
+  ])
   const conversations = new ConversationService(ctx)
   const conversation = await conversations.getOrCreate({
     agentId: agent.id,
@@ -326,6 +378,7 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
   const foreign = { ...ctx, database: foreignDb, projectId: foreignProject }
   await rejects(connectApp(foreign, SHOPIFY_TOOLKIT, shop))
   await rejects(listAppTools(foreign, started.id))
+  await rejects(configureShopifyChat(foreign, started.id, channel.id))
   await rejects(
     executeShopifyTool(foreign, started.id, "SHOPIFY_SEARCH_PRODUCTS", {
       query: "",

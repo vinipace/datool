@@ -578,6 +578,7 @@ function defaultEstimateCostUsd(input: {
   channel?: string
   input: string
   maxOutputTokens: number
+  inputTokens?: number
 }): number | null {
   const configuration = input.channel
     ? runtimeConfiguration(input.agent, input.channel)
@@ -610,7 +611,8 @@ function defaultEstimateCostUsd(input: {
   const instructionTokens = Math.ceil(
     (configuration.instructions?.length ?? 0) / 4
   )
-  const inputTokens = Math.ceil(input.input.length / 4) + instructionTokens
+  const inputTokens =
+    input.inputTokens ?? Math.ceil(input.input.length / 4) + instructionTokens
   return (
     (inputTokens * inputRate + input.maxOutputTokens * outputRate) / 1_000_000
   )
@@ -982,7 +984,9 @@ function validateFormSubmission(
       const value = input[field.name]
       return (
         field.required &&
-        (value === undefined || value === null || value === "" ||
+        (value === undefined ||
+          value === null ||
+          value === "" ||
           (field.type === "checkbox" && value !== true))
       )
     })
@@ -994,7 +998,11 @@ function validateFormSubmission(
 
   for (const field of action.fields) {
     const value = input[field.name]
-    if (field.type === "checkbox" && value !== undefined && typeof value !== "boolean")
+    if (
+      field.type === "checkbox" &&
+      value !== undefined &&
+      typeof value !== "boolean"
+    )
       throw new BuildRuntimeError(
         "INVALID_FORM_INPUT",
         "The submitted form data is invalid."
@@ -3074,7 +3082,8 @@ export async function runAgentTurn(
       configuration.instructions,
       knowledge?.text ? `Knowledge context:\n${knowledge.text}` : "",
       procedures.some(
-        (item) => item.definition.enabled && item.definition.instructions?.trim()
+        (item) =>
+          item.definition.enabled && item.definition.instructions?.trim()
       )
         ? "Skills provide reusable instructions for specific tasks. Follow any skill instructions supplied for this turn. To use another skill, load it with its procedure tool on each turn. Follow the returned instructions, use only available actions, and never claim an action succeeded without its result."
         : "",
@@ -3082,10 +3091,20 @@ export async function runAgentTurn(
         ? `Skill instructions for this turn:\n${procedureResult.instructions}`
         : "",
       procedureResult?.actionRefs?.length
-        ? `Actions mentioned in this skill:\n${JSON.stringify(procedureResult.actionRefs.flatMap(id => {
-            const action = actionMap.get(id)
-            return action ? [{ mention: `action:${action.slug}`, toolName: id, name: action.definition.name }] : []
-          }))}`
+        ? `Actions mentioned in this skill:\n${JSON.stringify(
+            procedureResult.actionRefs.flatMap((id) => {
+              const action = actionMap.get(id)
+              return action
+                ? [
+                    {
+                      mention: `action:${action.slug}`,
+                      toolName: id,
+                      name: action.definition.name,
+                    },
+                  ]
+                : []
+            })
+          )}`
         : "",
     ]
       .filter(Boolean)
@@ -3099,6 +3118,7 @@ export async function runAgentTurn(
         content: textFromContent(message.content),
       }))
     let pendingModelUsage: string | null = null
+    let reservedStepCost = 0
     // AI SDK event callbacks report and swallow errors. Keep admission and
     // side effects blocked if a model usage report could not be persisted.
     function assertModelUsageRecorded() {
@@ -3115,7 +3135,10 @@ export async function runAgentTurn(
     const skillActionRefs = new Set(procedureResult?.actionRefs ?? [])
     const activeTools = () =>
       Object.keys(aiTools).filter(
-        (name) => !actionMap.has(name) || modelActionMap.has(name) || skillActionRefs.has(name)
+        (name) =>
+          !actionMap.has(name) ||
+          modelActionMap.has(name) ||
+          skillActionRefs.has(name)
       )
     for (const action of actionMap.values()) {
       const actionDefinition = action.definition
@@ -3173,8 +3196,7 @@ export async function runAgentTurn(
         continue
       const procedureToolName = `procedure_${procedure.id}`
       aiTools[procedureToolName] = tool({
-        description:
-          `Use ${procedure.definition.name} when: ${procedure.definition.trigger.value}. ${procedure.definition.description}${procedure.definition.instructions?.trim() ? " Load this skill's instructions before responding or taking its actions." : ""}`,
+        description: `Use ${procedure.definition.name} when: ${procedure.definition.trigger.value}. ${procedure.definition.description}${procedure.definition.instructions?.trim() ? " Load this skill's instructions before responding or taking its actions." : ""}`,
         inputSchema: jsonSchema<Record<string, unknown>>({
           type: "object",
           properties: {},
@@ -3222,7 +3244,13 @@ export async function runAgentTurn(
                   actions: (procedureResult.actionRefs ?? []).flatMap((id) => {
                     const action = actionMap.get(id)
                     return action
-                      ? [{ mention: `action:${action.slug}`, toolName: id, name: action.definition.name }]
+                      ? [
+                          {
+                            mention: `action:${action.slug}`,
+                            toolName: id,
+                            name: action.definition.name,
+                          },
+                        ]
                       : []
                   }),
                 }
@@ -3281,8 +3309,46 @@ export async function runAgentTurn(
             Math.max(1, Math.min(options.maxToolSteps ?? 8, 20))
           ),
           maxRetries: 0,
-          prepareStep: async () => {
+          prepareStep: async (step: { messages: unknown[] }) => {
             assertModelUsageRecorded()
+            if (budgetReservation && !dependencies.reserveBudget) {
+              // Include history, retrieved knowledge, tool schemas and prior tool
+              // results. UTF-8 bytes plus protocol overhead conservatively bound
+              // text tokens; do not assume every turn is a single model call.
+              const prompt = JSON.stringify({
+                system,
+                messages: step.messages,
+                tools: aiTools,
+              })
+              const quote = defaultEstimateCostUsd({
+                agent,
+                channel: parsed.channel,
+                input: prompt,
+                inputTokens: Buffer.byteLength(prompt, "utf8") + 1024,
+                maxOutputTokens: configuration.guardrails.maxOutputTokens,
+              })
+              if (quote === null)
+                throw new BuildRuntimeError(
+                  "BUDGET_UNAVAILABLE",
+                  "This agent's usage budget cannot be evaluated safely yet."
+                )
+              reservedStepCost += quote
+              try {
+                await service.extendBudgetReservation({
+                  agentId: agent.id,
+                  reservationId: budgetReservation.reservationId,
+                  ownerFence: turn.ownerFence,
+                  estimatedUsd: reservedStepCost,
+                  dailyLimitUsd: configuration.guardrails.dailyBudgetUsd!,
+                })
+              } catch (error) {
+                if (error instanceof ConversationBudgetExceededError)
+                  throw new GuardrailBlockedError(
+                    "This agent has reached its daily usage budget."
+                  )
+                throw error
+              }
+            }
             pendingModelUsage = await beginModelUsage(context, {
               agentId: agent.id,
               conversationId: conversation.id,

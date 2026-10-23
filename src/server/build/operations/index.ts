@@ -475,9 +475,9 @@ register(
 )
 register(
   "build_update_channel",
-  "Edit a channel name, allowed origins or Chat Bubble display and launcher settings without changing credentials or delivery state.",
+  "Edit a channel name, allowed origins, visitor security or Chat Bubble display and launcher settings without changing credentials or delivery state.",
   ["build:write"],
-  z.object({ connectionId: id, label: z.string().trim().min(1).max(200).optional(), originAllowlist: z.array(z.string().url()).max(100).optional(), bubble: chatBubbleOverridesSchema.optional() }),
+  z.object({ connectionId: id, label: z.string().trim().min(1).max(200).optional(), originAllowlist: z.array(z.string().url()).max(100).optional(), shopifyShop: z.string().max(253).optional(), publicAdmission: z.record(z.string(), z.json()).optional(), bubble: chatBubbleOverridesSchema.optional() }),
   (context, input) => updateChannelConnection(context, input as never),
   { idempotency: "required" }
 )

@@ -1,3 +1,4 @@
+import { configureShopifyChat } from "./shopify"
 import { getAgentUsage } from "../usage"
 import { assertBuildProject } from "../context"
 import { getTracerWritePool } from "@/src/server/tracer/db"
@@ -84,4 +85,20 @@ registerBuildOperation({
       getTracerWritePool(ctx.database)
     )
   },
+})
+
+registerBuildOperation({
+  name: "build_configure_shopify_chat",
+  description:
+    "Connect the installed Shopify app's storefront chat to an enabled project web channel. The merchant must enable the Datool chat app embed in the theme editor.",
+  scopes: ["build:write"],
+  schema: z.object({ connectionId: id, channelId: id }),
+  idempotency: "required",
+  openWorld: true,
+  execute: (context, input) =>
+    configureShopifyChat(
+      context,
+      String(input.connectionId),
+      String(input.channelId)
+    ),
 })

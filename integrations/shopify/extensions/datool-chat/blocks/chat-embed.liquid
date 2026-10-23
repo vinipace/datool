@@ -1,0 +1,19 @@
+{% assign chat = app.metafields.datool.widget.value %}
+{% if chat.enabled and chat.channelId != blank and chat.baseUrl != blank %}
+  {% if request.design_mode %}
+    <aside aria-label="{{ 'datool_chat.editor_label' | t | escape }}" {{ block.shopify_attributes }}>
+      <p>{{ 'datool_chat.editor_message' | t }}</p>
+      <a href="{{ shop.url }}?preview_theme_id={{ theme.id }}" target="_blank" rel="noopener">{{ 'datool_chat.preview_link' | t }}</a>
+    </aside>
+  {% else %}
+    <div hidden data-datool-embed data-base-url="{{ chat.baseUrl | escape }}" data-channel-id="{{ chat.channelId | escape }}" data-shopify-proxy="{{ routes.root_url }}apps/datool" {{ block.shopify_attributes }}></div>
+  {% endif %}
+{% endif %}
+{% schema %}
+{
+  "name": "Datool chat",
+  "target": "body",
+  "javascript": "datool-chat.js",
+  "settings": []
+}
+{% endschema %}

@@ -1,3 +1,5 @@
+import { verifyNewVisitorChallenge } from "./challenge"
+import { verifyChannelVisitor } from "./visitor-sessions"
 import { createHmac, randomUUID } from "node:crypto"
 import { isIP } from "node:net"
 
@@ -24,11 +26,7 @@ import {
   type OutboundEnvelope,
   type NormalizedAttachment,
 } from "@/src/lib/build/channels"
-import {
-  channelSigningSecret,
-  signVisitorContext,
-  verifyVisitorContext,
-} from "./visitor"
+import { channelSigningSecret, signVisitorContext } from "./visitor"
 import { db } from "@/lib/db"
 import {
   createTracerDatabase,
@@ -274,7 +272,8 @@ export async function enforcePublicAdmission(
   context: BuildContext,
   connection: ChannelConnection,
   scope: PublicAdmissionScope,
-  clientKey?: string
+  clientKey?: string,
+  visitorId?: string
 ) {
   const policy = publicAdmissionPolicy(connection, scope)
   const now = Date.now()
@@ -289,7 +288,7 @@ export async function enforcePublicAdmission(
     DELETE FROM build_public_admission_bucket
     WHERE project_id = ${context.projectId}
       AND connection_id = ${connection.id}::uuid
-      AND window_started_at < ${new Date(now - Math.max(windowMs * 2, 120_000))}
+      AND window_started_at < ${new Date(now - 2 * 86_400_000)}
   `)
   const result = await databaseHandle.execute<{
     request_count: number | string
@@ -303,7 +302,53 @@ export async function enforcePublicAdmission(
     RETURNING request_count, window_started_at
   `)
   const requestCount = Number(result.rows[0]?.request_count ?? 0)
-  if (requestCount <= policy.maxRequests) return
+  if (requestCount <= policy.maxRequests) {
+    const limits = jsonObject(jsonObject(connection.config).publicAdmission)
+    const bounded = (value: unknown, fallback: number, max: number) =>
+      Number.isInteger(value)
+        ? Math.max(1, Math.min(max, Number(value)))
+        : fallback
+    const buckets = [
+      { key: "channel", max: scope === "session" ? 120 : 600, seconds: 60 },
+      ...(scope === "message" && visitorId
+        ? [
+            {
+              key: `visitor-minute:${visitorId}`,
+              max: bounded(limits.visitorMessagesPerMinute, 10, 120),
+              seconds: 60,
+            },
+            {
+              key: `visitor-day:${visitorId}`,
+              max: bounded(limits.visitorMessagesPerDay, 100, 10000),
+              seconds: 86400,
+            },
+          ]
+        : []),
+    ]
+    for (const bucket of buckets) {
+      const start = new Date(
+        Math.floor(now / (bucket.seconds * 1000)) * bucket.seconds * 1000
+      )
+      const admitted = await databaseHandle.execute<{
+        request_count: number
+      }>(sql`
+        INSERT INTO build_public_admission_bucket
+          (project_id,connection_id,scope,client_key,window_started_at,request_count)
+        VALUES (${context.projectId},${connection.id}::uuid,${scope},${publicAdmissionKey(bucket.key)},${start},1)
+        ON CONFLICT (project_id,connection_id,scope,client_key,window_started_at)
+        DO UPDATE SET request_count=LEAST(build_public_admission_bucket.request_count+1,2147483647)
+        RETURNING request_count
+      `)
+      if (Number(admitted.rows[0]?.request_count) > bucket.max)
+        throw new PublicAdmissionRateLimitError(
+          Math.max(
+            1,
+            Math.ceil((start.getTime() + bucket.seconds * 1000 - now) / 1000)
+          )
+        )
+    }
+    return
+  }
   const bucket =
     result.rows[0]?.window_started_at instanceof Date
       ? result.rows[0].window_started_at.getTime()
@@ -475,6 +520,8 @@ export async function updateChannelConnection(
     connectionId: string
     label?: string
     originAllowlist?: string[]
+    shopifyShop?: string
+    publicAdmission?: Record<string, unknown>
     bubble?: ChatBubbleOverrides
   }
 ) {
@@ -483,6 +530,29 @@ export async function updateChannelConnection(
     throw new Error("Allowed origins apply only to website channels.")
   if (input.bubble !== undefined && connection.channel !== "web")
     throw new Error("Chat bubble settings apply only to website channels.")
+  const security = CHANNEL_DESCRIPTORS.web.connectionSchema.parse({
+    ...(input.shopifyShop === undefined
+      ? {}
+      : { shopifyShop: input.shopifyShop }),
+    ...(input.publicAdmission === undefined
+      ? {}
+      : { publicAdmission: input.publicAdmission }),
+  }) as Record<string, unknown>
+  if (
+    (input.shopifyShop !== undefined || input.publicAdmission !== undefined) &&
+    connection.channel !== "web"
+  )
+    throw new Error("Visitor security settings apply only to website channels.")
+  if (input.shopifyShop !== undefined) {
+    const active = await database(context).execute(sql`
+      SELECT 1 FROM build_shopify_connections s JOIN build_app_connections a ON a.id=s.connection_id AND a.project_id=s.project_id
+      WHERE s.project_id=${context.projectId} AND s.shop=${security.shopifyShop} AND a.status='active'
+    `)
+    if (!active.rows.length)
+      throw new Error(
+        "Connect this Shopify store in the current project first."
+      )
+  }
   const bubble =
     input.bubble === undefined
       ? undefined
@@ -510,6 +580,17 @@ export async function updateChannelConnection(
       "Connection name must contain between 1 and 200 characters."
     )
   const patch = {
+    ...(input.shopifyShop === undefined
+      ? {}
+      : { shopifyShop: security.shopifyShop }),
+    ...(input.publicAdmission === undefined
+      ? {}
+      : {
+          publicAdmission: {
+            ...jsonObject(connection.config.publicAdmission),
+            ...jsonObject(security.publicAdmission),
+          },
+        }),
     ...(origins === undefined
       ? {}
       : { originAllowlist: [...new Set(origins)] }),
@@ -652,15 +733,23 @@ export async function findOrCreateContact(
 ) {
   // WhatsApp's sender ID is stable across business numbers. Derive it from
   // the provider identity, never a phone supplied by a public chat visitor.
-  const whatsappSender = envelope.channel === "whatsapp"
-    ? /^[0-9]+:([1-9][0-9]{6,19})$/.exec(envelope.externalContactId)?.[1]
-    : undefined
+  const whatsappSender =
+    envelope.channel === "whatsapp"
+      ? /^[0-9]+:([1-9][0-9]{6,19})$/.exec(envelope.externalContactId)?.[1]
+      : undefined
   const externalId = whatsappSender
     ? `whatsapp:${whatsappSender}`
     : `${envelope.channel}:${envelope.connectionId}:${envelope.externalContactId}`
   const identityKey = `${envelope.connectionId}:${envelope.externalContactId}`
-  const phone = whatsappSender ? `+${whatsappSender}` : envelope.contact.phone ?? null
-  const metadata = JSON.stringify({ ...envelope.contact.metadata, username: envelope.contact.username, locale: envelope.contact.locale, channel: envelope.channel })
+  const phone = whatsappSender
+    ? `+${whatsappSender}`
+    : (envelope.contact.phone ?? null)
+  const metadata = JSON.stringify({
+    ...envelope.contact.metadata,
+    username: envelope.contact.username,
+    locale: envelope.contact.locale,
+    channel: envelope.channel,
+  })
 
   return database(context).transaction(async (tx) => {
     const knownIdentity = await tx.execute<{ contact_id: string }>(sql`
@@ -2520,6 +2609,7 @@ export async function createPublicSession(
   connectionId: string,
   options: {
     visitorToken?: string
+    challengeToken?: string
     conversationId?: string
     origin?: string
     sameOrigin?: string
@@ -2538,7 +2628,10 @@ export async function createPublicSession(
   )
   const appearance = await readBubbleAppearance(context, loaded.connection)
   const visitor = options.visitorToken
-    ? verifyVisitorContext(options.visitorToken, { origin, connectionId })
+    ? await verifyChannelVisitor(context, options.visitorToken, {
+        origin,
+        connectionId,
+      })
     : {
         visitorId: randomUUID(),
         issuedAt: 0,
@@ -2560,7 +2653,13 @@ export async function createPublicSession(
       throw new Error("Conversation is not available for this visitor.")
     return {
       conversationId: String(resumed.rows[0].id),
-      visitorToken: options.visitorToken,
+      visitorToken: visitor.browserSessionId
+        ? options.visitorToken
+        : signVisitorContext({
+            visitorId: visitor.visitorId,
+            origin,
+            connectionId,
+          }),
       visitorId: visitor.visitorId,
       context: jsonObject(jsonObject(resumed.rows[0].metadata_json).context),
       appearance,
@@ -2572,6 +2671,8 @@ export async function createPublicSession(
     "session",
     options.clientKey
   )
+  if (!options.visitorToken)
+    await verifyNewVisitorChallenge(connectionId, options.challengeToken)
   const contactId = randomUUID()
   const conversationId = randomUUID()
   const contactExternalId = `web:${connectionId}:${visitor.visitorId}`
@@ -2601,9 +2702,9 @@ export async function createPublicSession(
     FROM build_channel_connection
     WHERE project_id = ${context.projectId} AND id = ${connectionId}::uuid
   `)
-  const token =
-    options.visitorToken ??
-    signVisitorContext({ visitorId: visitor.visitorId, origin, connectionId })
+  const token = visitor.browserSessionId
+    ? options.visitorToken!
+    : signVisitorContext({ visitorId: visitor.visitorId, origin, connectionId })
   return {
     conversationId,
     visitorToken: token,
@@ -2630,7 +2731,7 @@ export async function listPublicConversations(
     origin ?? null,
     sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, {
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
     origin: effectiveOrigin,
     connectionId,
   })
@@ -2718,12 +2819,16 @@ export async function recordPublicFeedback(
     input.origin ?? null,
     input.sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, { origin, connectionId })
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
+    origin,
+    connectionId,
+  })
   await enforcePublicAdmission(
     context,
     loaded.connection,
     "feedback",
-    input.clientKey
+    input.clientKey,
+    visitor.visitorId
   )
   const ownership = await database(context).execute<Row>(sql`
     SELECT 1
@@ -2788,12 +2893,16 @@ export async function enqueuePublicMessage(
     input.origin ?? null,
     input.sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, { origin, connectionId })
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
+    origin,
+    connectionId,
+  })
   await enforcePublicAdmission(
     context,
     loaded.connection,
     "message",
-    input.clientKey
+    input.clientKey,
+    visitor.visitorId
   )
   const ownership = await database(context).execute<Row>(sql`
     SELECT c.id, c.status, c.owner_type, c.agent_id, c.external_conversation_id
@@ -2852,7 +2961,7 @@ export async function readPublicConversation(
     origin ?? null,
     sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, {
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
     origin: effectiveOrigin,
     connectionId,
   })
@@ -2911,7 +3020,7 @@ export async function resetPublicConversation(
     origin ?? null,
     sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, {
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
     origin: effectiveOrigin,
     connectionId,
   })

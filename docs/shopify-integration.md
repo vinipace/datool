@@ -61,12 +61,12 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 
 ## Installation setup
 
-1. Apply migrations through `0062_shopify_billing.sql` using the normal release
+1. Apply migrations through `0063_shopify_visitor_sessions.sql` using the normal release
    flow. Existing organizations retain Stripe ownership.
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
    `https://YOUR_DATOOL_HOST/api/shopify/callback`, and
-   `read_products,read_legal_policies`. The official Shopify SDK performs the
+   `read_products,read_legal_policies,write_app_proxy`. The official Shopify SDK performs the
    authorization-code flow. Do not switch an existing embedded app's flow just
    to enable this connector.
 3. Set the following server-only variables on web and buildworker:
@@ -98,10 +98,11 @@ The card shows setup is required when OAuth credentials or the app handle are
 missing. Partner subscription verification additionally needs the Partner API
 settings above. OAuth credentials and the Partner API token are different.
 
-Public launch also requires the listing/review process, privacy and uninstall
-webhooks, and a production storefront extension. This integration alone does
-not publish the app or install its chat widget. The local React Router pilot
-remains a separate app until its extension is moved to the production app.
+Public launch still requires the listing/review process and privacy and uninstall
+webhooks. The production theme extension is maintained in
+`integrations/shopify/extensions/datool-chat`; it must be released on the same
+Shopify app as the OAuth connection. A local pilot extension belongs to a
+different app and does not inherit its credentials or configuration.
 
 ## Authorization and failure behavior
 
@@ -131,3 +132,94 @@ and [policy scope](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Sh
 
 Billing references: [Shopify App Pricing](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing)
 and [subscription verification](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing/redirect-plan-selection-page).
+
+
+## Storefront chat and customer identity
+
+Release the server and migration before changing the Shopify extension. Copy
+`integrations/shopify/extensions/datool-chat` into the production app's extension
+directory. Configure one proxy in that app's TOML:
+
+```toml
+[app_proxy]
+url = "https://YOUR_DATOOL_HOST/api/shopify/storefront"
+prefix = "apps"
+subpath = "datool"
+```
+
+Validate the configuration with `shopify app config validate --json`, then release
+it through the normal Shopify workflow. Existing stores must reconnect to grant
+`write_app_proxy`. In Datool **Integrations → Shopify**, choose the store's enabled
+chat bubble and select **Connect chat bubble**, then open the theme editor, enable
+**Datool chat** in App embeds, and save. The setup writes a public configuration
+app-data metafield on the current AppInstallation and allows the verified store's
+primary domain and myshopify.com origin. No secrets go into Liquid. App-data
+metafields cannot have a TOML definition. The equivalent authenticated operation is
+`build_configure_shopify_chat({ connectionId, channelId })`.
+
+The default proxy path is `/apps/datool`. If the merchant customizes that path,
+update the extension to match; a failed proxy must not fall back to unverified
+customer identity. Test both a custom store domain and myshopify.com.
+
+Guests retain a random browser identity for 30 days, refreshed when they return.
+Storage is first-party on the storefront; clearing browser data or disabling
+storage loses guest continuity. Shopify browsers store only an exchange
+credential. Every exchange goes through Shopify's signed proxy and verifies its
+HMAC, recent timestamp, installed store, channel binding and storefront origin.
+Only the signed `logged_in_customer_id` selects a customer. Customer history is
+shared across that customer's authenticated devices; guest history is kept
+separate and is not automatically merged.
+
+Customer access tokens last five minutes and carry a browser identity version.
+A fresh proxy exchange on page load, focus, every minute while visible, and before
+sending detects logout/account changes and revokes the browser's older tokens.
+Hidden chat content is cleared until revalidation. This is not an instantaneous
+Shopify logout webhook: a token can remain valid until the next exchange or its
+expiry. Channel or Datool connection disablement also denies reads. Shopify
+uninstalls must be processed by the uninstall webhook/reconciliation before local
+connection state reflects revocation. No customer profile, email or order access
+is added. The contact records the verified store/customer ID; include that data
+in the installation's privacy export/deletion and retention workflow before
+public launch.
+
+## Abuse controls
+
+All public web channels default to 10 accepted message attempts per visitor per
+minute and 100 per UTC day. These quotas survive new conversations and IP changes.
+Configure `publicAdmission.visitorMessagesPerMinute` (1–120) and
+`publicAdmission.visitorMessagesPerDay` (1–10000) with `build_update_channel`.
+The existing client-IP/anonymous admission limits remain, plus channel-wide
+ceilings of 120 session requests/minute and 600 message/feedback requests/minute.
+Denied requests return HTTP 429 and Retry-After before a model job is queued.
+Only configure a trusted client-IP header when the edge proxy overwrites it and
+clients cannot reach the origin directly. Without that trust, anonymous requests
+share a conservative bucket. These controls do not replace infrastructure DDoS
+protection.
+
+Set both `DATOOL_TURNSTILE_SITE_KEY` and `DATOOL_TURNSTILE_SECRET_KEY` on the web
+service to enable Cloudflare Managed Turnstile for new visitors. The widget must
+allow the canonical `BETTER_AUTH_URL` hostname because it runs inside Datool's
+iframe. The public key is returned to the browser; the secret stays server-only.
+The server verifies success, hostname, action and channel binding through
+Siteverify. Existing valid visitor credentials resume without another challenge.
+Both variables absent disables the challenge; partial configuration fails closed.
+Provider failure or cancellation shows a retryable security check rather than
+issuing a new visitor. Do not use Turnstile testing keys in production.
+
+Use agent guardrails as a second layer: daily turns, concurrent turns, input
+length, maximum output, spam checks and daily model budget. Daily model budget
+admission grows its reservation **before each model step**, including history,
+knowledge and tool-result context. Concurrent reservations share a database lock;
+unknown cost retains the reservation. Catalog-based text estimates are
+conservative, not a provider invoice or a cap on separate retrieval, external-tool
+or infrastructure charges. Keep provider-side billing limits as an independent
+ceiling.
+
+Validate on a development store before release: a fresh guest challenge, returning
+guest after browser restart, logged-in customer across devices, logout/account
+switch, forged or expired credentials, conversation resets at the message quota,
+and budget exhaustion before another tool-driven model call. Enable the theme
+embed only after the deployed proxy and channel binding work.
+
+Identity reference: [authenticated app proxies](https://shopify.dev/docs/apps/build/online-store/app-proxies/authenticate-app-proxies).
+Challenge reference: [Turnstile server validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/).

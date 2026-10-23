@@ -391,6 +391,33 @@ describe("Build conversation ledger", () => {
     expect(
       results.filter((result) => result.status === "rejected")
     ).toHaveLength(1)
+    const acceptedIndex = results.findIndex(
+      (result) => result.status === "fulfilled"
+    )
+    const accepted = results[acceptedIndex]
+    if (accepted?.status !== "fulfilled")
+      throw new Error("Expected one budget reservation")
+    const fence =
+      acceptedIndex === 0
+        ? firstTurn.turn.ownerFence
+        : secondTurn.turn.ownerFence
+    const growing = {
+      agentId: "agent-a",
+      reservationId: accepted.value.reservationId,
+      ownerFence: fence,
+      dailyLimitUsd: 1,
+    }
+    expect(
+      await service.extendBudgetReservation({ ...growing, estimatedUsd: 0.9 })
+    ).toBe(0.9)
+    // Replaying a smaller quote cannot release already reserved tool-call spend.
+    expect(
+      await service.extendBudgetReservation({ ...growing, estimatedUsd: 0.75 })
+    ).toBe(0.9)
+    await rejects(
+      service.extendBudgetReservation({ ...growing, estimatedUsd: 1.1 }),
+      ConversationBudgetExceededError
+    )
     const rejected = results.find((result) => result.status === "rejected")
     expect(rejected?.status === "rejected" && rejected.reason).toBeInstanceOf(
       ConversationBudgetExceededError

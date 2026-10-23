@@ -148,6 +148,73 @@ const handoffAction: ActionRecord = {
 }
 
 describe("Build agent tool runtime", () => {
+  test("reserves tool-result context before a second paid model call", async () => {
+    const { context, service } = await makeContext()
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [
+          {
+            type: "tool-call" as const,
+            toolCallId: "large-result",
+            toolName: clientAction.id,
+            input: "{}",
+          },
+        ],
+        finishReason: { unified: "tool-calls" as const, raw: "stop" },
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 10, text: 10, reasoning: 0 },
+        },
+        warnings: [],
+      }),
+    })
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: "agent-a",
+        channel: "telegram",
+        requestKey: "budget-tool-context",
+        message: "Look up the store catalog",
+      },
+      {
+        conversationService: service,
+        agent: agent(context, {
+          model: "openai/gpt-4.1-mini",
+          guardrails: {
+            ...agent(context).configuration.guardrails,
+            dailyBudgetUsd: 0.005,
+            maxOutputTokens: 64,
+          },
+        }),
+        dependencies: {
+          resolveActions: async () => [
+            { ...clientAction, projectId: context.projectId },
+          ],
+          resolveProcedures: async () => [],
+          retrieveKnowledge: async () => null,
+          executeAction: async () => ({
+            output: { catalog: "Product description. ".repeat(5000) },
+          }),
+          generateText: (options) => generateText({ ...options, model }),
+        },
+      }
+    )
+    expect(result.status).toBe("blocked")
+    expect(result.text).toContain("daily usage budget")
+    expect(model.doGenerateCalls).toHaveLength(1)
+    const reservations = await context.database.execute<{
+      status: string
+      estimated_usd: string
+    }>(sql`
+      SELECT status, estimated_usd FROM build_conversation_budget_reservations WHERE project_id=${context.projectId}
+    `)
+    expect(reservations.rows[0].status).toBe("uncertain")
+    expect(Number(reservations.rows[0].estimated_usd)).toBeGreaterThan(0)
+    expect(Number(reservations.rows[0].estimated_usd)).toBeLessThanOrEqual(
+      0.005
+    )
+  }, 30_000)
+
   test("persists a client continuation and the immutable catalog snapshot", async () => {
     const { context, service } = await makeContext()
     clientAction.projectId = context.projectId
@@ -651,8 +718,7 @@ describe("Build agent tool runtime", () => {
           type: "intent",
           value: "The customer asks whether an order is refundable.",
         },
-        instructions:
-          `Ask for the order reference. Use [@Order lookup](action:${linked.slug}). Explain eligibility from the approved policy; do not invent a refund.`,
+        instructions: `Ask for the order reference. Use [@Order lookup](action:${linked.slug}). Explain eligibility from the approved policy; do not invent a refund.`,
       },
     })
     await updateAgent(context, "agent-a", {

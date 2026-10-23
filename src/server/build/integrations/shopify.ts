@@ -1,3 +1,7 @@
+import {
+  getChannelConnection,
+  updateChannelConnection,
+} from "../channels/service"
 import { createShopifyInstallIntent } from "./shopify-install"
 import { createHash, randomBytes, randomUUID } from "node:crypto"
 import type { Pool } from "pg"
@@ -345,5 +349,91 @@ export async function executeShopifyTool(
       "VALIDATION_ERROR",
       "Shopify could not read the store data. Check app permissions or reconnect in Integrations."
     )
+  }
+}
+
+/** Bind the app-owned theme embed to a project-owned web channel. */
+export async function configureShopifyChat(
+  context: BuildContext,
+  connectionId: string,
+  channelId: string
+) {
+  const { connection } = await getChannelConnection(context, channelId)
+  if (connection.channel !== "web" || connection.status !== "connected")
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Enable this chat bubble before connecting it to Shopify."
+    )
+  const session = await authorizedSession(context, connectionId)
+  if (!session.isScopeIncluded("write_app_proxy"))
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Reconnect Shopify to authorize secure storefront chat."
+    )
+  const client = new (nativeShopify().clients.Graphql)({ session })
+  const query = `query DatoolChatInstallation {
+    currentAppInstallation { id metafield(namespace: "datool", key: "widget") { value } }
+    shop { primaryDomain { url } }
+  }`
+  const installation = await client.request<{
+    currentAppInstallation: { id: string; metafield: { value: string } | null }
+    shop: { primaryDomain: { url: string } }
+  }>(query, { retries: 0 })
+  const ownerId = installation.data?.currentAppInstallation.id
+  const primaryDomain = installation.data?.shop.primaryDomain.url
+  if (!ownerId || !primaryDomain) throw unavailable()
+  const value = JSON.stringify({
+    enabled: true,
+    channelId,
+    baseUrl: shopifyOrigin(),
+  })
+  const mutation = await client.request<{
+    metafieldsSet: { userErrors: { message: string }[] }
+  }>(
+    `
+    mutation DatoolChatConfigure($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) { userErrors { message } }
+    }
+  `,
+    {
+      variables: {
+        metafields: [
+          { ownerId, namespace: "datool", key: "widget", type: "json", value },
+        ],
+      },
+      retries: 0,
+    }
+  )
+  if (
+    !mutation.data?.metafieldsSet ||
+    mutation.data.metafieldsSet.userErrors.length
+  )
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Shopify could not save the chat configuration. Please retry."
+    )
+  const verified = await client.request<{
+    currentAppInstallation: { metafield: { value: string } | null }
+  }>(query, { retries: 0 })
+  if (verified.data?.currentAppInstallation.metafield?.value !== value)
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Shopify chat configuration could not be verified. Please retry."
+    )
+  await updateChannelConnection(context, {
+    connectionId: channelId,
+    shopifyShop: session.shop,
+    originAllowlist: [
+      ...new Set([
+        ...((connection.config.originAllowlist as string[]) ?? []),
+        new URL(primaryDomain).origin,
+        `https://${session.shop}`,
+      ]),
+    ],
+  })
+  return {
+    shop: session.shop,
+    channelId,
+    themeEditorUrl: `https://${session.shop}/admin/themes/current/editor?context=apps`,
   }
 }
