@@ -150,9 +150,11 @@ export async function syncShopifyBilling(client: PoolClient, row: BillingRow) {
   let credits: SubscriptionCreditPeriod | null = null
   const subscriptionId = `shopify:${config.appId}:${row.shopify_shop_id}`
   if (subscription) {
+    // The active contract grants access. price.active only says whether that
+    // catalog price is current; grandfathered and no-charge test prices may be
+    // inactive while their subscription remains active.
     const matches = subscription.items.filter(
       (item) =>
-        item.price.active &&
         item.price.__typename === "FlatRatePrice" &&
         Object.values(config.handles).includes(item.handle ?? "")
     )

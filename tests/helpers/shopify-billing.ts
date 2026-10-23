@@ -37,7 +37,8 @@ let partnerCalls = 0,
   fail = "",
   plan: string | null = "core",
   trial = false
-let amount = "29.00"
+let amount = "29.00",
+  priceActive = true
 const periodStart = new Date(Date.now() - 1000).toISOString()
 const periodEnd = new Date(Date.now() + 30 * 86400_000).toISOString()
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -79,7 +80,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
                     handle: plan,
                     price: {
                       __typename: "FlatRatePrice",
-                      active: true,
+                      active: priceActive,
                       amount,
                       currency: "USD",
                     },
@@ -251,7 +252,13 @@ try {
   )
   trial = false
   amount = "0.00"
-  await getBilling(org, true)
+  // Shopify's live no-charge contract retains the plan handle while its price
+  // is marked inactive. Price activity is catalog metadata, not entitlement.
+  priceActive = false
+  const developerBilling = await getBilling(org, true)
+  assert.equal(developerBilling?.status, "active")
+  assert.equal(developerBilling?.plan, "core")
+  assert(hasSubscriptionAccess(developerBilling))
   assert.equal(
     (
       await db.query(
@@ -263,6 +270,7 @@ try {
     "No-charge developer plans do not issue funded execution credits"
   )
   amount = "29.00"
+  // Existing subscribers also retain access when a catalog price is replaced.
   let billing = await getBilling(org, true)
   assert.equal(
     billing?.plan,
@@ -271,6 +279,7 @@ try {
   )
   assert.equal(billing?.record_limit, 100_000)
   assert(hasSubscriptionAccess(billing))
+  priceActive = true
   const creditOperation = await executionCredits.reserve(
     project,
     "model",
