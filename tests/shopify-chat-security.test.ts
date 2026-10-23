@@ -26,6 +26,7 @@ import {
 import { saveAction, saveProcedure } from "@/src/server/build/definitions"
 import { runAgentTurn } from "@/src/server/build/runtime"
 import { shopifyCartTools } from "@/src/server/build/integrations/shopify-cart"
+import { shopifyChannelCart } from "@/src/server/build/integrations/shopify-channel-cart"
 import { createAgent, updateAgent } from "@/src/server/build/agents"
 import { ConversationService } from "@/src/server/build/conversations"
 import { shopifyShopper } from "@/src/server/build/integrations/shopify-identity"
@@ -574,6 +575,156 @@ for (const channelType of ["whatsapp", "telegram"] as const) {
   }, 90_000)
 }
 
+async function channelCartFixture() {
+  const f = await fixture({})
+  const channel = await createChannelConnection(f.context, {
+    agentId: f.agent.id,
+    channel: "whatsapp",
+    label: "Shop cart",
+  })
+  await f.database.execute(
+    sql`UPDATE build_channel_connection SET status='connected' WHERE id=${channel.id}::uuid`
+  )
+  const queued = await enqueueInboundEnvelope(f.context, {
+    connectionId: channel.id,
+    channel: "whatsapp",
+    providerEventId: "cart-message",
+    providerMessageId: "cart-message",
+    externalConversationId: "123:5511999999999",
+    externalContactId: "5511999999999",
+    receivedAt: new Date().toISOString(),
+    text: "Show cart",
+    attachments: [],
+    contact: { externalId: "5511999999999" },
+    metadata: {},
+  })
+  assert("messageId" in queued)
+  const jobs = await f.database.execute<{ id: string }>(
+    sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
+  )
+  const { turn } = await new ConversationService(f.context).startTurn(
+    queued.conversationId,
+    {
+      requestKey: `channel:${jobs.rows[0].id}`,
+      input: "Show cart",
+      metadata: {},
+      snapshot: {},
+    }
+  )
+  const state = {
+    currency: "USD",
+    price: "25.25",
+    unavailable: new Map<
+      string,
+      "sold_out" | "deleted" | "unpublished" | "subscription"
+    >(),
+  }
+  const run = (command: Parameters<typeof shopifyChannelCart>[4]) =>
+    shopifyChannelCart(
+      f.context,
+      f.connectionId,
+      { conversationId: queued.conversationId, turnId: turn.id },
+      "fixture.myshopify.com",
+      command,
+      async (_query, options) =>
+        Response.json({
+          data: {
+            shop: { currencyCode: state.currency },
+            nodes: (options?.variables?.ids as string[]).map((id) => {
+              const status = state.unavailable.get(id.split("/").at(-1)!)
+              return status === "deleted"
+                ? null
+                : {
+                    id,
+                    title: "Default",
+                    price: state.price,
+                    availableForSale: status !== "sold_out",
+                    product: {
+                      title: "Board wax",
+                      status: "ACTIVE",
+                      publishedAt:
+                        status === "unpublished"
+                          ? null
+                          : "2020-01-01T00:00:00Z",
+                      requiresSellingPlan: status === "subscription",
+                      handle: "wax",
+                    },
+                  }
+            }),
+          },
+        })
+    )
+  return { state, run }
+}
+
+for (const operation of ["read", "remove"] as const) {
+  test(`conversation cart ${operation} recovers multiple unavailable lines without restoring them later`, async () => {
+    const f = await channelCartFixture()
+    await f.run({
+      operation: "add",
+      items: ["123", "234", "345", "456", "567"].map((variantId) => ({
+        variantId,
+        quantity: 1,
+      })),
+    })
+    f.state.unavailable = new Map([
+      ["123", "sold_out"],
+      ["234", "deleted"],
+      ["345", "unpublished"],
+      ["456", "subscription"],
+    ])
+    // Fresh requests for unavailable products must still be rejected.
+    await assert.rejects(
+      f.run({ operation: "add", items: [{ variantId: "123", quantity: 1 }] }),
+      /unavailable/
+    )
+    await assert.rejects(
+      f.run({ operation: "set", lineKey: "123", quantity: 2 }),
+      /unavailable/
+    )
+    const result = await f.run(
+      operation === "read"
+        ? { operation: "read" }
+        : { operation: "set", lineKey: "123", quantity: 0 }
+    )
+    expect(result.shopifyCart.items.map((item) => item.variantId)).toEqual([
+      "567",
+    ])
+    expect(result.shopifyCart.itemCount).toBe(1)
+    expect(result.shopifyCart.totalPrice).toBe(2525)
+    expect(result.shopifyCart.checkoutUrl).toBe(
+      "https://fixture.myshopify.com/cart/567:1"
+    )
+    assert.match(result.message, /unavailable.*removed/i)
+    f.state.unavailable.clear()
+    expect(
+      (await f.run({ operation: "read" })).shopifyCart.items.map(
+        (item) => item.variantId
+      )
+    ).toEqual(["567"])
+  })
+}
+
+test("conversation cart amounts match Shopify cart hundredths for USD, JPY and KRW", async () => {
+  const f = await channelCartFixture()
+  for (const [currency, price, expected] of [
+    ["USD", "25.25", 5050],
+    ["JPY", "1000", 200000],
+    ["KRW", "1000", 200000],
+  ] as const) {
+    f.state.currency = currency
+    f.state.price = price
+    const result = await f.run(
+      currency === "USD"
+        ? { operation: "add", items: [{ variantId: "123", quantity: 2 }] }
+        : { operation: "read" }
+    )
+    expect(result.shopifyCart.currency).toBe(currency)
+    expect(result.shopifyCart.items[0].finalLinePrice).toBe(expected)
+    expect(result.shopifyCart.totalPrice).toBe(expected)
+  }
+})
+
 test("commerce authorization uses admitted Shopify identity and rejects forged metadata, wrong stores and revoked sessions", async () => {
   const f = await fixture()
   const attempts = await Promise.all(
@@ -853,7 +1004,7 @@ test("visitor limits survive conversation resets, IP changes, and minute-bucket 
   )
   // Expire only minute counts, preserving the daily ledger across new minute windows.
   await f.database.execute(
-    sql`UPDATE build_public_admission_bucket SET window_started_at=window_started_at-interval '3 minutes' WHERE scope='message' AND window_started_at<>date_trunc('day',now())`
+    sql`UPDATE build_public_admission_bucket SET window_started_at=window_started_at-interval '3 minutes' WHERE scope='message' AND window_started_at<>date_trunc('day',now(),'UTC')`
   )
   await enqueuePublicMessage(
     f.context,
@@ -889,7 +1040,7 @@ test("visitor limits survive conversation resets, IP changes, and minute-bucket 
     publicAdmission: { visitorMessagesPerDay: null },
   })
   await f.database.execute(
-    sql`UPDATE build_public_admission_bucket SET window_started_at=window_started_at-interval '3 minutes' WHERE scope='message' AND window_started_at<>date_trunc('day',now())`
+    sql`UPDATE build_public_admission_bucket SET window_started_at=window_started_at-interval '3 minutes' WHERE scope='message' AND window_started_at<>date_trunc('day',now(),'UTC')`
   )
   await enqueuePublicMessage(
     f.context,
@@ -3507,7 +3658,7 @@ for (const changed of [
     else if (changed === "routing") s.fulfillmentMode = "expanded"
     else s.holds[0].reason = "HIGH_RISK_OF_FRAUD"
     if (changed === "owner")
-      await assert.rejects(f.check(), { code: "ACTION_FAILED" })
+      await assert.rejects(f.check(), { code: "ACTION_INPUT_REQUIRED" })
     else assert.match(String((await f.check()).message), /changed|preserved/i)
     expect(s.holdReleases).toBe(0)
     expect(s.holds).toHaveLength(3)

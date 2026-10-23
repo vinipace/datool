@@ -93,12 +93,7 @@ export async function shopifyChannelCart(
         (item) => `gid://shopify/ProductVariant/${item.variantId}`
       ),
     })
-    const digits =
-      new Intl.NumberFormat("en", {
-        style: "currency",
-        currency: data.shop.currencyCode,
-      }).resolvedOptions().maximumFractionDigits ?? 2
-    const lines = selection.map((item) => {
+    const lines = selection.flatMap((item) => {
       const variant = data.nodes.find(
         (node) => node?.id === `gid://shopify/ProductVariant/${item.variantId}`
       )
@@ -109,26 +104,45 @@ export async function shopifyChannelCart(
         Date.parse(variant.product.publishedAt) > Date.now() ||
         !variant.availableForSale ||
         variant.product.requiresSellingPlan
-      )
-        throw new TracerError(
-          "VALIDATION_ERROR",
-          "An item is unavailable or requires a subscription. Remove it from the chat cart and choose an available product on the store."
-        )
-      return {
-        lineKey: item.variantId,
-        ...item,
-        title: `${variant.product.title} — ${variant.title}`.slice(0, 300),
-        finalLinePrice:
-          Math.round(Number(variant.price) * 10 ** digits) * item.quantity,
-        url: `https://${shop}/products/${encodeURIComponent(variant.product.handle)}?variant=${item.variantId}`,
+      ) {
+        const requested =
+          command.operation === "add"
+            ? command.items.some((added) => added.variantId === item.variantId)
+            : command.operation === "set" && command.lineKey === item.variantId
+        if (requested)
+          throw new TracerError(
+            "VALIDATION_ERROR",
+            "An item is unavailable or requires a subscription. Choose an available product on the store."
+          )
+        // Refresh stale selections without preventing reads or removals.
+        return []
       }
+      return [
+        {
+          lineKey: item.variantId,
+          ...item,
+          title: `${variant.product.title} — ${variant.title}`.slice(0, 300),
+          // Shopify cart amounts use hundredths even for JPY and KRW.
+          finalLinePrice:
+            Math.round(Number(variant.price) * 100) * item.quantity,
+          url: `https://${shop}/products/${encodeURIComponent(variant.product.handle)}?variant=${item.variantId}`,
+        },
+      ]
     })
-    const checkoutUrl = selection.length
-      ? `https://${shop}/cart/${selection.map((item) => `${item.variantId}:${item.quantity}`).join(",")}`
+    const currentSelection = lines.map(({ variantId, quantity }) => ({
+      variantId,
+      quantity,
+    }))
+    const removedUnavailable = currentSelection.length !== selection.length
+    const checkoutUrl = currentSelection.length
+      ? `https://${shop}/cart/${currentSelection.map((item) => `${item.variantId}:${item.quantity}`).join(",")}`
       : `https://${shop}/cart`
     const result = {
       message:
-        "Your chat cart. Shopify confirms availability, discounts, shipping and the final total at checkout.",
+        (removedUnavailable
+          ? "Unavailable or subscription items were removed from your chat cart. "
+          : "Your chat cart. ") +
+        "Shopify confirms availability, discounts, shipping and the final total at checkout.",
       source: "conversation_cart",
       shopifyCart: shopifyCartSchema.parse({
         currency: data.shop.currencyCode,
@@ -141,9 +155,9 @@ export async function shopifyChannelCart(
         checkoutUrl,
       }),
     }
-    if (command.operation !== "read") {
+    if (command.operation !== "read" || removedUnavailable) {
       await tx.execute(
-        sql`UPDATE build_conversations SET metadata_json=jsonb_set(metadata_json,'{shopifyCarts}',COALESCE(metadata_json->'shopifyCarts','{}'::jsonb) || jsonb_build_object(${connectionId}::text,${JSON.stringify(selection)}::jsonb)) WHERE project_id=${context.projectId} AND id=${execution.conversationId}`
+        sql`UPDATE build_conversations SET metadata_json=jsonb_set(metadata_json,'{shopifyCarts}',COALESCE(metadata_json->'shopifyCarts','{}'::jsonb) || jsonb_build_object(${connectionId}::text,${JSON.stringify(currentSelection)}::jsonb)) WHERE project_id=${context.projectId} AND id=${execution.conversationId}`
       )
     }
     return result
