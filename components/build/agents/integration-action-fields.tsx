@@ -253,6 +253,122 @@ export function IntegrationActionFields({
                   />
                 </FormRow>
               )}
+              {draft.toolSlug === "SHOPIFY_CREATE_ORDER" && (
+                <>
+                  {(
+                    [
+                      {
+                        key: "paymentMethod",
+                        label: "Payment",
+                        description:
+                          "Online payment creates a checkout link. Cash on delivery places an unpaid order. Free orders waive the full price and delivery charge; use a controlled procedure or teammate approval for gifts and replacements.",
+                        options: [
+                          ["online", "Online payment"],
+                          ["cash_on_delivery", "Cash on delivery"],
+                          ["free", "Free order"],
+                        ],
+                      },
+                      {
+                        key: "orderSource",
+                        label: "Order items",
+                        description:
+                          "Use the current storefront cart, or the specific items selected in this conversation.",
+                        options: [
+                          ["cart", "Use the cart"],
+                          ["items", "Specific items"],
+                        ],
+                      },
+                      {
+                        key: "shippingPhone",
+                        label: "Delivery phone",
+                        description:
+                          "Choose whether a delivery phone number must be collected.",
+                        options: [
+                          ["required", "Required"],
+                          ["optional", "Optional"],
+                          ["omit", "Do not include"],
+                        ],
+                      },
+                    ] as const
+                  ).map((field) => (
+                    <FormRow
+                      key={field.key}
+                      label={field.label}
+                      htmlFor={`shopify-${field.key}`}
+                      description={field.description}
+                      layout="vertical"
+                      variant="plain"
+                    >
+                      <Select
+                        id={`shopify-${field.key}`}
+                        value={shopifySettings[field.key]}
+                        onChange={(event) =>
+                          onChange({
+                            ...draft,
+                            shopifySettings: shopifyActionSettingsSchema.parse({
+                              ...shopifySettings,
+                              [field.key]: event.target.value,
+                            }),
+                          })
+                        }
+                      >
+                        {field.options.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormRow>
+                  ))}
+                  <FormRow
+                    label="Order tags"
+                    htmlFor="shopify-order-tags"
+                    description="Separate tags with commas. These are applied to every order created by this action."
+                    layout="vertical"
+                    variant="plain"
+                  >
+                    <Input
+                      id="shopify-order-tags"
+                      key={`${draft.id}:${draft.connectionId}:order-tags`}
+                      defaultValue={shopifySettings.orderTags.join(", ")}
+                      onBlur={(event) =>
+                        onChange({
+                          ...draft,
+                          shopifySettings: {
+                            ...shopifySettings,
+                            orderTags: event.target.value
+                              .split(",")
+                              .map((tag) => tag.trim())
+                              .filter(Boolean),
+                          },
+                        })
+                      }
+                    />
+                  </FormRow>
+                  <FormRow
+                    label="Order note"
+                    htmlFor="shopify-order-note"
+                    description="A note for the store team. Use {{paymentModeLabel}} to include the payment method."
+                    layout="vertical"
+                    variant="plain"
+                  >
+                    <Input
+                      id="shopify-order-note"
+                      maxLength={1000}
+                      value={shopifySettings.orderNote}
+                      onChange={(event) =>
+                        onChange({
+                          ...draft,
+                          shopifySettings: {
+                            ...shopifySettings,
+                            orderNote: event.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </FormRow>
+                </>
+              )}
             </>
           )}
         </>

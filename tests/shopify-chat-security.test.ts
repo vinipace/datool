@@ -131,6 +131,32 @@ async function fixture(
   return { context, database, channel, session, request, connectionId, agent }
 }
 
+async function activateShopifyConnection(
+  f: Awaited<ReturnType<typeof fixture>>,
+  scope = "read_products,read_legal_policies,write_app_proxy"
+) {
+  const providerSession = new Session({
+    id: "offline_fixture",
+    shop: "fixture.myshopify.com",
+    state: "",
+    isOnline: false,
+    scope,
+    accessToken: "private-fixture-token",
+    expires: new Date(Date.now() + 3600000),
+  })
+  const encrypted = encryptProviderKey(
+    JSON.stringify(providerSession.toPropertyArray()),
+    f.context.projectId,
+    `shopify:${f.connectionId}`
+  )
+  await f.database.execute(
+    sql`UPDATE build_shopify_connections SET session_encrypted=${encrypted} WHERE connection_id=${f.connectionId}::uuid`
+  )
+  await f.database.execute(
+    sql`UPDATE build_app_connections SET provider_user_id=${composioUserId(f.context.organizationId!, f.context.projectId)} WHERE id=${f.connectionId}::uuid`
+  )
+}
+
 test("commerce authorization uses admitted Shopify identity and rejects forged metadata, wrong stores and revoked sessions", async () => {
   const f = await fixture()
   const attempts = await Promise.all(
@@ -560,26 +586,7 @@ for (const flow of [
 ])
   test(`native cart actions preserve merchant approval and deliver a one-shot browser result to the storefront (${flow})`, async () => {
     const f = await fixture({})
-    const providerSession = new Session({
-      id: "offline_fixture",
-      shop: "fixture.myshopify.com",
-      state: "",
-      isOnline: false,
-      scope: "read_products,read_legal_policies,write_app_proxy",
-      accessToken: "private-fixture-token",
-      expires: new Date(Date.now() + 3600000),
-    })
-    const encrypted = encryptProviderKey(
-      JSON.stringify(providerSession.toPropertyArray()),
-      f.context.projectId,
-      `shopify:${f.connectionId}`
-    )
-    await f.database.execute(
-      sql`UPDATE build_shopify_connections SET session_encrypted=${encrypted} WHERE connection_id=${f.connectionId}::uuid`
-    )
-    await f.database.execute(
-      sql`UPDATE build_app_connections SET provider_user_id=${composioUserId(f.context.organizationId!, f.context.projectId)} WHERE id=${f.connectionId}::uuid`
-    )
+    await activateShopifyConnection(f)
     const action = await saveAction(f.context, f.agent.id, {
       slug: "update-cart",
       definition: {
@@ -984,3 +991,479 @@ for (const flow of [
       /no longer available/
     )
   }, 60_000)
+
+for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
+  for (const orderSource of ["items", "cart"] as const) {
+    test(`Shopify orders calculate, confirm and place exactly once (${paymentMethod}, ${orderSource})`, async () => {
+      const f = await fixture({})
+      const requireHumanApproval =
+        paymentMethod === "cash_on_delivery" && orderSource === "cart"
+      const requirePhone = paymentMethod === "online" && orderSource === "items"
+      await activateShopifyConnection(
+        f,
+        "read_products,read_legal_policies,write_app_proxy,write_draft_orders,read_payment_terms,read_orders"
+      )
+      const { shopifyOrderCreationTools } =
+        await import("@/src/server/build/integrations/shopify-order-create")
+      const action = await saveAction(f.context, f.agent.id, {
+        slug: "create-order",
+        definition: {
+          type: "integration",
+          name: "Create order",
+          connectionId: f.connectionId,
+          toolSlug: "SHOPIFY_CREATE_ORDER",
+          channels: ["web"],
+          inputSchema: shopifyOrderCreationTools[0].inputSchema,
+          shopifySettings: {
+            requireHumanApproval,
+            paymentMethod,
+            orderSource,
+            shippingPhone: requirePhone ? "required" : "omit",
+            orderTags: ["support"],
+            orderNote: "Chat order: {{paymentModeLabel}}",
+          },
+        },
+      })
+      const input = {
+        email: "buyer@example.test",
+        items: [{ variantId: "123", quantity: 2 }],
+        shippingAddress: {
+          firstName: "Alice",
+          address1: "123 Main St",
+          city: "Austin",
+          countryCode: "US",
+          phone: "+15555551234",
+        },
+      }
+      let priceChanged = false
+      let loseCreateResponse = false
+      let loseCompleteResponse = false
+      let createdTotalChanged = false
+      let stock = 10
+      let created = 0
+      let completed = 0
+      let createdInput: Record<string, unknown> | null = null
+      const totals = () => {
+        const bag = (amount: string) => ({
+          presentmentMoney: { amount, currencyCode: "USD" },
+        })
+        return {
+          subtotalPriceSet: bag(paymentMethod === "free" ? "0.00" : "50.00"),
+          totalShippingPriceSet: bag(
+            paymentMethod === "free" ? "0.00" : "5.00"
+          ),
+          totalTaxSet: bag(paymentMethod === "free" ? "0.00" : "2.00"),
+          totalPriceSet: bag(
+            paymentMethod === "free" ? "0.00" : priceChanged ? "60.00" : "57.00"
+          ),
+        }
+      }
+      const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+        _url: unknown,
+        init: RequestInit
+      ) => {
+        const { query, variables } = JSON.parse(String(init.body))
+        if (query.includes("DatoolOrderVariants"))
+          return Response.json({
+            data: {
+              nodes: [
+                {
+                  id: "gid://shopify/ProductVariant/123",
+                  title: "Cool weather",
+                  availableForSale: true,
+                  inventoryQuantity: stock,
+                  inventoryPolicy: "DENY",
+                  inventoryItem: { tracked: true, requiresShipping: true },
+                  product: {
+                    title: "Board wax",
+                    status: "ACTIVE",
+                    publishedAt: "2020-01-01T00:00:00Z",
+                    requiresSellingPlan: false,
+                  },
+                },
+              ],
+              shop: { currencyCode: "USD" },
+              paymentTermsTemplates: [
+                {
+                  id: "gid://shopify/PaymentTermsTemplate/1",
+                  paymentTermsType: "RECEIPT",
+                },
+              ],
+            },
+          })
+        if (query.includes("DatoolCalculateOrder"))
+          return Response.json({
+            data: {
+              draftOrderCalculate: {
+                userErrors: [],
+                calculatedDraftOrder: {
+                  ...totals(),
+                  availableShippingRates: [
+                    {
+                      handle: "ground",
+                      title: "Ground",
+                      price: { amount: "5", currencyCode: "USD" },
+                    },
+                  ],
+                  lineItems: [
+                    {
+                      title: "Board wax",
+                      variantTitle: "Cool weather",
+                      quantity: 2,
+                    },
+                  ],
+                  transformerFingerprint: null,
+                },
+              },
+            },
+          })
+        if (query.includes("DatoolCreateOrder")) {
+          created++
+          createdInput = variables.input
+          if (loseCreateResponse)
+            throw new Error("Connection lost after dispatch")
+          return Response.json({
+            data: {
+              draftOrderCreate: {
+                userErrors: [],
+                draftOrder: {
+                  id: "gid://shopify/DraftOrder/99",
+                  invoiceUrl:
+                    "https://fixture.myshopify.com/invoices/checkout-secret",
+                  ...totals(),
+                  ...(createdTotalChanged
+                    ? {
+                        totalPriceSet: {
+                          presentmentMoney: {
+                            amount: "80",
+                            currencyCode: "USD",
+                          },
+                        },
+                      }
+                    : {}),
+                  paymentTerms:
+                    paymentMethod === "cash_on_delivery"
+                      ? { paymentTermsType: "RECEIPT" }
+                      : null,
+                },
+              },
+            },
+          })
+        }
+        if (query.includes("DatoolCompleteOrder")) {
+          completed++
+          if (loseCompleteResponse)
+            throw new Error("Connection lost after completing the draft")
+          return Response.json({
+            data: {
+              draftOrderComplete: {
+                userErrors: [],
+                draftOrder: {
+                  id: "gid://shopify/DraftOrder/99",
+                  order: {
+                    id: "gid://shopify/Order/100",
+                    name: "#100",
+                    displayFinancialStatus:
+                      paymentMethod === "free" ? "PAID" : "PENDING",
+                    fullyPaid: paymentMethod === "free",
+                  },
+                },
+              },
+            },
+          })
+        }
+        throw new Error("Unexpected Shopify request")
+      }) as typeof fetch)
+      cleanup.push(async () => {
+        fetchSpy.mockRestore()
+      })
+      const agent = await updateAgent(f.context, f.agent.id, {
+        expectedRevision: 1,
+        apply: true,
+        configuration: {
+          ...f.agent.configuration,
+          model: "test-model",
+          channelAllowlist: ["web"],
+        },
+      })
+      const session = await f.session(paymentMethod === "online" ? "" : "123")
+      const dependencies = {
+        generateText: (async (options: {
+          tools: Record<
+            string,
+            {
+              execute: (
+                args: unknown,
+                context: { toolCallId: string }
+              ) => Promise<unknown>
+            }
+          >
+        }) => {
+          await options.tools[action.id].execute(input, {
+            toolCallId: "create-order",
+          })
+          return {
+            text: "Review your order.",
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          }
+        }) as never,
+      }
+      async function turn(
+        metadata: Record<string, unknown> = {},
+        approve = false
+      ) {
+        const queued = await enqueuePublicMessage(
+          f.context,
+          f.channel.id,
+          session.conversationId,
+          session.visitorToken,
+          {
+            text: "Place this order",
+            origin: "https://chat.example.test",
+            metadata,
+          }
+        )
+        if (!("messageId" in queued))
+          throw new Error("Expected customer message")
+        const jobs = await f.database.execute<{ id: string }>(
+          sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
+        )
+        return runAgentTurn(
+          f.context,
+          {
+            agentId: f.agent.id,
+            channel: "web",
+            conversationId: session.conversationId,
+            requestKey: `channel:${jobs.rows[0].id}`,
+            message: "Place this order",
+            metadata: metadata as never,
+          },
+          {
+            agent,
+            dependencies,
+            ...(approve
+              ? {
+                  trustedApproval: {
+                    actionId: action.id,
+                    continuationId: (
+                      metadata.widgetInteraction as { continuationId: string }
+                    ).continuationId,
+                  },
+                }
+              : {}),
+          }
+        )
+      }
+      if (requirePhone) {
+        stock = 1
+        await assert.rejects(turn(), /not enough stock/)
+        stock = 10
+        // Missing information is rejected before any draft order is created.
+        delete (input.shippingAddress as { phone?: string }).phone
+        await assert.rejects(turn(), /requires a phone/)
+        input.shippingAddress.phone = "+15555551234"
+        expect(created).toBe(0)
+      }
+      let pending = await turn()
+      expect(created).toBe(0)
+      async function readCart(
+        pending: Awaited<ReturnType<typeof turn>>,
+        requiresStoreCheckout = false
+      ) {
+        return turn({
+          widgetInteraction: {
+            actionId: action.id,
+            continuationId: pending.continuations[0].continuationId,
+            input: {
+              cartResult: {
+                status: "completed",
+                cart: {
+                  currency: "USD",
+                  totalPrice: 1,
+                  itemCount: 2,
+                  items: [
+                    {
+                      lineKey: "123:key",
+                      variantId: "123",
+                      title: "Forged cheap price",
+                      quantity: 2,
+                      finalLinePrice: 1,
+                      url: "https://fixture.myshopify.com/products/wax",
+                    },
+                  ],
+                  truncated: false,
+                  requiresStoreCheckout,
+                  cartUrl: "https://fixture.myshopify.com/cart",
+                  checkoutUrl: "https://fixture.myshopify.com/checkout",
+                },
+              },
+            },
+          },
+        })
+      }
+      if (orderSource === "cart") {
+        expect(pending.continuations[0].shopifyCart?.command).toEqual({
+          operation: "read",
+        })
+        if (paymentMethod === "online") {
+          await assert.rejects(
+            readCart(pending, true),
+            /custom options|subscriptions/
+          )
+          expect(created).toBe(0)
+          pending = await turn()
+        }
+        pending = await readCart(pending)
+      }
+      expect(pending.continuations[0].type).toBe(
+        requireHumanApproval ? "approval_required" : "client_action"
+      )
+      if (!requireHumanApproval)
+        expect(pending.continuations[0].eventName).toBe("Confirm changes")
+      expect(pending.continuations[0].shopifyOrderQuote?.total).toEqual({
+        amount: paymentMethod === "free" ? "0" : "57",
+        currencyCode: "USD",
+      })
+      await enqueueAgentTurnResult(f.context, pending, "order-quote")
+      const publicMessages = await readPublicConversation(
+        f.context,
+        f.channel.id,
+        session.conversationId,
+        session.visitorToken,
+        "https://chat.example.test"
+      )
+      const publicContinuations = publicMessages.at(-1)?.metadata.continuations
+      if (!Array.isArray(publicContinuations))
+        throw new Error("Expected order quote")
+      expect(publicContinuations[0]).toMatchObject({
+        shopifyOrderQuote: {
+          items: [{ title: "Board wax (Cool weather)", quantity: 2 }],
+        },
+      })
+      expect(created).toBe(0)
+      const confirm = (continuationId: string) => ({
+        widgetInteraction: {
+          actionId: action.id,
+          continuationId,
+          input: {
+            items: [{ variantId: "999", quantity: 99 }],
+            total: 0,
+            paymentMethod: "free",
+          },
+        },
+      })
+      if (paymentMethod === "online") {
+        priceChanged = true
+        pending = await turn(confirm(pending.continuations[0].continuationId!))
+        expect(pending.continuations[0].shopifyOrderQuote?.total.amount).toBe(
+          "60"
+        )
+        expect(created).toBe(0)
+      }
+      const confirmation = confirm(pending.continuations[0].continuationId!)
+      if (requireHumanApproval) {
+        await assert.rejects(turn(confirmation), /no longer available/)
+        expect(created).toBe(0)
+      }
+      const result = await turn(confirmation, requireHumanApproval)
+      expect(created).toBe(1)
+      expect(completed).toBe(paymentMethod === "online" ? 0 : 1)
+      expect(createdInput).toMatchObject({
+        email: "buyer@example.test",
+        lineItems: [
+          { variantId: "gid://shopify/ProductVariant/123", quantity: 2 },
+        ],
+      })
+      const submitted = createdInput as unknown as {
+        shippingAddress: Record<string, unknown>
+        tags: string[]
+        purchasingEntity?: unknown
+        reserveInventoryUntil?: string
+      }
+      expect(submitted.tags).toContain("support")
+      expect(submitted.tags).toContain("datool")
+      if (paymentMethod === "online")
+        expect(submitted.reserveInventoryUntil).toBeUndefined()
+      else
+        expect(Date.parse(submitted.reserveInventoryUntil!) > Date.now()).toBe(
+          true
+        )
+      expect(submitted.shippingAddress.phone).toBe(
+        requirePhone ? "+15555551234" : undefined
+      )
+      if (paymentMethod === "online") {
+        expect(result.text).toContain(
+          "https://fixture.myshopify.com/invoices/checkout-secret"
+        )
+        expect(submitted.purchasingEntity).toBeUndefined()
+      } else {
+        expect(result.text).toContain("#100")
+        expect(createdInput).toMatchObject({
+          purchasingEntity: { customerId: "gid://shopify/Customer/123" },
+        })
+        if (paymentMethod === "free")
+          expect(createdInput).toMatchObject({
+            appliedDiscount: { value: 100, valueType: "PERCENTAGE" },
+            shippingLine: { priceWithCurrency: { amount: "0" } },
+          })
+        else
+          expect(createdInput).toMatchObject({
+            paymentTerms: {
+              paymentTermsTemplateId: "gid://shopify/PaymentTermsTemplate/1",
+            },
+          })
+      }
+      await assert.rejects(turn(confirmation), /no longer available/)
+      expect(created).toBe(1)
+      const recorded = await f.database.execute<{ provider_log_id: string }>(
+        sql`SELECT provider_log_id FROM build_usage_event WHERE connection_id=${f.connectionId}::uuid AND provider_log_id IS NOT NULL`
+      )
+      expect(recorded.rows).toEqual([
+        { provider_log_id: "gid://shopify/DraftOrder/99" },
+      ])
+      if (paymentMethod === "free") {
+        pending = await turn()
+        loseCreateResponse = orderSource === "items"
+        loseCompleteResponse = orderSource === "cart"
+        if (orderSource === "cart") pending = await readCart(pending)
+        const uncertain = confirm(pending.continuations[0].continuationId!)
+        await assert.rejects(turn(uncertain), { code: "ACTION_UNCERTAIN" })
+        await assert.rejects(turn(uncertain), /no longer available/)
+        expect(created).toBe(2)
+        expect(completed).toBe(loseCompleteResponse ? 2 : 1)
+        const uncertainty = await f.database.execute<{
+          status: string
+          provider_log_id: string | null
+          provider_session_id: string
+        }>(
+          sql`SELECT status, provider_log_id, provider_session_id FROM build_usage_event WHERE connection_id=${f.connectionId}::uuid AND status='uncertain'`
+        )
+        expect(uncertainty.rows).toEqual([
+          {
+            status: "uncertain",
+            provider_log_id: loseCompleteResponse
+              ? "gid://shopify/DraftOrder/99"
+              : null,
+            provider_session_id:
+              pending.continuations[0].shopifyOrderQuote?.operationId,
+          },
+        ])
+        // A new model call must not bypass the unresolved financial write by making a new confirmation.
+        await assert.rejects(turn(), /previous order.*unresolved/)
+        expect(created).toBe(2)
+      }
+      if (paymentMethod === "cash_on_delivery" && orderSource === "items") {
+        pending = await turn()
+        createdTotalChanged = true
+        const review = await turn(
+          confirm(pending.continuations[0].continuationId!)
+        )
+        expect(review.text).toContain("not finalized")
+        expect(created).toBe(2)
+        expect(completed).toBe(1)
+        await assert.rejects(turn(), /previous order.*unresolved/)
+        expect(created).toBe(2)
+      }
+    }, 60_000)
+  }
+}

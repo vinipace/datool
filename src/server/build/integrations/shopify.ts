@@ -24,6 +24,12 @@ import {
   shopifyOrigin,
 } from "./shopify-provider"
 import { shopifyProductSearchSchema } from "@/src/lib/build/shopify-products"
+import {
+  shopifyOrderQuoteSchema,
+  type ShopifyOrderQuote,
+} from "@/src/lib/build/shopify-order"
+import { shopifyCartResultSchema } from "@/src/lib/build/shopify-cart"
+import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
 import { readShopifyOrders } from "./shopify-orders"
 import { shopifyShopper } from "./shopify-identity"
@@ -339,6 +345,9 @@ export async function executeShopifyTool(
     turnId: string
     confirmed?: boolean
     cartResult?: unknown
+    prepareOrder?: boolean
+    orderQuote?: ShopifyOrderQuote
+    recordDraft?: (id: string) => Promise<void>
     settings?: ShopifyActionSettings
   }
 ) {
@@ -367,7 +376,11 @@ export async function executeShopifyTool(
         })
       : null
   if (commerce && !shopper) throw unavailable()
-  if (shopifyActionNeedsConfirmation(slug) && !execution?.confirmed)
+  if (
+    shopifyActionNeedsConfirmation(slug) &&
+    !execution?.confirmed &&
+    !(slug === "SHOPIFY_CREATE_ORDER" && execution?.prepareOrder)
+  )
     throw new TracerError(
       "VALIDATION_ERROR",
       "Confirm this change in the chat before it can be applied."
@@ -403,6 +416,62 @@ export async function executeShopifyTool(
         if (current.customerId !== shopper.customerId) throw unavailable()
       }
       if (orders) return await readShopifyOrders(args, shopper, graphql)
+      if (slug === "SHOPIFY_CREATE_ORDER") {
+        const settings = shopifyActionSettingsSchema.parse(
+          execution.settings ?? {}
+        )
+        if (execution.prepareOrder) {
+          let orderInput = args
+          if (settings.orderSource === "cart") {
+            if (execution.cartResult === undefined)
+              return { cartCommand: { operation: "read" as const } }
+            const cartResult = shopifyCartResultSchema.parse(
+              execution.cartResult
+            )
+            if (cartResult.status !== "completed" || cartResult.cart.truncated)
+              throw new TracerError(
+                "VALIDATION_ERROR",
+                "Read the complete current cart before creating an order."
+              )
+            if (cartResult.cart.requiresStoreCheckout !== false)
+              throw new TracerError(
+                "VALIDATION_ERROR",
+                "This cart may contain custom options, bundles or subscriptions. Use the store checkout to preserve them."
+              )
+            const quantities = new Map<string, number>()
+            for (const item of cartResult.cart.items)
+              quantities.set(
+                item.variantId,
+                (quantities.get(item.variantId) ?? 0) + item.quantity
+              )
+            orderInput = {
+              ...args,
+              items: [...quantities].map(([variantId, quantity]) => ({
+                variantId,
+                quantity,
+              })),
+            }
+          }
+          return {
+            orderQuote: (
+              await prepareShopifyOrder(orderInput, shopper, settings, graphql)
+            ).quote,
+          }
+        }
+        if (!execution.orderQuote || !execution.recordDraft)
+          throw new TracerError(
+            "VALIDATION_ERROR",
+            "Review the calculated order before confirming it."
+          )
+        return await createShopifyOrder(
+          shopifyOrderQuoteSchema.parse(execution.orderQuote),
+          shopper,
+          settings,
+          graphql,
+          beforeWrite,
+          execution.recordDraft
+        )
+      }
       if (slug === "SHOPIFY_TAG_ORDER")
         return await tagShopifyOrder(
           args,

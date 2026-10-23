@@ -113,6 +113,12 @@ export function appIntegrationScenario(
                         "Apply allowed tags to the customer's order.",
                       inputSchema: {},
                     },
+                    {
+                      slug: "SHOPIFY_CREATE_ORDER",
+                      name: "Create order",
+                      description: "Prepare an order for confirmation.",
+                      inputSchema: {},
+                    },
                   ]
                 : [
                     {

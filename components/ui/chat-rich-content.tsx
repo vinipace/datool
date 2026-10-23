@@ -13,6 +13,10 @@ import { isSafeHttpUrl } from "@/src/lib/build/urls"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
 import { shopifyCartCommandSchema } from "@/src/lib/build/shopify-cart"
 import { ShopifyProductsView } from "./shopify-products"
+import {
+  shopifyOrderQuoteSchema,
+  shopifyOrderSummary,
+} from "@/src/lib/build/shopify-order"
 import { ShopifyCartView } from "./shopify-cart"
 import { CodeWidgetFrame } from "./code-widget-frame"
 
@@ -80,6 +84,9 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
     : null
   const cartCommand = shopifyCartCommandSchema.safeParse(
     record(continuation?.shopifyCart)?.command
+  )
+  const orderQuote = shopifyOrderQuoteSchema.safeParse(
+    continuation?.shopifyOrderQuote
   )
   let cartSummary: string | null = null
   if (cartCommand.success && cartCommand.data.operation === "add") {
@@ -150,21 +157,27 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
                   typeof continuation.title === "string"
                     ? continuation.title
                     : "Confirm change",
-                body:
-                  cartSummary ??
-                  Object.entries(record(continuation.input) ?? {})
-                    .map(
-                      ([key, value]) =>
-                        `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
-                    )
-                    .join("\n"),
+                body: orderQuote.success
+                  ? shopifyOrderSummary(orderQuote.data)
+                  : (cartSummary ??
+                    Object.entries(record(continuation.input) ?? {})
+                      .map(
+                        ([key, value]) =>
+                          `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
+                      )
+                      .join("\n")),
               },
             ]
           : []),
         {
           type: "button",
-          label:
-            typeof continuation.eventName === "string"
+          label: orderQuote.success
+            ? orderQuote.data.paymentMethod === "online"
+              ? "Create checkout"
+              : orderQuote.data.paymentMethod === "free"
+                ? "Place free order"
+                : "Place order"
+            : typeof continuation.eventName === "string"
               ? continuation.eventName
               : "Continue",
           actionId: continuation.actionId,

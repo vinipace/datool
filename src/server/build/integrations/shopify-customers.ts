@@ -1,3 +1,5 @@
+import { shopifyAddressSchema } from "@/src/lib/build/shopify-order"
+export { shopifyAddressSchema } from "@/src/lib/build/shopify-order"
 import { z } from "zod"
 import type { IntegrationTool } from "@/src/lib/build/integrations"
 import { shopifyData, type ShopifyGraphqlClient } from "./shopify-catalog"
@@ -13,22 +15,6 @@ const profileSchema = z
       .string()
       .regex(/^\+[1-9][0-9]{7,14}$/)
       .nullable()
-      .optional(),
-  })
-  .strict()
-export const shopifyAddressSchema = z
-  .object({
-    firstName: z.string().trim().max(100).optional(),
-    lastName: z.string().trim().max(100).optional(),
-    address1: z.string().trim().min(1).max(200),
-    address2: z.string().trim().max(200).optional(),
-    city: z.string().trim().min(1).max(100),
-    provinceCode: z.string().trim().max(10).optional(),
-    countryCode: z.string().regex(/^[A-Z]{2}$/),
-    zip: z.string().trim().max(20).optional(),
-    phone: z
-      .string()
-      .regex(/^\+[1-9][0-9]{7,14}$/)
       .optional(),
   })
   .strict()

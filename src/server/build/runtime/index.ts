@@ -3,6 +3,11 @@ import {
   selectedShopifyCartInput,
 } from "./shopify-products"
 import {
+  shopifyOrderQuoteSchema,
+  shopifyOrderSummary,
+  type ShopifyOrderQuote,
+} from "@/src/lib/build/shopify-order"
+import {
   shopifyProductsSchema,
   type ShopifyProducts,
 } from "@/src/lib/build/shopify-products"
@@ -14,6 +19,7 @@ import {
 } from "@/src/lib/build/shopify-cart"
 import { createHash, randomUUID } from "node:crypto"
 import { executeAppAction } from "../integrations/service"
+import { TracerError } from "@/src/server/tracer/errors"
 import {
   shopifyActionNeedsConfirmation,
   shopifyActionNeedsHuman,
@@ -236,6 +242,7 @@ export type RuntimeContinuation = {
   shopifySourceTurnId?: string
   shopifyCart?: { command: ShopifyCartCommand; expiresAt: number }
   shopifyProductSelection?: { variantIds: string[]; expiresAt: number }
+  shopifyOrderQuote?: ShopifyOrderQuote
 }
 
 type RuntimeProcedureCursor = {
@@ -1314,6 +1321,7 @@ async function executeAction(
     allowApproval?: boolean
     shopifyConfirmed?: boolean
     shopifyCartResult?: unknown
+    shopifyOrderQuote?: ShopifyOrderQuote
     shopifyCartApproved?: boolean
     shopifySourceTurnId?: string
     signal?: AbortSignal
@@ -1355,6 +1363,92 @@ async function executeAction(
     throw error
   }
   const continuationId = options.continuationId ?? randomUUID()
+  const orderAction =
+    action.type === "integration" && action.toolSlug === "SHOPIFY_CREATE_ORDER"
+  let orderQuote = options.shopifyOrderQuote
+  const pendingBase = {
+    actionId: action.id,
+    continuationId,
+    input: persistedRuntimeRecord(input, knownSecrets),
+    ...(options.procedureCursor
+      ? {
+          procedureCursor: persistedProcedureCursor(
+            options.procedureCursor,
+            knownSecrets
+          ),
+        }
+      : {}),
+  }
+  const awaitInput = async (pending: RuntimeContinuation) => {
+    await service.recordToolCallFinish({
+      conversationId: conversation.id,
+      turnId: turn.id,
+      toolCallId: options.toolCallId,
+      status: "awaiting_client",
+      output: pending,
+      continuation: pending,
+      ownerFence: turn.ownerFence,
+    })
+    return {
+      output: pending,
+      continuation: pending,
+      status: "awaiting_client" as const,
+    }
+  }
+  if (orderAction && !orderQuote) {
+    try {
+      const prepared = await executeAppAction(context, {
+        connectionId: action.connectionId,
+        toolSlug: action.toolSlug,
+        agentId: conversation.agentId,
+        conversationId: conversation.id,
+        turnId: turn.id,
+        toolCallId: options.toolCallId,
+        arguments: input,
+        shopifyPrepareOrder: true,
+        shopifySettings: action.shopifySettings,
+        shopifyCartResult: options.shopifyCartResult,
+        signal: options.signal,
+      })
+      const output = prepared.output as {
+        cartCommand?: unknown
+        orderQuote?: unknown
+      }
+      if (output.cartCommand)
+        return await awaitInput({
+          ...pendingBase,
+          type: "client_action",
+          eventName: "Read cart for checkout",
+          title: action.name,
+          message:
+            "Read your current cart so Shopify can calculate the order. This does not place an order.",
+          shopifyCart: {
+            command: shopifyCartCommandSchema.parse(output.cartCommand),
+            expiresAt: Date.now() + 60 * 60_000,
+          },
+        })
+      orderQuote = shopifyOrderQuoteSchema.parse(output.orderQuote)
+    } catch (error) {
+      // These validation messages are authored by our native adapter. Never expose
+      // an arbitrary provider exception, which can contain credentials or customer data.
+      const failure =
+        error instanceof TracerError && error.code === "VALIDATION_ERROR"
+          ? new BuildRuntimeError("ACTION_INPUT_REQUIRED", error.message)
+          : new BuildRuntimeError(
+              "ACTION_FAILED",
+              "The order could not be prepared. Please try again."
+            )
+      await service.recordToolCallFinish({
+        conversationId: conversation.id,
+        turnId: turn.id,
+        toolCallId: options.toolCallId,
+        status: "failed",
+        error: safeError(failure),
+        ownerFence: turn.ownerFence,
+      })
+      throw failure
+    }
+  }
   const needsApproval =
     (options.requireHumanForActions ||
       (action.type === "integration" &&
@@ -1370,18 +1464,9 @@ async function executeAction(
   if (needsApproval || needsConfirmation) {
     // Teammate approval takes precedence and also confirms the pinned input.
     const pending: RuntimeContinuation = {
+      ...pendingBase,
       type: needsApproval ? "approval_required" : "client_action",
-      actionId: action.id,
-      continuationId,
-      input: persistedRuntimeRecord(input, knownSecrets),
-      ...(options.procedureCursor
-        ? {
-            procedureCursor: persistedProcedureCursor(
-              options.procedureCursor,
-              knownSecrets
-            ),
-          }
-        : {}),
+      ...(orderQuote ? { shopifyOrderQuote: orderQuote } : {}),
     }
     if (needsApproval) {
       pending.message = "A teammate must approve this action before it runs."
@@ -1395,20 +1480,9 @@ async function executeAction(
       pending.title = action.name
       pending.message = "Review the details and confirm to apply this change."
     }
-    await service.recordToolCallFinish({
-      conversationId: conversation.id,
-      turnId: turn.id,
-      toolCallId: options.toolCallId,
-      status: "awaiting_client",
-      output: pending,
-      continuation: pending,
-      ownerFence: turn.ownerFence,
-    })
-    return {
-      output: pending,
-      continuation: pending,
-      status: "awaiting_client" as const,
-    }
+    if (orderQuote && needsApproval)
+      pending.message += `\n\n${shopifyOrderSummary(orderQuote)}`
+    return awaitInput(pending)
   }
   if (options.dependencies.executeAction) {
     try {
@@ -1532,12 +1606,34 @@ async function executeAction(
         arguments: input,
         shopifyConfirmed: options.shopifyConfirmed || options.allowApproval,
         shopifyCartResult: options.shopifyCartResult,
+        shopifyOrderQuote: orderQuote,
         shopifySettings: action.shopifySettings,
         shopifySourceTurnId: options.allowApproval
           ? options.shopifySourceTurnId
           : undefined,
         signal: options.signal,
       })
+      if (
+        orderAction &&
+        (result.output as { status?: string }).status === "quote_changed"
+      ) {
+        const quote = shopifyOrderQuoteSchema.parse(
+          (result.output as { quote: unknown }).quote
+        )
+        const approval =
+          options.requireHumanForActions ||
+          shopifyActionNeedsHuman(action.toolSlug, action.shopifySettings)
+        return await awaitInput({
+          ...pendingBase,
+          type: approval ? "approval_required" : "client_action",
+          shopifyOrderQuote: quote,
+          title: action.name,
+          ...(approval
+            ? { shopifySourceTurnId: options.shopifySourceTurnId ?? turn.id }
+            : { eventName: "Confirm changes" }),
+          message: `The order changed or the quote expired. Review the updated details before continuing.${approval ? `\n\n${shopifyOrderSummary(quote)}` : ""}`,
+        })
+      }
       const shopifyProducts =
         action.toolSlug === "SHOPIFY_SEARCH_PRODUCTS" &&
         result.status === "completed"
@@ -2976,7 +3072,8 @@ export async function runAgentTurn(
       const resumesShopifyCart =
         continuationType === "client_action" &&
         action.definition.type === "integration" &&
-        isShopifyCartTool(action.definition.toolSlug) &&
+        (isShopifyCartTool(action.definition.toolSlug) ||
+          action.definition.toolSlug === "SHOPIFY_CREATE_ORDER") &&
         Boolean(persistedContinuation.shopifyCart)
       const approvedInput =
         productSelectionInput ??
@@ -3005,8 +3102,16 @@ export async function runAgentTurn(
           shopifyCartResult: resumesShopifyCart
             ? (interaction.input.cartResult ?? null)
             : undefined,
+          shopifyOrderQuote: persistedContinuation.shopifyOrderQuote
+            ? shopifyOrderQuoteSchema.parse(
+                persistedContinuation.shopifyOrderQuote
+              )
+            : undefined,
           // This continuation only exists after the pinned action's approval gate has passed.
-          shopifyCartApproved: resumesShopifyCart,
+          shopifyCartApproved:
+            resumesShopifyCart &&
+            action.definition.type === "integration" &&
+            isShopifyCartTool(action.definition.toolSlug),
           shopifySourceTurnId:
             approvalAllowed &&
             typeof persistedContinuation.shopifySourceTurnId === "string"

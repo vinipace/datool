@@ -340,6 +340,14 @@
         }
       }),
       truncated: value.items.length > 100,
+      requiresStoreCheckout: value.items.some(function (item) {
+        return Boolean(
+          item.selling_plan_allocation ||
+          (item.properties && Object.keys(item.properties).length) ||
+          item.has_components ||
+          item.parent_relationship
+        )
+      }),
       cartUrl: root + "cart",
       checkoutUrl: root + "checkout",
     }

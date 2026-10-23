@@ -9,6 +9,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [ ] Catalog image search, complete variant browsing and messaging-channel cart support from Chatbase's documented action matrix.
 - [x] Read and update the shopper's storefront cart; retain chat state during navigation.
 - [ ] Online checkout, cash on delivery and free orders, with merchant-selected payment policies.
+- [x] Shopify-calculated quotes and one-shot creation of online-payment drafts, unpaid cash-on-delivery orders and zero-total free orders.
+- [ ] Payment completion tracking, cart clearing after confirmed placement, reconciliation of interrupted writes and messaging-channel order creation.
 - [x] Own order history, status and tracking; guest lookup by order number and checkout email or phone.
 - [x] Merchant-allowlisted order tags.
 - [x] Account activation and sign-in guidance appropriate to the store's account system.
@@ -37,11 +39,19 @@ Large variant collections currently show the first matching page and link to the
 
 Shopify calculates prices, discounts, shipping, taxes and payment status. Browser cart totals are untrusted display data and must never authorize refunds, order prices or payment. The cart's Checkout link navigates to Shopify checkout; it does not create or prove a completed/paid order. Updating an account address does not change a placed order's delivery address.
 
+Create order obtains its payment method, item source, phone requirement, tags and note from merchant settings. The native adapter only sends live variant IDs and quantities to Shopify's draft-order calculation; it does not accept model-supplied prices. Physical goods require an address and an available Shopify shipping rate. The confirmation shows the Shopify subtotal, shipping, tax, total and payment behavior. A changed or expired quote requires a new confirmation or teammate approval before any order write.
+
+Online payment returns Shopify's invoice checkout URL without completing or marking the order paid. Cash on delivery uses Shopify receipt payment terms and verifies the completed order remains unpaid. Free orders apply the merchant-authorized discount and free delivery, then require Shopify's total to be zero. A draft whose creation response differs from the confirmed totals is retained for review without completion. Operation tags and external draft IDs are stored for reconciliation. An interrupted or uncertain attempt blocks a new order in the same conversation; automatic reconciliation and a supported resolution workflow are still release requirements.
+
+Cart-based drafts currently support ordinary variant lines. The storefront bridge flags subscriptions, line properties and bundle relationships without sending their private contents to Datool. Those carts, and carts from an older bridge that cannot establish this flag, use the store checkout to preserve their options. The remaining journey work includes cart clearing only after verified placement and payment-completion notifications; issuing a checkout link alone cannot trigger either.
+
 Existing abuse protections remain burst-oriented. This work does not add default daily message quotas or spending caps.
 
 ## Release gates
 
 Public apps require Shopify approval for protected customer/order data. Access to orders older than 60 days additionally requires `read_all_orders` approval. Added permissions require merchant consent. Development-store validation, merged code, production deployment, permission grants and end-to-end verification are separate checks.
+
+Order creation additionally requests `write_draft_orders` and `read_payment_terms`, alongside product and order reads. Existing installations must reconnect and consent; a local scope declaration does not grant access. The installation instructions list the complete configured scopes.
 
 ## Verification recorded so far
 
@@ -53,12 +63,14 @@ Those full-path tests exposed an incompatible JSON Schema dialect in the new nat
 
 The product-card slice exercises seven real-runtime cart paths, including product searches through model tools, keyword procedures, intent procedures and approved reads. They verify public card delivery, allowed variant selection, preserved merchant approval and one-shot completion. The regressions exposed missing procedure metadata, raw catalog JSON in approved replies and dropped card-only outbound messages; each failed before its repair. Six commerce tests cover Shopify adapters and published input schemas, including stock/price filtering across variant pages. Fifteen Chromium stories cover the chat and integration controls. Product images, mobile/desktop layout, keyboard focus, empty results and network errors were inspected. The product and variant GraphQL queries validate against Shopify 2026-10. These checks do not establish a live Shopify installation.
 
+Order creation has six real-runtime database cases spanning all three payment modes and both item sources. They exercise guest checkout, customer-bound orders, required delivery phones, stock checks, untrusted cart totals, price changes, immutable confirmation input, merchant approval and one-shot continuation consumption. Lost create/completion responses retain uncertain state and the available external identifiers. A new model call cannot bypass that state, and a changed creation total does not complete the order. The uncertainty and custom-cart regressions were demonstrated failing before their repairs. Browser stories cover merchant order settings and all three confirmation labels and summaries. The draft-order calculation, creation and completion operations validate against Shopify Admin GraphQL 2026-10. Live-store order/payment outcomes remain unverified.
+
 ## Design review
 
 The implementation deliberately reuses the Shopify SDK, Datool's action runtime, durable tool records, existing continuation storage and Inbox approvals. Customer confirmation and teammate approval now share one persistence path while retaining separate authorization rules. The mutation helper owns common Shopify error handling; callers describe only their action-specific response. The simplification is covered by four commerce tests and seven runtime tests for confirmation, approval, continuation and handoff behavior.
 
 Keep the server-owned message identity record and the ownership recheck immediately before writes. Removing those checks would let untrusted chat input or stale account identity influence customer access. Keep ambiguous writes distinguishable from failures; a shorter automatic retry path could repeat a change that Shopify already applied.
 
-For the remaining actions, Shopify remains responsible for prices, discounts, shipping, tax and payment state. Use the existing continuation mechanism for storefront interactions instead of introducing another queue or workflow engine. Checkout and return settings in the draft contract are reserved for unfinished actions; they do not establish implemented payment or return policy enforcement.
+For the remaining actions, Shopify remains responsible for prices, discounts, shipping, tax and payment state. Use the existing continuation mechanism for storefront interactions instead of introducing another queue or workflow engine. Order creation now consumes its merchant settings; return settings remain reserved for unfinished actions and do not establish return policy enforcement.
 
 Before financial actions are considered ready, validate delayed approvals across the five-minute identity freshness boundary, provide an explicit re-verification path, and test reconciliation after ambiguous external writes. Complete privacy/uninstall handling and scope/reconnect guidance, then verify the full customer journey in the sandbox. Passing the current unit and database tests does not replace those release checks.

@@ -97,6 +97,108 @@ export const ShopifyConfirmation: Story = {
   },
 }
 
+function orderConfirmation(
+  paymentMethod: "online" | "cash_on_delivery" | "free",
+  button: string,
+  description: string
+): Story {
+  const amount = paymentMethod === "free" ? "0" : "57"
+  return {
+    render: (args) => (
+      <div className="h-[42rem] w-full max-w-lg">
+        <Chat {...args} />
+      </div>
+    ),
+    args: {
+      messages: [
+        {
+          role: "assistant",
+          content: "Review your order before continuing.",
+          toolCalls: [],
+          metadata: {
+            continuations: [
+              {
+                type: "client_action",
+                actionId: "create-order",
+                continuationId: "order-confirmation",
+                eventName: "Confirm changes",
+                title: "Create order",
+                input: {},
+                shopifyOrderQuote: {
+                  operationId: "aadae85e-4ed6-4dbe-9444-9ad1dfdfd3e9",
+                  expiresAt: Date.now() + 60_000,
+                  customerId: null,
+                  fingerprint: "a".repeat(64),
+                  paymentMethod,
+                  input: {
+                    items: [{ variantId: "123", quantity: 2 }],
+                    email: "alice@example.test",
+                    shippingAddress: {
+                      firstName: "Alice",
+                      address1: "123 Main St",
+                      city: "Austin",
+                      countryCode: "US",
+                    },
+                  },
+                  items: [{ title: "Board wax", quantity: 2 }],
+                  shippingTitle: "Ground",
+                  subtotal: {
+                    amount: paymentMethod === "free" ? "0" : "50",
+                    currencyCode: "USD",
+                  },
+                  shipping: {
+                    amount: paymentMethod === "free" ? "0" : "5",
+                    currencyCode: "USD",
+                  },
+                  tax: {
+                    amount: paymentMethod === "free" ? "0" : "2",
+                    currencyCode: "USD",
+                  },
+                  total: { amount, currencyCode: "USD" },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      onWidgetInteraction: fn(),
+    },
+    play: async ({ canvasElement, args }) => {
+      const canvas = within(canvasElement)
+      await expect(canvas.getByText(/2 × Board wax/)).toBeVisible()
+      await expect(
+        canvas.getByText(new RegExp(`Total: USD ${amount}`))
+      ).toBeVisible()
+      await expect(canvas.getByText(new RegExp(description))).toBeVisible()
+      await expect(
+        canvas.getByText(/Contact: alice@example.test/)
+      ).toBeVisible()
+      await expect(canvas.queryByText(/fingerprint/)).not.toBeInTheDocument()
+      const confirm = canvas.getByRole("button", { name: button })
+      confirm.focus()
+      await expect(confirm).toHaveFocus()
+      await userEvent.keyboard("{Enter}")
+      await expect(args.onWidgetInteraction).toHaveBeenCalledOnce()
+    },
+  }
+}
+
+export const OnlineOrder: Story = orderConfirmation(
+  "online",
+  "Create checkout",
+  "Pay through Shopify checkout"
+)
+export const CashOnDeliveryOrder: Story = orderConfirmation(
+  "cash_on_delivery",
+  "Place order",
+  "Payment remains outstanding"
+)
+export const FreeOrder: Story = orderConfirmation(
+  "free",
+  "Place free order",
+  "No payment will be collected"
+)
+
 export const Waiting: Story = {
   args: {
     messages: [{ role: "user", content: "Hello", toolCalls: [] }],

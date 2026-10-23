@@ -259,6 +259,9 @@ test("storefront cart bridge uses the current cart, strips private fields and ne
   const requests: Array<{ url: string; body: unknown }> = []
   let quantity = 0
   let loseReply = false
+  let lineDetails: Record<string, unknown> = {
+    properties: { secret: "private" },
+  }
   const snapshot = () => ({
     token: "private-cart-checkout-token",
     note: "private note",
@@ -275,7 +278,7 @@ test("storefront cart bridge uses the current cart, strips private fields and ne
             quantity,
             final_line_price: quantity * 2500,
             url: "/products/wax?variant=123",
-            properties: { secret: "private" },
+            ...lineDetails,
           },
         ]
       : [],
@@ -339,6 +342,7 @@ test("storefront cart bridge uses the current cart, strips private fields and ne
       currency: "BRL",
       itemCount: 2,
       totalPrice: 5000,
+      requiresStoreCheckout: true,
       checkoutUrl: "https://store.example/pt-br/checkout",
     },
   })
@@ -353,6 +357,28 @@ test("storefront cart bridge uses the current cart, strips private fields and ne
   otherTab.receive(input)
   await new Promise((resolve) => setTimeout(resolve, 5))
   expect(quantity).toBe(2)
+  for (const [details, requiresStoreCheckout] of [
+    [
+      {
+        selling_plan_allocation: {
+          selling_plan: { id: 123, name: "private subscription" },
+        },
+      },
+      true,
+    ],
+    [{ has_components: true }, true],
+    [{ parent_relationship: { parent_key: "private-parent" } }, true],
+    [{ properties: {} }, false],
+  ] as const) {
+    lineDetails = details
+    page.receive({ ...input, command: { operation: "read" } })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    const result = page.frame.messages.at(-1) as {
+      result: { cart: { requiresStoreCheckout: boolean } }
+    }
+    expect(result.result.cart.requiresStoreCheckout).toBe(requiresStoreCheckout)
+    expect(JSON.stringify(result)).not.toContain("private")
+  }
   page.receive({
     ...input,
     operationId: "operation-0000000002",

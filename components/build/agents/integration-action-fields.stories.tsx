@@ -110,3 +110,47 @@ export const ShopifyProducts: Story = {
     await expect(stock).toBeChecked()
   },
 }
+
+export const ShopifyOrder: Story = {
+  parameters: { msw: { handlers: shopify.handlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole("option", { name: "Create order" })
+    await userEvent.selectOptions(
+      canvas.getByLabelText("App action"),
+      "SHOPIFY_CREATE_ORDER"
+    )
+    const payment = canvas.getByLabelText("Payment")
+    await expect(payment).toHaveValue("online")
+    await userEvent.selectOptions(payment, "cash_on_delivery")
+    await expect(payment).toHaveValue("cash_on_delivery")
+    await userEvent.selectOptions(payment, "free")
+    await expect(payment).toHaveValue("free")
+    await userEvent.selectOptions(canvas.getByLabelText("Order items"), "cart")
+    await expect(canvas.getByLabelText("Order items")).toHaveValue("cart")
+    await userEvent.selectOptions(
+      canvas.getByLabelText("Delivery phone"),
+      "required"
+    )
+    await expect(canvas.getByLabelText("Delivery phone")).toHaveValue(
+      "required"
+    )
+    await userEvent.type(
+      canvas.getByLabelText("Order tags"),
+      "support, replacement"
+    )
+    await userEvent.tab()
+    await expect(canvas.getByLabelText("Order tags")).toHaveValue(
+      "support, replacement"
+    )
+    await userEvent.type(canvas.getByLabelText("Order note"), "Approved gift")
+    await expect(canvas.getByLabelText("Order note")).toHaveValue(
+      "Approved gift"
+    )
+    const approval = canvas.getByRole("switch", {
+      name: "Require teammate approval",
+    })
+    await userEvent.click(approval)
+    await expect(approval).toBeChecked()
+  },
+}

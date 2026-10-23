@@ -54,6 +54,8 @@ export const shopifyCartSchema = z
       )
       .max(100),
     truncated: z.boolean(),
+    // Older widget versions cannot prove that custom options were preserved.
+    requiresStoreCheckout: z.boolean().optional(),
     cartUrl: httpsUrl,
     checkoutUrl: httpsUrl,
   })

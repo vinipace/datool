@@ -8,7 +8,7 @@ need to paste store domains or API keys.
 Merchants starting from the Shopify App Store authorize Shopify first, then
 sign in to Datool and choose an organization and project. Reopening an existing
 store reuses its connection and project. In **Actions → Create action → Connected
-app**, add **Search products** and **Read store policies** to the agent.
+app**, add the product, customer or order actions that the agent needs.
 
 Connections belong to the current project and can be used by its agents.
 Reconnecting a store in the same project preserves the connection ID so existing
@@ -34,11 +34,20 @@ connections.
 - `SHOPIFY_ACTIVATE_ACCOUNT`: legacy account invitations, with a ten-minute
   per-recipient cooldown, or sign-in guidance for new customer accounts.
 - `SHOPIFY_TAG_ORDER`: merchant-allowlisted tags on the verified customer's own order.
+- `SHOPIFY_GET_CART` and `SHOPIFY_UPDATE_CART`: read and update the shopper's
+  current storefront cart through the theme bridge, with merchant approval and
+  one-shot browser controls.
+- `SHOPIFY_CREATE_ORDER`: calculate a quote for selected items or ordinary cart
+  lines, then require confirmation or teammate approval. Merchant settings select
+  online payment, cash on delivery or a free order. Online payment returns an
+  unpaid Shopify checkout link; other modes validate the total and payment terms
+  before completing the draft. Uncertain writes require reconciliation.
 
-Product results use the same shape as the pilot's product-card widget. Keep
-the `show_products` widget action enabled to display cards. Storefront chat
+Product searches render native product cards. An enabled **Update shopping cart**
+action for the same connection adds variant and quantity controls. Storefront chat
 installation is separate from the data connection. This connector does not
-install a theme embed. Cart, checkout and return/exchange work is tracked in
+install a theme embed. Payment tracking, cart clearing, interrupted-order
+reconciliation and return/exchange work remain tracked in
 [the action parity checklist](shopify-action-parity.md).
 
 Customer-specific actions require a freshly verified Shopify storefront chat.
@@ -47,8 +56,9 @@ never authorize access. Newly added customer/order actions require merchant
 consent and Shopify protected customer data approval before a public launch.
 Existing catalog-only installs can continue using product and policy reads.
 
-Execution runs directly from the Datool worker to Shopify's Admin GraphQL API
-2026-10; it does not call the Shopify development app or its temporary tunnel.
+Catalog, customer and order execution runs directly from the Datool worker to
+Shopify's Admin GraphQL API 2026-10. Cart actions use the shopper's storefront
+session. Neither path calls the Shopify development app or its temporary tunnel.
 Native calls record integration usage with no configured Composio charge.
 Normal agent model usage still applies.
 
@@ -81,7 +91,7 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
    `https://YOUR_DATOOL_HOST/api/shopify/callback`, and
-   `read_products,read_legal_policies,write_app_proxy,write_customers,write_orders`.
+   `read_products,read_legal_policies,write_app_proxy,write_customers,write_orders,write_draft_orders,read_payment_terms`.
    Customer and order access must be approved for the public app. The official Shopify SDK performs the
    authorization-code flow. Do not switch an existing embedded app's flow just
    to enable this connector.
