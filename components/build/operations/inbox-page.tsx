@@ -1518,7 +1518,7 @@ function InboxInspector({
     event.preventDefault()
     if (
       !message.trim() ||
-      activeTicket.ownerType !== "human" ||
+      !canReply ||
       !activeTicket.conversationId
     )
       return
@@ -1690,7 +1690,10 @@ function InboxInspector({
     }
   }
 
-  const canReply = ownershipAvailable && activeTicket.ownerType === "human"
+  const canReply =
+    ownershipAvailable && asRecord(ownershipState.data).canReply === true
+  const canTakeover =
+    ownershipAvailable && asRecord(ownershipState.data).canTakeover === true
 
   return (
     <aside
@@ -1777,9 +1780,13 @@ function InboxInspector({
               ? ownershipState.error
                 ? "Ownership unavailable"
                 : "Checking ownership…"
-              : activeTicket.ownerType === "human"
-                ? "Handled by your team"
-                : "Handled by AI"}
+              : canReply
+                ? "Handled by you"
+                : activeTicket.ownerType === "human"
+                  ? canTakeover
+                    ? "Waiting for a teammate"
+                    : "Handled by a teammate"
+                  : "Handled by AI"}
           </span>
           <div className="ml-auto flex items-center gap-2">
             {ticketId ? (
@@ -1798,18 +1805,12 @@ function InboxInspector({
             ) : null}
             <Button
               size="sm"
-              variant={
-                activeTicket.ownerType === "human" ? "outline" : "default"
-              }
-              onClick={() =>
-                void ownership(
-                  activeTicket.ownerType === "human" ? "resume" : "takeover"
-                )
-              }
+              variant={canReply ? "outline" : "default"}
+              onClick={() => void ownership(canReply ? "resume" : "takeover")}
               loading={takeover.isPending}
-              disabled={!ownershipAvailable}
+              disabled={!ownershipAvailable || (!canReply && !canTakeover)}
             >
-              {activeTicket.ownerType === "human" ? (
+              {canReply ? (
                 <>
                   <Play className="size-3.5" />
                   Resume AI
@@ -1948,7 +1949,9 @@ function InboxInspector({
                         ? "Loading ownership state before enabling replies…"
                         : !conversationId
                           ? "This ticket has no linked conversation for a human reply."
-                          : "AI is handling this conversation. Take over to reply."}
+                          : canTakeover
+                            ? "Take over this conversation to reply."
+                            : "Another teammate is handling this conversation."}
                   </p>
                 ) : null}
                 {send.error ? (

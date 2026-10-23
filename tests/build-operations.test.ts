@@ -141,6 +141,39 @@ test("inbox assignment and takeover leases reject stale or competing writers", a
     const ownershipEvents = await database.execute<{ fence: string }>(sql`select fence from build_conversation_ownership_events where project_id=${projectId} and conversation_id='conversation-1' order by fence`)
     expect(ownershipEvents.rows.map((row) => Number(row.fence))).toEqual([4, 5, 6])
     expect(assigned.assigneeUserId).toBe(assignedUserId)
+
+    // An AI escalation reserves the queue, not an individual support lease.
+    await createConversationService(first).claim("conversation-2", {
+      type: "human", id: "team:support", reason: "Customer requested support",
+    })
+    const queued = await getConversationOwnership(first, "conversation-2")
+    const queueClaim = await takeoverConversation(first, {
+      conversationId: "conversation-2", expectedVersion: queued!.version,
+    })
+    expect(queued).toMatchObject({ mode: "human", canReply: false, canTakeover: true })
+    await assert.rejects(() => sendHumanReply(second, {
+      conversationId: "conversation-2", text: "Must claim before replying",
+    }), { code: "CONFLICT", status: 409 })
+    expect(await getConversationOwnership(first, "conversation-2"))
+      .toMatchObject({ canReply: true, canTakeover: true })
+    expect(await getConversationOwnership(second, "conversation-2"))
+      .toMatchObject({ canReply: false, canTakeover: false })
+    await assert.rejects(() => takeoverConversation(second, {
+      conversationId: "conversation-2", expectedVersion: queueClaim!.version,
+    }), { code: "CONFLICT", status: 409 })
+    await resumeConversation(first, {
+      conversationId: "conversation-2", expectedVersion: queueClaim!.version,
+      leaseToken: queueClaim!.leaseToken!,
+    })
+    // A later runtime handoff must not inherit the stale AI-mode lease row.
+    await createConversationService(first).claim("conversation-2", {
+      type: "human", id: "team:support", reason: "Customer requested support again",
+    })
+    const queuedAgain = await getConversationOwnership(second, "conversation-2")
+    expect(queuedAgain).toMatchObject({ mode: "human", canReply: false, canTakeover: true })
+    await takeoverConversation(second, {
+      conversationId: "conversation-2", expectedVersion: queuedAgain!.version,
+    })
   } finally {
     await closeTracerFixture(database)
   }
@@ -332,6 +365,7 @@ test("Telegram campaign worker delivers through the provider outbox and human re
     const supportTeam = await createTeam(context, { name: "Support" })
     await setTeamMember(context, { teamId: supportTeam.id, userId: context.actorId })
     await assignTicket(context, { ticketId: ticket.id, teamId: supportTeam.id, expectedVersion: ticket.version })
+    await createConversationService(context).claim(admitted.conversationId!, { type: "human", id: supportTeam.id, reason: "Agent escalated to Support" })
     const ownership = await takeoverConversation(context, { conversationId: admitted.conversationId })
     const replyContext = { ...context, idempotencyKey: "human-reply-1" }
     await assert.rejects(
