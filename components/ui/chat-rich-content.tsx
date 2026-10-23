@@ -22,6 +22,10 @@ import {
   shopifyReturnSummary,
 } from "@/src/lib/build/shopify-return"
 import { ShopifyCartView } from "./shopify-cart"
+import {
+  shopifyExchangeOrderQuoteSchema,
+  shopifyExchangeOrderSummary,
+} from "@/src/lib/build/shopify-exchange-order"
 import { CodeWidgetFrame } from "./code-widget-frame"
 
 type ChatMessage = InspectorMessage
@@ -95,6 +99,10 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
   const returnQuote = shopifyReturnQuoteSchema.safeParse(
     continuation?.shopifyReturnQuote
   )
+  const exchangeQuote = shopifyExchangeOrderQuoteSchema.safeParse(
+    continuation?.shopifyExchangeOrderQuote
+  )
+  const reverify = continuation?.eventName === "Continue approved change"
   let cartSummary: string | null = null
   if (cartCommand.success && cartCommand.data.operation === "add") {
     const count = cartCommand.data.items.reduce(
@@ -156,7 +164,9 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
           ? continuation.eventName
           : undefined,
       components: [
-        ...(continuation.eventName === "Confirm changes" || cartSummary
+        ...(continuation.eventName === "Confirm changes" ||
+        reverify ||
+        cartSummary
           ? [
               {
                 type: "card" as const,
@@ -168,31 +178,35 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
                   ? shopifyOrderSummary(orderQuote.data)
                   : returnQuote.success
                     ? shopifyReturnSummary(returnQuote.data)
-                    : (cartSummary ??
-                      Object.entries(record(continuation.input) ?? {})
-                        .map(
-                          ([key, value]) =>
-                            `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
-                        )
-                        .join("\n")),
+                    : exchangeQuote.success
+                      ? shopifyExchangeOrderSummary(exchangeQuote.data)
+                      : (cartSummary ??
+                        Object.entries(record(continuation.input) ?? {})
+                          .map(
+                            ([key, value]) =>
+                              `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
+                          )
+                          .join("\n")),
               },
             ]
           : []),
         {
           type: "button",
-          label: orderQuote.success
-            ? orderQuote.data.paymentMethod === "online"
-              ? "Create checkout"
-              : orderQuote.data.paymentMethod === "free"
-                ? "Place free order"
-                : "Place order"
-            : returnQuote.success
-              ? returnQuote.data.replacements.length
-                ? "Confirm exchange"
-                : "Confirm return"
-              : typeof continuation.eventName === "string"
-                ? continuation.eventName
-                : "Continue",
+          label: reverify
+            ? "Continue approved change"
+            : orderQuote.success
+              ? orderQuote.data.paymentMethod === "online"
+                ? "Create checkout"
+                : orderQuote.data.paymentMethod === "free"
+                  ? "Place free order"
+                  : "Place order"
+              : returnQuote.success
+                ? returnQuote.data.replacements.length
+                  ? "Confirm exchange"
+                  : "Confirm return"
+                : typeof continuation.eventName === "string"
+                  ? continuation.eventName
+                  : "Continue",
           actionId: continuation.actionId,
         },
       ],

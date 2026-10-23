@@ -9,22 +9,33 @@ export type ShopifyShopper = {
   browserSessionId: string | null
 }
 
+type ShopifyIdentityInput = {
+  connectionId: string
+  conversationId: string
+  turnId: string
+  shop?: string
+}
+
+function unverifiedSession() {
+  return new TracerError(
+    "VALIDATION_ERROR",
+    "Reconnect the storefront chat to verify your Shopify session before using this action."
+  )
+}
+
 /** Resolve only the identity admitted by the channel adapter, never model metadata. */
-export async function shopifyShopper(
+async function admittedShopifyShopper(
   context: BuildContext,
-  input: {
-    connectionId: string
-    conversationId: string
-    turnId: string
-    shop: string
-  }
-): Promise<ShopifyShopper> {
+  input: ShopifyIdentityInput
+) {
   const result = await context.database.execute<{
     shop: string
     customer_id: string | null
     browser_session_id: string
+    fresh: boolean
   }>(sql`
-    SELECT v.shop, v.customer_id, v.id AS browser_session_id
+    SELECT v.shop, v.customer_id, v.id AS browser_session_id,
+      (v.expires_at>now() AND v.verified_at>now()-interval '5 minutes') AS fresh
     FROM build_conversation_turns t
     JOIN build_conversations c ON c.project_id=t.project_id AND c.id=t.conversation_id
     JOIN build_channel_job j ON j.project_id=t.project_id AND t.request_key='channel:' || j.id::text
@@ -42,22 +53,49 @@ export async function shopifyShopper(
       AND c.metadata_json->>'connectionId'=v.connection_id::text
       AND ch.agent_id=c.agent_id AND ch.status='connected'
       AND ch.config_json->>'shopifyShop'=v.shop
-      AND s.connection_id=${input.connectionId}::uuid AND s.shop=${input.shop}
+      AND s.connection_id=${input.connectionId}::uuid
+      AND (${input.shop ?? null}::text IS NULL OR s.shop=${input.shop ?? null})
       AND s.client_id=${process.env.DATOOL_SHOPIFY_CLIENT_ID ?? ""} AND a.status='active'
-      AND v.expires_at>now() AND v.verified_at>now()-interval '5 minutes'
     LIMIT 1
   `)
   const row = result.rows[0]
-  if (!row)
-    throw new TracerError(
-      "VALIDATION_ERROR",
-      "Reconnect the storefront chat to verify your Shopify session before using this action."
-    )
+  if (!row) throw unverifiedSession()
+  return row
+}
+
+export async function shopifyShopper(
+  context: BuildContext,
+  input: ShopifyIdentityInput & { shop: string }
+): Promise<ShopifyShopper> {
+  const row = await admittedShopifyShopper(context, input)
+  if (!row.fresh) throw unverifiedSession()
   return {
     shop: row.shop,
     customerId: row.customer_id,
     browserSessionId: row.browser_session_id,
   }
+}
+
+/** Approval may wait for freshness, but cannot outlive its original identity binding. */
+export async function shopifyApprovalNeedsVerification(
+  context: BuildContext,
+  input: ShopifyIdentityInput & { verificationTurnId?: string }
+) {
+  const source = await admittedShopifyShopper(context, input)
+  if (input.verificationTurnId) {
+    const current = await admittedShopifyShopper(context, {
+      ...input,
+      turnId: input.verificationTurnId,
+    })
+    if (
+      current.browser_session_id !== source.browser_session_id ||
+      current.customer_id !== source.customer_id ||
+      current.shop !== source.shop
+    )
+      throw unverifiedSession()
+    if (!current.fresh) return true
+  }
+  return !source.fresh
 }
 
 export function requireShopifyCustomer(shopper: ShopifyShopper) {

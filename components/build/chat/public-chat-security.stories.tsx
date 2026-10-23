@@ -67,6 +67,14 @@ const cartSnapshot = {
 let cleanupResponse: "completed" | "uncertain" = "completed"
 let hostRequests: Array<Record<string, unknown>> = []
 
+async function waitForChatMessages(canvasElement: HTMLElement) {
+  // Run accessibility checks on settled messages, not their entrance opacity.
+  await waitFor(() => {
+    for (const message of canvasElement.querySelectorAll("[data-chat-message]"))
+      expect(getComputedStyle(message).opacity).toBe("1")
+  })
+}
+
 function StoreSessionFixture({ cart = false }: { cart?: boolean }) {
   const [customer, setCustomer] = React.useState("customer-a")
   React.useLayoutEffect(() => {
@@ -76,7 +84,7 @@ function StoreSessionFixture({ cart = false }: { cart?: boolean }) {
       type?: string
       requestId?: string
     }) => {
-      if (cart) hostRequests.push(data)
+      hostRequests.push(data)
       if (cart && data?.type === "datool:shopify:cart-request") {
         queueMicrotask(() => {
           for (const origin of ["https://evil.test", location.origin])
@@ -166,6 +174,101 @@ export const AccountSwitch: Story = {
     await expect(
       canvas.queryByText("Private question from customer A")
     ).not.toBeInTheDocument()
+  },
+}
+
+let approvedChangeReceipt: Record<string, unknown> | null = null
+export const ApprovedStoreChange: Story = {
+  beforeEach: () => {
+    approvedChangeReceipt = null
+    hostRequests = []
+  },
+  render: () => <StoreSessionFixture />,
+  parameters: {
+    msw: {
+      handlers: [
+        handlers[0],
+        http.get("*/api/build-public/:channel/conversation/:conversation", () =>
+          HttpResponse.json({
+            data: [
+              approvedChangeReceipt
+                ? {
+                    id: "approved-result",
+                    direction: "outbound",
+                    text: "Your profile was updated.",
+                    metadata: { completedContinuationId: "approved-change" },
+                  }
+                : {
+                    id: "approved-request",
+                    direction: "outbound",
+                    text: "A teammate approved this request. Continue from the store to verify your session and apply the reviewed change.",
+                    metadata: {
+                      continuations: [
+                        {
+                          type: "client_action",
+                          actionId: "update-profile",
+                          continuationId: "approved-change",
+                          eventName: "Continue approved change",
+                          title: "Update profile",
+                          input: { firstName: "Alice" },
+                        },
+                      ],
+                    },
+                  },
+            ],
+          })
+        ),
+        http.post(
+          "*/api/build-public/:channel/conversation/:conversation",
+          async ({ request }) => {
+            approvedChangeReceipt = (await request.json()) as Record<
+              string,
+              unknown
+            >
+            return HttpResponse.json({ data: { status: "queued" } })
+          }
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const proceed = await canvas.findByRole("button", {
+      name: "Continue approved change",
+    })
+    await waitFor(() =>
+      expect(canvas.getByText("first Name: Alice")).toBeVisible()
+    )
+    const draft = canvas.getByRole("textbox")
+    await userEvent.type(draft, "Keep my question")
+    const initialVerifications = hostRequests.filter(
+      (request) => request.type === "datool:chat:session-request"
+    ).length
+    proceed.focus()
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(approvedChangeReceipt).not.toBeNull())
+    expect(
+      hostRequests.filter(
+        (request) => request.type === "datool:chat:session-request"
+      ).length
+    ).toBeGreaterThan(initialVerifications)
+    expect(approvedChangeReceipt).toMatchObject({
+      metadata: {
+        widgetInteraction: {
+          actionId: "update-profile",
+          continuationId: "approved-change",
+          input: {},
+        },
+      },
+    })
+    await expect(draft).toHaveValue("Keep my question")
+    await expect(
+      canvas.findByText("Your profile was updated.")
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.getByRole("button", { name: "Continue approved change" })
+    ).toBeDisabled()
+    await waitForChatMessages(canvasElement)
   },
 }
 export const Challenge: Story = {
@@ -370,12 +473,7 @@ export const StorefrontCart: Story = {
         canvas.getByRole("region", { name: "Shopping cart" })
       ).toBeVisible()
     )
-    await waitFor(() => {
-      for (const message of canvasElement.querySelectorAll(
-        "[data-chat-message]"
-      ))
-        expect(getComputedStyle(message).opacity).toBe("1")
-    })
+    await waitForChatMessages(canvasElement)
     await expect(composer).toHaveValue("Keep my unfinished question")
     await expect(canvas.getByText("Board wax")).toBeVisible()
     await expect(
@@ -504,12 +602,7 @@ export const UncertainPurchasedCartCleanup: Story = {
     await expect(canvas.queryByRole("button", { name: "Retry" })).toBeNull()
     canvas.getByRole("button", { name: "Dismiss" }).focus()
     await expect(canvas.getByRole("button", { name: "Dismiss" })).toHaveFocus()
-    await waitFor(() => {
-      for (const message of canvasElement.querySelectorAll(
-        "[data-chat-message]"
-      ))
-        expect(getComputedStyle(message).opacity).toBe("1")
-    })
+    await waitForChatMessages(canvasElement)
   },
 }
 

@@ -25,7 +25,7 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [x] On-demand payment-verified release of the original recorded exchange payment holds.
 - [ ] Replacement orders with mandatory human approval and original-order credit accounting.
 - [ ] Action settings, confirmations, error states and reusable chat controls.
-- [ ] Delayed teammate approval and customer re-verification when the Shopify session has expired.
+- [x] Delayed teammate approval and customer re-verification when the Shopify session has expired.
 - [ ] Required/optional scope configuration, protected customer data approval and reconnect guidance.
 - [ ] Behavioral authorization, policy, idempotency and UI tests; Shopify schema validation.
 - [ ] Update this PR and verify a controlled sandbox install after release.
@@ -308,7 +308,35 @@ Keep the server-owned message identity record and the ownership recheck immediat
 
 For the remaining actions, Shopify remains responsible for prices, discounts, shipping, tax and payment state. Use the existing continuation mechanism for storefront interactions instead of introducing another queue or workflow engine. Order and return processing consume the same merchant settings and confirmation infrastructure. Return and order intent share the commerce ledger rather than separate queues or persistence systems.
 
-Before financial actions are considered ready, validate delayed approvals across the five-minute identity freshness boundary, provide an explicit re-verification path, and test reconciliation after ambiguous external writes. Complete privacy/uninstall handling and scope/reconnect guidance, then verify the full customer journey in the sandbox. Passing the current unit and database tests does not replace those release checks.
+Complete privacy/uninstall handling and scope/reconnect guidance, then verify the full customer journey in the sandbox, including delayed approvals and reconciliation after ambiguous writes. Passing the current unit and database tests does not replace those release checks.
+
+## Delayed approval and session verification
+
+When a teammate approves after the five-minute verification window, the runtime
+keeps the original reviewed input and quote in a one-shot customer continuation.
+It makes no Shopify request or financial write until the shopper selects
+**Continue approved change** in the storefront. The existing browser bridge
+refreshes the signed app-proxy identity before submitting that interaction.
+
+The runtime compares the newly admitted message with the original browser,
+customer, store, conversation and identity version. A different browser cannot
+use that saved approval, even for the same customer. Logout, account switching
+and disconnected integrations remain terminal authorization failures; they do
+not become verification prompts. Approval is read only from the claimed server
+record, and visitor input cannot replace its items or amount. Changed or expired
+quotes still require fresh teammate approval. Normal action execution and its
+immediate pre-write ownership checks remain unchanged.
+
+This reuses the current continuation ledger, signed identity lookup and chat
+confirmation card. It adds no endpoint, worker or table. Runtime/database tests
+exercise the stale-session regression, guest and signed-in refresh, changed
+prices, public chat delivery, pinned inputs, one-shot use, a different browser
+and revoked account/integration bindings. Chromium coverage verifies the session
+refresh before submission, keyboard activation, the visible reviewed input,
+retained composer draft and disabled completed action. Provider responses remain
+fixtures; live-store verification is still required.
+
+Provider contract: [authenticated app proxies and signed customer identity](https://shopify.dev/docs/apps/build/online-store/app-proxies/authenticate-app-proxies).
 
 ## Automatic commerce reconciliation
 

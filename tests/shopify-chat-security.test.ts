@@ -2093,28 +2093,33 @@ async function returnRuntimeFixture(
     },
   })
   async function turn(metadata: Record<string, unknown> = {}, approve = false) {
-    const queued = await enqueuePublicMessage(
-      f.context,
-      f.channel.id,
-      session.conversationId,
-      session.visitorToken,
-      {
-        text: "Return these items",
-        origin: "https://chat.example.test",
-        metadata,
-      }
-    )
-    if (!("messageId" in queued)) throw new Error("Expected admitted message")
-    const jobs = await f.database.execute<{ id: string }>(
-      sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
-    )
+    // Inbox approval is an operator turn, not a fresh storefront message.
+    let requestKey = `operator:${randomUUID()}`
+    if (!approve) {
+      const queued = await enqueuePublicMessage(
+        f.context,
+        f.channel.id,
+        session.conversationId,
+        session.visitorToken,
+        {
+          text: "Return these items",
+          origin: "https://chat.example.test",
+          metadata,
+        }
+      )
+      if (!("messageId" in queued)) throw new Error("Expected admitted message")
+      const jobs = await f.database.execute<{ id: string }>(
+        sql`SELECT id FROM build_channel_job WHERE message_id=${queued.messageId}`
+      )
+      requestKey = `channel:${jobs.rows[0].id}`
+    }
     return runAgentTurn(
       f.context,
       {
         agentId: f.agent.id,
         channel: "web",
         conversationId: session.conversationId,
-        requestKey: `channel:${jobs.rows[0].id}`,
+        requestKey,
         message: "Return these items",
         metadata: metadata as never,
       },
@@ -2140,6 +2145,13 @@ async function returnRuntimeFixture(
     input,
     turn,
     confirm,
+    refreshSession: async (sameBrowser = true) => {
+      session = await f.session(options.guest ? "" : "123", {
+        ...(sameBrowser ? { browserToken: session.browserToken } : {}),
+        conversationId: session.conversationId,
+      })
+      return session
+    },
     setSettings: async (settings: Record<string, unknown>) => {
       if (action.definition.type !== "integration")
         throw new Error("Expected integration")
@@ -2185,6 +2197,123 @@ async function returnRuntimeFixture(
       }
     },
   }
+}
+
+for (const changedQuote of [false, true]) {
+  test(`Shopify delayed approval survives session reverification with pinned inputs (changed quote: ${changedQuote})`, async () => {
+    const f = await returnRuntimeFixture({
+      approval: true,
+      guest: changedQuote,
+    })
+    const pending = await f.turn()
+    const original = pending.continuations[0]
+    await f.database.execute(sql`
+      UPDATE build_shopify_visitor_sessions SET verified_at=now()-interval '6 minutes'
+      WHERE project_id=${f.context.projectId}
+    `)
+    const before = f.provider.calls.length
+    const approved = await f.turn(f.confirm(original.continuationId!), true)
+    const continuation = approved.continuations[0]
+    expect(approved.status).toBe("awaiting_client")
+    expect(continuation.type).toBe("client_action")
+    expect(continuation.eventName).toBe("Continue approved change")
+    expect(continuation.shopifyReturnQuote).toEqual(original.shopifyReturnQuote)
+    expect(f.provider.calls).toHaveLength(before)
+    expect(f.provider.state.created).toBe(0)
+    await enqueueAgentTurnResult(
+      f.context,
+      approved,
+      `operator:${approved.turn.id}`
+    )
+    await assert.rejects(
+      f.turn(f.confirm(original.continuationId!), true),
+      /no longer available/
+    )
+    const refreshed = await f.refreshSession()
+    const delivered = await readPublicConversation(
+      f.context,
+      f.channel.id,
+      refreshed.conversationId,
+      refreshed.visitorToken,
+      "https://chat.example.test"
+    )
+    expect(JSON.stringify(delivered)).toContain("Continue approved change")
+    if (changedQuote) {
+      f.provider.state.returnedPrice = "20.99"
+      f.provider.state.transferAmount = "20.7"
+    }
+    const confirmation = f.confirm(continuation.continuationId!)
+    let result = await f.turn(confirmation)
+    if (changedQuote) {
+      expect(result.continuations[0].type).toBe("approval_required")
+      expect(result.continuations[0].shopifyReturnQuote?.operationId).toBe(
+        original.shopifyReturnQuote?.operationId
+      )
+      expect(
+        result.continuations[0].shopifyReturnQuote?.settlement.amount
+      ).toBe("20.7")
+      expect(f.provider.state.created).toBe(0)
+      const changed = f.confirm(result.continuations[0].continuationId!)
+      await assert.rejects(f.turn(changed), /no longer available/)
+      result = await f.turn(changed, true)
+    }
+    expect(result.status).toBe("completed")
+    expect(result.text).toContain("confirmed the refund")
+    expect(f.provider.state.created).toBe(1)
+    expect(f.provider.state.processed).toBe(1)
+    const processing = f.provider.calls.find((call) =>
+      call.query.includes("DatoolProcessReturn")
+    )!.variables.input as Record<string, unknown>
+    expect(processing.returnLineItems).toEqual([
+      { id: "gid://shopify/ReturnLineItem/1", quantity: 1 },
+    ])
+    await assert.rejects(f.turn(confirmation), /no longer available/)
+    expect(f.provider.state.processed).toBe(1)
+  }, 60_000)
+}
+
+test("Shopify delayed approval cannot transfer to another browser of the same customer", async () => {
+  const f = await returnRuntimeFixture({ approval: true })
+  const pending = await f.turn()
+  await f.database.execute(sql`
+    UPDATE build_shopify_visitor_sessions SET verified_at=now()-interval '6 minutes'
+    WHERE project_id=${f.context.projectId}
+  `)
+  const approved = await f.turn(
+    f.confirm(pending.continuations[0].continuationId!),
+    true
+  )
+  const before = f.provider.calls.length
+  await f.refreshSession(false)
+  await assert.rejects(
+    f.turn(f.confirm(approved.continuations[0].continuationId!)),
+    /verify|session/i
+  )
+  expect(f.provider.calls).toHaveLength(before)
+  expect(f.provider.state.created).toBe(0)
+}, 60_000)
+
+for (const revoked of ["connection", "identity"] as const) {
+  test(`Shopify delayed approval cannot revive a revoked ${revoked}`, async () => {
+    const f = await returnRuntimeFixture({ approval: true })
+    const pending = await f.turn()
+    const session = await f.refreshSession()
+    if (revoked === "connection") {
+      await f.database.execute(sql`
+        UPDATE build_app_connections SET status='disconnected'
+        WHERE id=${f.connectionId}::uuid
+      `)
+    } else {
+      await f.session("456", { browserToken: session.browserToken })
+    }
+    const before = f.provider.calls.length
+    await assert.rejects(
+      f.turn(f.confirm(pending.continuations[0].continuationId!), true),
+      /verify|session/i
+    )
+    expect(f.provider.calls).toHaveLength(before)
+    expect(f.provider.state.created).toBe(0)
+  }, 60_000)
 }
 
 for (const scenario of ["collect", "refund", "even"] as const) {

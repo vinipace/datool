@@ -35,6 +35,7 @@ import {
   shopifyActionNeedsConfirmation,
   shopifyActionNeedsHuman,
 } from "@/src/lib/build/shopify"
+import { shopifyApprovalNeedsVerification } from "../integrations/shopify-identity"
 import { beginModelUsage, finishModelUsage } from "../usage"
 
 import { createGateway } from "@ai-sdk/gateway"
@@ -251,6 +252,8 @@ export type RuntimeContinuation = {
   resumeAt?: string
   /** Server-owned source turn for a later merchant approval of a Shopify action. */
   shopifySourceTurnId?: string
+  /** Approval already granted; only the original shopper may resume after verification. */
+  shopifyApprovedSourceTurnId?: string
   shopifyCart?: { command: ShopifyCartCommand; expiresAt: number }
   shopifyProductSelection?: { variantIds: string[]; expiresAt: number }
   shopifyVariantPage?: { expiresAt: number }
@@ -1352,6 +1355,7 @@ async function executeAction(
     shopifyExchangeOrderQuote?: ShopifyExchangeOrderQuote
     shopifyCartApproved?: boolean
     shopifySourceTurnId?: string
+    shopifyReverification?: boolean
     signal?: AbortSignal
   }
 ) {
@@ -1657,6 +1661,33 @@ async function executeAction(
   }
   try {
     if (action.type === "integration") {
+      if (
+        action.toolSlug.startsWith("SHOPIFY_") &&
+        options.allowApproval &&
+        options.shopifySourceTurnId &&
+        (await shopifyApprovalNeedsVerification(context, {
+          connectionId: action.connectionId,
+          conversationId: conversation.id,
+          turnId: options.shopifySourceTurnId,
+          verificationTurnId: options.shopifyReverification
+            ? turn.id
+            : undefined,
+        }))
+      )
+        return await awaitInput({
+          ...pendingBase,
+          type: "client_action",
+          eventName: "Continue approved change",
+          title: action.name,
+          message:
+            "A teammate approved this request. Continue from the store to verify your session and apply the reviewed change. Changed or expired quotes need approval again.",
+          shopifyApprovedSourceTurnId: options.shopifySourceTurnId,
+          ...(orderQuote ? { shopifyOrderQuote: orderQuote } : {}),
+          ...(returnQuote ? { shopifyReturnQuote: returnQuote } : {}),
+          ...(exchangeOrderQuote
+            ? { shopifyExchangeOrderQuote: exchangeOrderQuote }
+            : {}),
+        })
       const result = await executeAppAction(context, {
         connectionId: action.connectionId,
         toolSlug: action.toolSlug,
@@ -3171,7 +3202,7 @@ export async function runAgentTurn(
           throw error
         }
       }
-      const approvalAllowed =
+      const trustedApproval =
         allowApproval &&
         options.trustedApproval?.actionId === continuationActionId &&
         (!options.trustedApproval.continuationId ||
@@ -3179,6 +3210,14 @@ export async function runAgentTurn(
             (typeof claimed.call.continuation?.continuationId === "string"
               ? claimed.call.continuation.continuationId
               : undefined))
+      const reverifiedApproval =
+        continuationType === "client_action" &&
+        persistedContinuation.eventName === "Continue approved change" &&
+        typeof persistedContinuation.shopifyApprovedSourceTurnId === "string" &&
+        action.definition.type === "integration" &&
+        action.definition.toolSlug.startsWith("SHOPIFY_")
+      // Approval comes from the claimed server record, never interaction metadata.
+      const approvalAllowed = trustedApproval || reverifiedApproval
       const shopifyConfirmed =
         continuationType === "client_action" &&
         persistedContinuation.eventName === "Confirm changes" &&
@@ -3238,11 +3277,13 @@ export async function runAgentTurn(
             resumesShopifyCart &&
             action.definition.type === "integration" &&
             isShopifyCartTool(action.definition.toolSlug),
-          shopifySourceTurnId:
-            approvalAllowed &&
-            typeof persistedContinuation.shopifySourceTurnId === "string"
+          shopifySourceTurnId: reverifiedApproval
+            ? (persistedContinuation.shopifyApprovedSourceTurnId as string)
+            : trustedApproval &&
+                typeof persistedContinuation.shopifySourceTurnId === "string"
               ? persistedContinuation.shopifySourceTurnId
               : undefined,
+          shopifyReverification: reverifiedApproval,
           procedureCursor: continuationCursor ?? undefined,
           signal: options.signal,
         }
