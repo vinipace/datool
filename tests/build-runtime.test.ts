@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { generateText } from "ai"
+import { sql } from "drizzle-orm"
+import { encryptProviderKey } from "@/src/server/model-providers/secrets"
 import { MockLanguageModelV4 } from "ai/test"
 import type { ActionRecord } from "@/src/lib/build/contracts"
 import { TracerService } from "@/src/server/tracer/service"
@@ -103,6 +105,156 @@ function agent(
 }
 
 describe("Build agent runtime", () => {
+  for (const [model, channel] of [
+    ["gpt-4.1-mini", "web"],
+    ["gpt-6-luna", "telegram"],
+  ] as const)
+    test(`direct OpenAI completes a tool loop through Responses without storing provider state (${model})`, async () => {
+      const { context, service } = await makeContext()
+      const previous = process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
+      process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = "test-provider-key-".repeat(
+        4
+      )
+      try {
+        const encrypted = encryptProviderKey(
+          "test-project-openai-key",
+          context.projectId,
+          "openai"
+        )
+        await context.database.execute(sql`
+          INSERT INTO project_model_provider (project_id,provider,encrypted_api_key)
+          VALUES (${context.projectId},'openai',${encrypted})
+        `)
+        let requests = 0
+        let executions = 0
+        const action: ActionRecord = {
+          id: "products",
+          projectId: context.projectId,
+          agentId: "agent-a",
+          slug: "products",
+          revision: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          definition: {
+            id: "products",
+            type: "client",
+            name: "Products",
+            description: "Look up products",
+            enabled: true,
+            channels: ["web", "telegram"],
+            procedureOnly: false,
+            eventName: "products",
+            inputSchema: {
+              type: "object",
+              properties: { query: { type: "string" } },
+              required: ["query"],
+              additionalProperties: false,
+            },
+            resultSchema: {},
+          },
+        }
+        const result = await runAgentTurn(
+          context,
+          {
+            agentId: "agent-a",
+            channel,
+            requestKey: `responses-${model}`,
+            message: "Find Hydrogen",
+          },
+          {
+            dependencies: {
+              resolveAgent: async () =>
+                agent(context, {
+                  provider: "openai",
+                  model,
+                  channelAllowlist: ["web", "telegram"],
+                }),
+              resolveActions: async () => [action],
+              resolveProcedures: async () => [],
+              retrieveKnowledge: async () => null,
+              executeAction: async ({ input }) => {
+                executions++
+                expect(input).toEqual({ query: "Hydrogen" })
+                return { status: "completed", output: { price: 600 } }
+              },
+              fetch: (async (url, init) => {
+                requests++
+                expect(String(url)).toBe("https://api.openai.com/v1/responses")
+                expect(new Headers(init?.headers).get("authorization")).toBe(
+                  "Bearer test-project-openai-key"
+                )
+                const body = JSON.parse(String(init?.body))
+                expect(body.model).toBe(model)
+                expect(body.store).toBe(false)
+                expect(
+                  body.tools.some(
+                    (tool: { name: string }) => tool.name === "products"
+                  )
+                ).toBe(true)
+                if (requests === 2)
+                  expect(
+                    body.input.some(
+                      (item: { type: string; call_id?: string }) =>
+                        item.type === "function_call_output" &&
+                        item.call_id === "call_products"
+                    )
+                  ).toBe(true)
+                return Response.json({
+                  id: `resp_${requests}`,
+                  object: "response",
+                  created_at: 1792784000,
+                  model,
+                  status: "completed",
+                  output:
+                    requests === 1
+                      ? [
+                          {
+                            type: "function_call",
+                            id: "fc_products",
+                            call_id: "call_products",
+                            name: "products",
+                            arguments: '{"query":"Hydrogen"}',
+                            status: "completed",
+                          },
+                        ]
+                      : [
+                          {
+                            type: "message",
+                            id: "msg_done",
+                            role: "assistant",
+                            status: "completed",
+                            content: [
+                              {
+                                type: "output_text",
+                                text: "Hydrogen costs R$600.",
+                                annotations: [],
+                              },
+                            ],
+                          },
+                        ],
+                  usage: {
+                    input_tokens: 10,
+                    output_tokens: 5,
+                    total_tokens: 15,
+                  },
+                })
+              }) as typeof fetch,
+            },
+          }
+        )
+        expect(requests).toBe(2)
+        expect(executions).toBe(1)
+        expect(result.text).toBe("Hydrogen costs R$600.")
+        expect(
+          await service.listToolCalls(result.conversation.id)
+        ).toHaveLength(1)
+      } finally {
+        if (previous === undefined)
+          delete process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
+        else process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = previous
+      }
+    })
+
   test("retains the safe HTTP failure status in tool traces", async () => {
     const { context, service } = await makeContext()
     const usage = {
