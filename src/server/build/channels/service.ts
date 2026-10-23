@@ -990,7 +990,12 @@ export type ClaimedChannelJob = {
   id: string
   projectId: string
   connectionId: string
-  kind: "process_inbound" | "deliver_outbound" | "telegram_poll" | "resume_wait"
+  kind:
+    | "process_inbound"
+    | "deliver_outbound"
+    | "telegram_poll"
+    | "resume_wait"
+    | "shopify_reconcile"
   messageId: string | null
   payload: Record<string, unknown>
   attempts: number
@@ -1106,7 +1111,7 @@ export async function claimNextChannelJob(
             AND active.kind = 'telegram_poll' AND active.status = 'running'
             AND active.locked_at >= now() - interval '5 minutes' AND active.id <> j.id
         ))
-      ORDER BY (j.kind = 'telegram_poll'), j.run_after, j.created_at, j.id
+      ORDER BY (j.kind IN ('telegram_poll','shopify_reconcile')), j.run_after, j.created_at, j.id
       FOR UPDATE SKIP LOCKED
       LIMIT 1
     )
@@ -1208,6 +1213,8 @@ export async function enqueueOutboundEnvelope(
     expectedOwnerFence?: number
     expectedOwnerType?: "ai" | "human"
     runtimeMessageId?: string
+    /** Persist an independently generated status update in model history atomically. */
+    recordRuntimeMessage?: boolean
   } = {}
 ) {
   const loaded = await getChannelConnection(context, envelope.connectionId)
@@ -1301,6 +1308,24 @@ export async function enqueueOutboundEnvelope(
     `)
     if (!inserted.rows.length)
       return { inserted: false, channelJobId: undefined as string | undefined }
+    if (options.recordRuntimeMessage) {
+      const conversations = new ConversationService({
+        ...context,
+        database: scopedTracerTransaction(context.database, tx),
+      })
+      const message = await conversations.appendMessage(
+        envelope.conversationId,
+        {
+          role: "assistant",
+          content: envelope.text,
+          status: "completed",
+          metadata: { source: "channel_status_update" },
+        }
+      )
+      await tx.execute(
+        sql`UPDATE build_channel_message SET runtime_message_id=${message.id} WHERE project_id=${context.projectId} AND id=${messageId}`
+      )
+    }
     const jobResult = await tx.execute<Row>(sql`
       INSERT INTO build_channel_job
         (id, project_id, connection_id, kind, message_id, payload_json, idempotency_key)
@@ -2072,6 +2097,16 @@ export async function processChannelJob(
     agentId: loaded.connection.agentId,
     channel: loaded.connection.channel,
   })
+  if (job.kind === "shopify_reconcile") {
+    const { processShopifyReconciliation } =
+      await import("../integrations/shopify-reconciliation")
+    return processShopifyReconciliation(context, job, () =>
+      assertChannelJobReady(database, job, {
+        agentId: loaded.connection.agentId,
+        channel: loaded.connection.channel,
+      })
+    )
+  }
   if (job.kind === "telegram_poll")
     return processTelegramPoll(context, loaded, job, database)
   if (job.kind === "resume_wait") {

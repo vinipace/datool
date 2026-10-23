@@ -81,7 +81,7 @@ connections.
 Product searches render native product cards. An enabled **Update shopping cart**
 action for the same connection adds variant and quantity controls. Storefront chat
 installation is separate from the data connection. This connector does not
-install a theme embed. Automatic payment notifications, cart clearing, resolution
+install a theme embed. Payment updates use the existing channel worker. Cart clearing, resolution
 of incomplete drafts and returns, and replacement-order work remain tracked in
 [the action parity checklist](shopify-action-parity.md).
 
@@ -97,7 +97,7 @@ session. Neither path calls the Shopify development app or its temporary tunnel.
 Native calls record integration usage with no configured Composio charge.
 Normal agent model usage still applies.
 
-Apply migrations through 0068 before enabling these actions. Confirmed order
+Apply migrations through 0069 before enabling these actions. Confirmed order
 intent is stored separately from usage events so interrupted tool responses do
 not erase the information needed for recovery. Checkout reads require draft-order,
 order and customer access; the corresponding write scopes also grant read access.
@@ -117,8 +117,10 @@ not replayed. Only a recorded never-started operation may continue in chat.
 Migration 0068 stores the exact exchange payment-hold IDs and fulfillment lines
 observed before payment. A paid exchange with no saved hold plan requires review.
 A lost hold-release response is recovered by reading those same IDs; no refund,
-invoice, newly added hold or shipment is repeated. Payment reconciliation is
-currently on demand through Check return; webhook notifications remain unfinished.
+invoice, newly added hold or shipment is repeated. Payment reconciliation also runs
+in the background, using the same checks as Check return. The worker only releases
+previously recorded exchange payment holds;
+it cannot create an order, refund or invoice.
 
 ## Billing ownership
 
@@ -144,7 +146,7 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 
 ## Installation setup
 
-1. Apply migrations through `0064_shopify_commerce_identity.sql` using the normal release
+1. Apply migrations through `0069_shopify_reconciliation.sql` using the normal release
    flow. Existing organizations retain Stripe ownership.
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
@@ -318,3 +320,51 @@ embed only after the deployed proxy and channel binding work.
 
 Identity reference: [authenticated app proxies](https://shopify.dev/docs/apps/build/online-store/app-proxies/authenticate-app-proxies).
 Challenge reference: [Turnstile server validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/).
+
+## Automatic payment updates
+
+The web process accepts Shopify deliveries at
+`https://YOUR_DATOOL_HOST/api/shopify/webhooks/commerce`. Configure the production
+app's webhook subscriptions with API version **2026-10** for these topics:
+
+- `orders/create`, `orders/paid`, `orders/updated`, `orders/cancelled`
+- `draft_orders/update`
+- `returns/process`, `returns/update`
+- `fulfillment_orders/order_routing_complete`
+
+Use the app configuration or Dev Dashboard, then release that Shopify app
+configuration. Declaring an endpoint in Datool does not register subscriptions.
+The return topic is `returns/process`, not `returns/processed`. See Shopify's
+[topic reference](https://shopify.dev/docs/api/admin-graphql/2026-10/enums/WebhookSubscriptionTopic)
+and [delivery verification](https://shopify.dev/docs/apps/build/webhooks/verify-deliveries).
+These subscriptions are separate from the mandatory privacy/uninstall handlers,
+which remain a public-release requirement.
+
+Apply migration 0069 and run the updated **web and buildworker** releases. The
+receiver uses the official SDK to verify the signature over the original body,
+deduplicates deliveries and marks existing operations due in one transaction.
+It stores a hashed receipt rather than the order/customer payload. Database
+admission failures return 503 so Shopify can retry. An unknown store, disabled
+organization or unrecognized topic cannot create an operation.
+
+The existing worker coalesces pending checks per operation and gives customer
+messages priority. Pending payments are checked every five minutes as a fallback
+for delayed or missed deliveries; a webhook wakes the check sooner. Each check
+reads current Shopify state and the original buyer/items. Out-of-order webhook
+bodies never become payment truth. An event arriving during a check stays due.
+Completed payments/refunds produce one message per milestone in the original
+conversation, atomically recorded with model history and the delivery job.
+Retries cannot create duplicate notifications or replay financial mutations.
+
+A browser session expiring does not cancel an already approved exchange. The
+worker can reconcile that saved intent, while chat access still requires a valid
+visitor credential. A new customer cannot read the original conversation.
+Disconnecting the integration or changing the store's channel binding prevents
+background processing. Missing grants or ambiguous provider state require store
+review. A paid exchange without a pre-payment hold snapshot still requires
+review; the worker never adopts new holds after payment.
+
+The implementation and local tests do not prove a production subscription is
+registered, Shopify has granted the scopes, or a real payment has been received.
+Verify those separately in the sandbox before public release. Cart clearing and
+messaging-channel notifications remain unfinished.

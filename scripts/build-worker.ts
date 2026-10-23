@@ -1,3 +1,4 @@
+import { enqueueShopifyReconciliationJobs } from "../src/server/build/integrations/shopify-reconciliation"
 import { createTracerDatabase } from "../src/server/tracer/db"
 import { createBuildContext } from "../src/server/build/context"
 import {
@@ -38,7 +39,9 @@ import { buildAvailable } from "../lib/build/config"
 
 // Stay healthy under process supervisors without admitting or processing jobs.
 if (!buildAvailable()) {
-  console.info("[build-worker] disabled; set DATOOL_BUILD_ENABLED=true or DATOOL_BUILD_ORGANIZATION_IDS to enable")
+  console.info(
+    "[build-worker] disabled; set DATOOL_BUILD_ENABLED=true or DATOOL_BUILD_ORGANIZATION_IDS to enable"
+  )
   await new Promise<void>((resolve) => {
     const timer = setInterval(() => {}, 60_000)
     const stop = () => {
@@ -341,6 +344,11 @@ await Promise.all([
   loop("simulation queue failed", simulationTask, 2000),
   loop("campaign queue failed", campaignTask, 2000),
   loop("conversation wait scheduler failed", waitTask, 1000),
+  loop(
+    "Shopify reconciliation scheduler failed",
+    async () => (await enqueueShopifyReconciliationJobs(workerDatabase)) > 0,
+    2000
+  ),
 ])
 const { db, analyticsDb } = await import("../lib/db")
 await Promise.all([db.end(), analyticsDb.end()])

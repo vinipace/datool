@@ -11,7 +11,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [ ] Online checkout, cash on delivery and free orders, with merchant-selected payment policies.
 - [x] Shopify-calculated quotes and one-shot creation of online-payment drafts, unpaid cash-on-delivery orders and zero-total free orders.
 - [x] Durable approved order intent and on-demand checkout recovery/payment status for the verified shopper.
-- [ ] Payment completion tracking, cart clearing after confirmed placement, reconciliation of interrupted writes and messaging-channel order creation.
+- [x] Automatic checkout/return payment reconciliation and deduplicated storefront conversation updates.
+- [ ] Cart clearing after confirmed placement, resolution of incomplete drafts and messaging-channel order creation.
 - [x] Own order history, status and tracking; guest lookup by order number and checkout email or phone.
 - [x] Merchant-allowlisted order tags.
 - [x] Account activation and sign-in guidance appropriate to the store's account system.
@@ -49,9 +50,9 @@ Online payment returns Shopify's invoice checkout URL without completing or mark
 
 Approved order intent, settings, operation tags and available draft/order IDs survive failed tool responses in a dedicated commerce table. Metering remains separate. An interrupted or uncertain attempt blocks a new order in the same conversation. Check checkout reads the saved draft/order ID, or searches the exact operation tag when the create response was lost. Missing search results never authorize a new order. An unambiguous online draft with matching buyer and totals recovers its existing unpaid checkout link. A completed draft recovers the placed order and current payment status; refunded or pending orders are not reported as paid. Logged-in customers can check their conversation on another verified device; guest access remains bound to the original browser session. Arbitrary external draft/order/customer IDs are not tool arguments.
 
-Recovery performs no Shopify writes. An uncompleted cash-on-delivery/free draft, mismatched buyer/totals, or duplicate operation tag stays blocked for store-team review. A later check can recognize the original order after the store team completes it in Shopify. Supported in-chat resolution of incomplete or missing drafts, automatic payment notifications and webhook reconciliation remain release requirements. A stale read cannot overwrite a newer recorded outcome.
+Recovery performs no Shopify writes. An uncompleted cash-on-delivery/free draft, mismatched buyer/totals, or duplicate operation tag stays blocked for store-team review. A later check can recognize the original order after the store team completes it in Shopify. Supported in-chat resolution of incomplete or missing drafts and production webhook registration remain release requirements. Automatic payment checks reuse the worker as described below. A stale read cannot overwrite a newer recorded outcome.
 
-Cart-based drafts currently support ordinary variant lines. The storefront bridge flags subscriptions, line properties and bundle relationships without sending their private contents to Datool. Those carts, and carts from an older bridge that cannot establish this flag, use the store checkout to preserve their options. The remaining journey work includes cart clearing only after verified placement and payment-completion notifications; issuing a checkout link alone cannot trigger either.
+Cart-based drafts currently support ordinary variant lines. The storefront bridge flags subscriptions, line properties and bundle relationships without sending their private contents to Datool. Those carts, and carts from an older bridge that cannot establish this flag, use the store checkout to preserve their options. The remaining journey work includes cart clearing only after verified placement and messaging-channel payment notifications; issuing a checkout link alone cannot prove payment.
 
 Existing abuse protections remain burst-oriented. This work does not add default daily message quotas or spending caps.
 
@@ -111,8 +112,8 @@ stories cover the shared confirmation and merchant settings. The generated
 queries validate against Shopify Admin GraphQL 2026-10. These are local tests
 with stubbed provider responses, not live refunds or payments.
 
-Apply migrations 0066–0068 and obtain `write_returns` plus the invoice/order scopes
-before enabling the action. Remaining return work includes payment webhooks.
+Apply migrations 0066–0069 and obtain `write_returns` plus the invoice/order scopes
+before enabling the action. Production payment webhook registration still needs verification.
 Separate replacement orders and their credit
 accounting are not implemented. Full after-sales parity remains incomplete.
 
@@ -210,7 +211,7 @@ Required grants are `write_merchant_managed_fulfillment_orders`, plus
 `write_third_party_fulfillment_orders` for third-party locations, and the Shopify
 user's `fulfill_and_ship_orders` permission. Incomplete visibility cannot authorize
 a release. Existing catalog/payment reads remain usable without these grants.
-Automatic payment webhooks and customer notifications are still unfinished.
+Automatic payment checks and storefront notifications use the existing worker, as described below. Production subscription registration remains unverified.
 
 The focused runtime cases cover explicit hold IDs, paginated membership, missing
 or mixed fulfillment, pending authorization, changed ownership/balance/holds,
@@ -233,3 +234,41 @@ Keep the server-owned message identity record and the ownership recheck immediat
 For the remaining actions, Shopify remains responsible for prices, discounts, shipping, tax and payment state. Use the existing continuation mechanism for storefront interactions instead of introducing another queue or workflow engine. Order and return processing consume the same merchant settings and confirmation infrastructure. Return and order intent share the commerce ledger rather than separate queues or persistence systems.
 
 Before financial actions are considered ready, validate delayed approvals across the five-minute identity freshness boundary, provide an explicit re-verification path, and test reconciliation after ambiguous external writes. Complete privacy/uninstall handling and scope/reconnect guidance, then verify the full customer journey in the sandbox. Passing the current unit and database tests does not replace those release checks.
+
+## Automatic commerce reconciliation
+
+Migration 0069 adds a due time to the existing commerce ledger and a metadata-only
+webhook receipt table. The existing channel job queue, leases, retries and
+outbound delivery path handle reconciliation; no second financial execution
+workflow is introduced. Webhook delivery and scheduled five-minute fallback
+checks converge on the same checkout/return readers used by the shopper.
+Existing unpaid cash-on-delivery orders enter the backfill, while historical
+paid orders are left idle to avoid generating old payment notifications.
+
+The receiver verifies raw-body HMAC through Shopify's SDK before tenant lookup,
+bounds the body and saves no webhook PII. Receipt insertion and waking the
+original operation are atomic. Events cannot choose an authenticated customer,
+change approved amounts or initiate new orders/refunds/invoices. Shopify's live
+buyer, item and payment checks remain authoritative. Existing exchange holds can
+be released under their original recorded approval, even after browser expiry.
+The original conversation retains its visitor authorization boundary.
+
+Per-operation admission coalesces concurrent checks. Customer message jobs have
+priority. A new event received while a check is running remains due; missed
+webhooks are recovered by polling while a payment is unresolved. Notifications
+use stable operation/milestone keys and atomically persist both the visible chat
+message and model history. A lost hold-release response is reconciled by reading
+the same hold IDs. It cannot repeat an invoice, refund or return.
+
+Runtime and database tests exercise signed ingress, duplicate deliveries, a
+forged payment status, revoked access, expired browser records, lost release
+responses, failed message persistence and an event arriving during a read.
+The order migration regression failed before unpaid cash-on-delivery records
+were included; it now passes alongside the historical paid-order case.
+Provider responses are fixtures, so live payment outcomes remain unverified.
+
+Required production work includes registering the documented webhook topics,
+releasing web/buildworker with migration 0069, obtaining the store's grants and
+verifying a sandbox checkout, payment, duplicate delivery and exchange outcome.
+Privacy/uninstall handling, cart clearing and messaging-channel notifications
+remain separate unfinished requirements.

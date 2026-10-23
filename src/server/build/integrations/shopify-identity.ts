@@ -5,7 +5,8 @@ import { TracerError } from "@/src/server/tracer/errors"
 export type ShopifyShopper = {
   shop: string
   customerId: string | null
-  browserSessionId: string
+  // Background reconciliation uses the original operation after browser expiry.
+  browserSessionId: string | null
 }
 
 /** Resolve only the identity admitted by the channel adapter, never model metadata. */

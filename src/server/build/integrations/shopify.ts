@@ -40,8 +40,7 @@ import { prepareShopifyReturn } from "./shopify-return-quote"
 import { processShopifyReturn } from "./shopify-return-process"
 import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
 import { ShopifyOperationStore } from "./shopify-operation-store"
-import { checkShopifyReturn } from "./shopify-return-status"
-import { reconcileShopifyExchangeFulfillment } from "./shopify-exchange-fulfillment"
+import { reconcileShopifyReturn } from "./shopify-return-reconcile"
 import { checkShopifyCheckout } from "./shopify-order-status"
 import { getShopifyReturnOptions } from "./shopify-return-options"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
@@ -276,7 +275,10 @@ export async function completeShopifyAuthorization(
   )
 }
 
-async function authorizedSession(context: BuildContext, id: string) {
+export async function authorizedShopifySession(
+  context: BuildContext,
+  id: string
+) {
   await assertBuildProject(context)
   const client = await getTracerWritePool(context.database).connect()
   try {
@@ -335,7 +337,7 @@ export async function refreshShopifyConnection(
   context: BuildContext,
   id: string
 ) {
-  const session = await authorizedSession(context, id)
+  const session = await authorizedShopifySession(context, id)
   const client = new (nativeShopify().clients.Graphql)({ session })
   try {
     const result = await client.request<{ shop: { myshopifyDomain: string } }>(
@@ -377,7 +379,7 @@ export async function executeShopifyTool(
     : commerce
       ? input
       : z.object({}).strict().parse(input)
-  const session = await authorizedSession(context, id)
+  const session = await authorizedShopifySession(context, id)
   if (commerce && !session.isScopeIncluded(shopifyToolScopes[slug]))
     throw new TracerError(
       "VALIDATION_ERROR",
@@ -456,36 +458,16 @@ export async function executeShopifyTool(
           execution.conversationId,
           shopper
         )
-        const result = await checkShopifyReturn(
+        return await reconcileShopifyReturn(
           args,
           shopper,
           operations,
-          graphql
+          graphql,
+          manageExchangeHolds,
+          beforeWrite
         )
-        if (
-          !("paymentStatus" in result) ||
-          !["payment_required", "paid"].includes(result.paymentStatus)
-        )
-          return result
-        const fulfillment = manageExchangeHolds
-          ? await reconcileShopifyExchangeFulfillment(
-              result.operationId,
-              shopper,
-              operations,
-              graphql,
-              beforeWrite
-            )
-          : {
-              fulfillmentStatus: "permission_required",
-              message:
-                "The store team must grant fulfillment access before Datool can release the exchange payment holds. Return and payment status remain available.",
-            }
-        return {
-          ...result,
-          fulfillmentStatus: fulfillment.fulfillmentStatus,
-          message: `${result.message} ${fulfillment.message}`,
-        }
       }
+
       if (slug === "SHOPIFY_RETURN_OR_EXCHANGE") {
         const settings = shopifyActionSettingsSchema.parse(
           execution.settings ?? {}
@@ -647,7 +629,7 @@ export async function configureShopifyChat(
       "VALIDATION_ERROR",
       "Enable this chat bubble before connecting it to Shopify."
     )
-  const session = await authorizedSession(context, connectionId)
+  const session = await authorizedShopifySession(context, connectionId)
   if (!session.isScopeIncluded("write_app_proxy"))
     throw new TracerError(
       "VALIDATION_ERROR",

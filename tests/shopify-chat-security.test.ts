@@ -32,7 +32,13 @@ import {
   readPublicConversation,
   PublicAdmissionRateLimitError,
   updateChannelConnection,
+  claimNextChannelJob,
+  processChannelJob,
+  completeChannelJob,
+  failChannelJob,
 } from "@/src/server/build/channels/service"
+import { handleShopifyCommerceWebhook } from "@/src/server/build/integrations/shopify-webhook"
+import { enqueueShopifyReconciliationJobs } from "@/src/server/build/integrations/shopify-reconciliation"
 import { shopifyStorefrontSession } from "@/src/server/build/integrations/shopify-storefront"
 import {
   verifyNewVisitorChallenge,
@@ -1534,9 +1540,63 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         providerPlaced = true
         expect((await check()).text).toContain("Payment status: pending")
         financialStatus = "PAID"
+        if (orderSource === "items") {
+          await f.database.execute(
+            sql`UPDATE build_shopify_order_operations SET reconcile_after=NULL WHERE id=${firstOperation}::uuid`
+          )
+          const response = await handleShopifyCommerceWebhook(
+            commerceWebhook({
+              admin_graphql_api_id: "gid://shopify/Order/100",
+              tags: `datool-operation-${firstOperation}`,
+            }),
+            f.database
+          )
+          expect(response.status).toBe(204)
+          const job = await reconciliationJob(f)
+          await processChannelJob(job, noModel, f.database)
+          await completeChannelJob(f.database, job)
+          const delivery = await claimNextChannelJob(f.database)
+          expect(delivery?.kind).toBe("deliver_outbound")
+          await processChannelJob(delivery!, noModel, f.database)
+          await completeChannelJob(f.database, delivery!)
+          const visible = await readPublicConversation(
+            f.context,
+            f.channel.id,
+            session.conversationId,
+            session.visitorToken,
+            "https://chat.example.test"
+          )
+          expect(
+            visible.filter(
+              (m) =>
+                m.direction === "outbound" &&
+                m.text.includes("payment is complete")
+            )
+          ).toHaveLength(1)
+        }
         expect((await check()).text).toContain("payment is complete")
         financialStatus = "REFUNDED"
         expect((await check()).text).toContain("Payment status: refunded")
+        if (orderSource === "items") {
+          await handleShopifyCommerceWebhook(
+            commerceWebhook({
+              admin_graphql_api_id: "gid://shopify/Order/100",
+              tags: `datool-operation-${firstOperation}`,
+            }),
+            f.database
+          )
+          const refunded = await reconciliationJob(f)
+          await processChannelJob(refunded, noModel, f.database)
+          await completeChannelJob(f.database, refunded)
+          expect(await enqueueShopifyReconciliationJobs(f.database)).toBe(0)
+          expect(
+            (
+              await f.database.execute<{ due: unknown }>(
+                sql`SELECT reconcile_after AS due FROM build_shopify_order_operations WHERE id=${firstOperation}::uuid`
+              )
+            ).rows[0].due
+          ).toBeNull()
+        }
       } else {
         expect((await check()).text).toContain("#100")
         // Same customer on another verified device can recover the same conversation.
@@ -1691,6 +1751,34 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         expect(completed).toBe(1)
         await assert.rejects(turn(), /previous order.*unresolved/)
         expect(created).toBe(2)
+      }
+      if (orderSource === "items" && paymentMethod !== "online") {
+        // Reapply the complete migration to existing real checkout records:
+        // unpaid COD needs polling; already-paid free orders need no new alert.
+        await f.database.execute(
+          sql.raw(`
+          ALTER TABLE build_shopify_order_operations DROP COLUMN reconcile_after CASCADE;
+          DROP INDEX build_shopify_reconciliation_active;
+          DROP TABLE build_shopify_webhook_receipts;
+        `)
+        )
+        await f.database.execute(
+          sql.raw(
+            await readFile(
+              new URL(
+                "../migrations/0069_shopify_reconciliation.sql",
+                import.meta.url
+              ),
+              "utf8"
+            )
+          )
+        )
+        const migrated = await f.database.execute<{ due: unknown }>(
+          sql`SELECT reconcile_after AS due FROM build_shopify_order_operations WHERE id=${firstOperation}::uuid`
+        )
+        expect(migrated.rows[0].due !== null).toBe(
+          paymentMethod === "cash_on_delivery"
+        )
       }
     }, 60_000)
   }
@@ -2636,3 +2724,314 @@ test("Shopify exchange recovers a failed hold-plan save without repeating proces
   expect(s.invoices).toBe(0)
   expect(s.holdReleases).toBe(1)
 }, 60_000)
+
+function commerceWebhook(
+  body: Record<string, unknown>,
+  options: {
+    topic?: string
+    shop?: string
+    id?: string
+    corrupt?: boolean
+  } = {}
+) {
+  const raw = JSON.stringify(body)
+  return new Request(
+    "https://chat.example.test/api/shopify/webhooks/commerce",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-shopify-topic": options.topic ?? "orders/paid",
+        "x-shopify-shop-domain": options.shop ?? "fixture.myshopify.com",
+        "x-shopify-api-version": "2026-10",
+        "x-shopify-webhook-id": options.id ?? randomUUID(),
+        "x-shopify-hmac-sha256": createHmac("sha256", "fixture-secret")
+          .update(raw)
+          .digest("base64"),
+      },
+      body: options.corrupt ? `${raw} ` : raw,
+    }
+  )
+}
+async function reconciliationJob(f: Awaited<ReturnType<typeof fixture>>) {
+  // These runtime fixtures execute their admitted turns directly. Finish those
+  // inbound jobs before exercising the actual background worker boundary.
+  await f.database.execute(
+    sql`UPDATE build_channel_job SET status='succeeded' WHERE kind='process_inbound'`
+  )
+  await enqueueShopifyReconciliationJobs(f.database)
+  let job = await claimNextChannelJob(f.database)
+  while (job?.kind === "deliver_outbound") {
+    await processChannelJob(job, noModel, f.database)
+    await completeChannelJob(f.database, job)
+    job = await claimNextChannelJob(f.database)
+  }
+  expect(job?.kind).toBe("shopify_reconcile")
+  if (!job) throw new Error("Missing reconciliation job")
+  return job
+}
+const noModel = async (): Promise<never> => {
+  throw new Error("A payment update must not invoke the model")
+}
+
+// Owner-boundary coverage: signed ingress, real durable worker, provider read,
+// saved approval and public/model delivery. Existing on-demand tests cannot
+// catch dropped webhooks, background identity mistakes or duplicate messages.
+test("Shopify payment webhooks reconcile approved exchanges after session expiry and deliver one durable update", async () => {
+  const f = await returnRuntimeFixture({
+    exchange: true,
+    fulfillment: true,
+    guest: true,
+  })
+  const s = f.provider.state
+  s.direction = "InvoiceReturnOutcome"
+  s.transferAmount = "0.4"
+  const pending = await f.turn()
+  const operationId = pending.continuations[0].shopifyReturnQuote!.operationId
+  const originalConversation = pending.conversation.id
+  await f.turn(f.confirm(pending.continuations[0].continuationId!))
+  await f.database.execute(
+    sql`DELETE FROM build_shopify_visitor_sessions WHERE project_id=${f.context.projectId}`
+  )
+  await f.database.execute(
+    sql`UPDATE build_shopify_order_operations SET reconcile_after=NULL WHERE id=${operationId}::uuid`
+  )
+  const body = {
+    admin_graphql_api_id: "gid://shopify/Order/10",
+    financial_status: "paid",
+    email: "never-retain@example.test",
+  }
+  const delivery = randomUUID()
+  for (const options of [
+    { corrupt: true },
+    { shop: "foreign.myshopify.com" },
+  ]) {
+    const response = await handleShopifyCommerceWebhook(
+      commerceWebhook(body, options),
+      f.database
+    )
+    expect(response.status).toBe(options.corrupt ? 401 : 204)
+    expect(await enqueueShopifyReconciliationJobs(f.database)).toBe(0)
+  }
+  await f.database.execute(
+    sql.raw(`
+    CREATE FUNCTION reject_payment_wake() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'fixture: admission unavailable'; END $$;
+    CREATE TRIGGER reject_payment_wake BEFORE UPDATE OF reconcile_after ON build_shopify_order_operations FOR EACH ROW EXECUTE FUNCTION reject_payment_wake();
+  `)
+  )
+  expect(
+    (
+      await handleShopifyCommerceWebhook(
+        commerceWebhook(body, { id: delivery }),
+        f.database
+      )
+    ).status
+  ).toBe(503)
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT * FROM build_shopify_webhook_receipts`
+      )
+    ).rows
+  ).toHaveLength(0)
+  await f.database.execute(
+    sql.raw(
+      "DROP TRIGGER reject_payment_wake ON build_shopify_order_operations"
+    )
+  )
+  expect(
+    (
+      await handleShopifyCommerceWebhook(
+        commerceWebhook(body, { id: delivery }),
+        f.database
+      )
+    ).status
+  ).toBe(204)
+  const job = await reconciliationJob(f)
+  expect(await enqueueShopifyReconciliationJobs(f.database)).toBe(0)
+  // A signed "paid" payload is not payment proof: the provider still says pending.
+  await processChannelJob(job, noModel, f.database)
+  await completeChannelJob(f.database, job)
+  expect(s.holdReleases).toBe(0)
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT id FROM build_channel_message WHERE direction='outbound'`
+      )
+    ).rows
+  ).toHaveLength(0)
+  const due = (
+    await f.database.execute<{ due: string }>(
+      sql`SELECT reconcile_after::text AS due FROM build_shopify_order_operations WHERE id=${operationId}::uuid`
+    )
+  ).rows[0].due
+  await handleShopifyCommerceWebhook(
+    commerceWebhook(body, { id: delivery }),
+    f.database
+  )
+  expect(
+    (
+      await f.database.execute<{ due: string }>(
+        sql`SELECT reconcile_after::text AS due FROM build_shopify_order_operations WHERE id=${operationId}::uuid`
+      )
+    ).rows[0].due
+  ).toBe(due)
+  s.outstanding = "0"
+  s.fullyPaid = true
+  s.financialStatus = "PAID"
+  s.loseHoldRelease = true
+  await handleShopifyCommerceWebhook(commerceWebhook(body), f.database)
+  const lost = await reconciliationJob(f)
+  await assert.rejects(
+    processChannelJob(lost, noModel, f.database),
+    /did not confirm/
+  )
+  await failChannelJob(f.database, lost, {
+    message: "Lost provider reply",
+    uncertain: true,
+  })
+  expect(s.holdReleases).toBe(1)
+  // Periodic reconciliation recovers a missed event and a lost release response.
+  await f.database.execute(
+    sql`UPDATE build_shopify_order_operations SET reconcile_after=now()-interval '1 minute' WHERE id=${operationId}::uuid`
+  )
+  const recovered = await reconciliationJob(f)
+  const priorMessages = (
+    await new ConversationService(f.context).listMessages(originalConversation)
+  ).items.length
+  await f.database.execute(
+    sql.raw(`
+    CREATE FUNCTION reject_payment_delivery() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN IF NEW.kind='deliver_outbound' THEN RAISE EXCEPTION 'fixture: delivery storage unavailable'; END IF; RETURN NEW; END $$;
+    CREATE TRIGGER reject_payment_delivery BEFORE INSERT ON build_channel_job FOR EACH ROW EXECUTE FUNCTION reject_payment_delivery();
+  `)
+  )
+  await assert.rejects(
+    processChannelJob(recovered, noModel, f.database),
+    /Failed query/
+  )
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT id FROM build_channel_message WHERE direction='outbound'`
+      )
+    ).rows
+  ).toHaveLength(0)
+  expect(
+    (
+      await new ConversationService(f.context).listMessages(
+        originalConversation
+      )
+    ).items
+  ).toHaveLength(priorMessages)
+  await f.database.execute(
+    sql.raw("DROP TRIGGER reject_payment_delivery ON build_channel_job")
+  )
+  await processChannelJob(recovered, noModel, f.database)
+  await completeChannelJob(f.database, recovered)
+  const outbound = await claimNextChannelJob(f.database)
+  expect(outbound?.kind).toBe("deliver_outbound")
+  await processChannelJob(outbound!, noModel, f.database)
+  await completeChannelJob(f.database, outbound!)
+  const messages = await f.database.execute<{
+    conversation_id: string
+    content_json: { text: string }
+    status: string
+    runtime_message_id: string
+  }>(sql`SELECT * FROM build_channel_message WHERE direction='outbound'`)
+  expect(messages.rows).toHaveLength(1)
+  expect(messages.rows[0].conversation_id).toBe(originalConversation)
+  expect(messages.rows[0].content_json.text).toContain(
+    "payment holds are cleared"
+  )
+  expect(messages.rows[0].status).toBe("sent")
+  expect(
+    (
+      await new ConversationService(f.context).listMessages(
+        originalConversation
+      )
+    ).items.some((m) => m.id === messages.rows[0].runtime_message_id)
+  ).toBe(true)
+  expect(s.holdReleases).toBe(1)
+  expect(s.holds.map((h) => h.id)).toEqual([
+    "gid://shopify/FulfillmentHold/502",
+    "gid://shopify/FulfillmentHold/503",
+  ])
+  expect([s.created, s.processed, s.invoices]).toEqual([1, 1, 1])
+  // A new delivery for the same payment must not create another notification.
+  await handleShopifyCommerceWebhook(commerceWebhook(body), f.database)
+  const duplicate = await reconciliationJob(f)
+  const originalGraphql = f.provider.graphql
+  let eventDuringRead = false
+  f.provider.graphql = async (...args) => {
+    const response = await originalGraphql(...args)
+    if (!eventDuringRead && args[0].includes("DatoolCheckCreatedReturn")) {
+      eventDuringRead = true
+      await handleShopifyCommerceWebhook(commerceWebhook(body), f.database)
+    }
+    return response
+  }
+  await processChannelJob(duplicate, noModel, f.database)
+  f.provider.graphql = originalGraphql
+  await completeChannelJob(f.database, duplicate)
+  expect(
+    (
+      await f.database.execute(
+        sql`SELECT id FROM build_channel_message WHERE direction='outbound'`
+      )
+    ).rows
+  ).toHaveLength(1)
+  expect(eventDuringRead).toBe(true)
+  expect(await enqueueShopifyReconciliationJobs(f.database)).toBe(1)
+  const finalJob = await claimNextChannelJob(f.database)
+  expect(finalJob?.kind).toBe("shopify_reconcile")
+  await processChannelJob(finalJob!, noModel, f.database)
+  await completeChannelJob(f.database, finalJob!)
+  expect(await enqueueShopifyReconciliationJobs(f.database)).toBe(0)
+  const privateRows = await f.database.execute(
+    sql`SELECT * FROM build_shopify_webhook_receipts`
+  )
+  expect(JSON.stringify(privateRows.rows)).not.toContain("never-retain")
+}, 60_000)
+
+for (const invalidation of [
+  "owner",
+  "disconnect",
+  "channel",
+  "organization",
+] as const) {
+  test(`Shopify background reconciliation rejects ${invalidation} changes before payment completion`, async () => {
+    const f = await returnRuntimeFixture({ exchange: true, fulfillment: true })
+    f.provider.state.direction = "InvoiceReturnOutcome"
+    f.provider.state.transferAmount = "0.4"
+    const pending = await f.turn()
+    await f.turn(f.confirm(pending.continuations[0].continuationId!))
+    const job = await reconciliationJob(f)
+    f.provider.state.outstanding = "0"
+    f.provider.state.fullyPaid = true
+    f.provider.state.financialStatus = "PAID"
+    if (invalidation === "owner") f.provider.state.customerId = "999"
+    if (invalidation === "disconnect")
+      await f.database.execute(
+        sql`UPDATE build_app_connections SET status='disconnected' WHERE id=${f.connectionId}::uuid`
+      )
+    if (invalidation === "channel")
+      await f.database.execute(
+        sql`UPDATE build_channel_connection SET config_json='{}'::jsonb WHERE id=${f.channel.id}::uuid`
+      )
+    if (invalidation === "organization") {
+      env("DATOOL_BUILD_ENABLED", "false")
+      env("DATOOL_BUILD_ORGANIZATION_IDS", "")
+    }
+    await processChannelJob(job, noModel, f.database)
+    expect(f.provider.state.holdReleases).toBe(0)
+    expect(
+      (
+        await f.database.execute(
+          sql`SELECT id FROM build_channel_message WHERE direction='outbound'`
+        )
+      ).rows
+    ).toHaveLength(0)
+  }, 60_000)
+}

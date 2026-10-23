@@ -140,7 +140,7 @@ export class ShopifyOperationStore {
 
   async recordReturn(id: string, returnId: string) {
     const saved = await this.context.database.execute(sql`
-      UPDATE build_shopify_order_operations SET return_id=${returnId},status='return_created',updated_at=now(),revision=revision+1
+      UPDATE build_shopify_order_operations SET return_id=${returnId},status='return_created',reconcile_after=now(),updated_at=now(),revision=revision+1
       WHERE ${this.scope()} AND id=${id}::uuid AND kind='return' AND status='pending' RETURNING id
     `)
     if (!saved.rows.length) throw new ShopifyWriteUncertainError()
@@ -148,7 +148,7 @@ export class ShopifyOperationStore {
 
   async claimReturnProcessing(quote: ShopifyReturnQuote) {
     const saved = await this.context.database.execute(sql`
-      UPDATE build_shopify_order_operations SET status='processing',return_process_started=true,
+      UPDATE build_shopify_order_operations SET status='processing',return_process_started=true,reconcile_after=now(),
         quote_json=${JSON.stringify(quote)}::jsonb,updated_at=now(),revision=revision+1
       WHERE ${this.scope()} AND id=${quote.operationId}::uuid AND kind='return' AND NOT return_process_started
         ${
@@ -174,6 +174,7 @@ export class ShopifyOperationStore {
     const saved = await this.context.database.execute(sql`
       UPDATE build_shopify_order_operations SET status=${result.status},result_json=${JSON.stringify(result)}::jsonb,
         return_id=COALESCE(${result.returnId ?? null},return_id),updated_at=now(),revision=revision+1
+        ${expectedRevision === undefined ? sql`,reconcile_after=now()` : sql``}
       WHERE ${this.scope()} AND id=${id}::uuid AND kind='return'
       ${
         expectedRevision === undefined
@@ -208,7 +209,7 @@ export class ShopifyOperationStore {
     }>(sql`
       SELECT * FROM build_shopify_order_operations WHERE ${this.scope()} AND kind='return'
         AND customer_id IS NOT DISTINCT FROM ${this.shopper.customerId}
-        AND (${this.shopper.customerId !== null} OR browser_session_id=${this.shopper.browserSessionId}::uuid)
+        AND (${this.shopper.customerId !== null} OR browser_session_id IS NOT DISTINCT FROM ${this.shopper.browserSessionId}::uuid)
         ${id ? sql`AND id=${id}::uuid` : sql``}
       ORDER BY created_at DESC,id DESC LIMIT 1
     `)
@@ -250,7 +251,7 @@ export class ShopifyOperationStore {
 
   async recordDraft(id: string, draftOrderId: string) {
     const result = await this.context.database.execute(sql`
-      UPDATE build_shopify_order_operations SET draft_order_id=${draftOrderId},status='draft',updated_at=now(),revision=revision+1
+      UPDATE build_shopify_order_operations SET draft_order_id=${draftOrderId},status='draft',reconcile_after=now(),updated_at=now(),revision=revision+1
       WHERE ${this.scope()} AND id=${id}::uuid AND kind='order' AND status='pending' RETURNING id
     `)
     if (!result.rows.length) throw new ShopifyWriteUncertainError()
@@ -274,6 +275,7 @@ export class ShopifyOperationStore {
     const saved = await this.context.database.execute(sql`
       UPDATE build_shopify_order_operations SET status=${status},result_json=${JSON.stringify(result)}::jsonb,
         draft_order_id=COALESCE(${result.draftOrderId ?? null},draft_order_id),order_id=COALESCE(${result.orderId ?? null},order_id),updated_at=now(),revision=revision+1
+        ${expectedRevision === undefined ? sql`,reconcile_after=now()` : sql``}
       WHERE ${this.scope()} AND id=${id}::uuid AND kind='order'
         AND (status <> 'placed' OR ${status}='placed')
         ${expectedRevision === undefined ? sql`` : sql`AND revision=${expectedRevision}`}
@@ -310,7 +312,7 @@ export class ShopifyOperationStore {
     }>(sql`
       SELECT * FROM build_shopify_order_operations WHERE ${this.scope()} AND kind='order'
         AND customer_id IS NOT DISTINCT FROM ${this.shopper.customerId}
-        AND (${this.shopper.customerId !== null} OR browser_session_id=${this.shopper.browserSessionId}::uuid)
+        AND (${this.shopper.customerId !== null} OR browser_session_id IS NOT DISTINCT FROM ${this.shopper.browserSessionId}::uuid)
         ${id ? sql`AND id=${id}::uuid` : sql``}
       ORDER BY created_at DESC,id DESC LIMIT 1
     `)
