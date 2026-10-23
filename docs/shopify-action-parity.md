@@ -17,7 +17,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [x] Account activation and sign-in guidance appropriate to the store's account system.
 - [x] Update the authenticated customer's profile and default account address.
 - [x] Confirmed original-order return/refund and exchange processing, delivery-window policy and original-payment settlement.
-- [ ] Return recovery/reconciliation, changed-balance resolution and payment-verified exchange hold release.
+- [x] Recover an original return and its confirmed refund/payment status without repeating Shopify writes.
+- [ ] Reviewed continuation of unprocessed returns, changed-balance resolution and payment-verified exchange hold release.
 - [ ] Replacement orders with mandatory human approval and original-order credit accounting.
 - [ ] Action settings, confirmations, error states and reusable chat controls.
 - [ ] Delayed teammate approval and customer re-verification when the Shopify session has expired.
@@ -110,10 +111,44 @@ queries validate against Shopify Admin GraphQL 2026-10. These are local tests
 with stubbed provider responses, not live refunds or payments.
 
 Apply migration 0066 and obtain `write_returns` plus the invoice/order scopes
-before enabling the action. Remaining return work includes recovering unresolved
-operations, re-confirming a balance changed after return creation, payment
+before enabling the action. Remaining return work includes reviewed continuation of
+unprocessed operations, re-confirming a balance changed after return creation, payment
 webhooks and verified hold release. Separate replacement orders and their credit
 accounting are not implemented. Full after-sales parity remains incomplete.
+
+## Return recovery
+
+Check return reads the saved operation within the verified project, store,
+conversation and customer. Guests remain bound to their original browser session.
+A known return ID is read directly; a lost creation response is recovered by
+paginating the original order's returns and requiring an exact operation marker
+on every requested line. A partial marker, duplicate match, incomplete pagination
+or missing result never proves failure and cannot authorize a second write.
+
+Recovery rechecks current order ownership, exact line quantities and Shopify's
+processed quantities. It confirms only the approved refund amount with successful
+or pending transactions; failed, incomplete or conflicting transactions require
+review. Unpaid exchanges recover Shopify's existing additional-payment URL only
+for the approved outstanding amount. Zero outstanding alone does not establish a
+completed payment. The check sends no invoice and changes no fulfillment hold.
+
+The recovered ID and financial outcome use the existing commerce ledger with a
+revision check; a stale read cannot overwrite a newer reconciliation. The original
+mutation and recovery paths share item matching and refund verification. There is
+no new queue, persistence table or provider-write retry loop.
+
+Local runtime tests cover lost create/process/invoice responses and failed ID/result
+saves, guest access from another conversation, changed ownership, ambiguous search,
+partial processing, pending/successful/failed refunds and payment-link recovery.
+A database lifecycle check covers an active writer and a newer reconciliation.
+These use stubbed Shopify responses; live permission grants and provider outcomes
+remain unverified. An unprocessed recovered return still requires store-team review;
+reviewed in-chat continuation and verified fulfillment-hold release are next.
+
+The queries validate against Shopify Admin GraphQL 2026-10. Provider contracts:
+[return transactions and state](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Return),
+[processed return quantities and reason notes](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/ReturnLineItem),
+and [existing additional-payment URL](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/OrderPaymentCollectionDetails).
 
 ## Design review
 

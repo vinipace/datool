@@ -16,6 +16,25 @@ import {
   totalShopifyMoney,
   type ShopifyMoney,
 } from "./shopify-return-quote"
+import {
+  sameShopifyMoney,
+  matchesReturnLines,
+  type ReturnLines,
+  type ReturnPage,
+  type ReturnTransaction,
+  shopifyRefundStatus,
+} from "./shopify-return-record"
+
+type FinancialTransfer = {
+  __typename: string
+  amount: { presentmentMoney: ShopifyMoney }
+  suggestedTransactions?: Array<{
+    kind: string
+    amountSet: { presentmentMoney: ShopifyMoney }
+    maximumRefundableSet: { presentmentMoney: ShopifyMoney } | null
+    parentTransaction: { id: string; kind: string } | null
+  }>
+}
 
 const money = `presentmentMoney { amount currencyCode }`
 const lines = `returnLineItems(first: 100) {
@@ -72,68 +91,6 @@ export const INVOICE_EXCHANGE = `#graphql
    orderInvoiceSend(id: $id) { order { id } userErrors { field message } }
  }
 `
-
-type Page<T> = { nodes: T[]; pageInfo: { hasNextPage: boolean } }
-type Line = { id: string; quantity: number; processedQuantity: number }
-type ReturnLines = {
-  id: string
-  returnLineItems: Page<Line & { fulfillmentLineItem?: { id: string } }>
-  exchangeLineItems: Page<Line & { variantId: string | null }>
-}
-type Transaction = {
-  id: string
-  kind: string
-  status: string
-  amountSet: { presentmentMoney: ShopifyMoney }
-}
-type FinancialTransfer = {
-  __typename: string
-  amount: { presentmentMoney: ShopifyMoney }
-  suggestedTransactions?: Array<{
-    kind: string
-    amountSet: { presentmentMoney: ShopifyMoney }
-    maximumRefundableSet: { presentmentMoney: ShopifyMoney } | null
-    parentTransaction: { id: string; kind: string } | null
-  }>
-}
-
-function sameMoney(a: ShopifyMoney, b: ShopifyMoney) {
-  return (
-    totalShopifyMoney(
-      [{ value: a }, { value: b, subtract: true }],
-      a.currencyCode
-    ).amount === "0"
-  )
-}
-
-function matchesLines(
-  record: ReturnLines,
-  quote: ShopifyReturnQuote,
-  processed: boolean
-) {
-  return (
-    !record.returnLineItems.pageInfo.hasNextPage &&
-    !record.exchangeLineItems.pageInfo.hasNextPage &&
-    record.returnLineItems.nodes.length === quote.input.items.length &&
-    record.exchangeLineItems.nodes.length === quote.input.replacements.length &&
-    quote.input.items.every((item) =>
-      record.returnLineItems.nodes.some(
-        (line) =>
-          line.fulfillmentLineItem?.id === item.fulfillmentLineItemId &&
-          line.quantity === item.quantity &&
-          line.processedQuantity === (processed ? item.quantity : 0)
-      )
-    ) &&
-    quote.input.replacements.every((item) =>
-      record.exchangeLineItems.nodes.some(
-        (line) =>
-          line.variantId === `gid://shopify/ProductVariant/${item.variantId}` &&
-          line.quantity === item.quantity &&
-          line.processedQuantity === (processed ? item.quantity : 0)
-      )
-    )
-  )
-}
 
 /** Uses only a server-persisted approved quote and Shopify's original payment suggestions. */
 export async function processShopifyReturn(
@@ -198,7 +155,7 @@ export async function processShopifyReturn(
       })
     if (
       returned.order.id !== quote.input.orderId ||
-      !matchesLines(returned, quote, false)
+      !matchesReturnLines(returned, quote, false)
     )
       return await review(
         "Shopify created a different return than expected. The store team must review it before any refund or exchange processing."
@@ -253,10 +210,13 @@ export async function processShopifyReturn(
       (expectedDirection === "even"
         ? transfer &&
           (!direction ||
-            !sameMoney(transfer.amount.presentmentMoney, quote.settlement))
+            !sameShopifyMoney(
+              transfer.amount.presentmentMoney,
+              quote.settlement
+            ))
         : direction !== expectedDirection ||
           !transfer ||
-          !sameMoney(transfer.amount.presentmentMoney, quote.settlement))
+          !sameShopifyMoney(transfer.amount.presentmentMoney, quote.settlement))
     )
       return await review(
         "Shopify changed the return balance. No refund or exchange was processed. The store team must review the updated amount."
@@ -282,7 +242,7 @@ export async function processShopifyReturn(
         )
       if (
         invalid ||
-        !sameMoney(
+        !sameShopifyMoney(
           totalShopifyMoney(
             transactions.map((tx) => ({
               value: tx.amountSet.presentmentMoney,
@@ -315,7 +275,7 @@ export async function processShopifyReturn(
               id: string
               totalOutstandingSet: { presentmentMoney: ShopifyMoney }
             }
-            transactions: Page<Transaction>
+            transactions: ReturnPage<ReturnTransaction>
           })
         | null
     }>(
@@ -339,7 +299,7 @@ export async function processShopifyReturn(
     if (
       !actual ||
       actual.id !== returned.id ||
-      !matchesLines(actual, quote, true)
+      !matchesReturnLines(actual, quote, true)
     )
       throw new ShopifyWriteUncertainError()
     let paymentStatus:
@@ -348,37 +308,23 @@ export async function processShopifyReturn(
       | "payment_required"
       | "no_payment_difference" = "no_payment_difference"
     if (expectedDirection === "refund") {
-      const refunds = actual.transactions.nodes.filter(
-        (tx) => tx.kind === "REFUND"
+      const refundStatus = shopifyRefundStatus(
+        actual.transactions,
+        quote.settlement
       )
-      if (
-        actual.transactions.pageInfo.hasNextPage ||
-        !refunds.length ||
-        refunds.some(
-          (tx) =>
-            !["SUCCESS", "PENDING", "AWAITING_RESPONSE"].includes(tx.status)
-        ) ||
-        !sameMoney(
-          totalShopifyMoney(
-            refunds.map((tx) => ({ value: tx.amountSet.presentmentMoney })),
-            quote.settlement.currencyCode
-          ),
-          quote.settlement
-        )
-      )
+      if (!refundStatus)
         return await review(
           "The return was processed, but Shopify has not confirmed the expected refund. The store team must inspect its transactions before another refund attempt."
         )
-      paymentStatus = refunds.every((tx) => tx.status === "SUCCESS")
-        ? "refunded"
-        : "refund_pending"
+      paymentStatus = refundStatus
     }
+
     if (expectedDirection === "collect") {
       // An order invoice collects the whole outstanding balance, including any
       // earlier unpaid amount. Never invoice more than the approved exchange.
       if (
         actual.order.id !== quote.input.orderId ||
-        !sameMoney(
+        !sameShopifyMoney(
           actual.order.totalOutstandingSet.presentmentMoney,
           quote.settlement
         )

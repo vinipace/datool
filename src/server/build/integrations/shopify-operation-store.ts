@@ -1,4 +1,7 @@
-import { type ShopifyReturnQuote } from "@/src/lib/build/shopify-return"
+import {
+  shopifyReturnQuoteSchema,
+  type ShopifyReturnQuote,
+} from "@/src/lib/build/shopify-return"
 import { sql } from "drizzle-orm"
 import type { BuildContext } from "../context"
 import { TracerError } from "@/src/server/tracer/errors"
@@ -26,6 +29,23 @@ export type ShopifyOrderOperation = {
   draftOrderId: string | null
   orderId: string | null
   quote: ShopifyOrderQuote
+  settings: ShopifyActionSettings
+  updatedAt: Date
+  revision: number
+}
+
+export type ShopifyReturnOperation = {
+  id: string
+  status:
+    | "pending"
+    | "return_created"
+    | "processing"
+    | "return_processed"
+    | "uncertain"
+    | "needs_review"
+    | "failed"
+  returnId: string | null
+  quote: ShopifyReturnQuote
   settings: ShopifyActionSettings
   updatedAt: Date
   revision: number
@@ -105,7 +125,7 @@ export class ShopifyOperationStore {
       if (previous.rows.length)
         throw new TracerError(
           "VALIDATION_ERROR",
-          "A return for this order is still being processed or needs review. Check it with the store team before requesting another."
+          "A return for this order is still being processed or needs review. Use Check return to recover its status before requesting another."
         )
       await tx.execute(sql`
         INSERT INTO build_shopify_order_operations(id,project_id,connection_id,conversation_id,customer_id,browser_session_id,quote_json,settings_json,status,kind,source_order_id)
@@ -132,15 +152,60 @@ export class ShopifyOperationStore {
 
   async finishReturn<T extends { status: "return_processed" | "needs_review" }>(
     id: string,
-    result: T
+    result: T & { returnId?: string },
+    expectedRevision?: number
   ) {
     const saved = await this.context.database.execute(sql`
-      UPDATE build_shopify_order_operations SET status=${result.status},result_json=${JSON.stringify(result)}::jsonb,updated_at=now(),revision=revision+1
+      UPDATE build_shopify_order_operations SET status=${result.status},result_json=${JSON.stringify(result)}::jsonb,
+        return_id=COALESCE(${result.returnId ?? null},return_id),updated_at=now(),revision=revision+1
       WHERE ${this.scope()} AND id=${id}::uuid AND kind='return'
-      AND status IN ('return_created','processing') RETURNING id
+      ${
+        expectedRevision === undefined
+          ? sql`AND status IN ('return_created','processing')`
+          : sql`AND revision=${expectedRevision} AND status <> 'failed'
+          AND (status <> 'return_processed' OR ${result.status}='return_processed')`
+      }
+      RETURNING id
     `)
-    if (!saved.rows.length) throw new ShopifyWriteUncertainError()
+    if (!saved.rows.length) {
+      if (expectedRevision !== undefined)
+        throw new TracerError(
+          "VALIDATION_ERROR",
+          "The return changed while checking it. Check return again for its current status."
+        )
+      throw new ShopifyWriteUncertainError()
+    }
     return { ...result, operationId: id }
+  }
+
+  async readReturn(id?: string): Promise<ShopifyReturnOperation | null> {
+    const result = await this.context.database.execute<{
+      id: string
+      status: ShopifyReturnOperation["status"]
+      return_id: string | null
+      quote_json: unknown
+      settings_json: unknown
+      updated_at: Date
+      revision: number
+    }>(sql`
+      SELECT * FROM build_shopify_order_operations WHERE ${this.scope()} AND kind='return'
+        AND customer_id IS NOT DISTINCT FROM ${this.shopper.customerId}
+        AND (${this.shopper.customerId !== null} OR browser_session_id=${this.shopper.browserSessionId}::uuid)
+        ${id ? sql`AND id=${id}::uuid` : sql``}
+      ORDER BY created_at DESC,id DESC LIMIT 1
+    `)
+    const row = result.rows[0]
+    return row
+      ? {
+          id: row.id,
+          status: row.status,
+          returnId: row.return_id,
+          quote: shopifyReturnQuoteSchema.parse(row.quote_json),
+          settings: shopifyActionSettingsSchema.parse(row.settings_json),
+          updatedAt: new Date(row.updated_at),
+          revision: row.revision,
+        }
+      : null
   }
 
   async recordDraft(id: string, draftOrderId: string) {

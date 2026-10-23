@@ -23,6 +23,17 @@ export function shopifyReturnFixture() {
     foreignOutcome: false,
     foreignTransaction: false,
     omitMaximumRefundable: false,
+    returnStatus: "OPEN",
+    financialStatus: "PENDING",
+    fullyPaid: false,
+    cancelledAt: null as string | null,
+    paymentUrl: "https://fixture.myshopify.com/orders/exchange-payment",
+    returnSearch: "normal" as
+      "normal" | "missing" | "duplicate" | "partial_marker" | "repeat_cursor",
+    foreignReturn: false,
+    partialProcessing: false,
+    moreTransactions: false,
+    guestEmail: "buyer@example.test",
   }
   const bag = (amount: string) => ({
     presentmentMoney: { amount, currencyCode: state.currency },
@@ -43,22 +54,42 @@ export function shopifyReturnFixture() {
         returnLineItems: Array<{
           fulfillmentLineItemId: string
           quantity: number
+          returnReasonNote: string
         }>
         exchangeLineItems: Array<{ variantId: string; quantity: number }>
       }
     | undefined
   const returned = () => ({
     id: `gid://shopify/Return/${state.created}`,
+    status: state.returnStatus,
     order: {
       id: "gid://shopify/Order/10",
+      name: "#1001",
+      email: state.guestEmail,
+      phone: "+15555551234",
+      customer: {
+        id: `gid://shopify/Customer/${state.foreignReturn ? "999" : state.customerId}`,
+      },
+      shippingAddress: null,
       totalOutstandingSet: bag(state.outstanding),
+      displayFinancialStatus: state.financialStatus,
+      fullyPaid: state.fullyPaid,
+      cancelledAt: state.cancelledAt,
+      paymentCollectionDetails: {
+        additionalPaymentCollectionUrl: state.paymentUrl,
+      },
     },
     returnLineItems: {
       nodes: (createdInput?.returnLineItems ?? []).map((line, i) => ({
         id: `gid://shopify/ReturnLineItem/${i + 1}`,
         quantity: line.quantity,
-        processedQuantity: state.processed ? line.quantity : 0,
+        processedQuantity: state.partialProcessing
+          ? 99
+          : state.processed
+            ? line.quantity
+            : 0,
         fulfillmentLineItem: { id: line.fulfillmentLineItemId },
+        returnReasonNote: line.returnReasonNote,
       })),
       pageInfo: { hasNextPage: false },
     },
@@ -72,9 +103,63 @@ export function shopifyReturnFixture() {
       pageInfo: { hasNextPage: false },
     },
   })
+  const transactions = () => ({
+    nodes:
+      state.processed &&
+      state.direction === "RefundReturnOutcome" &&
+      state.transferAmount !== "0"
+        ? [
+            {
+              id: "gid://shopify/OrderTransaction/301",
+              kind: "REFUND",
+              status: state.refundStatus,
+              amountSet: bag(state.transferAmount),
+            },
+          ]
+        : [],
+    pageInfo: { hasNextPage: state.moreTransactions },
+  })
   const graphql: ShopifyGraphqlClient = async (query, options) => {
     const variables = options?.variables ?? {}
     calls.push({ query, variables })
+    if (query.includes("DatoolFindCreatedReturn")) {
+      const match = returned()
+      const candidate = { id: match.id, returnLineItems: match.returnLineItems }
+      if (state.returnSearch === "partial_marker")
+        candidate.returnLineItems.nodes.forEach((line) => {
+          line.returnReasonNote += "extra"
+        })
+      return Response.json({
+        data: {
+          order: {
+            ...match.order,
+            returns: {
+              nodes:
+                state.returnSearch === "missing" || !state.created
+                  ? []
+                  : state.returnSearch === "duplicate" && variables.after
+                    ? [{ ...candidate, id: "gid://shopify/Return/999" }]
+                    : variables.after || state.returnSearch === "duplicate"
+                      ? [candidate]
+                      : [],
+              pageInfo: {
+                hasNextPage:
+                  state.returnSearch === "repeat_cursor" || !variables.after,
+                endCursor: "next-return",
+              },
+            },
+          },
+        },
+      })
+    }
+    if (query.includes("DatoolCheckCreatedReturn"))
+      return Response.json({
+        data: {
+          return: state.created
+            ? { ...returned(), transactions: transactions() }
+            : null,
+        },
+      })
     if (query.includes("DatoolReturnOrder"))
       return Response.json({
         data: {
@@ -246,21 +331,7 @@ export function shopifyReturnFixture() {
           returnProcess: {
             return: {
               ...returned(),
-              transactions: {
-                nodes:
-                  state.direction === "RefundReturnOutcome" &&
-                  state.transferAmount !== "0"
-                    ? [
-                        {
-                          id: "gid://shopify/OrderTransaction/301",
-                          kind: "REFUND",
-                          status: state.refundStatus,
-                          amountSet: bag(state.transferAmount),
-                        },
-                      ]
-                    : [],
-                pageInfo: { hasNextPage: false },
-              },
+              transactions: transactions(),
             },
             userErrors: [],
           },

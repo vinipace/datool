@@ -57,14 +57,25 @@ connections.
   approval. Shopify supplies amounts and original payment transactions. Pending
   refunds remain pending; payable exchanges receive a Shopify invoice and remain
   on fulfillment hold. The action never claims physical receipt or restocks goods.
-  Unknown or changed outcomes require store-team review; automatic recovery and
+  Changed balances require store-team review; reviewed continuation and
   payment-verified hold release remain unfinished.
+- `SHOPIFY_CHECK_RETURN`: recover the original return after a lost response or
+  database-save failure and check refund/payment status. Enable **Check return**
+  alongside **Return or exchange items**. It accepts Datool's operation ID, or
+  checks the latest return in the verified shopper's conversation. Recovery uses
+  the stored return ID or searches the original order for an exact operation
+  marker. It never creates a return, repeats a refund or resends an invoice.
+  Pending refunds stay pending. An unpaid exchange can recover its existing
+  Shopify payment link only when the outstanding balance matches the approved
+  amount. Paid status requires Shopify's paid flag and zero outstanding balance;
+  it does not release fulfillment holds or prove shipment. Unprocessed returns,
+  missing/ambiguous matches, changed ownership or unmatched amounts require review.
 
 Product searches render native product cards. An enabled **Update shopping cart**
 action for the same connection adds variant and quantity controls. Storefront chat
 installation is separate from the data connection. This connector does not
 install a theme embed. Automatic payment notifications, cart clearing, resolution
-of incomplete drafts, return recovery and replacement-order work remain tracked in
+of incomplete drafts and returns, and replacement-order work remain tracked in
 [the action parity checklist](shopify-action-parity.md).
 
 Customer-specific actions require a freshly verified Shopify storefront chat.

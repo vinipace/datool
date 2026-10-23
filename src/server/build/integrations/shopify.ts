@@ -37,6 +37,7 @@ import { prepareShopifyReturn } from "./shopify-return-quote"
 import { processShopifyReturn } from "./shopify-return-process"
 import { prepareShopifyOrder, createShopifyOrder } from "./shopify-order-create"
 import { ShopifyOperationStore } from "./shopify-operation-store"
+import { checkShopifyReturn } from "./shopify-return-status"
 import { checkShopifyCheckout } from "./shopify-order-status"
 import { getShopifyReturnOptions } from "./shopify-return-options"
 import { runShopifyStoreTool, STORE_QUERY } from "./shopify-catalog"
@@ -433,6 +434,18 @@ export async function executeShopifyTool(
       if (slug === "SHOPIFY_CHECK_CHECKOUT")
         return await checkShopifyCheckout(
           args,
+          new ShopifyOperationStore(
+            context,
+            id,
+            execution.conversationId,
+            shopper
+          ),
+          graphql
+        )
+      if (slug === "SHOPIFY_CHECK_RETURN")
+        return await checkShopifyReturn(
+          args,
+          shopper,
           new ShopifyOperationStore(
             context,
             id,

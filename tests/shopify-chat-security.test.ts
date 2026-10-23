@@ -1705,6 +1705,8 @@ async function returnRuntimeFixture(
   )
   const { shopifyReturnTools } =
     await import("@/src/server/build/integrations/shopify-return-process")
+  const { shopifyReturnStatusTools } =
+    await import("@/src/server/build/integrations/shopify-return-status")
   const { shopifyReturnFixture } = await import("./helpers/shopify-return")
   const provider = shopifyReturnFixture()
   const input: Record<string, unknown> = {
@@ -1729,6 +1731,19 @@ async function returnRuntimeFixture(
       },
     },
   })
+  const checkAction = await saveAction(f.context, f.agent.id, {
+    slug: "check-return",
+    definition: {
+      type: "integration",
+      name: "Check return",
+      connectionId: f.connectionId,
+      toolSlug: "SHOPIFY_CHECK_RETURN",
+      channels: ["web"],
+      inputSchema: shopifyReturnStatusTools[0].inputSchema,
+    },
+  })
+  let checking = false
+  let checkInput: Record<string, unknown> = {}
   const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
     url: RequestInfo | URL,
     init?: RequestInit
@@ -1769,7 +1784,12 @@ async function returnRuntimeFixture(
         }
       >
     }) => {
-      await tools[action.id].execute(input, { toolCallId: "return-items" })
+      await tools[checking ? checkAction.id : action.id].execute(
+        checking ? checkInput : input,
+        {
+          toolCallId: checking ? "check-return" : "return-items",
+        }
+      )
       return {
         text: "Review your return.",
         usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
@@ -1839,10 +1859,29 @@ async function returnRuntimeFixture(
     input,
     turn,
     confirm,
+    check: async (args: Record<string, unknown> = {}) => {
+      checking = true
+      checkInput = args
+      try {
+        const result = await turn()
+        const call = result.toolCalls.find(
+          (entry) =>
+            entry.turnId === result.turn.id && entry.actionId === checkAction.id
+        )
+        expect(call?.status).toBe("completed")
+        return call!.output as Record<string, unknown>
+      } finally {
+        checking = false
+      }
+    },
     newConversation: async () => {
+      const original = session
       const previous = session.conversationId
       session = await f.session(options.guest ? "" : "123")
       expect(session.conversationId).not.toBe(previous)
+      return () => {
+        session = original
+      }
     },
   }
 }
@@ -2014,12 +2053,55 @@ for (const lost of [
           ? null
           : "gid://shopify/Return/1",
     })
-    await f.newConversation()
+    const restore = await f.newConversation()
     const retry = await f.turn()
     await assert.rejects(
       f.turn(f.confirm(retry.continuations[0].continuationId!)),
       /still being processed|needs review/
     )
+    const operationId = pending.continuations[0].shopifyReturnQuote!.operationId
+    const reads = f.provider.calls.length
+    expect((await f.check({ operationId })).status).toBe("not_found")
+    expect(f.provider.calls.length).toBe(reads)
+    restore()
+    if (lost === "record" || lost === "finish") {
+      await f.database.execute(
+        sql.raw(
+          "DROP TRIGGER reject_return_storage ON build_shopify_order_operations"
+        )
+      )
+    }
+    const recovered = await f.check({ operationId })
+    expect(recovered).toMatchObject({
+      returnId: "gid://shopify/Return/1",
+      operationId,
+      status:
+        lost === "create" || lost === "record"
+          ? "needs_review"
+          : "return_processed",
+      ...(lost === "create" || lost === "record"
+        ? {}
+        : {
+            paymentStatus: lost === "invoice" ? "payment_required" : "refunded",
+          }),
+    })
+    if (lost === "invoice") expect(recovered.paymentUrl).toBe(s.paymentUrl)
+    expect(
+      (
+        await f.database.execute(
+          sql`SELECT return_id FROM build_shopify_order_operations WHERE id=${operationId}::uuid`
+        )
+      ).rows[0].return_id
+    ).toBe("gid://shopify/Return/1")
+    const replayed = await f.check({ operationId })
+    expect(replayed.status).toBe(recovered.status)
+    if (lost === "finish") {
+      s.guestEmail = "different-buyer@example.test"
+      const denied = await f.check({ operationId })
+      expect(denied.status).toBe("needs_review")
+      expect(JSON.stringify(denied)).not.toContain("different-buyer")
+      expect(denied.returnId).toBeUndefined()
+    }
     expect(s.created).toBe(1)
     expect(s.processed).toBe(lost === "create" || lost === "record" ? 0 : 1)
     expect(s.invoices).toBe(lost === "invoice" ? 1 : 0)
@@ -2076,4 +2158,148 @@ test("Shopify return runtime does not invoice an unapproved existing balance", a
       )
     ).rows[0].status
   ).toBe("needs_review")
+}, 60_000)
+
+test("Shopify return recovery rejects ambiguous matches and changed ownership, then tracks the original pending refund", async () => {
+  const f = await returnRuntimeFixture()
+  const s = f.provider.state
+  const pending = await f.turn()
+  s.lost = "create"
+  await assert.rejects(
+    f.turn(f.confirm(pending.continuations[0].continuationId!)),
+    { code: "ACTION_UNCERTAIN" }
+  )
+  for (const mode of [
+    "missing",
+    "partial_marker",
+    "duplicate",
+    "repeat_cursor",
+  ] as const) {
+    s.returnSearch = mode
+    expect((await f.check()).status).toBe("needs_review")
+  }
+  s.returnSearch = "normal"
+  s.foreignReturn = true
+  expect((await f.check()).status).toBe("needs_review")
+  expect(
+    f.provider.calls.some((call) =>
+      call.query.includes("DatoolCheckCreatedReturn")
+    )
+  ).toBe(false)
+  s.foreignReturn = false
+  // Shopify subsequently completes the original return; the original request must never replay.
+  s.processed = 1
+  s.refundStatus = "PENDING"
+  expect(await f.check()).toMatchObject({
+    status: "return_processed",
+    paymentStatus: "refund_pending",
+  })
+  s.partialProcessing = true
+  expect((await f.check()).status).toBe("needs_review")
+  s.partialProcessing = false
+  s.refundStatus = "FAILURE"
+  expect((await f.check()).status).toBe("needs_review")
+  s.refundStatus = "SUCCESS"
+  s.moreTransactions = true
+  expect((await f.check()).status).toBe("needs_review")
+  s.moreTransactions = false
+  expect(await f.check()).toMatchObject({
+    status: "return_processed",
+    paymentStatus: "refunded",
+  })
+  expect(s.created).toBe(1)
+  expect(
+    f.provider.calls.filter((call) => call.query.includes("mutation")).length
+  ).toBe(1)
+}, 60_000)
+
+test("Shopify return recovery only offers the approved exchange balance and distinguishes pending from paid", async () => {
+  const f = await returnRuntimeFixture({ exchange: true })
+  const s = f.provider.state
+  s.direction = "InvoiceReturnOutcome"
+  s.transferAmount = "0.4"
+  const pending = await f.turn()
+  await f.turn(f.confirm(pending.continuations[0].continuationId!))
+  expect(await f.check()).toMatchObject({
+    paymentStatus: "payment_required",
+    paymentUrl: s.paymentUrl,
+  })
+  s.paymentUrl = "javascript:alert(1)"
+  expect((await f.check()).paymentUrl).toBeUndefined()
+  s.outstanding = "9.4"
+  expect((await f.check()).status).toBe("needs_review")
+  s.outstanding = "0"
+  expect(await f.check()).toMatchObject({ paymentStatus: "payment_pending" })
+  s.fullyPaid = true
+  s.financialStatus = "PAID"
+  expect(await f.check()).toMatchObject({ paymentStatus: "paid" })
+  s.cancelledAt = new Date().toISOString()
+  expect((await f.check()).status).toBe("needs_review")
+  expect(s.created).toBe(1)
+  expect(s.processed).toBe(1)
+  expect(s.invoices).toBe(1)
+}, 60_000)
+
+test("Shopify return recovery waits for an active writer and cannot overwrite a newer reconciliation", async () => {
+  const f = await returnRuntimeFixture()
+  const pending = await f.turn()
+  await f.turn(f.confirm(pending.continuations[0].continuationId!))
+  const { ShopifyOperationStore } =
+    await import("@/src/server/build/integrations/shopify-operation-store")
+  const { checkShopifyReturn } =
+    await import("@/src/server/build/integrations/shopify-return-status")
+  const row = (
+    await f.database.execute<{
+      id: string
+      conversation_id: string
+      browser_session_id: string
+      customer_id: string
+    }>(
+      sql`SELECT id,conversation_id,browser_session_id,customer_id FROM build_shopify_order_operations WHERE kind='return'`
+    )
+  ).rows[0]
+  const shopper = {
+    shop: "fixture.myshopify.com",
+    customerId: row.customer_id,
+    browserSessionId: row.browser_session_id,
+  }
+  const operations = new ShopifyOperationStore(
+    f.context,
+    f.connectionId,
+    row.conversation_id,
+    shopper
+  )
+  await f.database.execute(
+    sql`UPDATE build_shopify_order_operations SET status='processing',updated_at=now() WHERE id=${row.id}::uuid`
+  )
+  const calls = f.provider.calls.length
+  expect(
+    (await checkShopifyReturn({}, shopper, operations, f.provider.graphql))
+      .status
+  ).toBe("processing")
+  expect(f.provider.calls.length).toBe(calls)
+  await f.database.execute(
+    sql`UPDATE build_shopify_order_operations SET status='uncertain' WHERE id=${row.id}::uuid`
+  )
+  const operation = (await operations.readReturn())!
+  await assert.rejects(
+    checkShopifyReturn({}, shopper, operations, async (query, options) => {
+      const response = await f.provider.graphql(query, options)
+      // Another reconciler commits after this read has taken its snapshot.
+      await operations.finishReturn(
+        row.id,
+        { status: "return_processed", paymentStatus: "refund_pending" },
+        operation.revision
+      )
+      return response
+    }),
+    /return changed while checking/
+  )
+  const saved = (
+    await f.database.execute<{ result_json: { paymentStatus: string } }>(
+      sql`SELECT result_json FROM build_shopify_order_operations WHERE id=${row.id}::uuid`
+    )
+  ).rows[0]
+  expect(saved.result_json.paymentStatus).toBe("refund_pending")
+  expect(f.provider.state.processed).toBe(1)
 }, 60_000)
