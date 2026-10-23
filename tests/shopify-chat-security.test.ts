@@ -1352,6 +1352,10 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
       }
       let pending = await turn()
       expect(created).toBe(0)
+      const purchaseSnapshot = {
+        id: randomUUID(),
+        expiresAt: Date.now() + 30 * 86400000,
+      }
       async function readCart(
         pending: Awaited<ReturnType<typeof turn>>,
         requiresStoreCheckout = false
@@ -1379,6 +1383,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
                   ],
                   truncated: false,
                   requiresStoreCheckout,
+                  purchaseSnapshot,
                   cartUrl: "https://fixture.myshopify.com/cart",
                   checkoutUrl: "https://fixture.myshopify.com/checkout",
                 },
@@ -1435,6 +1440,10 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
             items: [{ variantId: "999", quantity: 99 }],
             total: 0,
             paymentMethod: "free",
+            purchaseSnapshot: {
+              id: randomUUID(),
+              expiresAt: Date.now() + 60000,
+            },
           },
         },
       })
@@ -1529,6 +1538,24 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
       }
       const firstOperation =
         pending.continuations[0].shopifyOrderQuote!.operationId
+      async function reconcileCheckout() {
+        const job = await reconciliationJob(f)
+        await processChannelJob(job, noModel, f.database)
+        await completeChannelJob(f.database, job)
+        let delivery = await claimNextChannelJob(f.database)
+        while (delivery?.kind === "deliver_outbound") {
+          await processChannelJob(delivery, noModel, f.database)
+          await completeChannelJob(f.database, delivery)
+          delivery = await claimNextChannelJob(f.database)
+        }
+        return readPublicConversation(
+          f.context,
+          f.channel.id,
+          session.conversationId,
+          session.visitorToken,
+          "https://chat.example.test"
+        )
+      }
       expect((await check({ operationId: randomUUID() })).text).toContain(
         "no checkout"
       )
@@ -1537,10 +1564,16 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         const resumed = await check()
         expect(resumed.text).toContain("existing Shopify checkout")
         expect(resumed.text).toContain("Payment has not been confirmed")
+        if (orderSource === "cart") {
+          const unpaid = await reconcileCheckout()
+          expect(
+            unpaid.filter((m) => m.metadata.shopifyCartCleanup)
+          ).toHaveLength(0)
+        }
         providerPlaced = true
         expect((await check()).text).toContain("Payment status: pending")
         financialStatus = "PAID"
-        if (orderSource === "items") {
+        {
           await f.database.execute(
             sql`UPDATE build_shopify_order_operations SET reconcile_after=NULL WHERE id=${firstOperation}::uuid`
           )
@@ -1573,6 +1606,14 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
                 m.text.includes("payment is complete")
             )
           ).toHaveLength(1)
+          const cleanup = visible.filter((m) => m.metadata.shopifyCartCleanup)
+          expect(cleanup).toHaveLength(orderSource === "cart" ? 1 : 0)
+          if (orderSource === "cart")
+            expect(cleanup[0].metadata.shopifyCartCleanup).toEqual({
+              operationId: firstOperation,
+              snapshotId: purchaseSnapshot.id,
+              expiresAt: purchaseSnapshot.expiresAt,
+            })
         }
         expect((await check()).text).toContain("payment is complete")
         financialStatus = "REFUNDED"
@@ -1599,6 +1640,20 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
         }
       } else {
         expect((await check()).text).toContain("#100")
+        if (orderSource === "cart") {
+          const placed = await reconcileCheckout()
+          expect(
+            placed
+              .filter((m) => m.metadata.shopifyCartCleanup)
+              .map((m) => m.metadata.shopifyCartCleanup)
+          ).toEqual([
+            {
+              operationId: firstOperation,
+              snapshotId: purchaseSnapshot.id,
+              expiresAt: purchaseSnapshot.expiresAt,
+            },
+          ])
+        }
         // Same customer on another verified device can recover the same conversation.
         session = await f.session("123")
         expect((await check({ operationId: firstOperation })).text).toContain(

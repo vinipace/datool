@@ -530,6 +530,7 @@ export async function executeShopifyTool(
         if (execution.prepareOrder) {
           await operations.assertNoUnresolved()
           let orderInput = args
+          let purchaseSnapshot
           if (settings.orderSource === "cart") {
             if (execution.cartResult === undefined)
               return { cartCommand: { operation: "read" as const } }
@@ -547,6 +548,7 @@ export async function executeShopifyTool(
                 "This cart may contain custom options, bundles or subscriptions. Use the store checkout to preserve them."
               )
             const quantities = new Map<string, number>()
+            purchaseSnapshot = cartResult.cart.purchaseSnapshot
             for (const item of cartResult.cart.items)
               quantities.set(
                 item.variantId,
@@ -560,10 +562,17 @@ export async function executeShopifyTool(
               })),
             }
           }
+          const { quote } = await prepareShopifyOrder(
+            orderInput,
+            shopper,
+            settings,
+            graphql
+          )
           return {
-            orderQuote: (
-              await prepareShopifyOrder(orderInput, shopper, settings, graphql)
-            ).quote,
+            orderQuote: {
+              ...quote,
+              ...(purchaseSnapshot ? { purchaseSnapshot } : {}),
+            },
           }
         }
         if (!execution.orderQuote || !execution.recordDraft)

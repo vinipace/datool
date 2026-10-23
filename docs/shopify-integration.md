@@ -81,8 +81,8 @@ connections.
 Product searches render native product cards. An enabled **Update shopping cart**
 action for the same connection adds variant and quantity controls. Storefront chat
 installation is separate from the data connection. This connector does not
-install a theme embed. Payment updates use the existing channel worker. Cart clearing, resolution
-of incomplete drafts and returns, and replacement-order work remain tracked in
+install a theme embed. Payment updates and purchased-cart cleanup use the existing
+channel worker. Resolution of incomplete drafts and returns, and replacement-order work remain tracked in
 [the action parity checklist](shopify-action-parity.md).
 
 Customer-specific actions require a freshly verified Shopify storefront chat.
@@ -366,5 +366,21 @@ review; the worker never adopts new holds after payment.
 
 The implementation and local tests do not prove a production subscription is
 registered, Shopify has granted the scopes, or a real payment has been received.
-Verify those separately in the sandbox before public release. Cart clearing and
-messaging-channel notifications remain unfinished.
+Verify those separately in the sandbox before public release. Messaging-channel
+notifications remain unfinished.
+
+For cart-based orders, the updated widget stores the original cart snapshot in
+first-party browser storage and shares only an opaque reference. Once the worker
+verifies placement (and payment for online checkout), it sends a directive through
+the existing public conversation. The chat verifies the store session again; the
+host removes the purchased quantities from matching lines in the same cart.
+New quantities and unrelated items observed at cleanup remain. Another device,
+a changed cart token or changed line keys cannot cause removal from another cart.
+Item-based orders leave the cart untouched.
+
+Deploy the matching widget, chat and worker together. Cleanup requires the original
+browser snapshot, storage and Web Locks; snapshots last 30 days. Ambiguous writes
+are never repeated. The shopper sees a dismissible warning to check the cart if
+completion cannot be confirmed. Other theme/app writes cannot share Datool's lock,
+so concurrent same-line changes during the Ajax read/update window remain a limit.
+No additional scopes or migration beyond 0069 are required for this cleanup.

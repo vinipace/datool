@@ -1772,6 +1772,7 @@ function publicMessageMetadata(metadata: Record<string, unknown>) {
     "completedContinuationId",
     "shopifyCart",
     "shopifyProducts",
+    "shopifyCartCleanup",
   ])
   return Object.fromEntries(
     Object.entries(metadata).filter(([key]) => allowed.has(key))

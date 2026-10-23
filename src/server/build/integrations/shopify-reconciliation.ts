@@ -16,6 +16,8 @@ import { checkShopifyCheckout } from "./shopify-order-status"
 import { reconcileShopifyReturn } from "./shopify-return-reconcile"
 import type { ShopifyGraphqlClient } from "./shopify-catalog"
 import type { ShopifyShopper } from "./shopify-identity"
+import { shopifyOrderQuoteSchema } from "@/src/lib/build/shopify-order"
+import { shopifyActionSettingsSchema } from "@/src/lib/build/shopify"
 
 /** Coalesce events into the existing worker. Periodic reads also recover missed webhooks. */
 export async function enqueueShopifyReconciliationJobs(
@@ -60,6 +62,8 @@ type Operation = {
   external_conversation_id: string
   contact_id: string | null
   reconcile_after: string | null
+  quote_json: unknown
+  settings_json: unknown
 }
 
 /** Internal worker entry: payload selects only a saved operation, never a customer or amount. */
@@ -79,7 +83,7 @@ export async function processShopifyReconciliation(
     await assertLease()
     const rows = await context.database.execute<Operation>(sql`
       SELECT o.connection_id,o.conversation_id,o.customer_id,o.browser_session_id,o.kind,
-        o.reconcile_after::text,s.shop,c.external_conversation_id,c.metadata_json->>'contactId' AS contact_id
+        o.reconcile_after::text,o.quote_json,o.settings_json,s.shop,c.external_conversation_id,c.metadata_json->>'contactId' AS contact_id
       FROM build_shopify_order_operations o
       JOIN build_shopify_connections s ON s.project_id=o.project_id AND s.connection_id=o.connection_id
       JOIN build_app_connections a ON a.project_id=s.project_id AND a.id=s.connection_id
@@ -154,6 +158,31 @@ export async function processShopifyReconciliation(
     payment = "paid"
   const fulfillment =
     "fulfillmentStatus" in result ? result.fulfillmentStatus : null
+  let cartCleanup
+  if (row.kind === "order" && result.status === "order_created") {
+    const quote = shopifyOrderQuoteSchema.parse(row.quote_json)
+    const settings = shopifyActionSettingsSchema.parse(row.settings_json)
+    const snapshot = quote.purchaseSnapshot
+    const placed =
+      payment === "paid" ||
+      (settings.paymentMethod === "cash_on_delivery" &&
+        "financialStatus" in result &&
+        ["PENDING", "PARTIALLY_PAID", "AUTHORIZED"].includes(
+          String(result.financialStatus)
+        ))
+    if (
+      settings.orderSource === "cart" &&
+      placed &&
+      snapshot &&
+      snapshot.expiresAt > Date.now() &&
+      snapshot.expiresAt <= Date.now() + 30 * 86400000
+    )
+      cartCleanup = {
+        operationId,
+        snapshotId: snapshot.id,
+        expiresAt: snapshot.expiresAt,
+      }
+  }
   let milestone: string | null = null
   if (fulfillment === "payment_holds_cleared") milestone = fulfillment
   else if (payment === "refunded") milestone = payment
@@ -162,6 +191,7 @@ export async function processShopifyReconciliation(
     (fulfillment === null || fulfillment === "permission_required")
   )
     milestone = payment
+  if (!milestone && cartCleanup) milestone = "cart_cleanup"
   if (milestone) {
     await enqueueOutboundEnvelope(
       context,
@@ -171,14 +201,15 @@ export async function processShopifyReconciliation(
         contactId: row.contact_id ?? undefined,
         channel: "web",
         idempotencyKey: `shopify:${operationId}:${milestone}`,
-        text: result.message,
+        text: milestone === "cart_cleanup" ? "" : result.message,
         metadata: {
           shopifyOperationId: operationId,
           source: "shopify_reconciliation",
+          ...(cartCleanup ? { shopifyCartCleanup: cartCleanup } : {}),
         },
       },
       row.external_conversation_id,
-      { recordRuntimeMessage: true }
+      { recordRuntimeMessage: milestone !== "cart_cleanup" }
     )
   }
   await assertLease()

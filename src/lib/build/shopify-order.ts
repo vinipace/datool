@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { shopifyPurchaseSnapshotSchema } from "./shopify-cart"
 
 export const orderLookupSchema = z
   .object({
@@ -83,6 +84,7 @@ export const shopifyOrderQuoteSchema = z
     tax: money,
     total: money,
     fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    purchaseSnapshot: shopifyPurchaseSnapshotSchema.optional(),
   })
   .strict()
 export type ShopifyOrderQuote = z.infer<typeof shopifyOrderQuoteSchema>

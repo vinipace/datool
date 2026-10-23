@@ -266,6 +266,14 @@
     }
     if (value.operation === "read") return { operation: "read" }
     if (
+      value.operation === "complete_order" &&
+      typeof value.snapshotId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        value.snapshotId
+      )
+    )
+      return { operation: "complete_order", snapshotId: value.snapshotId }
+    if (
       value.operation === "add" &&
       Array.isArray(value.items) &&
       value.items.length > 0 &&
@@ -352,14 +360,70 @@
       checkoutUrl: root + "checkout",
     }
   }
-  async function readCart(root) {
+  async function readCartData(root) {
     var response = await fetch(root + "cart.js", {
       credentials: "same-origin",
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
     })
     if (!response.ok) throw new Error("Could not read your cart.")
-    return cartSnapshot(await response.json(), root)
+    return response.json()
+  }
+  async function readCart(root) {
+    return cartSnapshot(await readCartData(root), root)
+  }
+  var purchasePrefix = "datool:purchase:" + baseUrl + ":" + channelId + ":"
+  async function cartTokenHash(value) {
+    if (
+      typeof value.token !== "string" ||
+      !value.token ||
+      value.token.length > 4096
+    )
+      throw new Error("Missing cart identity.")
+    var digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(value.token)
+    )
+    return Array.from(new Uint8Array(digest), function (byte) {
+      return byte.toString(16).padStart(2, "0")
+    }).join("")
+  }
+  async function capturePurchaseCart(root, visitorId) {
+    var raw = await readCartData(root)
+    var cart = cartSnapshot(raw, root)
+    if (!cart.truncated && !cart.requiresStoreCheckout && cart.items.length) {
+      try {
+        for (var i = window.localStorage.length - 1; i >= 0; i--) {
+          var key = window.localStorage.key(i)
+          if (key && key.indexOf(purchasePrefix) === 0) {
+            var old = readStored(key)
+            if (old && old.expiresAt <= Date.now())
+              window.localStorage.removeItem(key)
+          }
+        }
+        var id = crypto.randomUUID()
+        var expiresAt = Date.now() + 30 * 86400000
+        window.localStorage.setItem(
+          purchasePrefix + id,
+          JSON.stringify({
+            visitorId: visitorId,
+            expiresAt: expiresAt,
+            tokenHash: await cartTokenHash(raw),
+            items: cart.items.map(function (item) {
+              return {
+                lineKey: item.lineKey,
+                variantId: item.variantId,
+                quantity: item.quantity,
+              }
+            }),
+          })
+        )
+        cart.purchaseSnapshot = { id: id, expiresAt: expiresAt }
+      } catch (_) {
+        // Checkout remains available without optional automatic cart cleanup.
+      }
+    }
+    return cart
   }
   async function executeCart(input) {
     var uncertain = {
@@ -377,13 +441,18 @@
       var root = cartRoot()
       var command = cartCommand(input.command)
       if (command.operation === "read")
-        return { status: "completed", cart: await readCart(root) }
+        return {
+          status: "completed",
+          cart: await capturePurchaseCart(root, input.visitorId),
+        }
       if (
         typeof input.operationId !== "string" ||
         !/^[a-zA-Z0-9_-]{16,120}$/.test(input.operationId) ||
         !Number.isFinite(input.expiresAt) ||
         input.expiresAt <= Date.now() ||
-        input.expiresAt > Date.now() + 3600000
+        input.expiresAt >
+          Date.now() +
+            (command.operation === "complete_order" ? 30 * 86400000 : 3600000)
       )
         throw new Error(
           "This cart request expired. Ask the assistant for a new one."
@@ -397,7 +466,7 @@
         command: command,
       })
       return await window.navigator.locks.request(
-        receiptKey,
+        receiptPrefix + "cart",
         async function () {
           // A persisted pre-dispatch receipt prevents a lost response or page reload from replaying a write.
           // Expired requests cannot execute again, so their receipts may be removed safely.
@@ -421,6 +490,54 @@
             if (receipt.status !== "completed") return uncertain
             return { status: "completed", cart: await readCart(root) }
           }
+          var purchase
+          var cleanupBody
+          if (command.operation === "complete_order") {
+            purchase = readStored(purchasePrefix + command.snapshotId)
+            // Another device (or cleared storage) does not own the original cart.
+            if (!purchase || purchase.visitorId !== input.visitorId)
+              return { status: "completed", cart: await readCart(root) }
+            if (
+              purchase.expiresAt !== input.expiresAt ||
+              !Array.isArray(purchase.items) ||
+              purchase.items.length > 100 ||
+              (purchase.operationId &&
+                purchase.operationId !== input.operationId)
+            )
+              throw new Error("This purchase belongs to a different cart.")
+            var currentRaw = await readCartData(root)
+            var current = cartSnapshot(currentRaw, root)
+            var updates = Object.create(null)
+            // A completed Shopify checkout may already have replaced the cart.
+            // Never clear a new cart, or lines whose keys/options have changed.
+            if (purchase.tokenHash === (await cartTokenHash(currentRaw))) {
+              if (current.truncated)
+                throw new Error("Cart changed; review it in the store.")
+              purchase.items.forEach(function (bought) {
+                var line = current.items.find(function (item) {
+                  return (
+                    item.lineKey === bought.lineKey &&
+                    item.variantId === bought.variantId
+                  )
+                })
+                if (
+                  line &&
+                  Number.isSafeInteger(bought.quantity) &&
+                  bought.quantity > 0
+                )
+                  updates[line.lineKey] = Math.max(
+                    0,
+                    line.quantity - bought.quantity
+                  )
+              })
+            }
+            cleanupBody = { updates: updates }
+          }
+          if (
+            input.visitorId !== verifiedVisitorId ||
+            input.expiresAt <= Date.now()
+          )
+            throw new Error("Your store session changed.")
           var pending = {
             fingerprint: fingerprint,
             status: "pending",
@@ -429,21 +546,29 @@
           // Unlike optional chat persistence, writes require durable replay protection.
           window.localStorage.setItem(receiptKey, JSON.stringify(pending))
           try {
-            var response = await fetch(
-              root +
-                (command.operation === "add"
-                  ? "cart/add.js"
-                  : "cart/change.js"),
-              {
+            if (purchase) {
+              purchase.operationId = input.operationId
+              window.localStorage.setItem(
+                purchasePrefix + command.snapshotId,
+                JSON.stringify(purchase)
+              )
+            }
+            var endpoint = "cart/change.js"
+            if (command.operation === "add") endpoint = "cart/add.js"
+            if (command.operation === "complete_order")
+              endpoint = "cart/update.js"
+            var response = null
+            if (!cleanupBody || Object.keys(cleanupBody.updates).length) {
+              response = await fetch(root + endpoint, {
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify(command.body),
+                body: JSON.stringify(cleanupBody || command.body),
                 signal: AbortSignal.timeout(15000),
-              }
-            )
+              })
+            }
             // Even an inventory error can partially change quantities. Never infer no side effects.
-            if (!response.ok) return uncertain
+            if (response && !response.ok) return uncertain
             pending.status = "completed"
             window.localStorage.setItem(receiptKey, JSON.stringify(pending))
             var cart = await readCart(root)

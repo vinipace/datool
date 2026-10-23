@@ -12,7 +12,8 @@ Implementation checklist for PR #36. The reference is [Chatbase's native Shopify
 - [x] Shopify-calculated quotes and one-shot creation of online-payment drafts, unpaid cash-on-delivery orders and zero-total free orders.
 - [x] Durable approved order intent and on-demand checkout recovery/payment status for the verified shopper.
 - [x] Automatic checkout/return payment reconciliation and deduplicated storefront conversation updates.
-- [ ] Cart clearing after confirmed placement, resolution of incomplete drafts and messaging-channel order creation.
+- [x] Remove purchased quantities from the original browser cart after verified placement/payment.
+- [ ] Resolution of incomplete drafts and messaging-channel order creation.
 - [x] Own order history, status and tracking; guest lookup by order number and checkout email or phone.
 - [x] Merchant-allowlisted order tags.
 - [x] Account activation and sign-in guidance appropriate to the store's account system.
@@ -52,7 +53,7 @@ Approved order intent, settings, operation tags and available draft/order IDs su
 
 Recovery performs no Shopify writes. An uncompleted cash-on-delivery/free draft, mismatched buyer/totals, or duplicate operation tag stays blocked for store-team review. A later check can recognize the original order after the store team completes it in Shopify. Supported in-chat resolution of incomplete or missing drafts and production webhook registration remain release requirements. Automatic payment checks reuse the worker as described below. A stale read cannot overwrite a newer recorded outcome.
 
-Cart-based drafts currently support ordinary variant lines. The storefront bridge flags subscriptions, line properties and bundle relationships without sending their private contents to Datool. Those carts, and carts from an older bridge that cannot establish this flag, use the store checkout to preserve their options. The remaining journey work includes cart clearing only after verified placement and messaging-channel payment notifications; issuing a checkout link alone cannot prove payment.
+Cart-based drafts currently support ordinary variant lines. The storefront bridge flags subscriptions, line properties and bundle relationships without sending their private contents to Datool. Those carts, and carts from an older bridge that cannot establish this flag, use the store checkout to preserve their options. The payment worker now authorizes cleanup of the original cart after verified placement, as described below. Messaging-channel payment notifications remain unfinished; issuing a checkout link alone cannot prove payment.
 
 Existing abuse protections remain burst-oriented. This work does not add default daily message quotas or spending caps.
 
@@ -270,5 +271,48 @@ Provider responses are fixtures, so live payment outcomes remain unverified.
 Required production work includes registering the documented webhook topics,
 releasing web/buildworker with migration 0069, obtaining the store's grants and
 verifying a sandbox checkout, payment, duplicate delivery and exchange outcome.
-Privacy/uninstall handling, cart clearing and messaging-channel notifications
+Privacy/uninstall handling and messaging-channel notifications
 remain separate unfinished requirements.
+
+## Purchased cart cleanup
+
+The storefront stores an expiring purchase snapshot locally when it shares an
+ordinary cart for an order quote. Only its random reference and expiry cross the
+bridge; the cart token is hashed locally and never leaves the store. The reference
+survives price changes and fresh approval in the existing quote and commerce
+ledger. It is not a model argument. Item-based orders never capture or clean a cart.
+
+The existing payment worker sends a cleanup directive only after it verifies the
+original placed order. Online orders require confirmed payment; cash-on-delivery
+orders can clean up while payment is pending, and free orders after placement.
+The chat reverifies the storefront identity before sending the directive to the
+host. Only outbound, delivered controls can trigger cleanup; inbound metadata is
+ignored. No extra model call, public endpoint or persistence table is introduced.
+
+The host checks the original snapshot, visitor and cart token, then subtracts the
+purchased quantities from matching line keys. Extra quantities observed at cleanup
+and unrelated lines remain. Changed line keys are preserved, and a different cart
+or device is left alone. One cart lock serializes Datool writes across tabs. A
+pre-dispatch receipt and consumed snapshot prevent replay after duplicate events,
+reloads or lost replies. An uncertain write produces a dismissible warning rather
+than another mutation. Successful changes emit `datool:cart:updated`.
+
+Snapshots and receipts expire after 30 days. Cleared storage, old widget versions
+and unsupported browser primitives require manual cart management. Shopify Ajax
+has no compare-and-swap operation: another theme/app changing the same quantities
+between the final read and update is outside Datool's browser lock. The cleanup
+uses one batch update by line key; it never calls cart clear or changes notes,
+attributes, options or other lines. See the [Ajax Cart API](https://shopify.dev/docs/api/ajax/reference/cart).
+
+The existing six order runtime cases cover all payment modes and item/cart sources,
+including changed quotes, human approval, forged snapshot input, unpaid checkout
+and delivery through the public conversation. The browser bridge test covers
+extra items/quantities, cross-tab deduplication, lost replies, snapshot reuse and a
+different cart/device. Two chat stories cover automatic dispatch after identity
+verification, ignored inbound metadata, polling deduplication, retained drafts and
+the warning/dismiss path. These remain local checks, not live store proof.
+
+The warning remains visible during automated accessibility checks. That check
+exposed dashboard dark colors leaking into the light chat; the chat's central
+warning tokens now follow its own theme. Mobile/desktop visual checks cover both
+themes, keyboard focus and dismissing the warning without losing the draft.

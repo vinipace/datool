@@ -340,7 +340,15 @@ export async function createShopifyOrder(
     quote.expiresAt <= Date.now() ||
     quote.fingerprint !== prepared.quote.fingerprint
   )
-    return { status: "quote_changed" as const, quote: prepared.quote }
+    return {
+      status: "quote_changed" as const,
+      quote: {
+        ...prepared.quote,
+        ...(quote.purchaseSnapshot
+          ? { purchaseSnapshot: quote.purchaseSnapshot }
+          : {}),
+      },
+    }
   await operations.begin(quote, settings)
   let providerConfirmed = false
   try {

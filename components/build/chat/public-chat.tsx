@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   requestShopifyCart,
   shopifyCartCommandSchema,
+  shopifyCartCleanupSchema,
 } from "@/src/lib/build/shopify-cart"
 import { requestHostSession } from "@/src/lib/build/chat-host-session"
 import { usePublicChallenge } from "./use-public-challenge"
@@ -11,6 +12,7 @@ import Image from "next/image"
 import datoolLogo from "@/app/icon.svg"
 import { MessageCircle, MessageCircleWarning, RefreshCw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Notice } from "@/components/ui/notice"
 import { cn } from "@/lib/utils"
 import {
   HelpPageSidebar,
@@ -170,6 +172,10 @@ export function PublicChat({
   const readSequence = React.useRef(0)
   const sessionSequence = React.useRef(0)
   const sendingRef = React.useRef(false)
+  const cartCleanupAttempts = React.useRef(new Set<string>())
+  const [cartCleanupWarningFor, setCartCleanupWarningFor] = React.useState<
+    string | null
+  >(null)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [draft, setDraft] = React.useState("")
   const updateDraft = React.useCallback(
@@ -549,6 +555,63 @@ export function PublicChat({
       verifyChallenge,
     ]
   )
+
+  React.useEffect(() => {
+    if (
+      !shopifyIdentity ||
+      previewAgentId ||
+      !embedOrigin ||
+      !session ||
+      loading
+    )
+      return
+    const current = () =>
+      sessionRef.current?.visitorId === session.visitorId &&
+      sessionRef.current?.conversationId === session.conversationId
+    for (const message of messages) {
+      if (
+        message.direction !== "outbound" ||
+        !["sent", "delivered"].includes(message.status ?? "")
+      )
+        continue
+      const parsed = shopifyCartCleanupSchema.safeParse(
+        message.metadata?.shopifyCartCleanup
+      )
+      if (!parsed.success || parsed.data.expiresAt <= Date.now()) continue
+      const cleanup = parsed.data
+      const key = `${session.visitorId}:${cleanup.operationId}`
+      if (cartCleanupAttempts.current.has(key)) continue
+      cartCleanupAttempts.current.add(key)
+      void (async () => {
+        // Reverify through Shopify before an automatic browser write, just as
+        // interactive cart changes do. A payment event cannot select a cart.
+        const verified = await requestHostSession<Session>(embedOrigin, {
+          conversationId: session.conversationId,
+        })
+        if (!current()) return
+        if (
+          verified.error ||
+          verified.session?.visitorId !== session.visitorId ||
+          verified.session.conversationId !== session.conversationId
+        )
+          throw new Error("Store session changed")
+        const result = await requestShopifyCart(
+          embedOrigin,
+          { operation: "complete_order", snapshotId: cleanup.snapshotId },
+          cleanup.operationId,
+          session.visitorId,
+          cleanup.expiresAt
+        )
+        if (result.status !== "completed")
+          throw new Error("Cart cleanup was not confirmed")
+      })().catch(() => {
+        if (current())
+          setCartCleanupWarningFor(
+            `${session.visitorId}:${session.conversationId}`
+          )
+      })
+    }
+  }, [embedOrigin, loading, messages, previewAgentId, session, shopifyIdentity])
 
   React.useEffect(() => {
     if (!shopifyIdentity || previewAgentId) return
@@ -974,6 +1037,26 @@ export function PublicChat({
         helpPage && !messages.length && "p-0 pb-0"
       )}
     >
+      {session &&
+      cartCleanupWarningFor ===
+        `${session.visitorId}:${session.conversationId}` ? (
+        <Notice variant="warning" role="status" className="mb-3 text-xs">
+          <div className="flex items-start justify-between gap-3">
+            <p>
+              Your order is placed, but the cart update could not be confirmed.
+              Check your cart before checking out again.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setCartCleanupWarningFor(null)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </Notice>
+      ) : null}
       {error && messages.length ? (
         <div
           className="mb-3 flex items-start justify-between gap-3 rounded-md border border-destructive-border bg-destructive-background px-3 py-2 text-xs text-destructive"
@@ -1227,12 +1310,22 @@ export function PublicChat({
                   ) : undefined
                 }
                 variant="customer"
-                messages={messages.map((message) => ({
-                  ...message,
-                  role: message.direction === "inbound" ? "user" : "assistant",
-                  content: message.text ?? "",
-                  toolCalls: [],
-                }))}
+                messages={messages
+                  .filter(
+                    (message) =>
+                      message.text?.trim() ||
+                      message.attachments?.length ||
+                      !shopifyCartCleanupSchema.safeParse(
+                        message.metadata?.shopifyCartCleanup
+                      ).success
+                  )
+                  .map((message) => ({
+                    ...message,
+                    role:
+                      message.direction === "inbound" ? "user" : "assistant",
+                    content: message.text ?? "",
+                    toolCalls: [],
+                  }))}
                 onWidgetInteraction={
                   sending || loading || !session
                     ? undefined

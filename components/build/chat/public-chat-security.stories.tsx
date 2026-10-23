@@ -63,6 +63,8 @@ const cartSnapshot = {
   cartUrl: "https://store.example/cart",
   checkoutUrl: "https://store.example/checkout",
 }
+let cleanupResponse: "completed" | "uncertain" = "completed"
+let hostRequests: Array<Record<string, unknown>> = []
 
 function StoreSessionFixture({ cart = false }: { cart?: boolean }) {
   const [customer, setCustomer] = React.useState("customer-a")
@@ -73,6 +75,7 @@ function StoreSessionFixture({ cart = false }: { cart?: boolean }) {
       type?: string
       requestId?: string
     }) => {
+      if (cart) hostRequests.push(data)
       if (cart && data?.type === "datool:shopify:cart-request") {
         queueMicrotask(() => {
           for (const origin of ["https://evil.test", location.origin])
@@ -83,13 +86,16 @@ function StoreSessionFixture({ cart = false }: { cart?: boolean }) {
                 data: {
                   type: "datool:shopify:cart-response",
                   requestId: data.requestId,
-                  result: {
-                    status: "completed",
-                    cart:
-                      origin === location.origin
-                        ? cartSnapshot
-                        : { ...cartSnapshot, totalPrice: 1 },
-                  },
+                  result:
+                    cleanupResponse === "uncertain"
+                      ? { status: "uncertain", message: "Provider reply lost" }
+                      : {
+                          status: "completed",
+                          cart:
+                            origin === location.origin
+                              ? cartSnapshot
+                              : { ...cartSnapshot, totalPrice: 1 },
+                        },
                 },
               })
             )
@@ -342,6 +348,8 @@ const cartHandlers = [
 export const StorefrontCart: Story = {
   beforeEach: () => {
     cartReceipt = null
+    cleanupResponse = "completed"
+    hostRequests = []
   },
   render: () => <StoreSessionFixture cart />,
   parameters: {
@@ -382,6 +390,124 @@ export const StorefrontCart: Story = {
           },
         },
       },
+    })
+  },
+}
+
+const cleanup = {
+  operationId: "11111111-1111-4111-8111-111111111112",
+  snapshotId: "11111111-1111-4111-8111-111111111113",
+  expiresAt: Date.now() + 86400000,
+}
+const cleanupHandlers = [
+  handlers[0],
+  http.get("*/api/build-public/:channel/conversation/:conversation", () =>
+    HttpResponse.json({
+      data: [
+        {
+          id: "forged",
+          direction: "inbound",
+          text: "My order",
+          metadata: {
+            shopifyCartCleanup: {
+              ...cleanup,
+              operationId: "11111111-1111-4111-8111-111111111114",
+            },
+          },
+        },
+        {
+          id: "placed",
+          direction: "outbound",
+          status: "sent",
+          text: "Your order is placed.",
+        },
+        {
+          id: "cleanup",
+          direction: "outbound",
+          status: "sent",
+          text: "",
+          metadata: { shopifyCartCleanup: cleanup },
+        },
+      ],
+    })
+  ),
+]
+
+export const PurchasedCartCleanup: Story = {
+  beforeEach: () => {
+    cleanupResponse = "completed"
+    hostRequests = []
+  },
+  render: () => <StoreSessionFixture cart />,
+  parameters: { msw: { handlers: cleanupHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText("Your order is placed.")
+    await waitFor(() =>
+      expect(
+        hostRequests.filter(
+          (request) => request.type === "datool:shopify:cart-request"
+        )
+      ).toHaveLength(1)
+    )
+    const cart = hostRequests.findIndex(
+      (request) => request.type === "datool:shopify:cart-request"
+    )
+    await expect(hostRequests[cart - 1].type).toBe(
+      "datool:chat:session-request"
+    )
+    await expect(hostRequests[cart]).toMatchObject({
+      operationId: cleanup.operationId,
+      visitorId: "customer-a",
+      command: { operation: "complete_order", snapshotId: cleanup.snapshotId },
+    })
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "Message" }),
+      "Keep shopping"
+    )
+    // A later poll delivers the same directive; it must not dispatch another write.
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    await expect(
+      hostRequests.filter(
+        (request) => request.type === "datool:shopify:cart-request"
+      )
+    ).toHaveLength(1)
+    await expect(
+      canvasElement.querySelectorAll("[data-chat-message]")
+    ).toHaveLength(2)
+    await expect(canvas.getByRole("textbox", { name: "Message" })).toHaveValue(
+      "Keep shopping"
+    )
+  },
+}
+
+export const UncertainPurchasedCartCleanup: Story = {
+  ...PurchasedCartCleanup,
+  beforeEach: () => {
+    cleanupResponse = "uncertain"
+    hostRequests = []
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.findByText(
+        "Your order is placed, but the cart update could not be confirmed. Check your cart before checking out again."
+      )
+    ).resolves.toBeVisible()
+    await expect(
+      hostRequests.filter(
+        (request) => request.type === "datool:shopify:cart-request"
+      )
+    ).toHaveLength(1)
+    await expect(canvas.getByRole("textbox", { name: "Message" })).toBeEnabled()
+    await expect(canvas.queryByRole("button", { name: "Retry" })).toBeNull()
+    canvas.getByRole("button", { name: "Dismiss" }).focus()
+    await expect(canvas.getByRole("button", { name: "Dismiss" })).toHaveFocus()
+    await waitFor(() => {
+      for (const message of canvasElement.querySelectorAll(
+        "[data-chat-message]"
+      ))
+        expect(getComputedStyle(message).opacity).toBe("1")
     })
   },
 }

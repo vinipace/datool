@@ -111,6 +111,8 @@ async function storefront(
     Promise,
     AbortSignal,
     CustomEvent,
+    crypto: globalThis.crypto,
+    TextEncoder,
     fetch: async (url: string, init?: { body?: string }) =>
       cart && url.includes("/cart")
         ? cart.respond(url, init?.body)
@@ -259,29 +261,34 @@ test("storefront cart bridge uses the current cart, strips private fields and ne
   const requests: Array<{ url: string; body: unknown }> = []
   let quantity = 0
   let loseReply = false
+  let cartToken = "private-cart-checkout-token"
+  let extraItems: Record<string, unknown>[] = []
   let lineDetails: Record<string, unknown> = {
     properties: { secret: "private" },
   }
   const snapshot = () => ({
-    token: "private-cart-checkout-token",
+    token: cartToken,
     note: "private note",
     attributes: { email: "private@example.test" },
     currency: "BRL",
     total_price: quantity * 2500,
     item_count: quantity,
-    items: quantity
-      ? [
-          {
-            key: "123:line",
-            variant_id: 123,
-            product_title: "Board wax",
-            quantity,
-            final_line_price: quantity * 2500,
-            url: "/products/wax?variant=123",
-            ...lineDetails,
-          },
-        ]
-      : [],
+    items: [
+      ...(quantity
+        ? [
+            {
+              key: "123:line",
+              variant_id: 123,
+              product_title: "Board wax",
+              quantity,
+              final_line_price: quantity * 2500,
+              url: "/products/wax?variant=123",
+              ...lineDetails,
+            },
+          ]
+        : []),
+      ...extraItems,
+    ],
   })
   const proxy = {
     path: "/apps/datool",
@@ -300,6 +307,8 @@ test("storefront cart bridge uses the current cart, strips private fields and ne
       requests.push({ url, body: data })
       if (url.endsWith("/cart/add.js")) quantity += data.items[0].quantity
       if (url.endsWith("/cart/change.js")) quantity = data.quantity
+      if (url.endsWith("/cart/update.js"))
+        quantity = data.updates["123:line"] ?? quantity
       if (body && loseReply) throw new Error("Reply lost after write")
       return Response.json(snapshot())
     },
@@ -426,4 +435,108 @@ test("storefront cart bridge uses the current cart, strips private fields and ne
     page.receive(rejected)
   await new Promise((resolve) => setTimeout(resolve, 5))
   expect(requests.filter((request) => request.body)).toHaveLength(writes)
+
+  // An order snapshot remains local and can remove only its purchased quantities,
+  // once, even after another page load or a lost cleanup response.
+  loseReply = false
+  const capture = async () => {
+    page.receive({
+      ...input,
+      requestId: "purchase",
+      command: { operation: "read" },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const result = page.frame.messages.at(-1) as {
+      result: { cart: { purchaseSnapshot?: { id: string; expiresAt: number } } }
+    }
+    expect(result.result.cart.purchaseSnapshot).toBeDefined()
+    expect(JSON.stringify(result)).not.toContain("private")
+    return result.result.cart.purchaseSnapshot!
+  }
+  const purchase = await capture()
+  quantity = 5 // Two were purchased; three were added later.
+  extraItems = [
+    {
+      key: "456:new",
+      variant_id: 456,
+      product_title: "New item",
+      quantity: 1,
+      final_line_price: 100,
+      url: "/products/new",
+    },
+  ]
+  const cleanup = {
+    ...input,
+    requestId: "cleanup",
+    operationId: "purchase-00000000001",
+    expiresAt: purchase.expiresAt,
+    command: { operation: "complete_order", snapshotId: purchase.id },
+  }
+  page.receive(cleanup)
+  otherTab.receive(cleanup)
+  await new Promise((resolve) => setTimeout(resolve, 15))
+  expect(quantity).toBe(3)
+  expect(
+    requests.filter((request) => request.url.endsWith("/cart/update.js"))
+  ).toEqual([
+    {
+      url: "https://store.example/pt-br/cart/update.js",
+      body: { updates: { "123:line": 3 } },
+    },
+  ])
+  // The same snapshot cannot be spent again under another operation ID.
+  page.receive({ ...cleanup, operationId: "purchase-00000000002" })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(quantity).toBe(3)
+  extraItems = []
+  const lostSnapshot = await capture()
+  loseReply = true
+  const lostCleanup = {
+    ...cleanup,
+    operationId: "purchase-00000000003",
+    expiresAt: lostSnapshot.expiresAt,
+    command: { operation: "complete_order", snapshotId: lostSnapshot.id },
+  }
+  page.receive(lostCleanup)
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(quantity).toBe(0)
+  quantity = 4
+  otherTab.receive(lostCleanup)
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(quantity).toBe(4)
+  expect(
+    (otherTab.frame.messages.at(-1) as { result: { status: string } }).result
+      .status
+  ).toBe("uncertain")
+  loseReply = false
+  const oldCart = await capture()
+  cartToken = "private-different-cart"
+  const beforeDifferentCart = requests.filter((request) => request.body).length
+  page.receive({
+    ...cleanup,
+    operationId: "purchase-00000000004",
+    expiresAt: oldCart.expiresAt,
+    command: { operation: "complete_order", snapshotId: oldCart.id },
+  })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(quantity).toBe(4)
+  expect(requests.filter((request) => request.body)).toHaveLength(
+    beforeDifferentCart
+  )
+  const otherDevice = await storefront(new Map(), "channel-one", proxy, cart)
+  otherDevice.receive({
+    type: "datool:chat:session-request",
+    requestId: "new-device",
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  otherDevice.receive(cleanup)
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(
+    (otherDevice.frame.messages.at(-1) as { result: { status: string } }).result
+      .status
+  ).toBe("completed")
+  expect(quantity).toBe(4)
+  expect(requests.filter((request) => request.body)).toHaveLength(
+    beforeDifferentCart
+  )
 })

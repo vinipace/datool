@@ -22,9 +22,26 @@ export const shopifyCartUpdateSchema = z.discriminatedUnion("operation", [
 ])
 export const shopifyCartCommandSchema = z.union([
   z.object({ operation: z.literal("read") }).strict(),
+  z
+    .object({ operation: z.literal("complete_order"), snapshotId: z.uuid() })
+    .strict(),
   shopifyCartUpdateSchema,
 ])
 export type ShopifyCartCommand = z.infer<typeof shopifyCartCommandSchema>
+
+export const shopifyPurchaseSnapshotSchema = z
+  .object({
+    id: z.uuid(),
+    expiresAt: z.number().int(),
+  })
+  .strict()
+export const shopifyCartCleanupSchema = z
+  .object({
+    operationId: z.uuid(),
+    snapshotId: z.uuid(),
+    expiresAt: z.number().int(),
+  })
+  .strict()
 
 const money = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
 const httpsUrl = z
@@ -56,6 +73,8 @@ export const shopifyCartSchema = z
     truncated: z.boolean(),
     // Older widget versions cannot prove that custom options were preserved.
     requiresStoreCheckout: z.boolean().optional(),
+    // Only a reference to the browser's private cart snapshot crosses the bridge.
+    purchaseSnapshot: shopifyPurchaseSnapshotSchema.optional(),
     cartUrl: httpsUrl,
     checkoutUrl: httpsUrl,
   })
