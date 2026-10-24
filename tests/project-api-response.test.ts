@@ -48,3 +48,22 @@ describe("project API request guards", () => {
     }
   })
 })
+
+
+test("Datool Cloud accepts its installed app origin without trusting arbitrary aliases", () => {
+  const previous = process.env.BETTER_AUTH_URL
+  const request = (origin: string) => new Request("https://www.trydatool.com/api/inbox-mobile/devices", {
+    method: "POST", headers: { origin, cookie: "better-auth.session_token=fixture" },
+  })
+  try {
+    process.env.BETTER_AUTH_URL = "https://www.trydatool.com"
+    for (const origin of ["https://www.trydatool.com", "https://trydatool.com"]) expect(hasTrustedMutationOrigin(request(origin))).toBe(true)
+    for (const origin of ["http://trydatool.com", "https://trydatool.com.evil.test", "https://other.trydatool.com", "https://evil.test"]) expect(hasTrustedMutationOrigin(request(origin))).toBe(false)
+    process.env.BETTER_AUTH_URL = "https://self-hosted.example"
+    expect(hasTrustedMutationOrigin(request("https://trydatool.com"))).toBe(false)
+    expect(hasTrustedMutationOrigin(request("https://self-hosted.example"))).toBe(true)
+  } finally {
+    if (previous === undefined) delete process.env.BETTER_AUTH_URL
+    else process.env.BETTER_AUTH_URL = previous
+  }
+})
