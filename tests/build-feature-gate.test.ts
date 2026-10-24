@@ -87,6 +87,8 @@ describe("Build runtime opt-in", () => {
         ["/p/project/build/inbox?view=mine", "HEAD"],
         ["/chat/channel", "GET"],
         ["/api/build/build_list_agents", "POST"],
+        ["/api/inbox-mobile/projects", "GET"],
+        ["/api/inbox-mobile/devices", "POST"],
         ["/api/build-public/channel/session", "POST"],
         ["/api/build-public/channel/appearance", "OPTIONS"],
         ["/api/build-webhooks/whatsapp", "GET"],
@@ -114,6 +116,7 @@ describe("Build runtime opt-in", () => {
     for (const path of [
       "/p/project/build/agents",
       "/api/build/build_list_agents",
+      "/api/inbox-mobile/projects",
       "/api/build-public/channel/session",
       "/api/build-webhooks/whatsapp",
     ]) {

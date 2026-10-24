@@ -1,3 +1,4 @@
+import { expo } from "@better-auth/expo"
 import { google } from "better-auth/social-providers"
 import { isAllowedEmail, isAllowedGoogleUser } from "./launch-access"
 import {
@@ -86,7 +87,7 @@ export function organizationAuthOptions(
     },
     baseURL,
     secret,
-    trustedOrigins: [baseURL],
+    trustedOrigins: [baseURL, "datool-inbox://"],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         if (process.env.AUTH_PASSWORD_SIGN_IN_ENABLED === "true" &&
@@ -242,6 +243,7 @@ export function organizationAuthOptions(
     session: { cookieCache: { enabled: false } },
     rateLimit: { enabled: true, storage: "database" },
     plugins: [
+      expo(),
       magicLink({
         expiresIn: signInLinkExpirySeconds,
         storeToken: "hashed",

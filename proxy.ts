@@ -46,7 +46,7 @@ async function applyPublicChatPolicy(
 /** Preserve the requested deep link across authentication and organization selection. */
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
-  const buildApi = /^\/api\/build(?:-public|-webhooks)?(?:\/|$)/.test(pathname)
+  const buildApi = /^\/api\/(?:build(?:-public|-webhooks)?|inbox-mobile)(?:\/|$)/.test(pathname)
   if (
     !buildAvailable() &&
     (buildApi || /^\/(?:p\/[^/]+\/build|chat)(?:\/|$)/.test(pathname))
@@ -137,6 +137,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     "/api/build/:path*",
+    "/api/inbox-mobile/:path*",
     "/api/build-public/:path*",
     "/api/build-webhooks/:path*",
     "/((?!api/|api$|_next/|\\.well-known/|favicon.ico$).*)",
