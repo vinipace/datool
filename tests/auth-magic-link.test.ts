@@ -188,3 +188,19 @@ test("limits repeated requests and rejects external redirect destinations", asyn
   expect(messages).toHaveLength(sent)
   expect(records.session).toHaveLength(0)
 })
+
+
+test("mobile sign-in returns a session cookie through the trusted native callback", async () => {
+  const { auth, requestLink, link } = setup()
+  expect((await requestLink("alice@example.com", "datool-inbox://auth-callback?state=fixture")).status).toBe(200)
+  const response = await auth.handler(new Request(link()))
+  expect(response.status).toBe(302)
+  const callback = new URL(response.headers.get("location")!)
+  expect(callback.protocol).toBe("datool-inbox:")
+  expect(callback.host).toBe("auth-callback")
+  expect(callback.searchParams.get("state")).toBe("fixture")
+  const cookie = callback.searchParams.get("cookie")!
+  expect(cookie).toContain("better-auth.session_token=")
+  const session = await auth.handler(new Request(`${origin}/api/auth/get-session`, { headers: { cookie } }))
+  expect((await session.json()).user.email).toBe("alice@example.com")
+})

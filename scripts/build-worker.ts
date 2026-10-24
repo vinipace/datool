@@ -1,3 +1,4 @@
+import { drainInboxPush } from "../src/server/build/mobile/push"
 import { enqueueShopifyReconciliationJobs } from "../src/server/build/integrations/shopify-reconciliation"
 import { createTracerDatabase } from "../src/server/tracer/db"
 import { createBuildContext } from "../src/server/build/context"
@@ -330,6 +331,10 @@ await Promise.all([
   loop("simulation queue failed", simulationTask, 2000),
   loop("campaign queue failed", campaignTask, 2000),
   loop("conversation wait scheduler failed", waitTask, 1000),
+  loop("inbox push queue failed", async () => {
+    await drainInboxPush(workerDatabase)
+    return false
+  }, 5000),
   loop(
     "Shopify reconciliation scheduler failed",
     async () => (await enqueueShopifyReconciliationJobs(workerDatabase)) > 0,
