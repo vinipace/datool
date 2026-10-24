@@ -1,3 +1,4 @@
+import { trustedAuthWebOrigins } from "./auth-origins"
 import { NextResponse } from "next/server"
 import { apiErrorHint } from "./api-error-hint"
 
@@ -73,11 +74,9 @@ export function hasTrustedMutationOrigin(request: Request): boolean {
 
   const configuredBaseUrl = process.env.BETTER_AUTH_URL
   if (!configuredBaseUrl) return false
-  let expectedOrigin: string
   try {
-    expectedOrigin = new URL(configuredBaseUrl).origin
+    return trustedAuthWebOrigins(configuredBaseUrl).includes(origin)
   } catch {
     return false
   }
-  return origin === expectedOrigin
 }

@@ -29,3 +29,10 @@ untrusted callback schemes remain rejected, and checking that both mobile API
 routes reject anonymous requests with JSON 401 responses. Complete Google sign-in
 on a device, open a workspace and verify a subscribed handoff notification before
 claiming the complete mobile journey works.
+
+The first native build uses `https://trydatool.com`, while Cloud authentication
+uses `https://www.trydatool.com`. The browser authorization bridge redirects to
+the configured auth host before setting its host-only OAuth cookie. Cloud also
+accepts the exact HTTPS apex origin for native API mutations. This exception is
+limited to the configured Cloud origin; self-hosted installations keep their own
+origin and do not trust arbitrary subdomains.

@@ -1,3 +1,4 @@
+import { GET as authGet } from "../../app/api/auth/[...all]/route"
 import assert from "node:assert/strict"
 import { makeSignature } from "better-auth/crypto"
 import { getAuth } from "../../lib/auth"
@@ -16,13 +17,24 @@ try {
     body: JSON.stringify({ provider: "google", callbackURL, disableRedirect: true }),
   }))
   }
+  let signInURL = ""
   for (const callback of ["datool-inbox:///", "datool-inbox://auth-callback?state=fixture", "/"]) {
     const response = await signIn(callback)
     assert.equal(response.status, 200, `Native callback rejected: ${callback}: ${await response.clone().text()}`)
     const authorization = new URL((await response.json()).url)
+    signInURL ||= authorization.toString()
     assert.equal(authorization.origin, "https://accounts.google.com")
     assert.equal(authorization.searchParams.get("redirect_uri"), `${base}/api/auth/callback/google`)
   }
+  const browserPath = "/api/auth/expo-authorization-proxy?" + new URLSearchParams({ authorizationURL: signInURL })
+  const fromInstalledApp = await authGet(new Request("https://trydatool.com" + browserPath, { headers: { host: "trydatool.com" } }))
+  assert.equal(fromInstalledApp.status, 307, "OAuth browser state must be set on the provider callback host")
+  assert.equal(fromInstalledApp.headers.get("location"), base + browserPath)
+  assert.equal(fromInstalledApp.headers.get("set-cookie"), null)
+  const canonicalBrowser = await authGet(new Request(base + browserPath, { headers: { host: new URL(base).host } }))
+  assert.equal(canonicalBrowser.status, 302)
+  assert.equal(canonicalBrowser.headers.get("location"), signInURL)
+  assert(canonicalBrowser.headers.get("set-cookie")?.includes("state="))
   for (const callback of ["https://untrusted.example/", "other-app://", "datool-inbox-evil://"]) {
     const response = await signIn(callback)
     assert.equal(response.status, 403)
@@ -55,7 +67,7 @@ try {
   assert.equal((await register(request(projectId, base, ""))).status, 401)
   assert.equal((await register(request(projectId, "https://untrusted.example"))).status, 403)
   assert.equal((await register(request(foreignProject))).status, 403)
-  assert.equal((await register(request(projectId))).status, 200)
+  assert.equal((await register(request(projectId, "https://trydatool.com"))).status, 200)
   assert.equal((await db.query('select user_id from inbox_mobile_devices')).rows[0].user_id, user.id)
   await db.query('delete from member where "userId"=$1', [user.id])
   assert.equal((await register(request(projectId))).status, 403)

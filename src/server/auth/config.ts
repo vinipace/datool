@@ -1,3 +1,4 @@
+import { trustedAuthWebOrigins } from "@/lib/auth-origins"
 import { expo } from "@better-auth/expo"
 import { google } from "better-auth/social-providers"
 import { isAllowedEmail, isAllowedGoogleUser } from "./launch-access"
@@ -87,7 +88,7 @@ export function organizationAuthOptions(
     },
     baseURL,
     secret,
-    trustedOrigins: [baseURL, "datool-inbox://"],
+    trustedOrigins: [...trustedAuthWebOrigins(baseURL), "datool-inbox://"],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         if (process.env.AUTH_PASSWORD_SIGN_IN_ENABLED === "true" &&
