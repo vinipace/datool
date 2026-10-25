@@ -29,16 +29,24 @@ import {
 import { bubbleStyle } from "./bubble-style"
 import { localizeBubble } from "@/src/lib/build/bubble-localization"
 import { buildApi } from "@/components/build/operations/build-api"
-import { MessageTranscript } from "@/components/ui/message-transcript"
 import {
   isPublicReplyPending,
   type PublicChatThread,
 } from "@/src/lib/build/public-chat"
-import { ChatComposer, ChatTypingIndicator } from "@/components/ui/chat"
+import {
+  ChatComposer,
+  ChatTypingIndicator,
+} from "@/components/ui/chat-composer"
 import { ChatFeedback } from "@/components/ui/chat-feedback"
 import { formatRelative } from "@/components/tracer/format"
 import { ChatNavigationContext } from "@/components/ui/chat-navigation-context"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
+
+const MessageTranscript = React.lazy(() =>
+  import("@/components/ui/message-transcript").then((module) => ({
+    default: module.MessageTranscript,
+  }))
+)
 
 type Appearance = ChatBubbleSettings
 
@@ -127,6 +135,7 @@ function sessionKey(channelId: string, origin?: string) {
 export function PublicChat({
   channelId,
   embedded = false,
+  deferSessionUntilOpen = false,
   shopifyIdentity = false,
   context = defaultContext,
   embedOrigin,
@@ -138,6 +147,7 @@ export function PublicChat({
 }: {
   channelId: string
   embedded?: boolean
+  deferSessionUntilOpen?: boolean
   shopifyIdentity?: boolean
   context?: Record<string, unknown>
   embedOrigin?: string
@@ -149,6 +159,11 @@ export function PublicChat({
 }) {
   const { verify: verifyChallenge, element: challengeElement } =
     usePublicChallenge()
+  const managedEmbed = embedded && deferSessionUntilOpen && !previewAgentId
+  const [hasOpened, setHasOpened] = React.useState(!managedEmbed)
+  const [frameVisible, setFrameVisible] = React.useState(!managedEmbed)
+  const sessionActive =
+    !managedEmbed || (shopifyIdentity ? frameVisible : hasOpened)
   const [session, setSession] = React.useState<Session | null>(null)
   const [storedAppearance, setAppearance] = React.useState(
     initialAppearance ?? defaultAppearance
@@ -407,6 +422,7 @@ export function PublicChat({
         }
         let stored = sessionRef.current
         let active: Session
+        let newConversation = false
         if (embedded && embedOrigin && shopifyIdentity) {
           let result = await requestHostSession<Session>(embedOrigin, {
             newConversation: reset,
@@ -479,6 +495,7 @@ export function PublicChat({
               stored = null
             }
           }
+          newConversation = !threadId && (reset || !stored)
           active = await requestJson<Session>(
             `/api/build-public/${encodeURIComponent(channelId)}/session`,
             {
@@ -510,21 +527,35 @@ export function PublicChat({
         sessionRef.current = active
         setSession(active)
         try {
-          setDraft(
+          const savedDraft =
             window.sessionStorage.getItem(
               `${key}:draft:${active.conversationId}`
             ) ?? ""
-          )
+          const switched =
+            stored &&
+            (stored.conversationId !== active.conversationId ||
+              stored.visitorId !== active.visitorId)
+          setDraft((current) => (switched ? savedDraft : current || savedDraft))
         } catch {
-          setDraft("")
+          /* Preserve text typed while the session was connecting. */
         }
-        const display = await requestJson<{ appearance: Appearance }>(
-          `/api/build-public/${encodeURIComponent(channelId)}/appearance`
-        )
+        // Both public and Shopify session responses already include appearance.
+        // Shopify may resume a thread, so only known-new public chats skip history.
+        if (active.appearance) setAppearance(mergeAppearance(active.appearance))
+        if (newConversation) setMessages([])
+        await Promise.all([
+          active.appearance
+            ? Promise.resolve()
+            : requestJson<{ appearance: Appearance }>(
+                `/api/build-public/${encodeURIComponent(channelId)}/appearance`
+              ).then((result) => {
+                if (sequence === sessionSequence.current)
+                  setAppearance(mergeAppearance(result.appearance))
+              }),
+          newConversation ? Promise.resolve() : loadConversation(active),
+        ])
         if (sequence !== sessionSequence.current) return
-        setAppearance(mergeAppearance(display.appearance))
-        await loadConversation(active)
-        if (helpPage) await loadHistory(active)
+        if (helpPage) void loadHistory(active)
       } catch (reason) {
         if (sequence !== sessionSequence.current) return
         if (shopifyIdentity) {
@@ -614,7 +645,8 @@ export function PublicChat({
   }, [embedOrigin, loading, messages, previewAgentId, session, shopifyIdentity])
 
   React.useEffect(() => {
-    if (!shopifyIdentity || previewAgentId) return
+    if (!shopifyIdentity || previewAgentId || (managedEmbed && !frameVisible))
+      return
     const refresh = () => {
       if (document.visibilityState !== "hidden") void startSession()
       else {
@@ -633,7 +665,13 @@ export function PublicChat({
       document.removeEventListener("visibilitychange", refresh)
       window.clearInterval(timer)
     }
-  }, [shopifyIdentity, previewAgentId, startSession])
+  }, [
+    shopifyIdentity,
+    previewAgentId,
+    startSession,
+    managedEmbed,
+    frameVisible,
+  ])
 
   React.useEffect(() => {
     if (!previewAgentId || !session) return
@@ -648,12 +686,50 @@ export function PublicChat({
   }, [channelId, embedOrigin, previewAgentId, session, threads])
 
   React.useEffect(() => {
-    // Loading the signed session is the external side effect this effect owns.
-    void startSession()
-  }, [startSession])
+    if (!managedEmbed || !embedOrigin || window.parent === window) return
+    let parentOrigin: string
+    try {
+      parentOrigin = new URL(embedOrigin).origin
+    } catch {
+      return
+    }
+    const onVisibility = (event: MessageEvent) => {
+      if (event.source !== window.parent || event.origin !== parentOrigin)
+        return
+      if (
+        event.data?.type !== "datool:chat:visibility" ||
+        typeof event.data.visible !== "boolean"
+      )
+        return
+      setFrameVisible(event.data.visible)
+      if (event.data.visible) setHasOpened(true)
+      else if (shopifyIdentity) {
+        ++sessionSequence.current
+        ++readSequence.current
+        setMessages([])
+        setThreads([])
+        setLoading(true)
+      }
+    }
+    window.addEventListener("message", onVisibility)
+    window.parent.postMessage({ type: "datool:chat:ready" }, parentOrigin)
+    return () => window.removeEventListener("message", onVisibility)
+  }, [managedEmbed, embedOrigin, shopifyIdentity])
 
   React.useEffect(() => {
-    if (!session || previewAgentId) return
+    // Loading the signed session is the external side effect this effect owns.
+    if (!sessionActive && window.parent !== window) return
+    void startSession()
+  }, [startSession, sessionActive])
+
+  React.useEffect(() => {
+    if (
+      !session ||
+      previewAgentId ||
+      loading ||
+      (managedEmbed && !frameVisible)
+    )
+      return
     const controller = new AbortController()
     let polling = false
     const timer = window.setInterval(() => {
@@ -694,10 +770,11 @@ export function PublicChat({
     loading,
     shopifyIdentity,
     startSession,
+    managedEmbed,
+    frameVisible,
   ])
 
-  const lastMessage = messages.at(-1)
-  React.useEffect(() => {
+  const scrollToLatest = React.useCallback(() => {
     const log = messageLogRef.current
     if (!log) return
     const latestMessage = Array.from(
@@ -717,7 +794,20 @@ export function PublicChat({
           : 0,
       behavior: "smooth",
     })
-  }, [messages.length, lastMessage?.id, lastMessage?.text, sending])
+  }, [messages.length])
+  const onTranscriptMount = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) scrollToLatest()
+    },
+    [scrollToLatest]
+  )
+  const lastMessage = messages.at(-1)
+  React.useEffect(scrollToLatest, [
+    scrollToLatest,
+    lastMessage?.id,
+    lastMessage?.text,
+    sending,
+  ])
 
   async function submit(
     event?: React.FormEvent,
@@ -1144,7 +1234,7 @@ export function PublicChat({
           text={draft}
           onTextChange={updateDraft}
           running={waitingReply}
-          disabled={loading || !session || unavailable}
+          disabled={unavailable}
           canSubmit={!!draft.trim() && !waitingReply && !loading && !!session}
           placeholder={appearance.inputPlaceholder}
           messageLabel={copy.message}
@@ -1301,100 +1391,116 @@ export function PublicChat({
                 <HelpPageLinks settings={appearance} />
               </div>
             ) : null}
-            <div className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}>
-              <MessageTranscript
-                key={session?.conversationId}
-                pendingReply={
-                  waitingReply ? (
-                    <ChatTypingIndicator label={copy.thinking} />
-                  ) : undefined
-                }
-                variant="customer"
-                messages={messages
-                  .filter(
-                    (message) =>
-                      message.text?.trim() ||
-                      message.attachments?.length ||
-                      !shopifyCartCleanupSchema.safeParse(
-                        message.metadata?.shopifyCartCleanup
-                      ).success
-                  )
-                  .map((message) => ({
-                    ...message,
-                    role:
-                      message.direction === "inbound" ? "user" : "assistant",
-                    content: message.text ?? "",
-                    toolCalls: [],
-                  }))}
-                onWidgetInteraction={
-                  sending || loading || !session
-                    ? undefined
-                    : (message, interaction, label) => {
-                        const continuations = message.metadata?.continuations
-                        const pending = Array.isArray(continuations)
-                          ? continuations.find(
-                              (item) =>
-                                item &&
-                                item.continuationId ===
-                                  interaction.continuationId &&
-                                item.actionId === interaction.actionId
+            {messages.length > 0 || waitingReply ? (
+              <React.Suspense
+                fallback={<LoadingState compact label={copy.loading} />}
+              >
+                <div
+                  ref={onTranscriptMount}
+                  className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}
+                >
+                  <MessageTranscript
+                    key={session?.conversationId}
+                    pendingReply={
+                      waitingReply ? (
+                        <ChatTypingIndicator label={copy.thinking} />
+                      ) : undefined
+                    }
+                    variant="customer"
+                    messages={messages
+                      .filter(
+                        (message) =>
+                          message.text?.trim() ||
+                          message.attachments?.length ||
+                          !shopifyCartCleanupSchema.safeParse(
+                            message.metadata?.shopifyCartCleanup
+                          ).success
+                      )
+                      .map((message) => ({
+                        ...message,
+                        role:
+                          message.direction === "inbound"
+                            ? "user"
+                            : "assistant",
+                        content: message.text ?? "",
+                        toolCalls: [],
+                      }))}
+                    onWidgetInteraction={
+                      sending || loading || !session
+                        ? undefined
+                        : (message, interaction, label) => {
+                            const continuations =
+                              message.metadata?.continuations
+                            const pending = Array.isArray(continuations)
+                              ? continuations.find(
+                                  (item) =>
+                                    item &&
+                                    item.continuationId ===
+                                      interaction.continuationId &&
+                                    item.actionId === interaction.actionId
+                                )
+                              : undefined
+                            void submit(
+                              undefined,
+                              label,
+                              {
+                                ...interaction,
+                                sourceMessageId: message.id,
+                              },
+                              pending?.shopifyCart
                             )
-                          : undefined
-                        void submit(
-                          undefined,
-                          label,
-                          {
-                            ...interaction,
-                            sourceMessageId: message.id,
-                          },
-                          pending?.shopifyCart
-                        )
-                      }
-                }
-                renderMessageFooter={(message) => {
-                  if (message.role !== "assistant" || !message.id) return null
-                  const messageId = message.id
-                  return (
-                    <div className="mt-1 max-w-[85%] px-2 text-xs text-foreground-muted">
-                      <div className="flex items-center gap-2">
-                        {message.createdAt ? (
-                          <time
-                            dateTime={message.createdAt}
-                            title={new Date(message.createdAt).toLocaleString(
-                              language
-                            )}
-                          >
-                            {Math.abs(
-                              Date.now() - new Date(message.createdAt).getTime()
-                            ) < 60_000
-                              ? copy.justNow
-                              : formatRelative(message.createdAt, language)}
-                          </time>
-                        ) : null}
-                        {appearance.showFeedback ? (
-                          <ChatFeedback
-                            value={feedback[messageId]}
-                            onChange={(value) =>
-                              void sendFeedback(messageId, value)
-                            }
-                            disabled={!session || feedbackPending[messageId]}
-                            label={copy.feedback}
-                            positiveLabel={copy.helpful}
-                            negativeLabel={copy.notHelpful}
-                            hideLabel
-                          />
-                        ) : null}
-                      </div>
-                      {feedbackError[messageId] ? (
-                        <p className="mt-1 text-destructive" role="alert">
-                          {feedbackError[messageId]}
-                        </p>
-                      ) : null}
-                    </div>
-                  )
-                }}
-              />
-            </div>
+                          }
+                    }
+                    renderMessageFooter={(message) => {
+                      if (message.role !== "assistant" || !message.id)
+                        return null
+                      const messageId = message.id
+                      return (
+                        <div className="mt-1 max-w-[85%] px-2 text-xs text-foreground-muted">
+                          <div className="flex items-center gap-2">
+                            {message.createdAt ? (
+                              <time
+                                dateTime={message.createdAt}
+                                title={new Date(
+                                  message.createdAt
+                                ).toLocaleString(language)}
+                              >
+                                {Math.abs(
+                                  Date.now() -
+                                    new Date(message.createdAt).getTime()
+                                ) < 60_000
+                                  ? copy.justNow
+                                  : formatRelative(message.createdAt, language)}
+                              </time>
+                            ) : null}
+                            {appearance.showFeedback ? (
+                              <ChatFeedback
+                                value={feedback[messageId]}
+                                onChange={(value) =>
+                                  void sendFeedback(messageId, value)
+                                }
+                                disabled={
+                                  !session || feedbackPending[messageId]
+                                }
+                                label={copy.feedback}
+                                positiveLabel={copy.helpful}
+                                negativeLabel={copy.notHelpful}
+                                hideLabel
+                              />
+                            ) : null}
+                          </div>
+                          {feedbackError[messageId] ? (
+                            <p className="mt-1 text-destructive" role="alert">
+                              {feedbackError[messageId]}
+                            </p>
+                          ) : null}
+                        </div>
+                      )
+                    }}
+                  />
+                </div>
+              </React.Suspense>
+            ) : null}
             <div className="min-h-1" aria-hidden />
           </div>
           {!helpPage || messages.length > 0 ? composer : null}

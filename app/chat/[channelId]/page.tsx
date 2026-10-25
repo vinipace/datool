@@ -54,6 +54,7 @@ export default async function PublicChatRoute({
   params: Promise<{ channelId: string }>
   searchParams: Promise<{
     embed?: string
+    preload?: string
     context?: string
     origin?: string
     shopify?: string
@@ -67,6 +68,9 @@ export default async function PublicChatRoute({
       channelId={channelId}
       initialAppearance={initialAppearance}
       embedded={query.embed === "1"}
+      deferSessionUntilOpen={
+        query.embed === "1" && query.preload === "1" && !!query.origin
+      }
       context={parseContext(query.context)}
       embedOrigin={query.origin}
       shopifyIdentity={query.shopify === "1"}

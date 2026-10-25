@@ -52,11 +52,13 @@
 
   var frame = document.createElement("iframe")
   frame.title = dataset.title || "Customer support chat"
-  frame.loading = "lazy"
+  // Preload the UI; visitor sessions start only after the first open message.
+  frame.loading = "eager"
   frame.allow = "clipboard-write"
   frame.setAttribute("aria-hidden", "true")
   var context = dataset.context
-  var chatUrl = baseUrl + "/chat/" + encodeURIComponent(channelId) + "?embed=1"
+  var chatUrl =
+    baseUrl + "/chat/" + encodeURIComponent(channelId) + "?embed=1&preload=1"
   if (dataset.shopifyProxy) chatUrl += "&shopify=1"
   if (context) chatUrl += "&context=" + encodeURIComponent(context)
   if (window.location.origin)
@@ -72,18 +74,33 @@
   button.style.cssText =
     "display:block;margin-left:auto;border:1px solid ButtonBorder;border-radius:999px;background:ButtonFace;color:ButtonText;padding:10px 16px;font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer;box-shadow:0 4px 16px color-mix(in srgb, CanvasText 18%, transparent);"
 
+  function notifyVisibility() {
+    if (frame.contentWindow)
+      frame.contentWindow.postMessage(
+        {
+          type: "datool:chat:visibility",
+          visible: frame.style.display !== "none",
+        },
+        new URL(baseUrl).origin
+      )
+  }
+
   function open() {
+    if (disposed) return
     saveOpen(true)
     frame.style.display = "block"
     frame.setAttribute("aria-hidden", "false")
     renderLauncher(true)
+    notifyVisibility()
   }
 
   function close() {
+    if (disposed) return
     saveOpen(false)
     frame.style.display = "none"
     frame.setAttribute("aria-hidden", "true")
     renderLauncher(false)
+    notifyVisibility()
   }
 
   function toggle() {
@@ -229,6 +246,9 @@
       })
     }
     if (event.data && event.data.type === "datool:chat:close") close()
+    // Replay clicks that happened before the iframe finished hydrating.
+    if (event.data && event.data.type === "datool:chat:ready")
+      notifyVisibility()
     if (
       event.data &&
       event.data.type === "datool:chat:navigate" &&
