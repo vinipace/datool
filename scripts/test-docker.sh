@@ -110,8 +110,11 @@ docker exec -e NODE_EXTRA_CA_CERTS=/tmp/datool-tls/cert.pem "$prefix-web" node -
 # Development and acceptance scripts must not ship in the production image.
 docker exec "$prefix-web" node -e '
  const fs=require("node:fs");
- const expected=["alerts-worker.ts","backfill-eval-attribution.ts","backfill-missing-costs.ts","build-worker.ts","check-self-hosting.mjs","cms-local-database.ts","cms-seed-options.ts","execution-credits.ts","ingestion-jobs.ts","ingestion-worker.ts","langfuse-import.ts","migrate.ts","provision-alert-reader.ts","release.sh","seed-cms.ts"];
+ const expected=["alerts-worker.ts","backfill-eval-attribution.ts","backfill-missing-costs.ts","build-worker.ts","check-self-hosting.mjs","cms-local-database.ts","cms-seed-options.ts","execution-credits.ts","ingestion-jobs.ts","ingestion-worker.ts","langfuse-import.ts","migrate.ts","provision-alert-reader.ts","release.sh","seed-cms.ts","shopify-privacy.ts"];
  if(JSON.stringify(fs.readdirSync("scripts").sort())!==JSON.stringify(expected.sort())) throw new Error("Unexpected runtime scripts");'
+# The operator command must work in the packaged image, not just the checkout.
+docker exec "$prefix-web" bun scripts/shopify-privacy.ts health > "$temporary/privacy-health.json"
+node -e 'const fs=require("node:fs"), assert=require("node:assert/strict"); const result=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); assert.deepEqual(result,{status:"healthy",pending:0,overdue:0,dueSoon:0,nextDueAt:null});' "$temporary/privacy-health.json"
 # Seed a project only in the disposable database, then exercise the image's HTTP APIs.
 docker cp scripts/verify-v1.ts "$prefix-web:/app/scripts/verify-v1.ts"
 docker cp tests/helpers/postgres.ts "$prefix-web:/app/scripts/docker-test-postgres-helper.ts"

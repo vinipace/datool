@@ -13,10 +13,20 @@ const { positionals, values } = parseArgs({
     evidence: { type: "string" },
   },
 })
+const command = positionals[0]
 try {
   assertDatabaseConfiguration()
-  const command = positionals[0]
-  if (command === "list") {
+  if (command === "health") {
+    const result = await db.query(`SELECT count(*)::int AS pending,
+      count(*) FILTER (WHERE due_at<now())::int AS overdue,
+      count(*) FILTER (WHERE due_at>=now() AND due_at<=now()+interval '7 days')::int AS "dueSoon",
+      min(due_at) AS "nextDueAt"
+      FROM shopify_privacy_requests WHERE completed_at IS NULL`)
+    const summary = result.rows[0]
+    const urgent = summary.overdue > 0 || summary.dueSoon > 0
+    console.log(JSON.stringify({ status: urgent ? "action_required" : "healthy", ...summary }))
+    if (urgent) process.exitCode = 1
+  } else if (command === "list") {
     const result =
       await db.query(`SELECT id,topic,received_at,due_at,due_at<now() AS overdue
       FROM shopify_privacy_requests WHERE completed_at IS NULL ORDER BY due_at LIMIT 100`)
@@ -62,9 +72,14 @@ try {
     console.log("Recorded operator completion and removed the request payload.")
   } else {
     throw new Error(
-      "Usage: bun scripts/shopify-privacy.ts list | export --id ID --output PRIVATE_FILE | complete --id ID --evidence INTERNAL_REFERENCE"
+      "Usage: bun scripts/shopify-privacy.ts health | list | export --id ID --output PRIVATE_FILE | complete --id ID --evidence INTERNAL_REFERENCE"
     )
   }
+} catch (error) {
+  if (command !== "health") throw error
+  // Monitoring output must not expose database errors or connection secrets.
+  console.log(JSON.stringify({ status: "unavailable" }))
+  process.exitCode = 1
 } finally {
   await db.end()
 }

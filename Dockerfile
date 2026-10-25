@@ -59,6 +59,7 @@ COPY --from=build /app/scripts/alerts-worker.ts \
     /app/scripts/migrate.ts \
     /app/scripts/provision-alert-reader.ts \
     /app/scripts/release.sh \
+    /app/scripts/shopify-privacy.ts \
     /app/scripts/seed-cms.ts ./scripts/
 COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/payload.config.ts /app/payload-types.ts ./

@@ -40,12 +40,29 @@ and existing credential-encryption key:
 
 ```sh
 bun scripts/shopify-privacy.ts list
+bun scripts/shopify-privacy.ts health
 bun scripts/shopify-privacy.ts export --id REQUEST_ID --output /private/path/request.json
 ```
 
 `export` writes the **request**, not the customer's collected data. It creates
 a new file with mode 0600, refuses to overwrite existing files and never prints
 the customer payload. The list contains request IDs, topics and deadlines only.
+
+`health` is read-only and returns aggregate counts and the next deadline, without
+request payloads, store domains or customer identifiers. Exit status 1 means a
+request is overdue, due within seven days, or the database/configuration could
+not be checked (`status: unavailable`). Exit status 0 does not mean there are no
+pending requests; inspect `pending` and continue the daily operator review.
+Completed requests do not count. Connect this command to the installation's
+monitor and verify both failure alerts and a named recipient. Shipping the
+command does not install a schedule, deliver an alert, or fulfill a request.
+
+The production image includes the command. For Compose, run it inside the app
+container so it uses the deployment's private configuration:
+
+```sh
+docker compose exec -T app bun scripts/shopify-privacy.ts health
+```
 
 Fulfill the request using its verified store and customer/order identifiers:
 

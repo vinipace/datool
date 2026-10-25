@@ -222,7 +222,7 @@ jobs:
                 tests/build-inbox-mobile.test.ts tests/auth-magic-link.test.ts \
                 tests/ingestion-http.test.ts tests/ingestion-sequence.test.ts \
                 tests/execution-credits.test.ts tests/build-integrations.test.ts tests/build-shopify.test.ts \
-                tests/shopify-billing.test.ts \
+                tests/shopify-billing.test.ts tests/shopify-privacy-ops.test.ts \
                 tests/build-feature-gate.test.ts tests/build-api.test.ts \
                 tests/build-mcp.test.ts tests/build-organization-worker.test.ts
               bun run test:build:access
