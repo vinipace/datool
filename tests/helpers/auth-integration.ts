@@ -21,6 +21,12 @@ import {
 } from "../../src/lib/auth/permissions"
 
 const base = process.env.BETTER_AUTH_URL!
+const audit: Record<string, unknown>[] = []
+const originalInfo = console.info
+console.info = (...args: unknown[]) => {
+  if (typeof args[0] === "string" && args[0].startsWith('{"event":"security_audit"')) audit.push(JSON.parse(args[0]))
+  else originalInfo(...args)
+}
 // Simulate an installation created before trace/review scopes were added.
 // Better Auth's default insert-only seed leaves these policies unchanged.
 for (const resource of ["mcp", "cli"]) {
@@ -94,6 +100,23 @@ try {
     "INSERT INTO project (id,organization_id,name,slug,created_at,updated_at) VALUES ($1,$2,'A','a',NOW(),NOW())",
     [projectId, org.id]
   )
+  const memberUser = await context.internalAdapter.createUser({ name: "Private member", email: "private-member@example.test", emailVerified: true }, { method: "oauth" })
+  const member = await auth.api.addMember({ body: { organizationId: org.id, userId: memberUser.id, role: "member" } })
+  assert(member)
+  const memberSession = await context.internalAdapter.createSession(memberUser.id)
+  assert(memberSession)
+  const memberSignature = await makeSignature(memberSession.token, context.secret)
+  const memberCookie = `${context.authCookies.sessionToken.name}=${encodeURIComponent(`${memberSession.token}.${memberSignature}`)}`
+  const deniedRole = await auth.handler(new Request(`${base}/api/auth/organization/update-member-role`, {
+    method: "POST", headers: { origin: base, cookie: memberCookie, "content-type": "application/json" },
+    body: JSON.stringify({ organizationId: org.id, memberId: member.id, role: "admin" }),
+  }))
+  assert(!deniedRole.ok)
+  assert(audit.some(event => event.action === "auth.member.role_updated" && event.actorId === memberUser.id && event.outcome === "denied" && !event.organizationId), "Denied permission change must identify the caller without trusting the requested organization")
+  await call("/organization/update-member-role", { organizationId: org.id, memberId: member.id, role: "admin" })
+  assert(audit.some(event => event.action === "auth.member.role_updated" && event.actorId === owner.id && event.organizationId === org.id && event.targetId === member.id && event.role === "admin" && event.outcome === "success"), "Permission change has no attributed audit event")
+  await call("/organization/remove-member", { organizationId: org.id, memberIdOrEmail: member.id })
+  assert(audit.some(event => event.action === "auth.member.removed" && event.actorId === owner.id && event.targetId === member.id && event.outcome === "success"), "Member removal has no attributed audit event")
   const request = () =>
     new Request(`${base}/api/organizations/${org.id}/api-keys`, {
       method: "POST",
@@ -366,6 +389,14 @@ try {
   })
   assert.equal(trace.structuredContent.data.id, "oauth-trace")
   assert.deepEqual(trace.structuredContent.data.input, { prompt: "test input" })
+  assert(audit.some(event => event.action === "api_key.create" && event.actorId === owner.id && event.organizationId === org.id && event.targetId === key.id && event.outcome === "success"), "API key creation has no attributed audit event")
+  assert(audit.some(event => event.action === "api_key.revoke" && event.actorId === owner.id && event.targetId === key.id && event.outcome === "success"), "API key revocation has no audit event")
+  assert(audit.some(event => event.action === "http.POST.agent" && event.actorType === "api-key" && event.actorId === reader.id && event.projectId === projectId && event.outcome === "success"), "HTTP data access has no attributed audit event")
+  assert(audit.some(event => event.action === "get_trace" && event.actorType === "oauth" && event.actorId === owner.id && event.projectId === projectId && event.outcome === "success"), "MCP data access has no attributed audit event")
+  assert(audit.some(event => event.action === "mcp.tools.call" && event.actorType === "oauth" && event.actorId === owner.id && event.projectId === projectId && event.outcome === "success"), "MCP transport has no attributed audit event")
+  for (const secret of [key.key, reader.key, writer.key, token.data.access_token, "test input", "owner@example.test", "private-member@example.test", "Private member"])
+    assert(!JSON.stringify(audit).includes(secret), "Audit records contain private content")
+  console.log("PASS security audit credentials, HTTP and MCP access without private content")
   const oauthReview = (await mcp("tools/call", {
     name: "create_review_session", arguments: { name: "OAuth attribution test", traceIds: ["oauth-trace"] },
   })).structuredContent.data

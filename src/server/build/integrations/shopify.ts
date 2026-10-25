@@ -58,6 +58,7 @@ import {
 } from "@/src/lib/build/shopify"
 import { ShopifyWriteUncertainError } from "./shopify-mutation"
 import { isShopifyCartTool } from "@/src/lib/build/shopify-cart"
+import { audited, workspaceAuditIdentity } from "@/src/server/security/audit"
 import { prepareShopifyCart, completeShopifyCart } from "./shopify-cart"
 import { claimShopifyInvitation } from "./shopify-invitations"
 
@@ -353,7 +354,19 @@ export async function refreshShopifyConnection(
   }
 }
 
-export async function executeShopifyTool(
+export async function executeShopifyTool(...args: Parameters<typeof runShopifyTool>) {
+  const [context, connectionId, slug, , , execution] = args
+  const known = slug === "SHOPIFY_SEARCH_PRODUCTS" || slug === "SHOPIFY_READ_POLICIES" || Object.hasOwn(shopifyToolScopes, slug)
+  const caller = workspaceAuditIdentity()
+  return audited({
+    action: known ? slug : "shopify.unknown",
+    identity: caller.projectId === context.projectId ? caller : { actorType: "system", organizationId: context.organizationId, projectId: context.projectId },
+    connectionId,
+    conversationId: execution?.conversationId,
+  }, () => runShopifyTool(...args))
+}
+
+async function runShopifyTool(
   context: BuildContext,
   id: string,
   slug: string,
@@ -375,7 +388,7 @@ export async function executeShopifyTool(
 ) {
   const product = slug === "SHOPIFY_SEARCH_PRODUCTS"
   const orders = slug === "SHOPIFY_GET_ORDERS"
-  const commerce = slug in shopifyToolScopes
+  const commerce = Object.hasOwn(shopifyToolScopes, slug)
   if (!product && !commerce && slug !== "SHOPIFY_READ_POLICIES")
     throw unavailable()
   const args = product

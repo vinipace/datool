@@ -1,0 +1,58 @@
+---
+title: Service providers and subprocessors
+description: Providers used by Datool Cloud and optional services selected by workspace administrators.
+---
+
+Register version: 25 October 2026. Contact: **vini@vinipace.com**.
+
+## Datool Cloud service providers
+
+This register distinguishes infrastructure we operate through providers from
+services a merchant chooses to connect. A provider may act as a processor for
+some activities and independently for others; its role follows the relevant
+service and contract.
+
+| Provider | Service and information involved | Provider information |
+| --- | --- | --- |
+| netcup GmbH | Hosts Datool's application, database, queue and application files; may store workspace and account information | [Data-processing agreement](https://www.netcup.com/en/helpcenter/documentation/general/dpa) |
+| Google Cloud | Operational logging, including service diagnostics and security activity; these logs may include identifiers and incidental personal data | [Cloud data-processing terms](https://cloud.google.com/terms/data-processing-addendum) |
+| Plus Five Five, Inc. (Resend) | Authentication and invitation email: recipients, message content and delivery information | [Data-processing terms](https://resend.com/legal/dpa), [its subprocessors](https://resend.com/legal/subprocessors) |
+| Stripe | Direct Cloud subscriptions: customer, subscription, invoice and payment information | [Privacy information](https://stripe.com/privacy) |
+| Shopify | Shopify installation, store access, app subscriptions and requested commerce actions | [Privacy information](https://www.shopify.com/legal/privacy) |
+| Google Sign-In | Optional account authentication: identity and sign-in information | [Privacy information](https://policies.google.com/privacy) |
+
+The hosting region, log-storage region, account-specific contracting entities,
+and applicable signed transfer safeguards must be confirmed for a contractual
+residency requirement. Datool does not currently promise that all processing
+occurs in the EU, Brazil, or any other single region. The operator is in Brazil;
+support access is also processing. The links above describe provider terms and
+do not certify Datool's account configuration or acceptance of a contract.
+
+## Services selected for a workspace
+
+The project configuration determines which of these services receives data:
+
+| Optional service | Information sent when used |
+| --- | --- |
+| OpenAI or models reached through Vercel AI Gateway | Model input context, potentially including messages, knowledge and tool results; a gateway can involve both gateway and model providers |
+| WhatsApp/Meta or Telegram | Channel identifiers, messages and attachments for that channel |
+| Composio, connected MCP servers and other action services | Connection information and arguments/results needed for enabled actions |
+| Modal or Vercel Sandbox | Code, inputs and files used by configured sandbox executions |
+
+This is a feature inventory, not authorization to send every workspace's data to
+every listed service. Review the actual project settings and provider terms before
+enabling a connection. Bringing your own key does not, by itself, determine a
+provider's legal role or remove Datool from the data flow.
+
+Self-hosted administrators choose their own hosting, email, logs, models and
+channels. The Cloud infrastructure list is not a claim that every self-hosted
+installation sends its data to those providers.
+
+## Changes and agreements
+
+Contact **vini@vinipace.com** for the provider schedule applicable to your
+agreement or to raise a concern. A merchant agreement must identify the services,
+locations and transfer safeguards applicable to that merchant. An unconfigured
+backup service is not included as an active subprocessor. Changes follow the
+notice and authorization terms of the executed
+[merchant agreement](/docs/data-processing).

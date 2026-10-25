@@ -1,5 +1,5 @@
 import { configureBuildTestEnvironment } from "./helpers/build-env"
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import assert from "node:assert/strict"
 
 import {
@@ -13,6 +13,34 @@ import { withWorkspace } from "@/src/server/auth/context"
 configureBuildTestEnvironment()
 
 describe("Build operation HTTP contract", () => {
+  test("an unavailable audit sink preserves the original authorization result", async () => {
+    const log = spyOn(console, "info").mockImplementation(() => { throw new Error("Log sink unavailable") })
+    try {
+      await withWorkspace({ organizationId: "org-audit", projectId: "project-audit", userId: "user-audit", kind: "session", scopes: ["build:read"] }, async () => {
+        await assert.rejects(executeBuildOperation("build_create_agent", {}), { status: 403, code: "UNAUTHORIZED" })
+      })
+    } finally { log.mockRestore() }
+  })
+  test("denied operations audit the authenticated caller without recording supplied customer data", async () => {
+    const lines: string[] = []
+    const log = spyOn(console, "info").mockImplementation((line: unknown) => { lines.push(String(line)) })
+    try {
+      await withWorkspace({ organizationId: "org-audit", projectId: "project-audit", userId: "user-audit", clientId: "client-audit", kind: "oauth", scopes: ["build:read"] }, async () => {
+        await assert.rejects(executeBuildOperation("build_create_agent", { name: "private-customer@example.test", organizationId: "forged-org", token: "private-token" }), { status: 403 })
+        await assert.rejects(executeBuildOperation("private-customer@example.test", {}))
+      })
+      const events = lines.map(line => JSON.parse(line))
+      expect(events).toHaveLength(2)
+      expect(events[0]).toMatchObject({ event: "security_audit", version: 1, action: "build_create_agent", outcome: "denied", status: 403, organizationId: "org-audit", projectId: "project-audit", actorType: "oauth", actorId: "user-audit", clientId: "client-audit" })
+      assert.match(events[0].timestamp, /^\d{4}-\d{2}-\d{2}T/)
+      expect(typeof events[0].eventId).toBe("string")
+      expect(events[1].action).toBe("build.unknown")
+      const serialized = JSON.stringify(events)
+      for (const privateValue of ["private-customer", "forged-org", "private-token"])
+        expect(serialized).not.toContain(privateValue)
+    } finally { log.mockRestore() }
+  })
+
   test("disabled Build rejects a granted operation before accessing project data", async () => {
     delete process.env.DATOOL_BUILD_ENABLED
     await withWorkspace(

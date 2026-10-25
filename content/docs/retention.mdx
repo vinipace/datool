@@ -1,0 +1,55 @@
+---
+title: Retention and deletion
+description: What Datool expires automatically, what remains until deletion, and how to request removal.
+---
+
+Version: 25 October 2026. Contact: **vini@vinipace.com**.
+
+## Current retention rules
+
+| Record category | Current handling |
+| --- | --- |
+| Ordinary Cloud traces and associated spans/scores | Core has a 90-day trace window; Pro has 365 days. Eligible traces are removed by bounded background sweeps, so expiry is not an exact-to-the-minute deletion guarantee. This applies to eligible direct-billing and Shopify-billing organizations. |
+| Traces referenced by evaluations, reviews or dataset items | Preserved as selected evidence; ordinary trace expiry excludes them. Removing the evidence references makes an otherwise eligible trace available to the expiry worker. |
+| Conversations, contacts, channel messages, knowledge, datasets and evaluation/review records | The trace window does not automatically expire these records. They remain until removed through available controls or an authorized deletion request. Administrators must choose what remains necessary. |
+| Ingestion queue copies | The Cloud worker sweeps completed jobs older than 24 hours and failed jobs older than 32 days, in bounded batches. Pending jobs and other application queues are separate. |
+| Account, billing and security records | Kept as needed to administer the account, meet applicable recordkeeping obligations, resolve disputes and investigate abuse. A removal request is reviewed for applicable obligations and exceptions. |
+| Operational logs and backups | Retention depends on the deployed logging and backup configuration. There is no published universal expiry or backup-deletion guarantee. Ask for the verified schedule before relying on one. |
+
+These are the current product rules, not a promise that every copy of personal
+data disappears after the trace window. A stopped worker or cleanup backlog can
+delay automatic expiry. Customer-selected services have their own retention
+settings and may retain independent copies.
+
+Self-hosted operators manage their own retention, workers, databases, logs and
+backups. Installing the software alone does not enable Cloud retention or establish
+a deletion schedule for that installation.
+
+## Requesting access or deletion
+
+Workspace administrators can use available record-management controls or contact
+**vini@vinipace.com** for an authorized export or deletion request. Identify the
+workspace and the scope of the request, without sending passwords, keys or an
+unnecessary copy of the customer's data. We verify authority and coordinate any
+necessary merchant instructions, legal exceptions and applicable deadlines.
+
+Customer requests received from Shopify are recorded for handling. Receipt or
+acknowledgement of a webhook is not proof of a completed export or erasure. A
+completed request must account for the relevant conversations, traces, stored
+files, queues, exports and other retained copies. Records held under a lawful
+exception must be limited to that purpose. Where backup copies cannot be removed
+individually, their isolation, expiry and treatment after restoration must be
+addressed in the applicable deletion plan.
+
+## Leaving the service
+
+Disconnecting Shopify stops use of that connection. Uninstalling the app or
+canceling a subscription does not automatically erase historical records. Request
+return or deletion of the relevant workspace data when ending service. Clearing
+browser storage removes local state, not server records.
+
+A merchant that needs a fixed maximum retention period for all customer data must
+agree a supported schedule before using the service for that requirement. Do not
+treat a future retention feature or an uninstalled backup plan as an active control.
+See the [privacy policy](/docs/privacy) and
+[merchant data-processing agreement](/docs/data-processing).

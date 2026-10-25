@@ -36,6 +36,7 @@ import {
 import { operationId, type BuildContext } from "../context"
 import { assertPublicHttpUrl } from "../http"
 import { TracerError } from "@/src/server/tracer/errors"
+import { securityAudit } from "@/src/server/security/audit"
 import {
   pinContinuationWidgets,
   runtimeChannelMessage,
@@ -2809,6 +2810,7 @@ export async function listPublicConversations(
       AND c.metadata_json->>'connectionId' = ${connectionId} AND c.status <> 'blocked'
     ORDER BY latest_message.updated_at DESC, c.id DESC LIMIT 100
   `)
+  securityAudit({ action: "visitor.conversations.list", identity: { actorType: "visitor", actorId: visitor.visitorId, organizationId: context.organizationId, projectId: context.projectId }, connectionId })
   return rows.rows.map((row) => ({
     id: String(row.id),
     title: String(row.title || "New chat"),
@@ -3048,6 +3050,7 @@ export async function readPublicConversation(
   `)
   if (!rows.rows.length)
     throw new Error("Conversation is not available for this visitor.")
+  securityAudit({ action: "visitor.conversation.read", identity: { actorType: "visitor", actorId: visitor.visitorId, organizationId: context.organizationId, projectId: context.projectId }, connectionId, conversationId })
   return rows.rows
     .filter((row) => row.id !== null)
     .map((row) => {

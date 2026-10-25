@@ -57,9 +57,17 @@ export function MarketingShell({
         <footer className="mt-16 border-t border-border">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-sm text-foreground-muted">
             <p>Datool · Understand and improve your AI.</p>
-            <Button asChild variant="ghost-muted" size="sm">
-              <Link href="/faq">Questions? Start here</Link>
-            </Button>
+            <nav aria-label="Information and privacy" className="flex flex-wrap items-center gap-1">
+              <Button asChild variant="ghost-muted" size="sm">
+                <Link href="/docs/privacy">Privacy</Link>
+              </Button>
+              <Button asChild variant="ghost-muted" size="sm">
+                <Link href="/docs/data-processing">Data processing</Link>
+              </Button>
+              <Button asChild variant="ghost-muted" size="sm">
+                <Link href="/faq">Questions? Start here</Link>
+              </Button>
+            </nav>
           </div>
         </footer>
       ) : null}
