@@ -1,5 +1,9 @@
 # Deploying Datool with Dokku
 
+For encrypted data backups and isolated recovery checks, see the
+[backup runbook](../ops/dokku-backup/README.md). Installation is an explicit
+operator step; deploying Datool does not enable backup scheduling.
+
 For production image retention, disk preflight, scheduled capacity checks, and
 host log rotation, see [disk maintenance](../ops/dokku-disk/README.md).
 

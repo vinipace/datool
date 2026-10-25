@@ -213,6 +213,7 @@ jobs:
             bun run typecheck > "$logs/types" 2>&1 &
             types_pid=$!
             (
+              bash ops/dokku-backup/test.sh
               python3 -m unittest discover -s tests -p 'dokku_*_test.py'
               python3 -m unittest discover -s tests -p 'deployment_notifications_test.py'
               bun --no-env-file test --timeout 30000 \
