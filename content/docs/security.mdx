@@ -1,0 +1,106 @@
+---
+title: Security
+description: Datool's application protections, deployment responsibilities, and security review boundaries.
+---
+
+Datool provides authenticated workspaces, scoped API access, and encryption for
+saved model-provider credentials. The security of an installation also depends
+on how its infrastructure, identity providers, integrations, and backups are
+operated. This page describes the product; it is not an audit report or a
+guarantee about every deployment.
+
+## Cloud and self-hosted responsibilities
+
+| Area | Datool Cloud subscription | Self-hosted installation |
+| --- | --- | --- |
+| Application updates | Datool operates releases and patches. | Your operator selects and deploys releases. |
+| Hosting, network, storage and backups | Datool is responsible for the hosted infrastructure. Request current evidence for encryption, backup schedules and restore tests before relying on a specific commitment. | Your operator chooses hosting, regions, encryption, firewall rules, backup storage and recovery procedures. |
+| Workspace access | Your organization manages its members, API keys and connected accounts. Datool manages infrastructure administrator access. | Your organization manages workspace access and all infrastructure administrator access. |
+| AI and external integrations | Requests can be sent to the model, messaging, sandbox and integration providers used by your project. | The same applies. Hosting Datool yourself does not make configured external providers local. |
+| Retention and deletion | Confirm the applicable policy and scope with Datool; different record types have different lifecycles. | Your operator configures retention and carries out deletion across the database, files, queues, exports and backups. |
+
+## What is encrypted?
+
+Saved model-provider credentials use AES-256-GCM authenticated encryption with
+project/provider context. The server decrypts them when it needs to call the
+provider. The application must therefore have access to the encryption key.
+
+This protection does **not** encrypt every conversation, trace, uploaded file or
+database column. Full storage and backup encryption require infrastructure
+configuration and separate verification. It is not end-to-end encryption or a
+zero-knowledge service: Datool and the configured providers process data to
+deliver the requested functionality.
+
+Production access should use HTTPS. The supplied Compose deployment expects an
+operator-managed TLS proxy; it does not provision certificates. Its database and
+Redis ports are not published to the host, but their default internal connections
+are not encrypted. Use private networking and configure encrypted connections
+when the deployment's trust boundaries require them.
+
+## How is access controlled?
+
+Datool checks authenticated organization/project context and API permissions.
+API keys have scopes; browser mutations also enforce origin checks. Workspace
+membership is a meaningful trust boundary: ordinary members currently have broad
+workspace capabilities. Do not assume fine-grained per-project member roles,
+SAML SSO, SCIM, or native MFA are included.
+
+Google sign-in can use the protections configured on your Google account. That
+does not make MFA mandatory for every Datool sign-in method. Operators should
+require MFA on hosting, source-control, email and other administrative accounts,
+and review membership and keys regularly.
+
+Code scorers execute through a sandbox provider outside the application process.
+If no working sandbox is available, execution fails instead of falling back to
+the app host. The optional local Docker integration grants control of its Docker
+host; a separate provider or dedicated host is appropriate for untrusted users.
+
+## What data reaches an AI provider?
+
+Data needed for an agent or evaluation can include messages, retrieved knowledge,
+tool results and trace content. Select providers and features according to your
+data policy, minimize sensitive inputs, and review each provider's retention,
+training and region terms. Self-hosting does not override those terms.
+
+Datool does not sell customer data, use it for advertising, or use it to train
+its own AI models. This statement describes Datool's business use; it does not
+replace the terms of a model provider or connected service.
+
+## Retention, privacy requests and logs
+
+Trace retention is not a universal deletion policy for all data. Conversations,
+contacts, evaluation datasets, tool results, queues, exports and backups may
+have separate lifecycles. Curated evaluation or dataset references can also
+preserve trace data. Agree on the required scope before making a deletion promise.
+
+Shopify privacy webhooks record a request for operator fulfillment. Receiving or
+marking a request complete does not by itself export or erase all customer data.
+The operator must perform and verify the requested work across relevant stores.
+
+Operational logs and customer traces serve different purposes. Do not assume
+they provide a complete, immutable audit of all customer-data access. Limit who
+can read them and avoid putting secrets or unnecessary personal data in logs.
+
+## Can we use Datool for a regulated workload?
+
+Evaluate the exact deployment, data types, providers and contractual requirements.
+Do not treat a subscription, self-hosted installation, or a passed automated test
+as SOC 2, ISO 27001, HIPAA, GDPR or Shopify approval. Request a current report or
+signed commitment for any requirement your procurement process depends on.
+
+Datool does not currently offer a SOC 2 report. A future report would need to name
+its audited system, scope and period; a hosting provider's report would not cover
+Datool's application or operating practices automatically.
+
+## Ask a security question or report an issue
+
+For deployment questions or a security questionnaire, contact
+vini@vinipace.com. Describe the features and deployment
+you plan to use so the answer can distinguish supported controls from operational
+commitments.
+
+Report vulnerabilities through
+[GitHub private vulnerability reporting](https://github.com/vinipace/datool/security/advisories/new).
+Use synthetic data and never include real keys, session cookies or customer
+records. See the [security policy](https://github.com/vinipace/datool/blob/main/SECURITY.md)
+and [self-hosting guide](/docs/self-hosting).

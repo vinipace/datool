@@ -22,6 +22,11 @@ test("magic-link and Google-only installations need no CMS secret", () => {
   expect(check().status).toBe(0)
   expect(
     check({
+      DATOOL_PROVIDER_ENCRYPTION_KEY: "independent-test-only-key-with-at-least-32-characters",
+    }).status
+  ).toBe(0)
+  expect(
+    check({
       RESEND_API_KEY: "",
       RESEND_FROM_EMAIL: "",
       GOOGLE_CLIENT_ID: "test-client",
@@ -59,3 +64,16 @@ test("CMS opt-in requires its own secret; public signup is deliberate", () => {
     check({ AUTH_ALLOWED_DOMAINS: "", AUTH_ALLOW_PUBLIC_SIGNUP: "true" }).status
   ).toBe(0)
 })
+
+test.each([
+  { DATOOL_PROVIDER_ENCRYPTION_KEY: "short-provider-key" },
+  { NODE_TLS_REJECT_UNAUTHORIZED: "0" },
+])(
+  "unsafe credential encryption or disabled TLS verification stops startup: %j",
+  (settings) => {
+    const result = check(settings)
+    expect(result.status).toBe(1)
+    expect(result.stderr).not.toContain("short-provider-key")
+    expect(result.stderr).not.toContain(valid.BETTER_AUTH_SECRET)
+  }
+)

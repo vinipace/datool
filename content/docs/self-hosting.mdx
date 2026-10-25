@@ -17,7 +17,8 @@ Queued SDK delivery requires all four services. Starting only the web server doe
 
 ## Local development
 
-Self-hosting requires an authorized source checkout supplied by your Datool administrator. The application repository is private; a public documentation page does not grant source access. From that checkout, install dependencies and create a local environment file:
+Start from the [Datool source repository](https://github.com/vinipace/datool),
+review its licenses, install dependencies and create a local environment file:
 
 ```sh
 bun install
@@ -93,6 +94,12 @@ app/playground storage requires a single writer.
 Keep `BETTER_AUTH_SECRET` and any separate `DATOOL_PROVIDER_ENCRYPTION_KEY` stable
 across processes and restarts so saved provider credentials remain readable.
 Changing an environment password does not rotate an existing Postgres login.
+For a new installation, generate an independent provider-encryption key of at
+least 32 characters. Adding or changing the effective key on an existing install
+requires a credential migration; do not rotate it by simply editing the value.
+Startup checks reject an explicitly short key or globally disabled TLS certificate
+verification. These checks do not configure disk encryption, backups or firewalls.
+See [Security](/docs/security) for the deployment responsibilities.
 
 ## Code scorer sandbox
 
