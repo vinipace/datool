@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -168,18 +169,32 @@ class RestoreTest(unittest.TestCase):
                 ).stdout
             )
             run("redis-check-rdb", str(restored / "dump.rdb"))
-            run(
-                "redis-server",
-                "--port",
-                "6399",
-                "--bind",
-                "127.0.0.1",
-                "--dir",
-                str(restored),
-                "--daemonize",
-                "yes",
+            redis = subprocess.Popen(
+                [
+                    "redis-server",
+                    "--port",
+                    "6399",
+                    "--bind",
+                    "127.0.0.1",
+                    "--dir",
+                    str(restored),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             try:
+                deadline = time.monotonic() + 10
+                while True:
+                    probe = run("redis-cli", "-p", "6399", "PING", ok=False)
+                    if probe.returncode == 0 and probe.stdout.strip() == b"PONG":
+                        break
+                    self.assertIsNone(
+                        redis.poll(), "Restore Redis exited before becoming ready"
+                    )
+                    self.assertLess(
+                        time.monotonic(), deadline, "Restore Redis did not become ready"
+                    )
+                    time.sleep(0.05)
                 self.assertEqual(
                     run(
                         "redis-cli", "-p", "6399", "GET", "recovery-probe"
@@ -187,7 +202,8 @@ class RestoreTest(unittest.TestCase):
                     b"synthetic-queued-job-782",
                 )
             finally:
-                run("redis-cli", "-p", "6399", "shutdown", "nosave")
+                redis.terminate()
+                redis.wait(timeout=10)
             self.assertEqual(
                 run(
                     "restic",
