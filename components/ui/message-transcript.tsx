@@ -348,7 +348,8 @@ export function MessageTranscript({
                   {text !== null && (
                     <div
                       className={cn(
-                        "mt-1.5 text-sm leading-6 [overflow-wrap:anywhere] text-foreground",
+                        "mt-1.5 leading-6 [overflow-wrap:anywhere] text-foreground",
+                        !customer && "text-sm",
                         !customer &&
                           (isOutgoing || variant === "bubbles") &&
                           "w-fit max-w-full rounded-2xl border border-border bg-muted px-3 py-2",

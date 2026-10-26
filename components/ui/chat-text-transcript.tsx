@@ -14,7 +14,7 @@ export function ChatTextTranscript({
   pendingReply?: ReactNode
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {messages
         .filter((message) => message.text)
         .map((message) => (
