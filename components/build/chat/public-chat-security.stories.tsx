@@ -952,13 +952,39 @@ export const HumanReplies: Story = {
               },
               {
                 id: "human-reply",
+                createdAt: "2026-10-26T10:00:01Z",
                 direction: "outbound",
                 text: "Oi! Sou a Marina. Vou continuar seu atendimento por aqui.",
                 author: {
+                  key: "teammate-1",
                   name: "Marina",
                   image:
                     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='14' r='8' fill='currentColor'/%3E%3Cpath d='M4 40a16 16 0 0 1 32 0' fill='currentColor'/%3E%3C/svg%3E",
                 },
+                metadata: { source: "human" },
+              },
+              {
+                id: "human-continuation",
+                createdAt: "2026-10-26T10:00:59Z",
+                direction: "outbound",
+                text: "Já estou verificando seu pedido.",
+                author: { key: "teammate-1", name: "Marina", image: null },
+                metadata: { source: "human" },
+              },
+              {
+                id: "human-next-minute",
+                createdAt: "2026-10-26T10:01:00Z",
+                direction: "outbound",
+                text: "Encontrei seu pedido.",
+                author: { key: "teammate-1", name: "Marina", image: null },
+                metadata: { source: "human" },
+              },
+              {
+                id: "human-same-name",
+                createdAt: "2026-10-26T10:01:10Z",
+                direction: "outbound",
+                text: "Outra Marina também está ajudando.",
+                author: { key: "teammate-2", name: "Marina", image: null },
                 metadata: { source: "human" },
               },
               {
@@ -976,7 +1002,10 @@ export const HumanReplies: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const reply = await canvas.findByRole("article", { name: "Marina message" })
+    const replies = await canvas.findAllByRole("article", {
+      name: "Marina message",
+    })
+    const [reply, continuation, nextMinute, sameName] = replies
     await expect(within(reply).getByText("Marina")).toBeVisible()
     await expect(
       within(reply).getByText(
@@ -997,5 +1026,21 @@ export const HumanReplies: Story = {
         .querySelector('[data-slot="user-avatar"]')
     ).toBeNull()
     await waitForChatMessages(canvasElement)
+    await expect(
+      continuation.querySelector('[data-slot="user-avatar"]')
+    ).toBeNull()
+    await expect(within(continuation).queryByText("Marina")).toBeNull()
+    await expect(reply.querySelector("time")).toBeNull()
+    await expect(
+      within(reply).queryByRole("button", { name: "Helpful" })
+    ).toBeNull()
+    await expect(continuation.querySelector("time")).toBeVisible()
+    await expect(
+      within(continuation).getByRole("button", { name: "Helpful" })
+    ).toBeVisible()
+    for (const separate of [nextMinute, sameName]) {
+      await expect(within(separate).getByText("Marina")).toBeVisible()
+      await expect(separate.querySelector("time")).toBeVisible()
+    }
   },
 }

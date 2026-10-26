@@ -1009,10 +1009,14 @@ for (const customer of ["", "123"]) {
     expect(transcript.every((message) => !message.pendingReply)).toBe(true)
     expect(transcript[0].author).toBeNull()
     expect(transcript[0].metadata.source).toBeUndefined()
-    expect(transcript[1].author).toEqual({
+    const { key: senderKey, ...senderProfile } = transcript[1].author!
+    expect(typeof senderKey).toBe("string")
+    expect(senderKey).toBeTruthy()
+    expect(senderProfile).toEqual({
       name: "Marina",
       image: "https://example.test/marina.png",
     })
+    expect(transcript[1].author!.key).not.toContain(f.context.actorId!)
     expect(transcript[1].metadata).toEqual({ source: "human" })
     expect(transcript[2].author).toBeNull()
     expect(await conversations.get(original.conversationId)).toMatchObject({
@@ -1058,6 +1062,7 @@ for (const customer of ["", "123"]) {
       "https://chat.example.test"
     )
     expect(withoutMember[1].author).toEqual({
+      key: transcript[1].author!.key,
       name: "Support teammate",
       image: null,
     })

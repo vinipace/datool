@@ -3084,6 +3084,12 @@ export async function readPublicConversation(
         // Only publish the display identity of verified workspace senders.
         // Internal actor IDs and email addresses stay out of visitor responses.
         author: row.human_reply === true ? {
+          // Scope grouping identity to this conversation without exposing actor IDs.
+          key: typeof content.metadata?.actorId === "string" && content.metadata.actorId
+            ? createHmac("sha256", channelSigningSecret())
+                .update(JSON.stringify(["chat-author", context.projectId, conversationId, content.metadata.actorId]))
+                .digest("base64url")
+            : undefined,
           name: typeof row.author_name === "string" && row.author_name.trim()
             ? row.author_name.trim() : "Support teammate",
           image: typeof row.author_image === "string" ? row.author_image : null,
