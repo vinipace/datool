@@ -146,6 +146,57 @@ function sessionKey(channelId: string, origin?: string) {
   return `datool:public-chat:${channelId}:${origin ?? "same-origin"}:session`
 }
 
+// One bounded, tab-local snapshot per channel/origin. Never use it as identity
+// proof: the caller must obtain a fresh session before reading private content.
+function readTranscriptSnapshot(key: string, active: Session): ChatMessage[] {
+  try {
+    const snapshot = JSON.parse(
+      window.sessionStorage.getItem(`${key}:transcript`) ?? "null"
+    )
+    if (
+      snapshot?.visitorId === active.visitorId &&
+      snapshot.conversationId === active.conversationId &&
+      typeof snapshot.savedAt === "number" &&
+      Date.now() - snapshot.savedAt >= 0 &&
+      Date.now() - snapshot.savedAt < 5 * 60_000 &&
+      Array.isArray(snapshot.messages) &&
+      snapshot.messages.length <= 200 &&
+      snapshot.messages.every(
+        (message: ChatMessage) =>
+          message &&
+          typeof message.id === "string" &&
+          (message.direction === "inbound" ||
+            message.direction === "outbound") &&
+          (message.text == null || typeof message.text === "string")
+      )
+    )
+      return snapshot.messages
+  } catch {
+    /* Missing, blocked or corrupted storage falls back to the server. */
+  }
+  return []
+}
+
+function saveTranscriptSnapshot(
+  key: string,
+  active: Session,
+  messages: ChatMessage[]
+) {
+  try {
+    const value = JSON.stringify({
+      visitorId: active.visitorId,
+      conversationId: active.conversationId,
+      savedAt: Date.now(),
+      messages,
+    })
+    if (value.length <= 512_000)
+      window.sessionStorage.setItem(`${key}:transcript`, value)
+    else window.sessionStorage.removeItem(`${key}:transcript`)
+  } catch {
+    /* Chat remains available without browser storage. */
+  }
+}
+
 export function PublicChat({
   channelId,
   embedded = false,
@@ -261,6 +312,20 @@ export function PublicChat({
     isPublicReplyPending(
       messages.filter((message) => !message.localSend?.failed)
     )
+  // Delivery receipts change storage IDs, not the identity of a visible bubble.
+  const messageKeys = new Map(
+    messages.map((message) => {
+      if (message.direction !== "inbound") return [message.id, message.id]
+      const clientKey =
+        message.localSend?.key ?? message.metadata?.clientMessageId
+      const receipt =
+        message.providerMessageId ??
+        (typeof clientKey === "string"
+          ? `${session?.visitorId}:${clientKey}`
+          : message.id)
+      return [message.id, `${message.direction}:${receipt}`]
+    })
+  )
   const currentTitle =
     threads.find((thread) => thread.id === session?.conversationId)?.title ??
     messages
@@ -366,6 +431,12 @@ export function PublicChat({
         activeConversationId.current !== active.conversationId
       )
         return
+      if (!previewAgentId)
+        saveTranscriptSnapshot(
+          sessionKey(channelId, embedOrigin),
+          active,
+          incoming
+        )
       setMessages((current) => [
         ...incoming,
         ...current.filter((message) => {
@@ -562,6 +633,15 @@ export function PublicChat({
             )
         }
         if (sequence !== sessionSequence.current) return
+        const changedSession =
+          sessionRef.current?.visitorId !== active.visitorId ||
+          activeConversationId.current !== active.conversationId
+        if (newConversation) {
+          saveTranscriptSnapshot(key, active, [])
+          setMessages([])
+        } else if (changedSession) {
+          setMessages(readTranscriptSnapshot(key, active))
+        }
         activeConversationId.current = active.conversationId
         sessionRef.current = active
         setSession(active)
@@ -581,7 +661,6 @@ export function PublicChat({
         // Both public and Shopify session responses already include appearance.
         // Shopify may resume a thread, so only known-new public chats skip history.
         if (active.appearance) setAppearance(mergeAppearance(active.appearance))
-        if (newConversation) setMessages([])
         await Promise.all([
           active.appearance
             ? Promise.resolve()
@@ -901,7 +980,10 @@ export function PublicChat({
       status: "queued",
       pendingReply: true,
       text,
-      metadata: interaction ? { widgetInteraction: interaction } : undefined,
+      metadata: {
+        clientMessageId: requestKey,
+        ...(interaction ? { widgetInteraction: interaction } : {}),
+      },
       ...(!interaction
         ? {
             localSend: {
@@ -1496,6 +1578,7 @@ export function PublicChat({
               </div>
             ) : null}
             {!helpPage &&
+            !loading &&
             !error &&
             !messages.length &&
             appearance.welcomeMessage ? (
@@ -1509,6 +1592,7 @@ export function PublicChat({
               </div>
             ) : null}
             {!helpPage &&
+            !loading &&
             !error &&
             !messages.length &&
             !appearance.welcomeMessage ? (
@@ -1548,6 +1632,9 @@ export function PublicChat({
                 >
                   <MessageTranscript
                     key={session?.conversationId}
+                    getMessageKey={(message) =>
+                      messageKeys.get(message.id ?? "")
+                    }
                     pendingReply={
                       waitingReply ? (
                         <ChatTypingIndicator label={copy.thinking} />

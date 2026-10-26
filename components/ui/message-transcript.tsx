@@ -196,8 +196,11 @@ export function MessageTranscript({
   onCodeStatus,
   renderMessageFooter,
   pendingReply,
+  getMessageKey,
 }: {
   messages: InspectorMessage[]
+  /** Keep optimistic messages mounted when their persisted IDs arrive. */
+  getMessageKey?: (message: InspectorMessage) => string | undefined
   raw?: boolean
   variant?: "default" | "chat" | "bubbles" | "customer"
   perspective?: "customer" | "operator"
@@ -254,7 +257,11 @@ export function MessageTranscript({
               message.content.some((part) => !isTextOrToolPart(part)))
           return (
             <motion.article
-              key={message.id ?? `${message.role}-${index}`}
+              key={
+                getMessageKey?.(message) ??
+                message.id ??
+                `${message.role}-${index}`
+              }
               data-chat-message=""
               layout={customer && !reducedMotion ? "position" : false}
               initial={

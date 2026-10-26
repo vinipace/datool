@@ -1,3 +1,5 @@
+import * as React from "react"
+import { Button } from "@/components/ui/button"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 import { http, HttpResponse } from "msw"
@@ -679,7 +681,15 @@ export const FailedMessageRetry: Story = {
         providerMessageId: `${session.visitorId}:${first.idempotencyKey}`,
       },
     ]
+    const bubble = canvas.getByRole("article", { name: "Your message" })
+    await waitFor(() => expect(getComputedStyle(bubble).opacity).toBe("1"))
     releaseSend()
+    await waitFor(() => expect(send).toBeEnabled())
+    // Acknowledgement must update the existing bubble without replaying entry.
+    await expect(canvas.getByRole("article", { name: "Your message" })).toBe(
+      bubble
+    )
+    await expect(getComputedStyle(bubble).opacity).toBe("1")
     await waitFor(() =>
       expect(
         canvas.queryByRole("button", { name: "Retry sending" })
@@ -814,4 +824,105 @@ export const PreviewFailedMessageRetry: Story = {
       <PublicChat {...args} />
     </div>
   ),
+}
+
+// A real remount models a storefront page navigation. Cache contents must come
+// from the first verified chat and remain private until the next host check.
+export const ShopifyPageNavigation: Story = {
+  args: { shopifyIdentity: true },
+  beforeEach: () => {
+    shopifyHost = true
+  },
+  render: function PageNavigation(args) {
+    const [page, setPage] = React.useState(0)
+    return (
+      <div className="h-[42rem] max-w-md">
+        <Button onClick={() => setPage((value) => value + 1)}>
+          Navigate to another store page
+        </Button>
+        <PublicChat {...args} key={page} embedOrigin={window.location.origin} />
+      </div>
+    )
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    conversationMessages = [
+      {
+        id: "saved-reply",
+        direction: "outbound",
+        text: "The medium snowboard is available.",
+      },
+    ]
+    releaseMessages()
+    await expect(
+      await canvas.findByText("The medium snowboard is available.")
+    ).toBeVisible()
+    messagesGate = new Promise<void>((resolve) => {
+      releaseMessages = resolve
+    })
+    hostGate = new Promise<void>((resolve) => {
+      releaseHost = resolve
+    })
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Navigate to another store page" })
+    )
+    await expect(
+      canvas.queryByText(appearance.welcomeMessage)
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByText("The medium snowboard is available.")
+    ).not.toBeInTheDocument()
+    releaseHost()
+    // The verified snapshot is visible even though the history request is held.
+    await expect(
+      await canvas.findByText("The medium snowboard is available.")
+    ).toBeVisible()
+    await expect(
+      canvas.queryByText(appearance.welcomeMessage)
+    ).not.toBeInTheDocument()
+    conversationMessages = [
+      ...conversationMessages,
+      {
+        id: "new-reply",
+        direction: "outbound",
+        text: "Your conversation is up to date.",
+      },
+    ]
+    releaseMessages()
+    await waitFor(() =>
+      expect(canvas.getByText("Your conversation is up to date.")).toBeVisible()
+    )
+    // A different signed visitor must never inherit the prior page's snapshot.
+    hostGate = new Promise<void>((resolve) => {
+      releaseHost = resolve
+    })
+    messagesGate = new Promise<void>((resolve) => {
+      releaseMessages = resolve
+    })
+    hostSession = {
+      ...session,
+      visitorId: "another-visitor",
+      conversationId: "another-conversation",
+    }
+    conversationMessages = []
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Navigate to another store page" })
+    )
+    releaseHost()
+    const before = messageRequests
+    await waitFor(() => expect(messageRequests).toBeGreaterThan(before))
+    await expect(
+      canvas.queryByText("The medium snowboard is available.")
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByText("Your conversation is up to date.")
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByText(appearance.welcomeMessage)
+    ).not.toBeInTheDocument()
+    releaseMessages()
+    await expect(
+      await canvas.findByText(appearance.welcomeMessage)
+    ).toBeVisible()
+  },
 }
