@@ -202,6 +202,9 @@ jobs:
     steps:
       - checkout
       - install-dependencies
+      - run:
+          name: Check dependency security advisories
+          command: bun audit --audit-level high
       - start-services
       - run:
           name: Verify source and release contracts in parallel
