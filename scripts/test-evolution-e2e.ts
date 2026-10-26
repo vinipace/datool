@@ -422,6 +422,25 @@ try {
     }),
     null
   )
+  for (const remoteJid of [
+    "status@broadcast",
+    "123456789@g.us",
+    "123456789@newsletter",
+  ]) {
+    assert.equal(
+      evolutionMessage({
+        key: {
+          id: "non-direct",
+          fromMe: false,
+          remoteJid,
+          remoteJidAlt: "5511999990002@s.whatsapp.net",
+        },
+        messageTimestamp: Math.floor(Date.now() / 1000),
+        message: { conversation: "Not a direct message" },
+      }),
+      null
+    )
+  }
   await evo.disconnectEvolution(ctx, c.id)
   assert.equal(instances.size, 0)
   assert.equal((await webhook(incoming("late"))).status, 401)

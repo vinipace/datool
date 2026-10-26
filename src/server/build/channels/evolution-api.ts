@@ -101,6 +101,11 @@ export function evolutionMessage(data: unknown) {
   const raw = evolutionObject(data),
     key = evolutionObject(raw.key),
     message = evolutionObject(raw.message)
+  if (
+    typeof key.remoteJid !== "string" ||
+    !/@(?:s\.whatsapp\.net|lid)$/.test(key.remoteJid)
+  )
+    return null
   // LIDs are opaque. Only use an explicitly supplied phone JID; never strip @lid.
   const phone =
     evolutionPhone(key.remoteJid) ?? evolutionPhone(key.remoteJidAlt)
@@ -116,7 +121,6 @@ export function evolutionMessage(data: unknown) {
     time > Date.now() + 60_000
   )
     return null
-  if (String(key.remoteJid).endsWith("@g.us")) return null
   const body =
     typeof message.conversation === "string"
       ? message.conversation
