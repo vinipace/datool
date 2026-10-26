@@ -67,6 +67,7 @@ type Session = {
 
 type ChatMessage = {
   id: string
+  author?: { name: string; image: string | null } | null
   direction?: string
   status?: string
   pendingReply?: boolean
@@ -1617,6 +1618,11 @@ export function PublicChat({
                       id: message.id,
                       text: message.text ?? "",
                       outgoing: message.direction === "inbound",
+                      author:
+                        message.direction === "outbound" &&
+                        message.metadata?.source === "human"
+                          ? message.author
+                          : undefined,
                     }))}
                     pendingReply={
                       waitingReply ? (

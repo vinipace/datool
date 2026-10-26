@@ -24,6 +24,7 @@ import {
   ConversationRow,
   InboxQueueChip,
   ConversationListSkeleton,
+  TakeoverIndicator,
 } from "@/components/ui/inbox-conversation"
 import { cn } from "@/lib/utils"
 import {
@@ -118,6 +119,7 @@ import { NewTicketDialog } from "./new-ticket-dialog"
 
 type Ticket = {
   id: string
+  needsTakeover?: boolean
   agentName?: string | null
   agentAvatar?: Pick<
     AgentAppearance,
@@ -592,6 +594,7 @@ export function InboxPage({
                         ticket.contactName ||
                         "Untitled conversation"}
                     </span>
+                    {ticket.needsTakeover && <TakeoverIndicator compact />}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -815,7 +818,7 @@ export function InboxPage({
                 <ConversationRow
                   key={ticket.id}
                   selected={ticket.id === selectedId}
-                  aria-label={`Open ${ticket.contactName || ticket.subject || "conversation"}`}
+                  aria-label={`Open ${ticket.contactName || ticket.subject || "conversation"}${ticket.needsTakeover ? ", needs takeover" : ""}`}
                   onClick={(event) => {
                     returnFocusRef.current = event.currentTarget
                     setSelectedId(ticket.id)
@@ -854,7 +857,11 @@ export function InboxPage({
                   }
                   metadata={
                     <>
-                      <TicketStatusIndicator status={ticket.status} />
+                      {ticket.needsTakeover ? (
+                        <TakeoverIndicator />
+                      ) : (
+                        <TicketStatusIndicator status={ticket.status} />
+                      )}
                       <span className="truncate">
                         {ticket.assigneeName || ticket.teamName || "Unassigned"}
                       </span>

@@ -3043,12 +3043,21 @@ export async function readPublicConversation(
   })
   const rows = await database(context).execute<Row>(sql`
     SELECT m.id, m.direction, m.status, m.content_json, m.provider_message_id, m.created_at,
+      (m.direction='outbound' AND m.content_json->'metadata'->>'source'='human') AS human_reply,
+      author.name AS author_name, author.image AS author_image,
       (c.owner_type = 'ai' AND c.status = 'active' AND m.direction = 'inbound' AND EXISTS (
         SELECT 1 FROM build_channel_job j WHERE j.project_id = m.project_id AND j.message_id = m.id
           AND j.kind = 'process_inbound' AND j.status IN ('queued', 'running')
       )) AS pending_reply
     FROM build_conversations c
     LEFT JOIN build_channel_message m ON m.project_id = c.project_id AND m.conversation_id = c.id
+    LEFT JOIN "user" author ON m.direction='outbound'
+      AND m.content_json->'metadata'->>'source'='human'
+      AND author.id=m.content_json->'metadata'->>'actorId'
+      AND EXISTS (
+        SELECT 1 FROM member membership JOIN project p ON p.organization_id=membership."organizationId"
+        WHERE p.id=c.project_id AND membership."userId"=author.id
+      )
     WHERE c.project_id = ${context.projectId} AND c.id = ${conversationId}
       AND c.agent_id = ${loaded.connection.agentId}
       AND c.metadata_json->>'visitorId' = ${visitor.visitorId}
@@ -3063,6 +3072,8 @@ export async function readPublicConversation(
     .filter((row) => row.id !== null)
     .map((row) => {
       const content = messageContent(row)
+      const metadata = publicMessageMetadata(content.metadata)
+      if (row.human_reply === true) metadata.source = "human"
       return {
         id: String(row.id),
         direction: String(row.direction),
@@ -3070,7 +3081,14 @@ export async function readPublicConversation(
         pendingReply: row.pending_reply === true,
         text: content.text,
         attachments: content.attachments,
-        metadata: publicMessageMetadata(content.metadata),
+        // Only publish the display identity of verified workspace senders.
+        // Internal actor IDs and email addresses stay out of visitor responses.
+        author: row.human_reply === true ? {
+          name: typeof row.author_name === "string" && row.author_name.trim()
+            ? row.author_name.trim() : "Support teammate",
+          image: typeof row.author_image === "string" ? row.author_image : null,
+        } : null,
+        metadata,
         providerMessageId:
           row.provider_message_id == null
             ? null

@@ -930,3 +930,72 @@ export const ProductCards: Story = {
     })
   },
 }
+
+export const HumanReplies: Story = {
+  render: () => <StoreSessionFixture />,
+  parameters: {
+    msw: {
+      handlers: [
+        handlers[0],
+        http.get("*/api/build-public/:channel/conversation/:conversation", () =>
+          HttpResponse.json({
+            data: [
+              {
+                id: "question",
+                direction: "inbound",
+                text: "Quero falar com uma pessoa.",
+              },
+              {
+                id: "handoff",
+                direction: "outbound",
+                text: "Vou conectar você com nossa equipe.",
+              },
+              {
+                id: "human-reply",
+                direction: "outbound",
+                text: "Oi! Sou a Marina. Vou continuar seu atendimento por aqui.",
+                author: {
+                  name: "Marina",
+                  image:
+                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='14' r='8' fill='currentColor'/%3E%3Cpath d='M4 40a16 16 0 0 1 32 0' fill='currentColor'/%3E%3C/svg%3E",
+                },
+                metadata: { source: "human" },
+              },
+              {
+                id: "human-fallback",
+                direction: "outbound",
+                text: "Pode me contar como posso ajudar?",
+                author: { name: "Rafael", image: null },
+                metadata: { source: "human" },
+              },
+            ],
+          })
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const reply = await canvas.findByRole("article", { name: "Marina message" })
+    await expect(within(reply).getByText("Marina")).toBeVisible()
+    await expect(
+      within(reply).getByText(
+        "Oi! Sou a Marina. Vou continuar seu atendimento por aqui."
+      )
+    ).toBeVisible()
+    await waitFor(() =>
+      expect(reply.querySelector('[data-slot="user-avatar"] img')).toBeVisible()
+    )
+    const fallback = await canvas.findByRole("article", {
+      name: "Rafael message",
+    })
+    await expect(within(fallback).getByText("Rafael")).toBeVisible()
+    await expect(within(fallback).getByText("R")).toBeVisible()
+    await expect(
+      canvas
+        .getByRole("article", { name: "Assistant message" })
+        .querySelector('[data-slot="user-avatar"]')
+    ).toBeNull()
+    await waitForChatMessages(canvasElement)
+  },
+}
