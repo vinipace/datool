@@ -10,7 +10,13 @@ import { requestHostSession } from "@/src/lib/build/chat-host-session"
 import { usePublicChallenge } from "./use-public-challenge"
 import Image from "next/image"
 import datoolLogo from "@/app/icon.svg"
-import { MessageCircle, MessageCircleWarning, RefreshCw, X } from "lucide-react"
+import {
+  ArrowDown,
+  MessageCircle,
+  MessageCircleWarning,
+  RefreshCw,
+  X,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/ui/notice"
 import { cn } from "@/lib/utils"
@@ -37,6 +43,7 @@ import {
   ChatComposer,
   ChatTypingIndicator,
 } from "@/components/ui/chat-composer"
+import { ChatDeliveryStatus } from "@/components/ui/chat-delivery-status"
 import { ChatFeedback } from "@/components/ui/chat-feedback"
 import { formatRelative } from "@/components/tracer/format"
 import { ChatNavigationContext } from "@/components/ui/chat-navigation-context"
@@ -63,6 +70,13 @@ type ChatMessage = {
   direction?: string
   status?: string
   pendingReply?: boolean
+  providerMessageId?: string | null
+  localSend?: {
+    key: string
+    conversationId: string
+    visitorId: string
+    failed: boolean
+  }
   text?: string
   attachments?: Array<{
     type?: string
@@ -191,8 +205,10 @@ export function PublicChat({
   >(null)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [draft, setDraft] = React.useState("")
+  const draftRef = React.useRef("")
   const updateDraft = React.useCallback(
     (value: string) => {
+      draftRef.current = value
       setDraft(value)
       const active = sessionRef.current
       if (!active || previewAgentId) return
@@ -237,9 +253,14 @@ export function PublicChat({
     Record<string, string | undefined>
   >({})
   const messageLogRef = React.useRef<HTMLDivElement | null>(null)
-  const optimisticId = React.useRef(0)
+  const followLatest = React.useRef(true)
+  const [hasNewMessage, setHasNewMessage] = React.useState(false)
   const previewConversationKey = React.useRef(crypto.randomUUID())
-  const waitingReply = sending || isPublicReplyPending(messages)
+  const waitingReply =
+    sending ||
+    isPublicReplyPending(
+      messages.filter((message) => !message.localSend?.failed)
+    )
   const currentTitle =
     threads.find((thread) => thread.id === session?.conversationId)?.title ??
     messages
@@ -345,7 +366,24 @@ export function PublicChat({
         activeConversationId.current !== active.conversationId
       )
         return
-      setMessages(incoming)
+      setMessages((current) => [
+        ...incoming,
+        ...current.filter((message) => {
+          const local = message.localSend
+          return (
+            local?.failed &&
+            local.conversationId === active.conversationId &&
+            local.visitorId === active.visitorId &&
+            !incoming.some(
+              (saved) =>
+                saved.direction === "inbound" &&
+                (saved.providerMessageId ===
+                  `${active.visitorId}:${local.key}` ||
+                  saved.metadata?.clientMessageId === local.key)
+            )
+          )
+        }),
+      ])
       const first = incoming.find((message) => message.direction === "inbound")
       if (first?.text) {
         const thread = {
@@ -782,6 +820,7 @@ export function PublicChat({
   ])
 
   const scrollToLatest = React.useCallback(() => {
+    if (!followLatest.current) return
     const log = messageLogRef.current
     if (!log) return
     const latestMessage = Array.from(
@@ -799,7 +838,7 @@ export function PublicChat({
         : messages.length
           ? log.scrollHeight
           : 0,
-      behavior: "smooth",
+      behavior: "instant",
     })
   }, [messages.length])
   const onTranscriptMount = React.useCallback(
@@ -808,11 +847,21 @@ export function PublicChat({
     },
     [scrollToLatest]
   )
-  const lastMessage = messages.at(-1)
-  React.useEffect(scrollToLatest, [
+  const lastMessage = messages.findLast((message) => !message.localSend?.failed)
+  React.useEffect(() => {
+    followLatest.current = true
+    setHasNewMessage(false)
+    // A different conversation starts at its latest message.
+  }, [session?.conversationId])
+  React.useEffect(() => {
+    if (followLatest.current) scrollToLatest()
+    else if (lastMessage?.direction === "outbound") setHasNewMessage(true)
+  }, [
     scrollToLatest,
+    session?.conversationId,
     lastMessage?.id,
     lastMessage?.text,
+    lastMessage?.direction,
     sending,
   ])
 
@@ -820,21 +869,32 @@ export function PublicChat({
     event?: React.FormEvent,
     suggestedText?: string,
     interaction?: Record<string, unknown>,
-    cartRequest?: { command?: unknown; expiresAt?: number }
+    cartRequest?: { command?: unknown; expiresAt?: number },
+    retryMessage?: ChatMessage
   ) {
     event?.preventDefault()
     const text = (suggestedText ?? draft).trim()
     if (!text || !session || waitingReply || loading || sendingRef.current)
+      return
+    if (
+      retryMessage &&
+      (!retryMessage.localSend?.failed ||
+        retryMessage.localSend.conversationId !== session.conversationId ||
+        retryMessage.localSend.visitorId !== session.visitorId)
+    )
       return
     let activeSession = session
     // Invalidate background session/message reads before showing the local turn.
     ++sessionSequence.current
     sendingRef.current = true
     ++readSequence.current
-    if (!interaction) updateDraft("")
+    if (!interaction && !retryMessage) updateDraft("")
     setError(null)
     setSending(true)
-    const localMessageId = `local-${optimisticId.current++}`
+    const requestKey = retryMessage?.localSend?.key ?? crypto.randomUUID()
+    const localMessageId = retryMessage?.id ?? `local-${requestKey}`
+    followLatest.current = true
+    setHasNewMessage(false)
     const optimistic: ChatMessage = {
       id: localMessageId,
       direction: "inbound",
@@ -842,13 +902,29 @@ export function PublicChat({
       pendingReply: true,
       text,
       metadata: interaction ? { widgetInteraction: interaction } : undefined,
+      ...(!interaction
+        ? {
+            localSend: {
+              key: requestKey,
+              conversationId: activeSession.conversationId,
+              visitorId: activeSession.visitorId,
+              failed: false,
+            },
+          }
+        : {}),
     }
-    setMessages((current) => [...current, optimistic])
+    setMessages((current) =>
+      retryMessage
+        ? current.map((message) =>
+            message.id === localMessageId ? optimistic : message
+          )
+        : [...current, optimistic]
+    )
     const undoOptimistic = () => {
       setMessages((current) =>
         current.filter((message) => message.id !== localMessageId)
       )
-      if (!suggestedText && !interaction) updateDraft(text)
+      if (!suggestedText && !interaction && !draftRef.current) updateDraft(text)
       sendingRef.current = false
       setSending(false)
     }
@@ -872,7 +948,7 @@ export function PublicChat({
           setThreads([])
           setLoading(true)
           await startSession()
-          if (!suggestedText && !interaction) updateDraft(text)
+          if (!interaction) updateDraft(draftRef.current || text)
           setError(
             "Your store session changed. Please review the chat before sending."
           )
@@ -938,18 +1014,22 @@ export function PublicChat({
       const messageContext = { ...activeSession.context, ...context }
       if (previewAgentId) {
         await onBeforeSend?.()
-        await buildApi.call("build_run_agent_turn", {
-          agentId: previewAgentId,
-          channel: "web",
-          conversationId: activeSession.conversationId,
-          requestKey: crypto.randomUUID(),
-          message: text,
-          metadata: {
-            source: "channel-preview",
-            context: messageContext,
-            ...(interaction ? { widgetInteraction: interaction } : {}),
+        await buildApi.call(
+          "build_run_agent_turn",
+          {
+            agentId: previewAgentId,
+            channel: "web",
+            conversationId: activeSession.conversationId,
+            message: text,
+            metadata: {
+              source: "channel-preview",
+              clientMessageId: requestKey,
+              context: messageContext,
+              ...(interaction ? { widgetInteraction: interaction } : {}),
+            },
           },
-        })
+          { idempotencyKey: requestKey }
+        )
       } else {
         await requestJson(
           `/api/build-public/${encodeURIComponent(channelId)}/conversation/${encodeURIComponent(activeSession.conversationId)}`,
@@ -962,6 +1042,7 @@ export function PublicChat({
             },
             body: JSON.stringify({
               text,
+              idempotencyKey: requestKey,
               metadata: {
                 context: messageContext,
                 ...(interaction ? { widgetInteraction: interaction } : {}),
@@ -971,12 +1052,30 @@ export function PublicChat({
         )
       }
     } catch (reason) {
-      undoOptimistic()
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Your message could not be sent."
-      )
+      if (interaction) {
+        undoOptimistic()
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Your message could not be sent."
+        )
+      } else {
+        // A missing acknowledgement can mean the server accepted the message.
+        // Keep its key for retries; history reconciles it by the provider ID.
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === localMessageId && message.localSend
+              ? {
+                  ...message,
+                  pendingReply: false,
+                  localSend: { ...message.localSend, failed: true },
+                }
+              : message
+          )
+        )
+        sendingRef.current = false
+        setSending(false)
+      }
       return
     }
     try {
@@ -1134,6 +1233,20 @@ export function PublicChat({
     theme,
     onThemeChange: () => setVisitorTheme(theme === "light" ? "dark" : "light"),
   }
+  const messageDelivery = (id: string) => {
+    const message = messages.find((item) => item.id === id)
+    if (!message?.localSend?.failed) return null
+    return (
+      <ChatDeliveryStatus
+        label={copy.notSent}
+        retryLabel={copy.retryMessage}
+        disabled={waitingReply || loading || !session}
+        onRetry={() =>
+          void submit(undefined, message.text, undefined, undefined, message)
+        }
+      />
+    )
+  }
   const composer = (
     <footer
       hidden={unavailable}
@@ -1250,6 +1363,7 @@ export function PublicChat({
           text={draft}
           onTextChange={updateDraft}
           running={waitingReply}
+          allowDraftWhileRunning
           disabled={unavailable}
           canSubmit={!!draft.trim() && !waitingReply && !loading && !!session}
           placeholder={appearance.inputPlaceholder}
@@ -1343,6 +1457,12 @@ export function PublicChat({
           <div
             role="log"
             ref={messageLogRef}
+            onScroll={(event) => {
+              const log = event.currentTarget
+              followLatest.current =
+                log.scrollHeight - log.scrollTop - log.clientHeight < 64
+              if (followLatest.current) setHasNewMessage(false)
+            }}
             tabIndex={0}
             aria-label={`Conversation with ${appearance.displayName}`}
             aria-live="polite"
@@ -1408,6 +1528,7 @@ export function PublicChat({
               <React.Suspense
                 fallback={
                   <ChatTextTranscript
+                    renderMessageFooter={messageDelivery}
                     messages={messages.map((message) => ({
                       id: message.id,
                       text: message.text ?? "",
@@ -1478,6 +1599,8 @@ export function PublicChat({
                           }
                     }
                     renderMessageFooter={(message) => {
+                      if (message.id && message.role === "user")
+                        return messageDelivery(message.id)
                       if (message.role !== "assistant" || !message.id)
                         return null
                       const messageId = message.id
@@ -1529,6 +1652,23 @@ export function PublicChat({
             ) : null}
             <div className="min-h-1" aria-hidden />
           </div>
+          {hasNewMessage ? (
+            <div className="flex shrink-0 justify-center py-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  followLatest.current = true
+                  setHasNewMessage(false)
+                  scrollToLatest()
+                }}
+              >
+                {copy.newMessage}
+                <ArrowDown className="size-3.5" aria-hidden />
+              </Button>
+            </div>
+          ) : null}
           {!helpPage || messages.length > 0 ? composer : null}
         </section>
       </main>
