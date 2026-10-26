@@ -21,7 +21,7 @@ import {
   HelpPageLinks,
 } from "./help-page-layout"
 import { AgentAvatar } from "@/components/ui/agent-avatar"
-import { LoadingState } from "@/components/ui/loading-state"
+import { ChatTextTranscript } from "@/components/ui/chat-text-transcript"
 import {
   chatBubbleSettingsSchema,
   type ChatBubbleSettings,
@@ -42,11 +42,11 @@ import { formatRelative } from "@/components/tracer/format"
 import { ChatNavigationContext } from "@/components/ui/chat-navigation-context"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
 
-const MessageTranscript = React.lazy(() =>
+const loadTranscript = () =>
   import("@/components/ui/message-transcript").then((module) => ({
     default: module.MessageTranscript,
   }))
-)
+const MessageTranscript = React.lazy(loadTranscript)
 
 type Appearance = ChatBubbleSettings
 
@@ -135,7 +135,7 @@ function sessionKey(channelId: string, origin?: string) {
 export function PublicChat({
   channelId,
   embedded = false,
-  deferSessionUntilOpen = false,
+  preloaded = false,
   shopifyIdentity = false,
   context = defaultContext,
   embedOrigin,
@@ -147,7 +147,7 @@ export function PublicChat({
 }: {
   channelId: string
   embedded?: boolean
-  deferSessionUntilOpen?: boolean
+  preloaded?: boolean
   shopifyIdentity?: boolean
   context?: Record<string, unknown>
   embedOrigin?: string
@@ -159,11 +159,9 @@ export function PublicChat({
 }) {
   const { verify: verifyChallenge, element: challengeElement } =
     usePublicChallenge()
-  const managedEmbed = embedded && deferSessionUntilOpen && !previewAgentId
-  const [hasOpened, setHasOpened] = React.useState(!managedEmbed)
+  const managedEmbed = embedded && preloaded && !previewAgentId
   const [frameVisible, setFrameVisible] = React.useState(!managedEmbed)
-  const sessionActive =
-    !managedEmbed || (shopifyIdentity ? frameVisible : hasOpened)
+  const frameVisibleRef = React.useRef(!managedEmbed)
   const [session, setSession] = React.useState<Session | null>(null)
   const [storedAppearance, setAppearance] = React.useState(
     initialAppearance ?? defaultAppearance
@@ -248,7 +246,7 @@ export function PublicChat({
       .find((message) => message.direction === "inbound")
       ?.text?.slice(0, 120) ??
     copy.newChatShort
-  const unavailable = !loading && !!error && !messages.length
+  const unavailable = !loading && !!error && !messages.length && !session
   const hasTimestamps = messages.some((message) => !!message.createdAt)
   const [, refreshRelativeTime] = React.useReducer(
     (tick: number) => tick + 1,
@@ -367,9 +365,12 @@ export function PublicChat({
 
   const startSession = React.useCallback(
     async (reset = false, threadId?: string) => {
+      // Focus and visibility can change when clicking the composer. Never
+      // restart a connection or overwrite its optimistic turn during a send.
+      if (sendingRef.current) return
       const sequence = ++sessionSequence.current
       ++readSequence.current
-      setLoading(true)
+      if (!sessionRef.current || reset || threadId) setLoading(true)
       setError(null)
       setFeedback({})
       setFeedbackError({})
@@ -645,8 +646,7 @@ export function PublicChat({
   }, [embedOrigin, loading, messages, previewAgentId, session, shopifyIdentity])
 
   React.useEffect(() => {
-    if (!shopifyIdentity || previewAgentId || (managedEmbed && !frameVisible))
-      return
+    if (!shopifyIdentity || previewAgentId) return
     const refresh = () => {
       if (document.visibilityState !== "hidden") void startSession()
       else {
@@ -657,11 +657,19 @@ export function PublicChat({
         setLoading(true)
       }
     }
-    window.addEventListener("focus", refresh)
+    const onFocus = () => {
+      if (!managedEmbed || frameVisibleRef.current) refresh()
+    }
+    window.addEventListener("focus", onFocus)
+    // A hidden storefront can change accounts in another tab, even when its
+    // launcher was closed. Invalidate its private transcript in either state.
     document.addEventListener("visibilitychange", refresh)
-    const timer = window.setInterval(refresh, 60_000)
+    const timer =
+      !managedEmbed || frameVisible
+        ? window.setInterval(refresh, 60_000)
+        : undefined
     return () => {
-      window.removeEventListener("focus", refresh)
+      window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", refresh)
       window.clearInterval(timer)
     }
@@ -701,26 +709,25 @@ export function PublicChat({
         typeof event.data.visible !== "boolean"
       )
         return
+      const opening = event.data.visible && !frameVisibleRef.current
+      frameVisibleRef.current = event.data.visible
       setFrameVisible(event.data.visible)
-      if (event.data.visible) setHasOpened(true)
-      else if (shopifyIdentity) {
-        ++sessionSequence.current
-        ++readSequence.current
-        setMessages([])
-        setThreads([])
-        setLoading(true)
-      }
+      // Closing the launcher does not change the store identity. Keep the
+      // verified conversation mounted; check again without blanking it on open.
+      if (opening && shopifyIdentity && sessionRef.current) void startSession()
     }
     window.addEventListener("message", onVisibility)
     window.parent.postMessage({ type: "datool:chat:ready" }, parentOrigin)
     return () => window.removeEventListener("message", onVisibility)
-  }, [managedEmbed, embedOrigin, shopifyIdentity])
+  }, [managedEmbed, embedOrigin, shopifyIdentity, startSession])
 
   React.useEffect(() => {
-    // Loading the signed session is the external side effect this effect owns.
-    if (!sessionActive && window.parent !== window) return
+    // Warm the session and transcript with the iframe, before a launcher click.
     void startSession()
-  }, [startSession, sessionActive])
+    void loadTranscript().catch(() => {
+      // A failed preload must not interrupt session warmup.
+    })
+  }, [startSession])
 
   React.useEffect(() => {
     if (
@@ -819,40 +826,70 @@ export function PublicChat({
     const text = (suggestedText ?? draft).trim()
     if (!text || !session || waitingReply || loading || sendingRef.current)
       return
-    sendingRef.current = true
-    setSending(true)
     let activeSession = session
+    // Invalidate background session/message reads before showing the local turn.
+    ++sessionSequence.current
+    sendingRef.current = true
+    ++readSequence.current
+    if (!interaction) updateDraft("")
+    setError(null)
+    setSending(true)
+    const localMessageId = `local-${optimisticId.current++}`
+    const optimistic: ChatMessage = {
+      id: localMessageId,
+      direction: "inbound",
+      status: "queued",
+      pendingReply: true,
+      text,
+      metadata: interaction ? { widgetInteraction: interaction } : undefined,
+    }
+    setMessages((current) => [...current, optimistic])
+    const undoOptimistic = () => {
+      setMessages((current) =>
+        current.filter((message) => message.id !== localMessageId)
+      )
+      if (!suggestedText && !interaction) updateDraft(text)
+      sendingRef.current = false
+      setSending(false)
+    }
     if (shopifyIdentity && embedOrigin) {
       const verificationSequence = sessionSequence.current
       try {
         const result = await requestHostSession<Session>(embedOrigin, {
           conversationId: activeSession.conversationId,
         })
+        if (result.error || !result.session)
+          throw new Error(
+            result.error?.message || "Could not verify your store session."
+          )
         if (
           verificationSequence !== sessionSequence.current ||
-          result.error ||
-          !result.session ||
           result.session.visitorId !== activeSession.visitorId ||
           result.session.conversationId !== activeSession.conversationId
         ) {
+          undoOptimistic()
+          setMessages([])
+          setThreads([])
+          setLoading(true)
           await startSession()
+          if (!suggestedText && !interaction) updateDraft(text)
           setError(
             "Your store session changed. Please review the chat before sending."
           )
-          sendingRef.current = false
-          setSending(false)
           return
         }
         activeSession = result.session
         sessionRef.current = activeSession
         setSession(activeSession)
       } catch {
+        undoOptimistic()
         setMessages([])
+        setThreads([])
+        sessionRef.current = null
+        setSession(null)
         setError(
           "Could not verify your store session. Please refresh the page."
         )
-        sendingRef.current = false
-        setSending(false)
         return
       }
     }
@@ -881,26 +918,10 @@ export function PublicChat({
             ? reason.message
             : "Could not access your cart."
         )
-        sendingRef.current = false
-        setSending(false)
+        undoOptimistic()
         return
       }
     }
-    sendingRef.current = true
-    ++readSequence.current
-    if (!interaction) updateDraft("")
-    setError(null)
-    setSending(true)
-    const localMessageId = `local-${optimisticId.current++}`
-    const optimistic: ChatMessage = {
-      id: localMessageId,
-      direction: "inbound",
-      status: "queued",
-      pendingReply: true,
-      text,
-      metadata: interaction ? { widgetInteraction: interaction } : undefined,
-    }
-    setMessages((current) => [...current, optimistic])
     if (!messages.some((message) => message.direction === "inbound")) {
       setThreads((current) => [
         {
@@ -950,17 +971,12 @@ export function PublicChat({
         )
       }
     } catch (reason) {
-      setMessages((current) =>
-        current.filter((message) => message.id !== localMessageId)
-      )
-      if (!suggestedText && !interaction) updateDraft(text)
+      undoOptimistic()
       setError(
         reason instanceof Error
           ? reason.message
           : "Your message could not be sent."
       )
-      sendingRef.current = false
-      setSending(false)
       return
     }
     try {
@@ -1147,7 +1163,7 @@ export function PublicChat({
           </div>
         </Notice>
       ) : null}
-      {error && messages.length ? (
+      {error && !unavailable ? (
         <div
           className="mb-3 flex items-start justify-between gap-3 rounded-md border border-destructive-border bg-destructive-background px-3 py-2 text-xs text-destructive"
           role="alert"
@@ -1333,7 +1349,6 @@ export function PublicChat({
             aria-busy={loading || waitingReply}
             className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset @min-[28rem]/chat:px-5"
           >
-            {loading ? <LoadingState compact label={copy.loading} /> : null}
             {unavailable ? (
               <div
                 role="alert"
@@ -1361,7 +1376,6 @@ export function PublicChat({
               </div>
             ) : null}
             {!helpPage &&
-            !loading &&
             !error &&
             !messages.length &&
             appearance.welcomeMessage ? (
@@ -1375,7 +1389,6 @@ export function PublicChat({
               </div>
             ) : null}
             {!helpPage &&
-            !loading &&
             !error &&
             !messages.length &&
             !appearance.welcomeMessage ? (
@@ -1393,7 +1406,20 @@ export function PublicChat({
             ) : null}
             {messages.length > 0 || waitingReply ? (
               <React.Suspense
-                fallback={<LoadingState compact label={copy.loading} />}
+                fallback={
+                  <ChatTextTranscript
+                    messages={messages.map((message) => ({
+                      id: message.id,
+                      text: message.text ?? "",
+                      outgoing: message.direction === "inbound",
+                    }))}
+                    pendingReply={
+                      waitingReply ? (
+                        <ChatTypingIndicator label={copy.thinking} />
+                      ) : undefined
+                    }
+                  />
+                }
               >
                 <div
                   ref={onTranscriptMount}

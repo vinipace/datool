@@ -31,6 +31,15 @@ let sessionRequests = 0
 let messageRequests = 0
 let hostRequests = 0
 let shopifyHost = false
+let hostSession = session
+let hostGate = Promise.resolve()
+let releaseHost = () => {}
+let failHost = false
+let conversationMessages: Array<{
+  id: string
+  direction: string
+  text: string
+}> = []
 
 const meta = {
   title: "Build/PublicChat",
@@ -81,7 +90,7 @@ const meta = {
                       pendingReply: true,
                     },
                   ]
-                : [],
+                : conversationMessages,
             })
           }
         ),
@@ -104,13 +113,16 @@ const meta = {
     }
     // Exercise the iframe client with the same source/origin as a real host.
     // Dispatch from the parent so the browser supplies the authentic source.
-    const reply = (event: MessageEvent) => {
+    let active = true
+    const reply = async (event: MessageEvent) => {
       if (
         event.source !== window ||
         event.data?.type !== "datool:chat:session-request"
       )
         return
       hostRequests++
+      await hostGate
+      if (!active) return
       window.dispatchEvent(
         new MessageEvent("message", {
           source: window.parent,
@@ -119,7 +131,11 @@ const meta = {
             type: "datool:chat:session-response",
             requestId: event.data.requestId,
             shopify: shopifyHost,
-            ...(shopifyHost ? { session } : {}),
+            ...(failHost
+              ? { error: { message: "Store verification unavailable" } }
+              : shopifyHost
+                ? { session: hostSession }
+                : {}),
           },
         })
       )
@@ -135,6 +151,11 @@ const meta = {
     messageRequests = 0
     hostRequests = 0
     shopifyHost = false
+    hostSession = session
+    hostGate = Promise.resolve()
+    releaseHost = () => {}
+    failHost = false
+    conversationMessages = []
     sessionGate = new Promise<void>((resolve) => {
       releaseSession = resolve
     })
@@ -145,11 +166,13 @@ const meta = {
       releaseHistory = resolve
     })
     return () => {
+      active = false
       window.parent.removeEventListener("message", reply)
       window.localStorage.removeItem(key)
       window.localStorage.removeItem(
         `datool:public-chat:${channelId}:${window.location.origin}:session`
       )
+      releaseHost()
       releaseSession()
       releaseMessages()
       releaseHistory()
@@ -164,7 +187,7 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const PreloadedIframe: Story = {
-  args: { deferSessionUntilOpen: true },
+  args: { preloaded: true },
   render: (args) => (
     <PublicChat {...args} embedOrigin={window.location.origin} />
   ),
@@ -184,14 +207,24 @@ export const PreloadedIframe: Story = {
       )
     }
     const nextFrame = () => new Promise(requestAnimationFrame)
+    conversationMessages = [
+      {
+        id: "ready-history",
+        direction: "outbound",
+        text: "Your conversation is ready",
+      },
+    ]
+    await expect(
+      canvas.queryByText("Loading conversation…")
+    ).not.toBeInTheDocument()
     await nextFrame()
-    await expect(sessionRequests).toBe(0)
-    await expect(hostRequests).toBe(0)
+    await waitFor(() => expect(hostRequests).toBe(1))
+    await waitFor(() => expect(sessionRequests).toBe(shopifyHost ? 0 : 1))
     visibility(true, "https://unrelated.test")
     visibility(true, window.location.origin, window)
     await nextFrame()
-    await expect(sessionRequests).toBe(0)
-    await expect(hostRequests).toBe(0)
+    await expect(sessionRequests).toBe(shopifyHost ? 0 : 1)
+    await expect(hostRequests).toBe(1)
     visibility(true)
     releaseSession()
     releaseMessages()
@@ -205,26 +238,90 @@ export const PreloadedIframe: Story = {
     await waitFor(() => expect(messageRequests).toBeGreaterThan(0), {
       timeout: 2500,
     })
+    await expect(
+      await within(canvas.getByRole("log")).findByText(
+        "Your conversation is ready"
+      )
+    ).toBeVisible()
     visibility(false)
     await nextFrame()
     const closedReads = messageRequests
     await new Promise((resolve) => setTimeout(resolve, 1200))
     await expect(messageRequests).toBe(closedReads)
+    hostGate = new Promise<void>((resolve) => {
+      releaseHost = resolve
+    })
     visibility(true)
+    await nextFrame()
+    await expect(
+      within(canvas.getByRole("log")).getByText("Your conversation is ready")
+    ).toBeVisible()
+    await expect(
+      canvas.queryByText("Loading conversation…")
+    ).not.toBeInTheDocument()
+    releaseHost()
     await waitFor(() => expect(messageRequests).toBeGreaterThan(closedReads), {
       timeout: 2500,
     })
     await expect(sessionRequests).toBe(shopifyHost ? 0 : 1)
-    await expect(hostRequests).toBe(shopifyHost ? 2 : 1)
+    await expect(hostRequests).toBeGreaterThanOrEqual(shopifyHost ? 2 : 1)
     await expect(canvas.getByRole("textbox", { name: "Message" })).toHaveValue(
       "Keep this draft"
     )
+    if (shopifyHost) {
+      visibility(false)
+      await nextFrame()
+      const descriptor = Object.getOwnPropertyDescriptor(
+        document,
+        "visibilityState"
+      )
+      try {
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          value: "hidden",
+        })
+        document.dispatchEvent(new Event("visibilitychange"))
+        await waitFor(() =>
+          expect(
+            within(canvas.getByRole("log")).queryByText(
+              "Your conversation is ready"
+            )
+          ).not.toBeInTheDocument()
+        )
+        hostSession = {
+          ...session,
+          visitorId: "changed-visitor",
+          conversationId: "changed-conversation",
+        }
+        conversationMessages = []
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          value: "visible",
+        })
+        document.dispatchEvent(new Event("visibilitychange"))
+        await waitFor(() =>
+          expect(canvas.getByRole("textbox", { name: "Message" })).toHaveValue(
+            ""
+          )
+        )
+        visibility(true)
+        await expect(
+          within(canvas.getByRole("log")).queryByText(
+            "Your conversation is ready"
+          )
+        ).not.toBeInTheDocument()
+      } finally {
+        if (descriptor)
+          Object.defineProperty(document, "visibilityState", descriptor)
+        else Reflect.deleteProperty(document, "visibilityState")
+      }
+    }
   },
 }
 
 export const ShopifyPreloadedIframe: Story = {
   ...PreloadedIframe,
-  args: { deferSessionUntilOpen: true, shopifyIdentity: true },
+  args: { preloaded: true, shopifyIdentity: true },
   beforeEach: () => {
     shopifyHost = true
   },
@@ -329,6 +426,126 @@ export const ConnectionFailure: Story = {
     )
     await expect(canvas.getByRole("textbox", { name: "Message" })).toHaveValue(
       "Keep my draft"
+    )
+  },
+}
+
+// This boundary owns the real host verification -> optimistic UI -> HTTP send
+// lifecycle. Hold the host reply to expose any UI blocked on the round trip.
+export const ShopifySendWhileVerifying: Story = {
+  args: { shopifyIdentity: true },
+  render: (args) => (
+    <PublicChat {...args} embedOrigin={window.location.origin} />
+  ),
+  beforeEach: () => {
+    shopifyHost = true
+    releaseMessages()
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const input = canvas.getByRole("textbox", { name: "Message" })
+    const send = canvas.getByRole("button", { name: "Send message" })
+    await userEvent.type(input, "Do you have this in blue?")
+    await waitFor(() => expect(send).toBeEnabled())
+    hostGate = new Promise<void>((resolve) => {
+      releaseHost = resolve
+    })
+    await userEvent.click(send)
+    await waitFor(() => expect(hostRequests).toBeGreaterThanOrEqual(2))
+    await expect(
+      await within(canvas.getByRole("log")).findByText(
+        "Do you have this in blue?"
+      )
+    ).toBeVisible()
+    await expect(input).toHaveValue("")
+    await expect(
+      canvas.queryByText("Loading conversation…")
+    ).not.toBeInTheDocument()
+    await expect(submitted).toEqual([])
+    // A focus refresh must not erase the optimistic message or invalidate send.
+    window.dispatchEvent(new Event("focus"))
+    conversationMessages = [
+      {
+        id: "sent-message",
+        direction: "inbound",
+        text: "Do you have this in blue?",
+      },
+    ]
+    releaseHost()
+    await waitFor(() => expect(submitted).toHaveLength(1))
+    await waitFor(() =>
+      expect(
+        within(canvas.getByRole("log")).getAllByText(
+          "Do you have this in blue?"
+        )
+      ).toHaveLength(1)
+    )
+  },
+}
+
+export const ShopifyChangedIdentityBeforeSend: Story = {
+  ...ShopifySendWhileVerifying,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const input = canvas.getByRole("textbox", { name: "Message" })
+    const send = canvas.getByRole("button", { name: "Send message" })
+    await userEvent.type(input, "Keep this unsent question")
+    await waitFor(() => expect(send).toBeEnabled())
+    hostGate = new Promise<void>((resolve) => {
+      releaseHost = resolve
+    })
+    await userEvent.click(send)
+    await expect(
+      await within(canvas.getByRole("log")).findByText(
+        "Keep this unsent question"
+      )
+    ).toBeVisible()
+    hostSession = {
+      ...session,
+      visitorId: "another-visitor",
+      conversationId: "another-conversation",
+    }
+    releaseHost()
+    await expect(
+      await canvas.findByText(
+        "Your store session changed. Please review the chat before sending."
+      )
+    ).toBeVisible()
+    await expect(submitted).toEqual([])
+    await expect(input).toHaveValue("Keep this unsent question")
+    await expect(
+      within(canvas.getByRole("log")).queryByText("Keep this unsent question")
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const ShopifyVerificationFailure: Story = {
+  ...ShopifySendWhileVerifying,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const input = canvas.getByRole("textbox", { name: "Message" })
+    const send = canvas.getByRole("button", { name: "Send message" })
+    await userEvent.type(input, "Keep this failed question")
+    await waitFor(() => expect(send).toBeEnabled())
+    hostGate = new Promise<void>((resolve) => {
+      releaseHost = resolve
+    })
+    await userEvent.click(send)
+    await expect(
+      await within(canvas.getByRole("log")).findByText(
+        "Keep this failed question"
+      )
+    ).toBeVisible()
+    failHost = true
+    releaseHost()
+    await expect(await canvas.findByRole("alert")).toBeVisible()
+    await expect(submitted).toEqual([])
+    failHost = false
+    await userEvent.click(canvas.getByRole("button", { name: "Try again" }))
+    await waitFor(() =>
+      expect(canvas.getByRole("textbox", { name: "Message" })).toHaveValue(
+        "Keep this failed question"
+      )
     )
   },
 }
