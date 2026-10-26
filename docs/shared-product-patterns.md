@@ -168,8 +168,18 @@ scrolling, waiting feedback and Enter/Shift + Enter behavior.
 The inbox uses the shared chat's `operator` perspective: customer messages sit
 on the left, and AI or teammate replies sit on the right. This changes presentation
 and sender labels without changing message roles, history, or widget behavior.
-Human replies show the sender's profile avatar and display name; AI replies show
-the agent's configured avatar and name. The authenticated transcript operation
+The inbox opts into the shared `inbox` chat variant: neutral incoming bubbles,
+green outgoing bubbles, sender names inside replies, date separators, inline times
+and a rounded, single-row message field with a separate send button. Its compact customer header keeps status visible and includes icon tabs with
+tooltips for Conversation, Notes and Details;
+refresh and AI hand-back live in the conversation actions menu. Feedback sits beside the
+latest reply. The reading column starts below the header and uses narrower
+bubbles with tighter spacing; the composer aligns to the same column. Other operator transcripts retain profile/agent avatars.
+`components/ui/inbox-conversation.tsx` owns contact avatars, conversation rows,
+queue chips and the list skeleton. The inbox keeps server-side queue/search filters
+and the shared collection loading, retry, export and pagination controls. Its
+resizable desktop split gives the conversation 68% by default; narrow screens
+reuse the existing conversation sheet and restore focus to the selected row. The authenticated transcript operation
 resolves identities from stored sender IDs, scoped to the project organization.
 Sending a human reply automatically assigns the ticket to that authenticated
 sender. Reply persistence, assignment and delivery admission are atomic; retries
@@ -760,8 +770,11 @@ collected data. Repeated associations produce one row; contacts can appear for
 more than one agent. Creation and imports remain in the project-wide directory.
 Home and the other workspace groups are hidden while agent navigation is active.
 
-Inbox uses the shared default control height for New Ticket, Search, My Inbox, Mentions,
-All, Unassigned, Solved, and a bounded list of recent ticket conversations.
+Inbox has a dedicated sidebar with New Ticket, Search, My Inbox, Mentions, All,
+Unassigned, Solved, and recent ticket conversations. The collection uses a compact
+search toolbar without a duplicate title. Refresh,
+additional status filters and settings use the collection menu; an active additional
+status is shown as a removable chip.
 Queue and agent filters are applied before pagination on the server; My Inbox
 uses the authenticated actor, and Mentions matches explicit @email mentions in
 internal notes. Selection and filters are reflected in the URL for browser Back

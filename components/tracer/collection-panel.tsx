@@ -17,6 +17,7 @@ export function CollectionPanel({
   refreshInMenu: alwaysRefreshInMenu = false,
   displayIconOnly = false,
   contentClassName,
+  compactToolbar = false,
 }: React.PropsWithChildren<{
   label: string
   selectionControls?: React.ReactNode
@@ -25,6 +26,7 @@ export function CollectionPanel({
   refreshInMenu?: boolean
   displayIconOnly?: boolean
   contentClassName?: string
+  compactToolbar?: boolean
 }>) {
   const { title, tabs } = React.useContext(CollectionHeaderContext)
   const panelRef = React.useRef<HTMLElement>(null)
@@ -76,8 +78,15 @@ export function CollectionPanel({
           aria-label={`${label} controls`}
           className={cn(
             "@container/collection relative z-20 min-h-[53px] shrink-0 items-center gap-2 border-b border-border bg-background px-3 py-2",
-            !heading && !filter && "@max-[640px]/page:min-h-[97px]",
-            heading ? "grid grid-cols-[minmax(0,1fr)_auto]" : "flex @max-[640px]/page:flex-wrap"
+            !heading &&
+              !filter &&
+              !compactToolbar &&
+              "@max-[640px]/page:min-h-[97px]",
+            heading
+              ? "grid grid-cols-[minmax(0,1fr)_auto]"
+              : compactToolbar
+                ? "flex"
+                : "flex @max-[640px]/page:flex-wrap"
           )}
         >
           {!filter && (
@@ -98,12 +107,17 @@ export function CollectionPanel({
           </div>
           {/* Retain portal targets and filter state while selection actions replace the toolbar. */}
           <div className="contents peer-[:not(:empty)]/collection-selection:hidden">
-            <div ref={setPageView} className="flex min-w-0 flex-1 items-center empty:hidden @min-[640px]/page:flex-initial" />
+            <div
+              ref={setPageView}
+              className="flex min-w-0 flex-1 items-center empty:hidden @min-[640px]/page:flex-initial"
+            />
             <div
               ref={setFilter}
               className={cn(
                 "flex min-w-0 flex-1 items-center empty:hidden",
-                !heading && "@max-[640px]/page:order-last @max-[640px]/page:basis-full",
+                !heading &&
+                  !compactToolbar &&
+                  "@max-[640px]/page:order-last @max-[640px]/page:basis-full",
                 heading && "col-span-2 row-start-2"
               )}
             />
@@ -129,7 +143,12 @@ export function CollectionPanel({
             </div>
           </div>
         </div>
-        <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-auto px-3 py-1 [&>*]:shrink-0", contentClassName)}>
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-auto px-3 py-1 [&>*]:shrink-0",
+            contentClassName
+          )}
+        >
           <PageViewSurface>{children}</PageViewSurface>
         </div>
       </section>

@@ -36,14 +36,18 @@ export function TabsList({
 }
 export function TabsTrigger({
   className,
+  size = "default",
   ...props
-}: React.ComponentProps<typeof Primitive.Trigger>) {
+}: React.ComponentProps<typeof Primitive.Trigger> & {
+  size?: "default" | "icon"
+}) {
   const variant = React.useContext(TabsVariantContext)
   return (
     <Primitive.Trigger
       className={cn(
         "inline-flex items-center justify-center gap-1.5 px-3 text-xs whitespace-nowrap text-foreground-muted outline-none hover:bg-muted hover:text-foreground focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[state=active]:text-foreground [&_svg]:shrink-0",
         triggerVariants[variant],
+        size === "icon" && "size-8 p-0 [&_svg]:size-4",
         className
       )}
       {...props}
