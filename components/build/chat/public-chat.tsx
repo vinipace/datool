@@ -261,6 +261,19 @@ export function PublicChat({
     isPublicReplyPending(
       messages.filter((message) => !message.localSend?.failed)
     )
+  // Delivery receipts change storage IDs, not the identity of a visible bubble.
+  const messageKeys = new Map(
+    messages.map((message) => {
+      const clientKey =
+        message.localSend?.key ?? message.metadata?.clientMessageId
+      const receipt =
+        message.providerMessageId ??
+        (typeof clientKey === "string"
+          ? `${session?.visitorId}:${clientKey}`
+          : message.id)
+      return [message.id, `${message.direction}:${receipt}`]
+    })
+  )
   const currentTitle =
     threads.find((thread) => thread.id === session?.conversationId)?.title ??
     messages
@@ -901,7 +914,10 @@ export function PublicChat({
       status: "queued",
       pendingReply: true,
       text,
-      metadata: interaction ? { widgetInteraction: interaction } : undefined,
+      metadata: {
+        clientMessageId: requestKey,
+        ...(interaction ? { widgetInteraction: interaction } : {}),
+      },
       ...(!interaction
         ? {
             localSend: {
@@ -1548,6 +1564,9 @@ export function PublicChat({
                 >
                   <MessageTranscript
                     key={session?.conversationId}
+                    getMessageKey={(message) =>
+                      messageKeys.get(message.id ?? "")
+                    }
                     pendingReply={
                       waitingReply ? (
                         <ChatTypingIndicator label={copy.thinking} />

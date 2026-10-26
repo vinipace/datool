@@ -679,7 +679,15 @@ export const FailedMessageRetry: Story = {
         providerMessageId: `${session.visitorId}:${first.idempotencyKey}`,
       },
     ]
+    const bubble = canvas.getByRole("article", { name: "Your message" })
+    await waitFor(() => expect(getComputedStyle(bubble).opacity).toBe("1"))
     releaseSend()
+    await waitFor(() => expect(send).toBeEnabled())
+    // Acknowledgement must update the existing bubble without replaying entry.
+    await expect(canvas.getByRole("article", { name: "Your message" })).toBe(
+      bubble
+    )
+    await expect(getComputedStyle(bubble).opacity).toBe("1")
     await waitFor(() =>
       expect(
         canvas.queryByRole("button", { name: "Retry sending" })
