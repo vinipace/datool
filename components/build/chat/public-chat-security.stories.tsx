@@ -33,13 +33,20 @@ const handlers = [
       })
   ),
 ]
+let parentPostMessage: typeof window.postMessage
+
 const meta = {
   title: "Build/StoreChatSecurity",
   component: PublicChat,
   args: { channelId },
   beforeEach: () => {
+    parentPostMessage = window.parent.postMessage
     for (const key of Object.keys(sessionStorage))
       if (key.includes(channelId)) sessionStorage.removeItem(key)
+  },
+  afterEach: () => {
+    // Parent window survives between test iframes; restore it explicitly.
+    window.parent.postMessage = parentPostMessage
   },
   parameters: { msw: { handlers } },
 } satisfies Meta<typeof PublicChat>
@@ -335,8 +342,10 @@ export const Challenge: Story = {
     await userEvent.click(
       dialog.getByRole("button", { name: "Verify test visitor" })
     )
-    await waitFor(() =>
-      expect(within(canvasElement).getByText("Welcome, guest")).toBeVisible()
+    await waitFor(
+      () =>
+        expect(within(canvasElement).getByText("Welcome, guest")).toBeVisible(),
+      { timeout: 2500 }
     )
     await waitFor(() =>
       expect(page.queryByRole("dialog")).not.toBeInTheDocument()

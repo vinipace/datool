@@ -54,6 +54,41 @@ const meta = {
     layout: "fullscreen",
     msw: {
       handlers: [
+        http.post("/api/build/build_create_conversation", () =>
+          HttpResponse.json({ data: { id: session.conversationId } })
+        ),
+        http.post("/api/build/build_list_conversation_messages", async () => {
+          messageRequests++
+          await messagesGate
+          return HttpResponse.json({
+            data: {
+              items: conversationMessages.map((message) => ({
+                id: message.id,
+                role: message.direction === "inbound" ? "user" : "assistant",
+                content: message.text,
+                metadata: {
+                  clientMessageId: message.providerMessageId?.slice(
+                    session.visitorId.length + 1
+                  ),
+                },
+              })),
+            },
+          })
+        }),
+        http.post("/api/build/build_run_agent_turn", async ({ request }) => {
+          const body = (await request.json()) as { message: string }
+          submitted.push({
+            text: body.message,
+            idempotencyKey: request.headers.get("idempotency-key"),
+          })
+          await sendGate
+          return rejectSend
+            ? HttpResponse.json(
+                { error: { message: "Temporarily unavailable" } },
+                { status: 503 }
+              )
+            : HttpResponse.json({ data: {} })
+        }),
         http.post(`/api/build-public/${channelId}/session`, async () => {
           sessionRequests++
           await sessionGate
@@ -589,7 +624,7 @@ export const ShopifyVerificationFailure: Story = {
 // The browser boundary owns delivery recovery: preserve the bubble and the next
 // draft, retry the original text with the same server key, and lock double clicks.
 export const FailedMessageRetry: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     releaseSession()
     releaseMessages()
@@ -610,10 +645,15 @@ export const FailedMessageRetry: Story = {
       within(canvas.getByRole("log")).getByText("Please check medium")
     ).toBeVisible()
     await expect(input).toHaveValue("My next question")
-    const readsBefore = messageRequests
-    await waitFor(() => expect(messageRequests).toBeGreaterThan(readsBefore), {
-      timeout: 2500,
-    })
+    if (!args.previewAgentId) {
+      const readsBefore = messageRequests
+      await waitFor(
+        () => expect(messageRequests).toBeGreaterThan(readsBefore),
+        {
+          timeout: 2500,
+        }
+      )
+    }
     await expect(retry).toBeVisible()
     sendGate = new Promise<void>((resolve) => {
       releaseSend = resolve
@@ -762,4 +802,16 @@ export const ReadingEarlierMessages: Story = {
       canvas.queryByRole("button", { name: "New message" })
     ).not.toBeInTheDocument()
   },
+}
+
+// Preview uses the authenticated operation transport. Its retry key must travel
+// in the actual idempotency header, not just the operation's JSON input.
+export const PreviewFailedMessageRetry: Story = {
+  ...FailedMessageRetry,
+  args: { previewAgentId: "preview-agent" },
+  render: (args) => (
+    <div className="h-dvh">
+      <PublicChat {...args} />
+    </div>
+  ),
 }

@@ -1014,19 +1014,22 @@ export function PublicChat({
       const messageContext = { ...activeSession.context, ...context }
       if (previewAgentId) {
         await onBeforeSend?.()
-        await buildApi.call("build_run_agent_turn", {
-          agentId: previewAgentId,
-          channel: "web",
-          conversationId: activeSession.conversationId,
-          requestKey,
-          message: text,
-          metadata: {
-            source: "channel-preview",
-            clientMessageId: requestKey,
-            context: messageContext,
-            ...(interaction ? { widgetInteraction: interaction } : {}),
+        await buildApi.call(
+          "build_run_agent_turn",
+          {
+            agentId: previewAgentId,
+            channel: "web",
+            conversationId: activeSession.conversationId,
+            message: text,
+            metadata: {
+              source: "channel-preview",
+              clientMessageId: requestKey,
+              context: messageContext,
+              ...(interaction ? { widgetInteraction: interaction } : {}),
+            },
           },
-        })
+          { idempotencyKey: requestKey }
+        )
       } else {
         await requestJson(
           `/api/build-public/${encodeURIComponent(channelId)}/conversation/${encodeURIComponent(activeSession.conversationId)}`,
