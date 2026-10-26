@@ -316,7 +316,7 @@ export const CHANNEL_DESCRIPTORS: Record<ChannelId, ChannelDescriptor> = {
       "read_receipts",
       "human_handoff",
     ],
-    connectionSchema: z.object({}).strict(),
+    connectionSchema: z.object({ provider: z.enum(["meta", "evolution"]).default("meta") }).strict(),
   },
   messenger: {
     id: "messenger",

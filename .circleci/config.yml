@@ -230,6 +230,7 @@ jobs:
                 tests/build-mcp.test.ts tests/build-organization-worker.test.ts
               bun --no-env-file test tests/build-channel-durable.test.ts --test-name-pattern 'keeps visitor history' --timeout 30000
               bun run test:build:access
+              bun run test:evolution:e2e
             ) > "$logs/critical" 2>&1 &
             critical_pid=$!
             status=0

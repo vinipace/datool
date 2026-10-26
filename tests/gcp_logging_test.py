@@ -19,9 +19,11 @@ class DiscoveryTests(unittest.TestCase):
         records = [container("/datool.web.1"), container("/datool.worker.1", "b"),
                    container("/dokku.postgres.datool-db", "c"),
                    container("/dokku.redis.datool-redis", "d"),
+                   container("/datool-evolution.web.1", "2"),
+                   container("/datool-evolution.run.1", "3"),
                    container("/other.web.1", "e"), container("/datool.web.1-evil", "f"),
                    container("/datool.run.123", "1")]
-        self.assertEqual(len(discovery.selected_logs(records)), 4)
+        self.assertEqual(len(discovery.selected_logs(records)), 5)
 
     def test_unexpected_driver_or_path_is_rejected(self):
         for path in ("/etc/shadow", "", "/var/lib/docker/containers/../secrets"):

@@ -73,7 +73,7 @@ export function getWhatsAppSetup(): WhatsAppSetup {
 }
 async function connection(context: BuildContext, id: string) {
   const result = await context.database.execute<Row>(
-    sql`SELECT c.*, p.slug AS project_slug FROM build_channel_connection c JOIN project p ON p.id=c.project_id WHERE c.project_id=${context.projectId} AND c.id=${id}::uuid AND c.channel='whatsapp'`
+    sql`SELECT c.*, p.slug AS project_slug FROM build_channel_connection c JOIN project p ON p.id=c.project_id WHERE c.project_id=${context.projectId} AND c.id=${id}::uuid AND c.channel='whatsapp' AND COALESCE(c.config_json->>'provider','meta')='meta'`
   )
   if (!result.rows[0])
     throw new TracerError("NOT_FOUND", "WhatsApp channel was not found.")
@@ -723,7 +723,9 @@ export async function getWhatsAppDelivery(
   context: BuildContext,
   input: { connectionId: string; messageId: string }
 ) {
-  await connection(context, input.connectionId)
+  // Delivery is a shared WhatsApp read; provider credentials are not needed.
+  const owned = await context.database.execute(sql`SELECT 1 FROM build_channel_connection WHERE project_id=${context.projectId} AND id=${input.connectionId}::uuid AND channel='whatsapp'`)
+  if (!owned.rows.length) throw new TracerError("NOT_FOUND", "WhatsApp connection was not found.")
   const result = await context.database.execute<Row>(
     sql`SELECT m.id,m.status,m.provider_message_id,m.error_code,m.error_message,m.content_json->'whatsappDelivery' AS receipt,j.status AS job_status FROM build_channel_message m LEFT JOIN build_channel_job j ON j.project_id=m.project_id AND j.message_id=m.id AND j.kind='deliver_outbound' WHERE m.project_id=${context.projectId} AND m.connection_id=${input.connectionId}::uuid AND m.id=${input.messageId} AND m.direction='outbound'`
   )

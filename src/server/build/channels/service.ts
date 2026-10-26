@@ -1,3 +1,5 @@
+import { evolutionEnabled } from "./evolution-api"
+import { assertEvolutionOutbound, sendEvolutionEnvelope, setEvolutionStatus } from "./evolution"
 import { verifyNewVisitorChallenge } from "./challenge"
 import { verifyChannelVisitor } from "./visitor-sessions"
 import { createHmac, randomUUID } from "node:crypto"
@@ -597,6 +599,10 @@ export async function updateChannelStatus(
 ) {
   requireConnectionId(connectionId)
   const loaded = await getChannelConnection(context, connectionId)
+  if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider === "evolution") {
+    await setEvolutionStatus(context, connectionId, status)
+    return (await getChannelConnection(context, connectionId)).connection
+  }
   if (loaded.connection.channel === "whatsapp") {
     if (status === "disconnected") {
       await disconnectWhatsApp(context, connectionId)
@@ -1222,6 +1228,7 @@ export async function enqueueOutboundEnvelope(
   if (loaded.connection.channel !== envelope.channel) {
     throw new Error("Outbound envelope does not match its connection.")
   }
+  if (loaded.connection.config.provider === "evolution") await assertEvolutionOutbound(context, envelope, externalConversationId)
   const consistency = await database(context).execute<Row>(sql`
     SELECT c.agent_id AS conversation_agent_id,
            c.channel AS conversation_channel,
@@ -2086,6 +2093,7 @@ export async function processChannelJob(
     agentId: loaded.connection.agentId,
     channel: loaded.connection.channel,
   })
+  if (loaded.connection.config.provider === "evolution" && !evolutionEnabled(context.projectId)) throw new WhatsAppApiError("WHATSAPP_DISCONNECTED", "Evolution is disabled for this project.")
   if (job.kind === "shopify_reconcile") {
     const { processShopifyReconciliation } =
       await import("../integrations/shopify-reconciliation")
@@ -2190,7 +2198,7 @@ export async function processChannelJob(
         )
       )
     } else if (loaded.connection.channel === "whatsapp") {
-      ids = await sendWhatsAppEnvelope(
+      ids = await (loaded.connection.config.provider === "evolution" ? sendEvolutionEnvelope : sendWhatsAppEnvelope)(
         context,
         {
           connectionId: job.connectionId,
@@ -2220,7 +2228,7 @@ export async function processChannelJob(
         SET status = CASE WHEN status IN ('delivered','failed') THEN status ELSE 'sent' END, provider_message_id = ${ids[0] ?? null}, updated_at = now()
         WHERE project_id = ${job.projectId} AND id = ${job.messageId}
       `)
-      if (loaded.connection.channel === "whatsapp" && ids[0]) {
+      if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider !== "evolution" && ids[0]) {
         await database.execute(
           sql`UPDATE build_channel_message m SET status=CASE WHEN r.status='read' THEN 'delivered' ELSE r.status END,error_code=CASE WHEN r.status='failed' THEN 'WHATSAPP_' || COALESCE(r.error_code,'DELIVERY_FAILED') ELSE NULL END,error_message=CASE WHEN r.status='failed' THEN 'WhatsApp reported a delivery failure.' ELSE NULL END,content_json=jsonb_set(m.content_json,'{whatsappDelivery}',jsonb_build_object('status',r.status,'occurredAt',r.occurred_at)) FROM build_whatsapp_receipt r WHERE m.project_id=${job.projectId} AND m.id=${job.messageId} AND r.project_id=m.project_id AND r.connection_id=m.connection_id AND r.provider_message_id=${ids[0]}`
         )
