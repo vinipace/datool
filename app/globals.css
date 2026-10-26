@@ -78,6 +78,17 @@
   --color-invocation-highlight: #ffffff;
   --color-invocation-session: #facc15;
   --color-invocation-session-foreground: #000000;
+  --color-inbox-avatar-amber: var(--inbox-avatar-amber, #f2c469);
+  --color-inbox-avatar-indigo: var(--inbox-avatar-indigo, #4b50a4);
+  --color-inbox-avatar-rose: var(--inbox-avatar-rose, #f0a2c9);
+  --color-inbox-avatar-stone: var(--inbox-avatar-stone, #d9cab7);
+  --color-inbox-avatar-ink: var(--inbox-avatar-ink, #19252b);
+  --color-inbox-avatar-light: var(--inbox-avatar-light, #ffffff);
+  --color-inbox-outgoing: var(--inbox-outgoing);
+  --color-inbox-outgoing-foreground: var(--inbox-outgoing-foreground);
+  --color-inbox-incoming: var(--inbox-incoming);
+  --color-inbox-selection: var(--inbox-selection);
+  --color-inbox-selection-foreground: var(--inbox-selection-text);
   --color-message-user: #ffffff;
   --color-message-user-foreground: #18181b;
   --color-resource-folder: oklch(55.3% 0.195 38.402);
@@ -264,6 +275,12 @@
     --warning-foreground: #78350f;
     --warning-background: #fef3c7;
     --warning-border: #fcd34d;
+    /* Inbox conversation surfaces share the native app's semantic palette. */
+    --inbox-outgoing: #d9fdd3;
+    --inbox-outgoing-foreground: #123524;
+    --inbox-incoming: #f1f1f3;
+    --inbox-selection: #e4f4e9;
+    --inbox-selection-text: #14532d;
     --success: #15803d;
     --success-foreground: #14532d;
     --success-background: #dcfce7;
@@ -405,6 +422,11 @@
     --destructive-border: rgb(248 113 113 / 0.3);
     --border: oklch(1 0 0 / 10%);
     --border-strong: #27272a;
+    --inbox-outgoing: #144d37;
+    --inbox-outgoing-foreground: #f5f5f5;
+    --inbox-incoming: #262628;
+    --inbox-selection: #103529;
+    --inbox-selection-text: #d9fdd3;
     --data-series-primary: #818cf8;
     --data-bar-lift: 25%;
     --data-bar-opacity: 0.35;
