@@ -383,8 +383,16 @@ const typographyMessages = [
   {
     id: "answer",
     outgoing: false,
-    author: { name: "Marina", image: null },
+    author: { key: "teammate-1", name: "Marina", image: null },
+    createdAt: "2026-10-26T10:00:01Z",
     text: "Medium is available in blue and black. Would you like to see both?",
+  },
+  {
+    id: "continuation",
+    outgoing: false,
+    author: { key: "teammate-1", name: "Marina", image: null },
+    createdAt: "2026-10-26T10:00:30Z",
+    text: "Both sizes are in stock.",
   },
 ]
 
@@ -407,6 +415,7 @@ export const CustomerTextStability: Story = {
                 variant="customer"
                 messages={typographyMessages.map((message) => ({
                   id: message.id,
+                  createdAt: message.createdAt,
                   role: message.outgoing ? "user" : "assistant",
                   author: message.author,
                   metadata: message.author ? { source: "human" } : {},
@@ -429,6 +438,7 @@ export const CustomerTextStability: Story = {
         canvas.getByRole("region", { name: `${size}px chat` })
       )
       const bubbles = section.getAllByRole("article")
+      expect(section.getAllByText("Marina")).toHaveLength(1)
       return {
         fonts: typographyMessages.map((message) => {
           const style = getComputedStyle(section.getByText(message.text))

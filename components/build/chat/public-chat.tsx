@@ -67,7 +67,7 @@ type Session = {
 
 type ChatMessage = {
   id: string
-  author?: { name: string; image: string | null } | null
+  author?: { key?: string; name: string; image: string | null } | null
   direction?: string
   status?: string
   pendingReply?: boolean
@@ -1615,6 +1615,7 @@ export function PublicChat({
                     messages={messages.map((message) => ({
                       id: message.id,
                       text: message.text ?? "",
+                      createdAt: message.createdAt,
                       outgoing: message.direction === "inbound",
                       author:
                         message.direction === "outbound" &&

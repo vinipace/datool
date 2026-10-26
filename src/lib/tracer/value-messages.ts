@@ -13,6 +13,7 @@ export type InspectorMessage = {
   status?: string
   metadata?: Record<string, unknown>
   author?: {
+    key?: string
     name: string
     image: string | null
     agentAvatar?: Pick<

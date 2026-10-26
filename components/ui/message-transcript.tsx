@@ -21,6 +21,7 @@ import { ChatMessageAuthor } from "./chat-message-author"
 import { AgentAvatar } from "./agent-avatar"
 import { SpanKindIcon } from "@/components/tracer/span-kind-icon"
 import { cn } from "@/lib/utils"
+import { sameChatMessageGroup } from "@/src/lib/build/chat-message-grouping"
 import {
   ChatRichContent,
   type ChatInteractionHandler,
@@ -253,6 +254,10 @@ export function MessageTranscript({
               : message.role
           const customer = variant === "customer"
           const inbox = variant === "inbox"
+          const continuesGroup =
+            customer && sameChatMessageGroup(transcript[index - 1]?.message, message)
+          const endsGroup =
+            !customer || !sameChatMessageGroup(message, transcript[index + 1]?.message)
           const previousDate = transcript[index - 1]?.message.createdAt
           const startsDay =
             inbox &&
@@ -315,7 +320,7 @@ export function MessageTranscript({
                   </time>
                 </div>
               )}
-              {(customer || inbox) && isHumanReply && (
+              {(customer || inbox) && isHumanReply && !continuesGroup && (
                 <ChatMessageAuthor
                   name={message.author?.name || "Support teammate"}
                   image={message.author?.image ?? null}
@@ -507,7 +512,7 @@ export function MessageTranscript({
                   onCodeStatus={onCodeStatus}
                 />
               )}
-              {customer && renderMessageFooter?.(message)}
+              {customer && (isUser || endsGroup) && renderMessageFooter?.(message)}
             </motion.article>
           )
         })}
