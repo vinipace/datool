@@ -770,17 +770,15 @@ export function PublicChat({
       else {
         ++sessionSequence.current
         ++readSequence.current
-        setMessages([])
-        setThreads([])
-        setLoading(true)
       }
     }
     const onFocus = () => {
       if (!managedEmbed || frameVisibleRef.current) refresh()
     }
     window.addEventListener("focus", onFocus)
-    // A hidden storefront can change accounts in another tab, even when its
-    // launcher was closed. Invalidate its private transcript in either state.
+    // Keep the last verified conversation mounted across tab switches while
+    // rejecting stale reads. Revalidate on return, even with the launcher closed;
+    // startSession clears the transcript on identity change or verification failure.
     document.addEventListener("visibilitychange", refresh)
     const timer =
       !managedEmbed || frameVisible
