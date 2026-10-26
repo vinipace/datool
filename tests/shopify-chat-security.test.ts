@@ -29,6 +29,10 @@ import { shopifyCartTools } from "@/src/server/build/integrations/shopify-cart"
 import { shopifyChannelCart } from "@/src/server/build/integrations/shopify-channel-cart"
 import { createAgent, updateAgent } from "@/src/server/build/agents"
 import { ConversationService } from "@/src/server/build/conversations"
+import {
+  sendHumanReply,
+  takeoverConversation,
+} from "@/src/server/build/operations/inbox"
 import { shopifyShopper } from "@/src/server/build/integrations/shopify-identity"
 import { claimShopifyInvitation } from "@/src/server/build/integrations/shopify-invitations"
 import {
@@ -923,6 +927,94 @@ test("Shopify identity shares a customer's threads across devices and revokes a 
     /changed/
   )
 }, 30_000)
+
+for (const customer of ["", "123"]) {
+  test(`Shopify ${customer ? "customer" : "guest"} session preserves the conversation through handoff and takeover`, async () => {
+    const f = await fixture({})
+    const original = await f.session(customer)
+    await enqueuePublicMessage(
+      f.context,
+      f.channel.id,
+      original.conversationId,
+      original.visitorToken,
+      {
+        text: "Talk to a human",
+        origin: "https://chat.example.test",
+        idempotencyKey: "handoff-request",
+      }
+    )
+    const conversations = new ConversationService(f.context)
+    await conversations.claim(original.conversationId, {
+      type: "human",
+      id: "support-team",
+      reason: "Visitor requested a human",
+    })
+    // Reopening the launcher or returning from the inbox re-verifies identity.
+    const waiting = await f.session(customer, {
+      browserToken: original.browserToken,
+      conversationId: original.conversationId,
+    })
+    expect(waiting.conversationId).toBe(original.conversationId)
+    await takeoverConversation(f.context, {
+      conversationId: original.conversationId,
+    })
+    await sendHumanReply(f.context, {
+      conversationId: original.conversationId,
+      text: "A teammate is here to help.",
+    })
+    // A new page has only the browser credential; it must resume the same case.
+    const resumed = await f.session(customer, {
+      browserToken: waiting.browserToken,
+    })
+    expect(resumed.conversationId).toBe(original.conversationId)
+    expect(resumed.visitorId).toBe(original.visitorId)
+    const reply = await enqueuePublicMessage(
+      f.context,
+      f.channel.id,
+      resumed.conversationId,
+      resumed.visitorToken,
+      {
+        text: "Thank you, I still need help.",
+        origin: "https://chat.example.test",
+        idempotencyKey: "human-followup",
+      }
+    )
+    expect(reply).toMatchObject({ accepted: true, humanOwned: true })
+    const transcript = await readPublicConversation(
+      f.context,
+      f.channel.id,
+      resumed.conversationId,
+      resumed.visitorToken,
+      "https://chat.example.test"
+    )
+    expect(transcript.map((message) => message.text)).toEqual([
+      "Talk to a human",
+      "A teammate is here to help.",
+      "Thank you, I still need help.",
+    ])
+    expect(transcript.every((message) => !message.pendingReply)).toBe(true)
+    expect(await conversations.get(original.conversationId)).toMatchObject({
+      status: "handed_off",
+      ownerType: "human",
+      ownerId: f.context.actorId,
+    })
+    const count = await f.database.execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count FROM build_conversations WHERE project_id=${f.context.projectId}
+    `)
+    expect(count.rows[0].count).toBe(1)
+    // Starting a new chat remains explicit; an explicit existing case wins over it.
+    const fresh = await f.session(customer, {
+      browserToken: resumed.browserToken,
+      newConversation: true,
+    })
+    expect(fresh.conversationId).not.toBe(original.conversationId)
+    const selected = await f.session(customer, {
+      browserToken: fresh.browserToken,
+      conversationId: original.conversationId,
+    })
+    expect(selected.conversationId).toBe(original.conversationId)
+  }, 30_000)
+}
 
 test("storefront identity rejects tampering, stale signatures and a different store before issuing sessions", async () => {
   const f = await fixture()
