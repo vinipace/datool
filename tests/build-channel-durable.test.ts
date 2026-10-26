@@ -1,5 +1,5 @@
 import { configureBuildTestEnvironment } from "./helpers/build-env"
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import assert from "node:assert/strict"
 
 import { sql } from "drizzle-orm"
@@ -69,7 +69,10 @@ const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> =
   []
 const token = "123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
+const auditSpies: { mockRestore(): void }[] = []
+
 afterEach(async () => {
+  for (const spy of auditSpies.splice(0)) spy.mockRestore()
   for (const { database, target } of resources.splice(0)) {
     await closeTracerDatabase(database)
     await target.close()
@@ -831,6 +834,8 @@ describe("durable Build channel delivery", () => {
   }, 30_000)
 
   test("keeps visitor history and reopens only threads owned by that visitor and channel", async () => {
+    const auditLines: string[] = []
+    auditSpies.push(spyOn(console, "info").mockImplementation((line: unknown) => { auditLines.push(String(line)) }))
     const { context } = await fixture()
     const web = await createChannelConnection(context, {
       agentId: "agent-telegram",
@@ -937,6 +942,12 @@ describe("durable Build channel delivery", () => {
       }),
       /connection does not match/
     )
+    const events = auditLines.filter(line => line.startsWith('{"event":"security_audit"')).map(line => JSON.parse(line))
+    expect(events.some(event => event.action === "visitor.conversation.read" && event.actorType === "visitor" && event.actorId === first.visitorId && event.conversationId === first.conversationId && event.projectId === context.projectId)).toBe(true)
+    expect(events.some(event => event.action === "visitor.conversations.list" && event.actorId === first.visitorId)).toBe(true)
+    for (const privateValue of [first.visitorToken, "Help with my order", "Shipping question"])
+      expect(JSON.stringify(events)).not.toContain(privateValue)
+
   })
 
   test("queues an authenticated operator result once through the signed channel outbox", async () => {

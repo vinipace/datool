@@ -225,6 +225,7 @@ jobs:
                 tests/shopify-billing.test.ts \
                 tests/build-feature-gate.test.ts tests/build-api.test.ts \
                 tests/build-mcp.test.ts tests/build-organization-worker.test.ts
+              bun --no-env-file test tests/build-channel-durable.test.ts --test-name-pattern 'keeps visitor history' --timeout 30000
               bun run test:build:access
             ) > "$logs/critical" 2>&1 &
             critical_pid=$!

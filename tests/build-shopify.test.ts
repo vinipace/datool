@@ -3,7 +3,7 @@ import {
   updateChannelStatus,
   getChannelConnection,
 } from "@/src/server/build/channels/service"
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { createHmac } from "node:crypto"
 import { Pool } from "pg"
@@ -52,6 +52,13 @@ afterEach(async () => {
 })
 
 test("Shopify authorization binds a store to its project, rotates tokens once and revokes access", async () => {
+  const auditLines: string[] = []
+  let auditUnavailable = false
+  const auditLog = spyOn(console, "info").mockImplementation((line: unknown) => {
+    if (auditUnavailable) throw new Error("Log sink unavailable")
+    auditLines.push(String(line))
+  })
+  cleanup.push(async () => { auditLog.mockRestore() })
   process.env.DATOOL_SHOPIFY_CLIENT_ID = "shopify-fixture-client"
   process.env.DATOOL_SHOPIFY_CLIENT_SECRET = "shopify-fixture-secret"
   process.env.DATOOL_PROVIDER_ENCRYPTION_KEY =
@@ -309,6 +316,18 @@ test("Shopify authorization binds a store to its project, rotates tokens once an
     /Reconnect Shopify.*permissions/
   )
   expect(reads).toBe(readsBeforeOrder)
+  const auditEvents = auditLines
+    .filter(line => line.startsWith('{"event":"security_audit"'))
+    .map(line => JSON.parse(line))
+  expect(auditEvents.some(event => event.action === "SHOPIFY_SEARCH_PRODUCTS" && event.actorType === "system" && event.projectId === target.projectId && event.connectionId === started.id && event.outcome === "success")).toBe(true)
+  expect(auditEvents.some(event => event.action === "SHOPIFY_CREATE_ORDER" && event.outcome === "error")).toBe(true)
+  for (const privateValue of ["buyer@example.test", "private-access-token", shop, "Snowboard"])
+    expect(JSON.stringify(auditEvents)).not.toContain(privateValue)
+  auditUnavailable = true
+  try {
+    const delivered = await executeShopifyTool(ctx, started.id, "SHOPIFY_SEARCH_PRODUCTS", { query: "" })
+    expect("products" in delivered).toBe(true)
+  } finally { auditUnavailable = false }
   for (const result of results) {
     if (!("products" in result)) throw new Error("Expected product results")
     expect(result.products).toHaveLength(1)

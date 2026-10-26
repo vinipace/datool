@@ -23,6 +23,7 @@ import {
 } from "better-auth/plugins/organization/access"
 import { oauthProvider } from "@better-auth/oauth-provider"
 import { apiKey } from "@better-auth/api-key"
+import { securityAudit } from "@/src/server/security/audit"
 import { selectedOAuthProject } from "./oauth-context"
 import type { Pool } from "pg"
 import { nextCookies } from "better-auth/next-js"
@@ -162,6 +163,39 @@ export function organizationAuthOptions(
           })
       }),
       after: createAuthMiddleware(async (ctx) => {
+        const auditActions: Record<string, string> = {
+          "/organization/update-member-role": "auth.member.role_updated",
+          "/organization/remove-member": "auth.member.removed",
+          "/organization/add-member": "auth.member.added",
+          "/organization/accept-invitation": "auth.invitation.accepted",
+          "/organization/cancel-invitation": "auth.invitation.canceled",
+          "/api-key/create": "auth.api_key.created",
+          "/api-key/update": "auth.api_key.updated",
+          "/api-key/delete": "auth.api_key.deleted",
+        }
+        const auditAction = auditActions[ctx.path]
+        if (auditAction) {
+          try {
+            const session = await getSessionFromCtx(ctx)
+            const result = ctx.context.returned
+            const failed = result instanceof APIError
+            const record = !failed && result && typeof result === "object" ? result as Record<string, unknown> : {}
+            const member = record.member && typeof record.member === "object" ? record.member as Record<string, unknown> : record
+            // IDs come from successful adapter results. A failed request's
+            // claimed organization/member is not an authenticated identity.
+            const organizationId = member.organizationId ?? record.referenceId
+            const targetId = member.id ?? (record.success === true ? ctx.body?.keyId : undefined)
+            securityAudit({
+              action: auditAction,
+              identity: { actorType: session ? "session" : ctx.headers ? "unknown" : "system", actorId: session?.user.id, organizationId: typeof organizationId === "string" ? organizationId : undefined },
+              targetId: typeof targetId === "string" ? targetId : undefined,
+              role: typeof member.role === "string" ? member.role : undefined,
+            }, failed ? result.statusCode : 200)
+          } catch {
+            // Audit enrichment must never turn a completed auth change into a retry.
+            securityAudit({ action: "auth.audit_unavailable", identity: { actorType: "unknown" } }, 503)
+          }
+        }
         if (ctx.path !== "/organization/invite-member") return
         const result = ctx.context.returned
         if (

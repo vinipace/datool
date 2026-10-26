@@ -12,6 +12,7 @@ import {
 } from "./receipts"
 import { TracerError, validation } from "@/src/server/tracer/errors"
 import { scopedTracerTransaction } from "@/src/server/tracer/db"
+import { audited } from "@/src/server/security/audit"
 
 export { getBuildContext } from "./context"
 
@@ -316,6 +317,14 @@ async function executeAtomicBuildOperation(
 
 /** Execute the registered operation inside the caller's authorized workspace. */
 export async function executeBuildOperation(
+  name: string,
+  input: unknown,
+  options: BuildExecutionOptions = {}
+) {
+  return audited({ action: findBuildOperation(name)?.name ?? "build.unknown" }, () => executeAuthorizedBuildOperation(name, input, options))
+}
+
+async function executeAuthorizedBuildOperation(
   name: string,
   input: unknown,
   options: BuildExecutionOptions = {}
