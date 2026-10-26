@@ -12,9 +12,12 @@ source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ $(uname -m) == x86_64 ]] || { echo 'Expected the verified amd64 target.'; exit 1; }
 [[ $(awk '/MemAvailable:/ {print $2}' /proc/meminfo) -ge 3500000 ]] || { echo 'Insufficient available memory.'; exit 1; }
 [[ $(df -Pk /var/lib/docker | awk 'NR==2 {print $4}') -ge 12000000 ]] || { echo 'Insufficient Docker disk space.'; exit 1; }
+# Dokku 0.38 global help omits core subcommands; query each plugin directly.
 for command in apps:create postgres:create redis:create network:set checks:disable git:from-image resource:limit; do
-  dokku help | grep "$command" >/dev/null || { echo "Missing Dokku command: $command"; exit 1; }
+  dokku_commands=$(dokku "${command%%:*}:help") || { echo "Unable to read Dokku help for $command" >&2; exit 1; }
+  grep -E "^[[:space:]]*$command([[:space:],]|$)" <<< "$dokku_commands" >/dev/null || { echo "Missing Dokku command: $command"; exit 1; }
 done
+unset dokku_commands
 if dokku apps:exists "$app" >/dev/null 2>&1; then
   echo 'Evolution app already exists; inspect it and use the upgrade runbook. No changes made.'
   exit 1
