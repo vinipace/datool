@@ -7,8 +7,10 @@ import { cn } from "@/lib/utils"
 export function ChatTextTranscript({
   messages,
   pendingReply,
+  renderMessageFooter,
 }: {
   messages: Array<{ id: string; text: string; outgoing: boolean }>
+  renderMessageFooter?: (id: string) => ReactNode
   pendingReply?: ReactNode
 }) {
   return (
@@ -37,6 +39,7 @@ export function ChatTextTranscript({
             >
               {message.text}
             </div>
+            {renderMessageFooter?.(message.id)}
           </article>
         ))}
       {pendingReply}

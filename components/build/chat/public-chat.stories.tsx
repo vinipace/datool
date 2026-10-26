@@ -35,10 +35,15 @@ let hostSession = session
 let hostGate = Promise.resolve()
 let releaseHost = () => {}
 let failHost = false
+let rejectSend = false
+let sendGate = Promise.resolve()
+let releaseSend = () => {}
 let conversationMessages: Array<{
   id: string
   direction: string
   text: string
+  pendingReply?: boolean
+  providerMessageId?: string
 }> = []
 
 const meta = {
@@ -98,11 +103,25 @@ const meta = {
           `/api/build-public/${channelId}/conversation/:id`,
           async ({ request }) => {
             submitted.push(await request.json())
+            await sendGate
+            if (rejectSend)
+              return HttpResponse.json(
+                { error: { message: "Temporarily unavailable" } },
+                { status: 503 }
+              )
             return HttpResponse.json({ data: {} })
           }
         ),
       ],
     },
+  },
+  afterEach: async ({ canvasElement }) => {
+    await waitFor(() => {
+      for (const message of canvasElement.querySelectorAll(
+        "[data-chat-message]"
+      ))
+        expect(getComputedStyle(message).opacity).toBe("1")
+    })
   },
   beforeEach: () => {
     for (const storage of [window.localStorage, window.sessionStorage]) {
@@ -147,6 +166,9 @@ const meta = {
     sessionAppearance = appearance
     failSession = false
     submitted = []
+    rejectSend = false
+    sendGate = Promise.resolve()
+    releaseSend = () => {}
     sessionRequests = 0
     messageRequests = 0
     hostRequests = 0
@@ -173,6 +195,7 @@ const meta = {
         `datool:public-chat:${channelId}:${window.location.origin}:session`
       )
       releaseHost()
+      releaseSend()
       releaseSession()
       releaseMessages()
       releaseHistory()
@@ -373,9 +396,22 @@ export const RestoringConversation: Story = {
     })
     await expect(input).toHaveValue("And the size?")
     // Restoring a pending agent reply must not enable a duplicate turn.
-    await expect(input).toHaveAttribute("readonly")
+    await userEvent.type(input, " In medium.")
+    await expect(input).toHaveValue("And the size? In medium.")
+    await userEvent.keyboard("{Enter}")
     await expect(send).toBeDisabled()
     await expect(submitted).toEqual([])
+    restored = false
+    conversationMessages = [
+      {
+        id: "previous-message",
+        direction: "inbound",
+        text: "Previous question",
+      },
+      { id: "reply", direction: "outbound", text: "Medium is available." },
+    ]
+    await waitFor(() => expect(send).toBeEnabled(), { timeout: 2500 })
+    await expect(input).toHaveValue("And the size? In medium.")
   },
 }
 
@@ -547,5 +583,183 @@ export const ShopifyVerificationFailure: Story = {
         "Keep this failed question"
       )
     )
+  },
+}
+
+// The browser boundary owns delivery recovery: preserve the bubble and the next
+// draft, retry the original text with the same server key, and lock double clicks.
+export const FailedMessageRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    releaseSession()
+    releaseMessages()
+    const input = canvas.getByRole("textbox", { name: "Message" })
+    const send = canvas.getByRole("button", { name: "Send message" })
+    await userEvent.type(input, "Please check medium")
+    await waitFor(() => expect(send).toBeEnabled())
+    sendGate = new Promise<void>((resolve) => {
+      releaseSend = resolve
+    })
+    rejectSend = true
+    await userEvent.click(send)
+    await waitFor(() => expect(submitted).toHaveLength(1))
+    await userEvent.type(input, "My next question")
+    releaseSend()
+    const retry = await canvas.findByRole("button", { name: "Retry sending" })
+    await expect(
+      within(canvas.getByRole("log")).getByText("Please check medium")
+    ).toBeVisible()
+    await expect(input).toHaveValue("My next question")
+    const readsBefore = messageRequests
+    await waitFor(() => expect(messageRequests).toBeGreaterThan(readsBefore), {
+      timeout: 2500,
+    })
+    await expect(retry).toBeVisible()
+    sendGate = new Promise<void>((resolve) => {
+      releaseSend = resolve
+    })
+    rejectSend = false
+    await userEvent.dblClick(retry)
+    await waitFor(() => expect(submitted).toHaveLength(2))
+    const first = submitted[0] as { text: string; idempotencyKey: string }
+    const second = submitted[1] as { text: string; idempotencyKey: string }
+    await expect(first.idempotencyKey).toEqual(expect.any(String))
+    await expect(first.idempotencyKey.length).toBeGreaterThan(0)
+    await expect(second).toMatchObject({
+      text: "Please check medium",
+      idempotencyKey: first.idempotencyKey,
+    })
+    await expect(send).toBeDisabled()
+    await userEvent.type(input, " with more detail")
+    conversationMessages = [
+      {
+        id: "accepted-message",
+        direction: "inbound",
+        text: first.text,
+        providerMessageId: `${session.visitorId}:${first.idempotencyKey}`,
+      },
+    ]
+    releaseSend()
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole("button", { name: "Retry sending" })
+      ).not.toBeInTheDocument()
+    )
+    await waitFor(() =>
+      expect(
+        within(canvas.getByRole("log")).getAllByText(first.text)
+      ).toHaveLength(1)
+    )
+    await expect(input).toHaveValue("My next question with more detail")
+    await expect(submitted).toHaveLength(2)
+  },
+}
+
+export const LostAcknowledgement: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    releaseSession()
+    releaseMessages()
+    rejectSend = true
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "Message" }),
+      "Did this arrive?"
+    )
+    const send = canvas.getByRole("button", { name: "Send message" })
+    await waitFor(() => expect(send).toBeEnabled())
+    await userEvent.click(send)
+    await canvas.findByRole("button", { name: "Retry sending" })
+    const request = submitted[0] as { idempotencyKey: string }
+    // The next real history response proves the original request was accepted.
+    conversationMessages = [
+      {
+        id: "durable-message",
+        direction: "inbound",
+        text: "Did this arrive?",
+        providerMessageId: `${session.visitorId}:${request.idempotencyKey}`,
+      },
+    ]
+    await waitFor(
+      () =>
+        expect(
+          canvas.queryByRole("button", { name: "Retry sending" })
+        ).not.toBeInTheDocument(),
+      { timeout: 2500 }
+    )
+    await waitFor(() =>
+      expect(
+        within(canvas.getByRole("log")).getAllByText("Did this arrive?")
+      ).toHaveLength(1)
+    )
+    await expect(submitted).toHaveLength(1)
+  },
+}
+
+export const ReadingEarlierMessages: Story = {
+  beforeEach: () => {
+    window.sessionStorage.setItem(key, JSON.stringify(session))
+    conversationMessages = Array.from({ length: 30 }, (_, index) => ({
+      id: `answer-${index}`,
+      direction: "outbound",
+      text: `Earlier answer ${index + 1}: Here are the available sizes and colors.`,
+    }))
+    releaseSession()
+    releaseMessages()
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const log = canvas.getByRole("log")
+    await within(log).findByText(/Earlier answer 30:/)
+    await waitFor(() => expect(log.scrollTop).toBeGreaterThan(0))
+    log.scrollTo({ top: 0, behavior: "instant" })
+    await waitFor(() => expect(log.scrollTop).toBe(0))
+    // Let the browser dispatch the user's scroll before the next server response.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+    conversationMessages.push({
+      id: "new-answer",
+      direction: "outbound",
+      text: "Your size is now in stock.",
+    })
+    await within(log).findByText(
+      "Your size is now in stock.",
+      {},
+      { timeout: 2500 }
+    )
+    await expect(log.scrollTop).toBe(0)
+    const jump = await canvas.findByRole(
+      "button",
+      { name: "New message" },
+      { timeout: 2500 }
+    )
+    await expect(log.scrollTop).toBe(0)
+    await userEvent.click(jump)
+    await waitFor(() =>
+      expect(log.scrollHeight - log.scrollTop - log.clientHeight).toBeLessThan(
+        64
+      )
+    )
+    await expect(
+      canvas.queryByRole("button", { name: "New message" })
+    ).not.toBeInTheDocument()
+    conversationMessages.push({
+      id: "another-answer",
+      direction: "outbound",
+      text: "Shipping is available too.",
+    })
+    await within(log).findByText(
+      "Shipping is available too.",
+      {},
+      { timeout: 2500 }
+    )
+    await waitFor(() =>
+      expect(log.scrollHeight - log.scrollTop - log.clientHeight).toBeLessThan(
+        64
+      )
+    )
+    await expect(
+      canvas.queryByRole("button", { name: "New message" })
+    ).not.toBeInTheDocument()
   },
 }
