@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm"
+import { reconcileEvolutionConnection } from "../src/server/build/channels/evolution"
 import { drainInboxPush } from "../src/server/build/mobile/push"
 import { enqueueShopifyReconciliationJobs } from "../src/server/build/integrations/shopify-reconciliation"
 import { createTracerDatabase } from "../src/server/tracer/db"
@@ -327,6 +329,15 @@ await Promise.all([
   ...Array.from({ length: 4 }, (_, index) =>
     loop("channel consumer " + (index + 1), channelTask)
   ),
+  loop("Evolution reconciliation failed", async () => {
+    const sessions = await workerDatabase.execute<{ connection_id: string; project_id: string }>(sql`SELECT connection_id,project_id FROM build_evolution_instance ORDER BY checked_at NULLS FIRST LIMIT 100`)
+    for (const session of sessions.rows) {
+      if (stopped) break
+      try { await reconcileEvolutionConnection(projectContext(session.project_id), session.connection_id) }
+      catch (error) { reportWorkerError("Evolution session reconciliation failed", error) }
+    }
+    return false
+  }, 30_000),
   loop("knowledge queue failed", knowledgeTask, 2000),
   loop("simulation queue failed", simulationTask, 2000),
   loop("campaign queue failed", campaignTask, 2000),

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { EvolutionEditor } from "./evolution-editor"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -130,7 +131,7 @@ type Template = {
   category: string
 }
 
-export function WhatsAppEditor({
+function MetaWhatsAppEditor({
   connection,
   agent,
   fromAgent,
@@ -962,4 +963,16 @@ export function WhatsAppEditor({
       </Dialog>
     </div>
   )
+}
+
+export function WhatsAppEditor(props: { connection: ChannelConnection | null; agent: ManagedAgent; fromAgent: boolean }) {
+  const [provider, setProvider] = React.useState<string | null>(props.connection ? String(props.connection.config.provider ?? "meta") : null)
+  const setup = useRemote(signal => buildApi.call<{ enabled: boolean }>("build_get_evolution_setup", {}, signal), [])
+  if (provider === "evolution") return <EvolutionEditor {...props} />
+  if (provider === "meta") return <MetaWhatsAppEditor {...props} />
+  return <Card><CardHeader><CardTitle>Connect WhatsApp</CardTitle><CardDescription>Choose how to connect your business number.</CardDescription></CardHeader><CardContent className="space-y-4">
+    <div className="space-y-2"><Button onClick={() => setProvider("meta")}>Official Meta API</Button><p className="text-sm text-foreground-muted">Connect through Meta's official business platform.</p></div>
+    {setup.data?.enabled && <div className="space-y-2"><Button variant="outline" onClick={() => setProvider("evolution")}>Evolution · Unofficial connection</Button><p className="text-sm text-foreground-muted">Scan a QR code. This connection carries a risk of account restrictions or bans.</p></div>}
+    {setup.error && <Notice variant="error">Could not check connection options. <Button variant="outline" size="sm" onClick={setup.refresh}>Retry</Button></Notice>}
+  </CardContent></Card>
 }

@@ -1,3 +1,6 @@
+import { beginEvolutionConnection, getEvolutionConnection, getEvolutionPairing, refreshEvolutionConnection, disconnectEvolution } from "../channels/evolution"
+import { evolutionEnabled } from "../channels/evolution-api"
+import { EVOLUTION_ACCEPTANCE_VERSION } from "@/src/lib/build/evolution"
 import { getWhatsAppDelivery, getWhatsAppMedia } from "../channels/whatsapp"
 import { z } from "zod"
 import { metaIdSchema, whatsappModeSchema, whatsappRecipientSchema, whatsappTemplateSchema } from "@/src/lib/build/whatsapp"
@@ -487,7 +490,7 @@ register(
   ["build:write"],
   z.object({ connectionId: id, status: z.enum(["draft", "connected", "paused", "error", "disconnected"]), error: z.string().max(2_000).optional() }),
   (context, input) => updateChannelStatus(context, input.connectionId as string, input.status as never, input.error as string | undefined),
-  { idempotency: "required" }
+  { idempotency: "required", openWorld: true }
 )
 register(
   "build_register_telegram",
@@ -927,3 +930,10 @@ register("build_sync_whatsapp_app", "Request a one-time, consented Business App 
 
 register("build_get_whatsapp_delivery", "Read provider delivery/read receipts and queue state for a project-owned outbound WhatsApp message.", ["build:read"], z.object({ connectionId: z.string().uuid(), messageId: id }), (context, input) => getWhatsAppDelivery(context, input as never))
 register("build_get_whatsapp_media", "Download an attachment received on this channel as base64, up to 5 MiB. Never returns a Meta access token or media URL.", ["build:read"], z.object({ connectionId: z.string().uuid(), mediaId: metaIdSchema }), (context, input) => getWhatsAppMedia(context, input as never), { openWorld: true })
+
+register("build_get_evolution_setup", "Read whether the managed Evolution pilot is enabled for this project.", ["build:read"], z.object({}), context => ({ enabled: evolutionEnabled(context.projectId), acceptanceVersion: EVOLUTION_ACCEPTANCE_VERSION }))
+register("build_get_evolution_connection", "Read the project's Evolution session status without credentials or QR.", ["build:read"], z.object({ connectionId:z.string().uuid() }), (context,input) => getEvolutionConnection(context,String(input.connectionId)))
+register("build_begin_evolution_connection", "Accept the unofficial connection notice and pair a managed WhatsApp session. QR is sensitive and short lived.", ["build:write"], z.object({ connectionId:z.string().uuid(), acceptanceVersion:z.literal(EVOLUTION_ACCEPTANCE_VERSION) }), (context,input) => beginEvolutionConnection(context,input as never), { openWorld:true, idempotency:"required" })
+register("build_get_evolution_pairing", "Obtain a fresh short-lived QR for this project's accepted session. Never persist or share the QR.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => getEvolutionPairing(context,String(input.connectionId)), { openWorld:true })
+register("build_refresh_evolution_connection", "Reconcile the authenticated Evolution session with its provider.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => refreshEvolutionConnection(context,String(input.connectionId)), { openWorld:true })
+register("build_disconnect_evolution", "Revoke this session locally, cancel queued sends, and delete its remote instance. Retry completes pending cleanup.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => disconnectEvolution(context,String(input.connectionId)), { openWorld:true, idempotency:"required", destructive:true })

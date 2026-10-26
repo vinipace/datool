@@ -36,6 +36,7 @@
     "worker:build": "bun run scripts/build-worker.ts",
     "worker:alerts": "bun run scripts/alerts-worker.ts",
     "test:build:access": "bun --no-env-file scripts/test-build-organization-access.ts",
+    "test:evolution:e2e": "bun --no-env-file scripts/test-evolution-e2e.ts",
     "test:whatsapp:e2e": "bun --no-env-file scripts/test-whatsapp-e2e.ts",
     "test:alerts:e2e": "bun run build:monaco && bun run scripts/test-alerts-e2e.ts",
     "import:langfuse": "bun run scripts/langfuse-import.ts",
