@@ -264,6 +264,10 @@ export async function getEvolutionPairing(
       result.base64.length < 250_000
         ? result.base64
         : null
+    if (qr)
+      await ctx.database.execute(
+        sql`UPDATE build_evolution_instance SET state='connecting',checked_at=now() WHERE project_id=${ctx.projectId} AND connection_id=${id}::uuid`
+      )
     return qr
   })
   return {
@@ -499,7 +503,7 @@ export async function ingestEvolutionWebhook(
   payload: unknown
 ) {
   return locked(context, id, async (ctx) => {
-    const c = await channel(ctx, id),
+    let c = await channel(ctx, id),
       b = await binding(ctx, id)
     if (!b || b.desired_state === "disconnected" || !c.encrypted_credentials)
       throw new TracerError("UNAUTHORIZED", "Webhook authentication failed.")
@@ -546,6 +550,13 @@ export async function ingestEvolutionWebhook(
       return { accepted: true }
     }
     if (kind !== "MESSAGES_UPSERT") return { ignored: true }
+    // A message can reach us before the provider's asynchronous connection event.
+    if (b.state !== "open") {
+      await refresh(ctx, id)
+      c = await channel(ctx, id)
+      b = await binding(ctx, id)
+      if (!b) return { ignored: true }
+    }
     if (
       b.state !== "open" ||
       !b.phone ||
@@ -556,7 +567,7 @@ export async function ingestEvolutionWebhook(
     if (
       !msg ||
       new Date(msg.receivedAt).getTime() <
-        new Date(String(b.started_at)).getTime()
+        Math.floor(new Date(String(b.started_at)).getTime() / 1000) * 1000
     )
       return { ignored: true }
     const identity = `${b.phone}:${msg.phone}`

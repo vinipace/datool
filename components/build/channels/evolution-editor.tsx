@@ -2,7 +2,6 @@
 import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Notice } from "@/components/ui/notice"
@@ -41,8 +40,7 @@ export function EvolutionEditor({
   agent: ManagedAgent
   fromAgent: boolean
 }) {
-  const router = useRouter(),
-    href = useWorkspaceHref()
+  const href = useWorkspaceHref()
   const [saved, setSaved] = React.useState(connection)
   const [accepted, setAccepted] = React.useState(false)
   const [pending, setPending] = React.useState(false)
@@ -63,6 +61,17 @@ export function EvolutionEditor({
   )
   const refreshInfo = info.refresh
   const state = info.data ?? pairing
+  const statusLabel = state?.cleanupPending
+    ? "Disconnecting"
+    : state?.state === "open"
+      ? state.status === "paused"
+        ? "Agent paused · WhatsApp connected"
+        : "Connected"
+      : state?.state === "connecting"
+        ? "Waiting for WhatsApp"
+        : state?.phone
+          ? "Connection lost · Scan a new QR code"
+          : "Not connected"
   const back = fromAgent
     ? href(`/build/agents/${agent.id}?section=channels`)
     : href(`/build/integrations?agentId=${agent.id}`)
@@ -74,7 +83,6 @@ export function EvolutionEditor({
     try {
       await action()
       info.refresh()
-      router.refresh()
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -114,13 +122,12 @@ export function EvolutionEditor({
           { idempotencyKey: createKey.current }
         ))
       setSaved(target)
-      window.history.replaceState(
-        null,
-        "",
-        href(
-          `/build/integrations/${target.id}?agentId=${agent.id}${fromAgent ? "&from=agent" : ""}`
-        )
-      )
+      if (!saved) {
+        // Keep query state unchanged so the parent editor does not remount the QR.
+        const url = new URL(window.location.href)
+        url.pathname = href(`/build/integrations/${target.id}`)
+        window.history.replaceState(null, "", url)
+      }
       const result = await buildApi.call<EvolutionPairing>(
         "build_begin_evolution_connection",
         {
@@ -161,10 +168,7 @@ export function EvolutionEditor({
           )}
           {state && (
             <div className="space-y-1" role="status">
-              <p className="text-sm">
-                Status: {state.status} · Session:{" "}
-                {state.state.replaceAll("_", " ")}
-              </p>
+              <p className="text-sm">{statusLabel}</p>
               {state.phone && (
                 <p className="text-sm text-foreground-muted">+{state.phone}</p>
               )}

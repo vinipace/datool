@@ -187,11 +187,7 @@ try {
   )
   const instance = [...instances.keys()][0]
   remoteOpen = true
-  await evo.refreshEvolutionConnection(ctx, c.id)
-  // Timestamps are seconds at the provider; place the onboarding boundary earlier.
-  await database.execute(
-    sql`UPDATE build_evolution_instance SET started_at=now()-interval '1 minute' WHERE connection_id=${c.id}::uuid`
-  )
+  // A first customer message can arrive before the connection-state webhook.
   const incoming = (id: string, fromMe = false, text = "Hello") => ({
     event: "messages.upsert",
     instance,
