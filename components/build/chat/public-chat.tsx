@@ -264,6 +264,7 @@ export function PublicChat({
   // Delivery receipts change storage IDs, not the identity of a visible bubble.
   const messageKeys = new Map(
     messages.map((message) => {
+      if (message.direction !== "inbound") return [message.id, message.id]
       const clientKey =
         message.localSend?.key ?? message.metadata?.clientMessageId
       const receipt =
