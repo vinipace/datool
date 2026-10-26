@@ -35,6 +35,7 @@ const tickets = [
   },
   {
     id: "ticket-3",
+    needsTakeover: true,
     contactName: null,
     subject:
       "Quero falar com um atendente humano. Tem alguém disponível agora?",
@@ -221,6 +222,14 @@ export const Desktop: Story = {
     await expect(
       canvas.getAllByRole("textbox", { name: "Search conversations" })
     ).toHaveLength(1)
+    const waiting = await canvas.findByRole("button", {
+      name: /Open Quero falar.*needs takeover/,
+    })
+    await expect(within(waiting).getByText("Needs takeover")).toBeVisible()
+    const handled = await canvas.findByRole("button", {
+      name: "Open Marina Costa",
+    })
+    await expect(within(handled).queryByText("Needs takeover")).toBeNull()
     const queues = within(
       await canvas.findByRole("group", { name: "Inbox queues" })
     )
@@ -243,6 +252,13 @@ export const Desktop: Story = {
       name: "Message",
     })
     await waitFor(() => expect(composer).toBeEnabled())
+    const humanReply = page.getByRole("article", {
+      name: "Ana Martins message",
+    })
+    await expect(within(humanReply).getByText("Ana Martins")).toBeVisible()
+    await expect(
+      humanReply.querySelector('[data-slot="user-avatar"]')
+    ).toBeVisible()
     await userEvent.type(composer, "Let me check that for you.")
     await userEvent.click(
       page.getByRole("button", { name: "Conversation actions" })

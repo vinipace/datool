@@ -17,6 +17,7 @@ import {
 import { SyntaxCode } from "./syntax-code"
 import { CodeEditor } from "./code-editor"
 import { UserAvatarImage } from "./user-avatar"
+import { ChatMessageAuthor } from "./chat-message-author"
 import { AgentAvatar } from "./agent-avatar"
 import { SpanKindIcon } from "@/components/tracer/span-kind-icon"
 import { cn } from "@/lib/utils"
@@ -287,7 +288,9 @@ export function MessageTranscript({
                   : customer
                     ? isUser
                       ? "Your message"
-                      : "Assistant message"
+                      : isHumanReply
+                        ? `${message.author?.name || "Support teammate"} message`
+                        : "Assistant message"
                     : undefined
               }
               className={cn(
@@ -311,6 +314,12 @@ export function MessageTranscript({
                     })}
                   </time>
                 </div>
+              )}
+              {(customer || inbox) && isHumanReply && (
+                <ChatMessageAuthor
+                  name={message.author?.name || "Support teammate"}
+                  image={message.author?.image ?? null}
+                />
               )}
               {!customer && !inbox && (
                 <span
@@ -375,7 +384,7 @@ export function MessageTranscript({
                         : "bg-muted text-foreground")
                   )}
                 >
-                  {inbox && isAssistant && (
+                  {inbox && isAssistant && !isHumanReply && (
                     <p className="mb-1 text-xs font-semibold text-inherit">
                       {label}
                       {!isHumanReply && " · AI"}

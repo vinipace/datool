@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { ChatMessageAuthor } from "./chat-message-author"
 import { cn } from "@/lib/utils"
 
 /** Real message text stays visible while the rich transcript bundle loads. */
@@ -9,7 +10,12 @@ export function ChatTextTranscript({
   pendingReply,
   renderMessageFooter,
 }: {
-  messages: Array<{ id: string; text: string; outgoing: boolean }>
+  messages: Array<{
+    id: string
+    text: string
+    outgoing: boolean
+    author?: { name: string; image: string | null } | null
+  }>
   renderMessageFooter?: (id: string) => ReactNode
   pendingReply?: ReactNode
 }) {
@@ -21,12 +27,21 @@ export function ChatTextTranscript({
           <article
             key={message.id}
             data-chat-message=""
-            aria-label={message.outgoing ? "Your message" : "Assistant message"}
+            aria-label={
+              message.outgoing
+                ? "Your message"
+                : message.author
+                  ? `${message.author.name} message`
+                  : "Assistant message"
+            }
             className={cn(
               "flex min-w-0 flex-col py-1",
               message.outgoing ? "items-end" : "items-start"
             )}
           >
+            {!message.outgoing && message.author && (
+              <ChatMessageAuthor {...message.author} />
+            )}
             <div
               data-bubble-message=""
               data-bubble-user={message.outgoing ? "" : undefined}

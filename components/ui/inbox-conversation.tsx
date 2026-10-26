@@ -1,6 +1,7 @@
 "use client"
 
 import type * as React from "react"
+import { UserRoundPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
 
@@ -152,5 +153,21 @@ export function ConversationListSkeleton() {
         </div>
       ))}
     </div>
+  )
+}
+
+/** A text label as well as color makes waiting handoffs easy to identify. */
+export function TakeoverIndicator({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      title="Needs takeover"
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-md text-xs font-medium text-warning",
+        !compact && "bg-warning-background px-2 py-1"
+      )}
+    >
+      <UserRoundPlus className="size-3.5" aria-hidden />
+      <span className={compact ? "sr-only" : undefined}>Needs takeover</span>
+    </span>
   )
 }

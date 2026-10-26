@@ -32,6 +32,9 @@ import { ConversationService } from "@/src/server/build/conversations"
 import {
   sendHumanReply,
   takeoverConversation,
+  listTickets,
+  getTicket,
+  updateTicket,
 } from "@/src/server/build/operations/inbox"
 import { shopifyShopper } from "@/src/server/build/integrations/shopify-identity"
 import { claimShopifyInvitation } from "@/src/server/build/integrations/shopify-invitations"
@@ -931,6 +934,10 @@ test("Shopify identity shares a customer's threads across devices and revokes a 
 for (const customer of ["", "123"]) {
   test(`Shopify ${customer ? "customer" : "guest"} session preserves the conversation through handoff and takeover`, async () => {
     const f = await fixture({})
+    await f.database.execute(sql`
+      UPDATE "user" SET name='Marina', image='https://example.test/marina.png'
+      WHERE id=${f.context.actorId}
+    `)
     const original = await f.session(customer)
     await enqueuePublicMessage(
       f.context,
@@ -941,6 +948,7 @@ for (const customer of ["", "123"]) {
         text: "Talk to a human",
         origin: "https://chat.example.test",
         idempotencyKey: "handoff-request",
+        metadata: { source: "human", actorId: f.context.actorId },
       }
     )
     const conversations = new ConversationService(f.context)
@@ -949,6 +957,11 @@ for (const customer of ["", "123"]) {
       id: "support-team",
       reason: "Visitor requested a human",
     })
+    const pendingTicket = (await listTickets(f.context)).items[0]!
+    expect(pendingTicket.needsTakeover).toBe(true)
+    expect((await getTicket(f.context, pendingTicket.id)).needsTakeover).toBe(
+      true
+    )
     // Reopening the launcher or returning from the inbox re-verifies identity.
     const waiting = await f.session(customer, {
       browserToken: original.browserToken,
@@ -958,6 +971,7 @@ for (const customer of ["", "123"]) {
     await takeoverConversation(f.context, {
       conversationId: original.conversationId,
     })
+    expect((await listTickets(f.context)).items[0].needsTakeover).toBe(false)
     await sendHumanReply(f.context, {
       conversationId: original.conversationId,
       text: "A teammate is here to help.",
@@ -993,6 +1007,14 @@ for (const customer of ["", "123"]) {
       "Thank you, I still need help.",
     ])
     expect(transcript.every((message) => !message.pendingReply)).toBe(true)
+    expect(transcript[0].author).toBeNull()
+    expect(transcript[0].metadata.source).toBeUndefined()
+    expect(transcript[1].author).toEqual({
+      name: "Marina",
+      image: "https://example.test/marina.png",
+    })
+    expect(transcript[1].metadata).toEqual({ source: "human" })
+    expect(transcript[2].author).toBeNull()
     expect(await conversations.get(original.conversationId)).toMatchObject({
       status: "handed_off",
       ownerType: "human",
@@ -1013,6 +1035,32 @@ for (const customer of ["", "123"]) {
       conversationId: original.conversationId,
     })
     expect(selected.conversationId).toBe(original.conversationId)
+    await f.database.execute(sql`
+      UPDATE build_conversation_ownership SET lease_expires_at=now()-interval '1 second'
+      WHERE project_id=${f.context.projectId} AND conversation_id=${original.conversationId}
+    `)
+    expect((await getTicket(f.context, pendingTicket.id)).needsTakeover).toBe(
+      true
+    )
+    await updateTicket(f.context, pendingTicket.id, { status: "solved" })
+    expect((await getTicket(f.context, pendingTicket.id)).needsTakeover).toBe(
+      false
+    )
+    // Public attribution never exposes a profile outside the workspace.
+    await f.database.execute(
+      sql`DELETE FROM member WHERE "userId"=${f.context.actorId} AND "organizationId"=${f.context.organizationId}`
+    )
+    const withoutMember = await readPublicConversation(
+      f.context,
+      f.channel.id,
+      original.conversationId,
+      selected.visitorToken,
+      "https://chat.example.test"
+    )
+    expect(withoutMember[1].author).toEqual({
+      name: "Support teammate",
+      image: null,
+    })
   }, 30_000)
 }
 

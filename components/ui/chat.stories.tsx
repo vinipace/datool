@@ -383,6 +383,7 @@ const typographyMessages = [
   {
     id: "answer",
     outgoing: false,
+    author: { name: "Marina", image: null },
     text: "Medium is available in blue and black. Would you like to see both?",
   },
 ]
@@ -407,6 +408,8 @@ export const CustomerTextStability: Story = {
                 messages={typographyMessages.map((message) => ({
                   id: message.id,
                   role: message.outgoing ? "user" : "assistant",
+                  author: message.author,
+                  metadata: message.author ? { source: "human" } : {},
                   content: message.text,
                   toolCalls: [],
                 }))}
