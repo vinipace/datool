@@ -336,18 +336,69 @@ export const PreloadedIframe: Story = {
         "visibilityState"
       )
       try {
-        Object.defineProperty(document, "visibilityState", {
-          configurable: true,
-          value: "hidden",
+        const transcript = canvas.getByRole("log")
+        const bubble = within(transcript)
+          .getByText("Your conversation is ready")
+          .closest("article")!
+        const setVisibility = (value: "hidden" | "visible") => {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            value,
+          })
+          document.dispatchEvent(new Event("visibilitychange"))
+        }
+        hostGate = new Promise<void>((resolve) => {
+          releaseHost = resolve
         })
-        document.dispatchEvent(new Event("visibilitychange"))
+        messagesGate = new Promise<void>((resolve) => {
+          releaseMessages = resolve
+        })
+        const previousHostRequests = hostRequests
+        const previousMessageRequests = messageRequests
+        setVisibility("hidden")
+        await nextFrame()
+        setVisibility("visible")
+        window.dispatchEvent(new Event("focus"))
         await waitFor(() =>
-          expect(
-            within(canvas.getByRole("log")).queryByText(
-              "Your conversation is ready"
-            )
-          ).not.toBeInTheDocument()
+          expect(hostRequests).toBeGreaterThan(previousHostRequests)
         )
+        // Returning to a tab preserves the existing bubbles while both signed
+        // identity verification and the subsequent history refresh are pending.
+        await expect(bubble).toBeInTheDocument()
+        await expect(bubble).toBeVisible()
+        await expect(
+          canvas.getByRole("textbox", { name: "Message" })
+        ).toHaveValue("Keep this draft")
+        releaseHost()
+        await waitFor(() =>
+          expect(messageRequests).toBeGreaterThan(previousMessageRequests)
+        )
+        await expect(bubble).toBeInTheDocument()
+        releaseMessages()
+        await nextFrame()
+        await expect(bubble).toBeInTheDocument()
+        // If revalidation fails, the previously visible private transcript must
+        // disappear. A later successful check can recover the same conversation.
+        failHost = true
+        setVisibility("hidden")
+        await nextFrame()
+        setVisibility("visible")
+        await waitFor(() =>
+          expect(canvas.getByText("Couldn't load the chat")).toBeVisible()
+        )
+        await expect(
+          within(transcript).queryByText("Your conversation is ready")
+        ).not.toBeInTheDocument()
+        failHost = false
+        document.dispatchEvent(new Event("visibilitychange"))
+        await expect(
+          await within(transcript).findByText("Your conversation is ready")
+        ).toBeVisible()
+        setVisibility("hidden")
+        await nextFrame()
+        messagesGate = new Promise<void>((resolve) => {
+          releaseMessages = resolve
+        })
         hostSession = {
           ...session,
           visitorId: "changed-visitor",
@@ -370,6 +421,7 @@ export const PreloadedIframe: Story = {
             "Your conversation is ready"
           )
         ).not.toBeInTheDocument()
+        releaseMessages()
       } finally {
         if (descriptor)
           Object.defineProperty(document, "visibilityState", descriptor)
