@@ -3,7 +3,15 @@
 # No Datool restart and no customer number is paired by this script.
 set -euo pipefail
 umask 077
+resume=false
+case "${1:-}" in
+  "") ;;
+  --resume-after-redis-permissions) resume=true ;;
+  *) echo "Unknown bootstrap option" >&2; exit 1 ;;
+esac
 [[ $(id -u) == 0 ]] || { echo 'Run this script with sudo.' >&2; exit 1; }
+exec 9>/run/datool-evolution-bootstrap.lock
+flock -n 9 || { echo 'Another Evolution bootstrap is running.' >&2; exit 1; }
 app=datool-evolution
 network=datool-evolution-net
 image='evoapicloud/evolution-api@sha256:1bd8afc4a6cf48822e6cf02469aeae7bd35a12a6b616eacd1291926307f4d339'
@@ -18,16 +26,26 @@ for command in apps:create postgres:create redis:create network:set checks:disab
   grep -E "^[[:space:]]*$command([[:space:],]|$)" <<< "$dokku_commands" >/dev/null || { echo "Missing Dokku command: $command"; exit 1; }
 done
 unset dokku_commands
-if dokku apps:exists "$app" >/dev/null 2>&1; then
-  echo 'Evolution app already exists; inspect it and use the upgrade runbook. No changes made.'
-  exit 1
-fi
-for service in evolution-db evolution-redis; do
-  if [[ -d /var/lib/dokku/services/postgres/$service || -d /var/lib/dokku/services/redis/$service ]]; then
-    echo "Service $service already exists; inspect partial provisioning before retrying."
+if "$resume"; then
+  # This recovery path only accepts the undeployed checkpoint before service links.
+  dokku apps:exists "$app" >/dev/null
+  [[ -z "$(dokku config:get "$app" AUTHENTICATION_API_KEY)" ]] || { echo 'Recovery refused: Evolution already has credentials.'; exit 1; }
+  [[ ! -e /var/lib/dokku/data/storage/datool-evolution ]] || { echo 'Recovery refused: Evolution storage already exists.'; exit 1; }
+  [[ "$(docker inspect -f '{{.Config.Image}}' dokku.redis.evolution-redis)" == redis:7-alpine ]] || { echo 'Recovery refused: unexpected Redis image.'; exit 1; }
+  [[ "$(docker inspect -f '{{.Config.Image}}' dokku.postgres.evolution-db)" == postgres:15-alpine ]] || { echo 'Recovery refused: unexpected PostgreSQL image.'; exit 1; }
+  [[ -z "$(docker ps -aq --filter "label=com.dokku.app-name=$app")" ]] || { echo 'Recovery refused: Evolution already has an application container.'; exit 1; }
+else
+  if dokku apps:exists "$app" >/dev/null 2>&1; then
+    echo 'Evolution app already exists; inspect it and use the upgrade runbook. No changes made.'
     exit 1
   fi
-done
+  for service in evolution-db evolution-redis; do
+    if [[ -d /var/lib/dokku/services/postgres/$service || -d /var/lib/dokku/services/redis/$service ]]; then
+      echo "Service $service already exists; inspect partial provisioning before retrying."
+      exit 1
+    fi
+  done
+fi
 record="/root/evolution-bootstrap-$(date -u +%Y%m%dT%H%M%SZ).log"
 exec 3>&1
 exec >"$record" 2>&1
@@ -46,9 +64,34 @@ backup="/var/backups/datool-evolution/datool-before-evolution-$(date -u +%Y%m%dT
 dokku postgres:export datool-db > "$backup"
 test -s "$backup"
 docker pull "$image"
-dokku apps:create "$app"
-dokku postgres:create evolution-db --image-version 15-alpine --memory 512 --config-options '-c max_connections=60'
-dokku redis:create evolution-redis --image-version 7-alpine --memory 128 --config-options '--appendonly yes --maxmemory 96mb --maxmemory-policy noeviction'
+if "$resume"; then
+  # Preserve the protected service parent and config owner. Only the Redis
+  # container's group gains read/traverse access to its mounted configuration.
+  redis_config=/var/lib/dokku/services/redis/evolution-redis/config
+  [[ -d "$redis_config" && ! -L "$redis_config" && -f "$redis_config/redis.conf" && ! -L "$redis_config/redis.conf" ]]
+  redis_gid=$(docker run --rm --network none --entrypoint id redis:7-alpine -g redis)
+  [[ "$redis_gid" =~ ^[0-9]+$ ]]
+  chgrp "$redis_gid" "$redis_config" "$redis_config/redis.conf"
+  chmod 2750 "$redis_config"
+  chmod 0640 "$redis_config/redis.conf"
+  dokku redis:restart evolution-redis
+else
+  dokku apps:create "$app"
+  dokku postgres:create evolution-db --image-version 15-alpine --memory 512 --config-options '-c max_connections=60'
+  # Dokku creates a mounted config before Redis drops privileges. Do not pass
+  # the private backup/log umask into the service's configuration creation.
+  (umask 022; dokku redis:create evolution-redis --image-version 7-alpine --memory 128 --config-options '--appendonly yes --maxmemory 96mb --maxmemory-policy noeviction')
+fi
+redis_ready=false
+for attempt in $(seq 1 15); do
+  if [[ "$(REDISCLI_AUTH=$(cat /var/lib/dokku/services/redis/evolution-redis/PASSWORD) docker exec -e REDISCLI_AUTH dokku.redis.evolution-redis redis-cli ping 2>/dev/null)" == PONG ]]; then
+    redis_ready=true
+    break
+  fi
+  sleep 2
+done
+"$redis_ready"
+printf 'Redis authentication and readiness verified. Continuing Evolution setup.\n' >&3
 dokku postgres:link evolution-db "$app"
 dokku redis:link evolution-redis "$app"
 database_url=$(dokku config:get "$app" DATABASE_URL)

@@ -33,6 +33,21 @@ Evolution process, and imports the pinned upstream image. It refuses existing
 app/service names; inspect partial failures before retrying. It never restarts
 Datool. Its private root-only log may contain service credentials; never upload it.
 
+If first provisioning stops at Redis creation with `redis.conf: Permission denied`,
+inspect the private diagnostics. The dedicated recovery mode accepts only the
+undeployed checkpoint with both expected service images, no Evolution credentials,
+no application container and no session storage:
+
+```sh
+bash /path/to/reviewed/bootstrap.sh --resume-after-redis-permissions
+```
+
+It retains the services, grants only Redis's container group read/traverse access
+to its mounted configuration, restarts that Redis service and verifies an
+authenticated `PONG` before continuing. The protected service parent and file owner
+are preserved. New service creation uses Dokku's normal config umask; private logs
+and backups retain their restricted permissions. Bootstrap executions are serialized.
+
 The API has no public proxy or published database/cache ports. The Datool backend
 uses `http://datool-evolution.web.internal:8080` over an attached private network.
 Network/config changes take effect on Datool's next deployment. The installation
