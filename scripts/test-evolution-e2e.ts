@@ -17,6 +17,8 @@ let sends = 0,
   failDelete = false,
   remoteOpen = false
 const sentNumbers: string[] = []
+const storedMessages = new Map<string, Record<string, unknown>>()
+let lookupFailure = ""
 const instances = new Map<
   string,
   { token: string; webhook?: Record<string, unknown> }
@@ -68,6 +70,21 @@ const server = createServer(async (req, res) => {
     if (failDelete) return out(500, {})
     instances.delete(name)
     return out(200, {})
+  }
+  if (url.pathname.startsWith("/chat/findMessages/")) {
+    if (lookupFailure === "unavailable") return out(503, {})
+    const stored = structuredClone(storedMessages.get(body.where?.key?.id))
+    if (!stored || lookupFailure === "missing")
+      return out(200, { messages: { total: 0, records: [] } })
+    const key = stored.key as Record<string, unknown>
+    if (lookupFailure === "wrong-id") key.id = "another-message"
+    if (lookupFailure === "wrong-phone")
+      key.remoteJidAlt = "5511999990009@s.whatsapp.net"
+    if (lookupFailure === "from-me") key.fromMe = true
+    if (lookupFailure === "no-lid") key.remoteJid = key.remoteJidAlt
+    if (lookupFailure === "wrong-time") stored.messageTimestamp = 1
+    const records = lookupFailure === "duplicates" ? [stored, stored] : [stored]
+    return out(200, { messages: { total: records.length, records } })
   }
   if (url.pathname.startsWith("/message/sendText/")) {
     sends++
@@ -231,11 +248,25 @@ try {
         ...lidIncoming.data.key,
         remoteJid: "123456789012345@lid",
         remoteJidAlt: lidIncoming.data.key.remoteJid,
+        addressingMode: "lid",
       },
     },
   }
-  assert.equal((await webhook(lidPayload)).status, 200)
-  assert.equal((await webhook(lidPayload)).status, 200)
+  storedMessages.set("in-1", lidPayload.data)
+  // Evolution 2.3.7 persists the original key, then replaces remoteJid with
+  // remoteJidAlt before MESSAGES_UPSERT. Exercise that actual wire contract.
+  const normalizedPayload = {
+    ...lidPayload,
+    data: {
+      ...lidPayload.data,
+      key: {
+        ...lidPayload.data.key,
+        remoteJid: lidIncoming.data.key.remoteJid,
+      },
+    },
+  }
+  assert.equal((await webhook(normalizedPayload)).status, 200)
+  assert.equal((await webhook(normalizedPayload)).status, 200)
   const messages = await database.execute<Record<string, unknown>>(
     sql`SELECT * FROM build_channel_message WHERE connection_id=${c.id}::uuid`
   )
@@ -264,6 +295,32 @@ try {
       sql`SELECT * FROM build_channel_message WHERE connection_id=${c.id}::uuid AND direction='outbound'`
     )
   ).rows[0]
+  for (const failure of [
+    "missing",
+    "wrong-id",
+    "wrong-phone",
+    "from-me",
+    "no-lid",
+    "wrong-time",
+    "duplicates",
+    "unavailable",
+  ]) {
+    lookupFailure = failure
+    await assert.rejects(
+      evo.sendEvolutionEnvelope(ctx, envelope, external, String(message.id)),
+      (error: unknown) =>
+        error instanceof Error &&
+        "uncertain" in error &&
+        error.uncertain === false,
+      `Address lookup ${failure} must fail before attempting a send`
+    )
+    assert.equal(
+      sends,
+      0,
+      "Never fall back to a phone when a LID address cannot be verified"
+    )
+  }
+  lookupFailure = ""
   const ids = await evo.sendEvolutionEnvelope(
     ctx,
     envelope,
