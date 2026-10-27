@@ -43,7 +43,7 @@ export function initializeAnalytics(id: string) {
   const target = window as AnalyticsWindow
   target.dataLayer ??= []
   target.gtag ??= function () {
-    // Google's command queue requires Arguments objects, not arrays.
+    // eslint-disable-next-line prefer-rest-params -- Google's queue requires Arguments objects, not arrays.
     target.dataLayer!.push(arguments)
   }
   target.gtag("js", new Date())
