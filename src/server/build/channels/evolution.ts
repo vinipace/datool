@@ -433,6 +433,11 @@ export async function sendEvolutionEnvelope(
       ["sent", "delivered"].includes(String(row.status))
     )
       return [String(row.provider_message_id)]
+    if (row.provider_message_id && row.status === "failed")
+      throw new WhatsAppApiError(
+        "WHATSAPP_REJECTED",
+        "WhatsApp rejected this reply. Resolve the delivery error before sending a new message."
+      )
     if (
       content.expectedOwnerFence !== undefined &&
       (Number(content.expectedOwnerFence) !== Number(row.owner_fence) ||
@@ -452,13 +457,29 @@ export async function sendEvolutionEnvelope(
         false,
         2
       )
+    // Only a received message on this conversation and provider instance may
+    // supply an alternate address. Outbound caller metadata is not routing authority.
+    const address = await ctx.database.execute<Row>(sql`
+      SELECT content_json->'metadata'->'evolution'->>'replyJid' AS reply_jid
+      FROM build_channel_message
+      WHERE project_id=${ctx.projectId} AND connection_id=${envelope.connectionId}::uuid
+        AND conversation_id=${envelope.conversationId} AND direction='inbound'
+        AND content_json->'metadata'->'evolution'->>'instance'=${b.instance_name}
+        AND content_json->'metadata'->'evolution'->>'replyJid' ~ '^[0-9]{5,20}@lid$'
+      ORDER BY content_json->'metadata'->'evolution'->>'observedAt' DESC NULLS LAST, created_at DESC
+      LIMIT 1
+    `)
     const result = await evolutionRequest(
       `/message/sendText/${b.instance_name}`,
       {
         token: credentials(c, ctx).token,
         method: "POST",
         sending: true,
-        body: { number: recipient, text: envelope.text, linkPreview: false },
+        body: {
+          number: address.rows[0]?.reply_jid ?? recipient,
+          text: envelope.text,
+          linkPreview: false,
+        },
       }
     )
     accepted = true
@@ -531,6 +552,7 @@ export async function ingestEvolutionWebhook(
         const update = evolutionObject(value)
         const status = (
           {
+            ERROR: "failed",
             SERVER_ACK: "sent",
             DELIVERY_ACK: "delivered",
             READ: "read",
@@ -544,7 +566,19 @@ export async function ingestEvolutionWebhook(
         )
           continue
         await ctx.database.execute(
-          sql`UPDATE build_channel_message SET status=CASE WHEN ${status} IN ('delivered','read') THEN 'delivered' ELSE status END,content_json=jsonb_set(content_json,'{whatsappDelivery}',${JSON.stringify({ status })}::jsonb) WHERE project_id=${ctx.projectId} AND connection_id=${id}::uuid AND direction='outbound' AND provider_message_id=${update.keyId} AND (CASE content_json->'whatsappDelivery'->>'status' WHEN 'read' THEN 3 WHEN 'delivered' THEN 2 WHEN 'sent' THEN 1 ELSE 0 END)<${status === "read" ? 3 : status === "delivered" ? 2 : 1}`
+          sql`UPDATE build_channel_message
+          SET status=CASE WHEN ${status}='failed' THEN 'failed' WHEN ${status} IN ('delivered','read') THEN 'delivered' ELSE status END,
+            error_code=CASE WHEN ${status}='failed' THEN 'WHATSAPP_DELIVERY_FAILED' ELSE NULL END,
+            error_message=CASE WHEN ${status}='failed' THEN 'WhatsApp rejected this reply.' ELSE NULL END,
+            content_json=jsonb_set(content_json,'{whatsappDelivery}',${JSON.stringify({ status })}::jsonb)
+          WHERE project_id=${ctx.projectId} AND connection_id=${id}::uuid
+            AND direction='outbound' AND provider_message_id=${update.keyId}
+            AND (
+              (${status}='failed' AND status<>'delivered') OR
+              (${status}<>'failed' AND NOT (${status}='sent' AND status='failed') AND
+                (CASE content_json->'whatsappDelivery'->>'status' WHEN 'read' THEN 3 WHEN 'delivered' THEN 2 WHEN 'sent' THEN 1 ELSE 0 END)
+                  <${status === "read" ? 3 : status === "delivered" ? 2 : 1})
+            )`
         )
       }
       return { accepted: true }
@@ -582,7 +616,14 @@ export async function ingestEvolutionWebhook(
       text: msg.text,
       attachments: [],
       contact: { externalId: identity, displayName: msg.name },
-      metadata: { provider: "evolution" },
+      metadata: {
+        provider: "evolution",
+        evolution: {
+          instance: b.instance_name,
+          replyJid: msg.replyJid,
+          observedAt: msg.receivedAt,
+        },
+      },
     }
     if (msg.fromMe) {
       const existing = await ctx.database.execute(
