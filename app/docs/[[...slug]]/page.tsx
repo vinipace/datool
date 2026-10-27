@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { docsMarkdownUrl, docsSource } from "@/lib/docs-source"
 import { socialPreviewImage } from "@/lib/page-metadata"
+import { publicOrigin } from "@/lib/public-origin"
 
 export const dynamic = "force-static"
 export const dynamicParams = false
@@ -28,14 +29,19 @@ export async function generateMetadata({
   const { slug } = await params
   const page = docsSource.getPage(slug)
   if (!page) notFound()
+  const url = new URL(page.url, publicOrigin()).href
   return {
     title: page.data.title,
     description: page.data.description,
-    alternates: { types: { "text/markdown": docsMarkdownUrl(page.slugs) } },
+    alternates: {
+      canonical: url,
+      types: { "text/markdown": docsMarkdownUrl(page.slugs) },
+    },
     openGraph: {
       title: `${page.data.title} · Datool`,
       description: page.data.description,
       type: "article",
+      url,
       images: [socialPreviewImage],
     },
   }

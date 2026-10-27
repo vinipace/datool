@@ -1,6 +1,11 @@
 import { docsSource } from "@/lib/docs-source"
 import { docsOrigin } from "@/lib/docs-origin"
-import { getPublishedPages } from "@/lib/cms/content"
+import {
+  getPublishedPages,
+  getPublishedFAQPage,
+  getPublishedFAQs,
+} from "@/lib/cms/content"
+import { getFAQPath } from "@/lib/cms/faq"
 import { getPagePath } from "@/lib/cms/page-path"
 import { cmsEnabled } from "@/lib/cms/config"
 
@@ -18,15 +23,26 @@ function escapeXml(value: string) {
 
 export async function GET(request: Request) {
   const origin = docsOrigin(request)
-  const pages = await getPublishedPages()
-  const urls = [
+  const [pages, faqPage, faqs] = await Promise.all([
+    getPublishedPages(),
+    getPublishedFAQPage(),
+    getPublishedFAQs(),
+  ])
+  const paths = [
     ...(cmsEnabled() ? ["/", "/pricing"] : []),
+    ...(faqPage && !faqPage.seo?.noIndex ? ["/faq"] : []),
+    ...faqs
+      .filter((faq) => !faq.seo?.noIndex)
+      .map((faq) => getFAQPath(faq.slug)),
     ...pages
       .filter((page) => !page.seo?.noIndex)
       .map((page) => getPagePath(page.slug))
       .filter((path) => !path.includes("#")),
     ...docsSource.getPages().map((page) => page.url),
-  ].map((path) => `<url><loc>${escapeXml(`${origin}${path}`)}</loc></url>`)
+  ]
+  const urls = [...new Set(paths)].map(
+    (path) => `<url><loc>${escapeXml(`${origin}${path}`)}</loc></url>`
+  )
   return new Response(
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`,
     {

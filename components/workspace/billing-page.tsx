@@ -1,6 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  trackCheckout,
+  trackPurchase,
+  type CheckoutReceipt,
+} from "@/lib/site-analytics"
 import { useRemote } from "@/components/tracer/hooks"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -19,6 +24,7 @@ import {
 } from "@/src/lib/billing"
 
 type Status = {
+  purchase?: CheckoutReceipt | null
   provider?: "stripe" | "shopify"
   shop?: string | null
   status: string
@@ -31,9 +37,6 @@ type Status = {
   nextPaymentAttempt: string | null
   usage: CloudUsage
 }
-
-const loadBilling = (signal: AbortSignal) =>
-  workspaceRequest<Status>("/api/billing/status", { signal })
 
 export function BillingPage({
   organizationName,
@@ -49,6 +52,17 @@ export function BillingPage({
   checkout?: string
 }) {
   const router = useRouter()
+  const completing = useRef(false)
+  const loadBilling = useCallback(
+    (signal: AbortSignal) =>
+      workspaceRequest<Status>(
+        checkout === "success"
+          ? "/api/billing/status?checkout=success"
+          : "/api/billing/status",
+        { signal }
+      ),
+    [checkout]
+  )
   const remote = useRemote(loadBilling, [], {
     intervalMs: checkout === "success" ? 5000 : undefined,
     shouldPoll: (data) => !data?.active,
@@ -62,8 +76,13 @@ export function BillingPage({
   const confirming = checkout === "success" && !status?.active
 
   useEffect(() => {
-    if (checkout === "success" && status?.active) router.replace("/projects")
-  }, [checkout, status?.active, router])
+    if (checkout === "success" && status?.active && !completing.current) {
+      completing.current = true
+      void trackPurchase(status.purchase).finally(() =>
+        router.replace("/projects")
+      )
+    }
+  }, [checkout, status?.active, status?.purchase, router])
 
   async function open(action: "checkout" | "portal") {
     setBusy(action)
@@ -76,6 +95,8 @@ export function BillingPage({
           body: JSON.stringify({ plan }),
         }
       )
+      if (action === "checkout")
+        await trackCheckout(plan, prices?.[plan].amount)
       window.location.assign(result.url)
     } catch (error) {
       setError(
