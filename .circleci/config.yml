@@ -228,13 +228,14 @@ jobs:
                 tests/build-inbox-mobile.test.ts tests/auth-magic-link.test.ts tests/profile.test.ts tests/launch-access.test.ts \
                 tests/ingestion-http.test.ts tests/ingestion-sequence.test.ts \
                 tests/execution-credits.test.ts tests/build-integrations.test.ts tests/build-shopify.test.ts \
-                tests/shopify-billing.test.ts tests/build-channel-presentation.test.ts \
+                tests/shopify-billing.test.ts tests/build-channel-presentation.test.ts tests/whatsapp-text.test.ts \
                 tests/build-feature-gate.test.ts tests/build-api.test.ts \
                 tests/build-mcp.test.ts tests/build-organization-worker.test.ts
               bun --no-env-file test tests/build-channel-durable.test.ts --test-name-pattern 'keeps visitor history' --timeout 30000
               bun --no-env-file test tests/shopify-chat-security.test.ts --test-name-pattern 'session preserves the conversation' --timeout 30000
               bun run test:build:access
               bun run test:evolution:e2e
+              bun --no-env-file scripts/test-channel-links-e2e.ts
             ) > "$logs/critical" 2>&1 &
             critical_pid=$!
             status=0

@@ -1,3 +1,4 @@
+import { listChannelLinks } from "../channels/links"
 import { beginEvolutionConnection, getEvolutionConnection, getEvolutionPairing, refreshEvolutionConnection, disconnectEvolution } from "../channels/evolution"
 import { evolutionEnabled } from "../channels/evolution-api"
 import { EVOLUTION_ACCEPTANCE_VERSION } from "@/src/lib/build/evolution"
@@ -937,3 +938,11 @@ register("build_begin_evolution_connection", "Accept the unofficial connection n
 register("build_get_evolution_pairing", "Obtain a fresh short-lived QR for this project's accepted session. Never persist or share the QR.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => getEvolutionPairing(context,String(input.connectionId)), { openWorld:true })
 register("build_refresh_evolution_connection", "Reconcile the authenticated Evolution session with its provider.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => refreshEvolutionConnection(context,String(input.connectionId)), { openWorld:true })
 register("build_disconnect_evolution", "Revoke this session locally, cancel queued sends, and delete its remote instance. Retry completes pending cleanup.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => disconnectEvolution(context,String(input.connectionId)), { openWorld:true, idempotency:"required", destructive:true })
+
+register(
+  "build_list_channel_links",
+  "Read the latest 20 sent links with estimated clicks and automated visits. Repeated visits count; this is not unique-person attribution.",
+  ["build:read"],
+  z.object({ connectionId: z.string().uuid() }),
+  (context, input) => listChannelLinks(context, String(input.connectionId))
+)

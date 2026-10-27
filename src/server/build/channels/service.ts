@@ -1,3 +1,4 @@
+import { prepareWhatsAppText } from "./links"
 import { evolutionEnabled } from "./evolution-api"
 import { assertEvolutionOutbound, sendEvolutionEnvelope, setEvolutionStatus } from "./evolution"
 import { verifyNewVisitorChallenge } from "./challenge"
@@ -1316,6 +1317,20 @@ export async function enqueueOutboundEnvelope(
     `)
     if (!inserted.rows.length)
       return { inserted: false, channelJobId: undefined as string | undefined }
+    const outboundText =
+      envelope.channel === "whatsapp"
+        ? await prepareWhatsAppText(
+            { ...context, database: scopedTracerTransaction(context.database, tx) },
+            messageId,
+            envelope.text
+          )
+        : envelope.text
+    if (outboundText !== envelope.text)
+      await tx.execute(sql`
+        UPDATE build_channel_message
+        SET content_json=jsonb_set(content_json,'{text}',${JSON.stringify(outboundText)}::jsonb)
+        WHERE project_id=${context.projectId} AND id=${messageId}
+      `)
     if (options.recordRuntimeMessage) {
       const conversations = new ConversationService({
         ...context,
@@ -1339,7 +1354,7 @@ export async function enqueueOutboundEnvelope(
         (id, project_id, connection_id, kind, message_id, payload_json, idempotency_key)
       VALUES (${randomUUID()}::uuid, ${context.projectId}, ${envelope.connectionId}::uuid,
         'deliver_outbound', ${messageId},
-        ${JSON.stringify({ ...envelope, externalConversationId })}::jsonb,
+        ${JSON.stringify({ ...envelope, text: outboundText, externalConversationId })}::jsonb,
         ${`outbound:${envelope.connectionId}:${envelope.idempotencyKey}`})
         ON CONFLICT (project_id, idempotency_key) DO NOTHING
         RETURNING id

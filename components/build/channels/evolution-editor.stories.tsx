@@ -73,6 +73,8 @@ function scenario(
       http.post("/api/build/:operation", async ({ params, request }) => {
         const input = (await request.json()) as Record<string, unknown>
         const op = params.operation
+        if (op === "build_list_channel_links")
+          return HttpResponse.json({ data: { items: [] } })
         if (op === "build_get_evolution_connection") {
           if (connectsAt && Date.now() >= connectsAt)
             state = {
