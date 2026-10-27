@@ -207,6 +207,9 @@ jobs:
           command: bun audit --audit-level high
       - start-services
       - run:
+          name: Restore encrypted backups with disposable databases
+          command: bash ops/dokku-backup/test.sh
+      - run:
           name: Verify source and release contracts in parallel
           command: |
             logs="$(mktemp -d)"
