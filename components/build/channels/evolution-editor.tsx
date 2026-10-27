@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { ChannelLinkActivity } from "./channel-link-activity"
 import Link from "next/link"
 import Image from "next/image"
 import {
@@ -549,6 +550,7 @@ export function EvolutionEditor({
           )}
         </div>
       )}
+      {saved && <ChannelLinkActivity connectionId={saved.id} agentId={agent.id} />}
       <footer className="border-t border-border pt-4 text-xs leading-5 text-foreground-muted">
         Powered by{" "}
         <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>

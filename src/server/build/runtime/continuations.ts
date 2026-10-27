@@ -49,7 +49,7 @@ export function runtimeChannelMessage(
     )
     .filter(Boolean)
   return {
-    text: [result.text, integrationReplyText(metadata), ...prompts]
+    text: [result.text, integrationReplyText(metadata, result.text), ...prompts]
       .filter(Boolean)
       .join("\n\n"),
     metadata,

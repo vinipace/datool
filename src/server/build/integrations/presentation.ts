@@ -3,11 +3,16 @@ import { shopifyProductsSchema } from "@/src/lib/build/shopify-products"
 import { shopifyCartSchema } from "@/src/lib/build/shopify-cart"
 
 /** Integrations own their result content; channels choose how to deliver it. */
-export function integrationReplyText(metadata: Record<string, unknown>) {
+export function integrationReplyText(
+  metadata: Record<string, unknown>,
+  replyText = ""
+) {
   const products = shopifyProductsSchema.safeParse(metadata.shopifyProducts)
   const cart = shopifyCartSchema.safeParse(metadata.shopifyCart)
   return [
-    products.success
+    // The agent selects and explains products for messaging. Appending the raw
+    // search page would duplicate that selection and add unrequested products.
+    products.success && !replyText.trim()
       ? products.data.products
           .map((product) =>
             [
@@ -17,7 +22,9 @@ export function integrationReplyText(metadata: Record<string, unknown>) {
           )
           .join("\n\n")
       : "",
-    cart.success
+    cart.success &&
+    (!replyText.trim() ||
+      (cart.data.itemCount > 0 && !replyText.includes(cart.data.checkoutUrl)))
       ? [
           ...cart.data.items.map((item) => `${item.quantity} × ${item.title}`),
           cart.data.itemCount

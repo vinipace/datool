@@ -3191,6 +3191,9 @@ export async function runAgentTurn(
     }
     const system = [
       configuration.instructions,
+      parsed.channel === "whatsapp"
+        ? "WhatsApp presentation: answer concisely in the shopper's language. Use short paragraphs, blank lines between products, and simple emphasis. Show only the requested number of products, with name and price together and each URL on its own line. Do not use Markdown links, headings or tables. Give one checkout link, not a repeated cart summary. Avoid filler promises such as 'I will check' as a final response; report the tool result or explain what is missing. Do not invent shortened URLs; the channel creates those after your reply."
+        : "",
       "A human handoff queues the conversation for support. Do not promise a response time, immediate availability, or say someone has replied unless the action result establishes it.",
       knowledge?.text ? `Knowledge context:\n${knowledge.text}` : "",
       procedures.some(
