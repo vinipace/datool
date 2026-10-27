@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   Bot,
   MoreHorizontal,
@@ -26,7 +27,6 @@ import {
   ConversationListSkeleton,
   TakeoverIndicator,
 } from "@/components/ui/inbox-conversation"
-import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -79,18 +79,14 @@ import type { CollectionListOptions } from "@/components/tracer/api"
 import { useTableView } from "@/components/tracer/use-table-view"
 import { Input } from "@/components/ui/input"
 import { Notice } from "@/components/ui/notice"
-import {
-  Select,
-  SelectRoot,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { InspectorSection } from "@/components/ui/inspector-section"
 import { useMutation, useRemote } from "@/components/tracer/hooks"
-import { useWorkspaceStorageScope } from "@/components/tracer/workspace-path"
+import {
+  useWorkspaceHref,
+  useWorkspaceStorageScope,
+} from "@/components/tracer/workspace-path"
 import { buildApi, asList, asRecord } from "./build-api"
 import {
   BuildEmpty,
@@ -105,6 +101,10 @@ import {
   TicketStatusIndicator,
   TicketStatusSelect,
 } from "@/components/build/shared/ticket-status"
+import {
+  ConversationStatusBadge,
+  ConversationStatusSelect,
+} from "@/components/build/shared/conversation-status"
 import type { ChannelId } from "@/src/lib/build/channels"
 import type { AgentAppearance } from "@/src/lib/build/contracts"
 import { InboxConversations } from "@/components/build/shared/inbox-sidebar"
@@ -252,20 +252,6 @@ function listTickets({ filter, cursor, limit, signal }: CollectionListOptions) {
     )
     .then(ticketList)
 }
-
-const conversationStatuses: Record<string, string> = {
-  active: "Ongoing",
-  handed_off: "Taken over",
-  closed: "Ended",
-  blocked: "Blocked",
-}
-const conversationStatusOptions = [
-  { value: "", label: "All statuses" },
-  ...Object.entries(conversationStatuses).map(([value, label]) => ({
-    value,
-    label,
-  })),
-]
 
 function listConversations({
   filter,
@@ -453,9 +439,6 @@ export function InboxPage({
 }) {
   const isInbox = view === "inbox"
   const showAgentColumn = !isInbox && !fixedAgentId
-  const ItemIcon = isInbox
-    ? productIcons.buildInbox
-    : productIcons.buildConversations
   const scope = useWorkspaceStorageScope()
   const navigation = useInboxNavigation()
   const { isMobile, setOpenMobile } = useSidebar()
@@ -486,7 +469,7 @@ export function InboxPage({
       ? "solved"
       : (isInbox
             ? ["open", "pending", "snoozed", "solved", "closed"]
-            : Object.keys(conversationStatuses)
+            : ["active", "handed_off", "closed", "blocked"]
           ).includes(requestedStatus)
         ? requestedStatus
         : ""
@@ -705,24 +688,10 @@ export function InboxPage({
                   focusRequest={Number(navigation.params.get("search")) || 0}
                 />
                 {!isInbox && (
-                  <SelectRoot
+                  <ConversationStatusSelect
                     value={status}
-                    items={conversationStatusOptions}
-                    onValueChange={(value) => {
-                      if (value !== null) setStatus(value)
-                    }}
-                  >
-                    <SelectTrigger aria-label="Conversation status" size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {conversationStatusOptions.map(({ value, label }) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </SelectRoot>
+                    onValueChange={setStatus}
+                  />
                 )}
               </div>
             ),
@@ -876,6 +845,7 @@ export function InboxPage({
           ) : (
             <CollectionTable
               fillHeight
+              selectionColumnWidth={0}
               enableCardView
               settings={tableView.settings}
               onSettingsChange={tableView.onSettingsChange}
@@ -898,7 +868,7 @@ export function InboxPage({
             >
               <thead className={collectionTable.head}>
                 <tr>
-                  <th aria-hidden className={collectionTable.heading} />
+                  <th aria-hidden className="p-0" />
                   {[
                     "Conversation",
                     "Customer",
@@ -937,12 +907,19 @@ export function InboxPage({
                       }
                     }}
                   >
-                    <td aria-hidden className={collectionTable.cell} />
+                    <td aria-hidden className="p-0" />
                     <td className={collectionTable.cell}>
                       <span className="flex min-w-0 items-center gap-2 font-medium">
-                        <ItemIcon
-                          aria-hidden
-                          className="size-4 shrink-0 text-foreground-muted"
+                        <ConversationAvatar
+                          compact
+                          name={
+                            ticket.contactName || ticket.subject || "Customer"
+                          }
+                          identity={
+                            ticket.contactId ||
+                            ticket.conversationId ||
+                            ticket.id
+                          }
                         />
                         <span className="truncate">
                           {ticket.subject || "Untitled conversation"}
@@ -979,9 +956,9 @@ export function InboxPage({
                       {isInbox ? (
                         <TicketStatusIndicator status={ticket.status} />
                       ) : (
-                        conversationStatuses[
-                          ticket.conversationStatus ?? "active"
-                        ]
+                        <ConversationStatusBadge
+                          status={ticket.conversationStatus}
+                        />
                       )}
                     </td>
                     {isInbox ? (
@@ -1027,7 +1004,7 @@ export function InboxPage({
           title="Conversation details"
           description="Read messages, reply, and manage this conversation."
           isWide={isWide}
-          defaultSize={isInbox ? 68 : 45}
+          defaultSize={68}
           onClose={closeConversation}
           onRestoreFocus={() => returnFocusRef.current?.focus()}
         >
@@ -1035,7 +1012,6 @@ export function InboxPage({
             <InboxInspector
               key={selected.id}
               ticket={selected}
-              inboxStyle={isInbox}
               isLoading={detail.isLoading}
               error={detail.error}
               onClose={closeConversation}
@@ -1518,19 +1494,18 @@ function InboxOperationsPanel({ ticket }: { ticket: Ticket | null }) {
 
 function InboxInspector({
   ticket,
-  inboxStyle = false,
   isLoading,
   error,
   onClose,
   onChanged,
 }: {
   ticket: Ticket | null
-  inboxStyle?: boolean
   isLoading: boolean
   error: Error | null
   onClose: () => void
   onChanged: () => void
 }) {
+  const href = useWorkspaceHref()
   const [activeTab, setActiveTab] = React.useState("conversation")
   const [message, setMessage] = React.useState("")
   const [note, setNote] = React.useState("")
@@ -1872,7 +1847,15 @@ function InboxInspector({
         !!linkedTicket.error
       }
     />
-  ) : null
+  ) : (
+    <ConversationStatusBadge
+      status={
+        typeof conversation.data?.status === "string"
+          ? conversation.data.status
+          : activeTicket.conversationStatus
+      }
+    />
+  )
   const ownershipLabel = !ownershipAvailable
     ? ownershipState.error
       ? "Ownership unavailable"
@@ -1907,14 +1890,9 @@ function InboxInspector({
         onValueChange={setActiveTab}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <header
-          className={cn(
-            "shrink-0 border-b border-border px-4",
-            inboxStyle ? "py-3" : "space-y-4 pt-4 pb-3"
-          )}
-        >
-          <div className="flex items-center gap-3">
-            {inboxStyle ? (
+        <header className="shrink-0 border-b border-border px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-1 basis-48 items-center gap-3">
               <ConversationAvatar
                 compact
                 name={activeTicket.contactName || "Customer"}
@@ -1929,29 +1907,13 @@ function InboxInspector({
                   ) : undefined
                 }
               />
-            ) : activeTicket.channel ? (
-              <ChannelIcon channel={activeTicket.channel} />
-            ) : (
-              <UserRound
-                aria-hidden
-                className="mt-1 size-6 shrink-0 text-foreground-muted"
-              />
-            )}
-            <div className="min-w-0 flex-1">
-              <h2
-                className={cn(
-                  "font-semibold",
-                  inboxStyle
-                    ? "truncate text-sm leading-5"
-                    : "line-clamp-2 text-base leading-6"
-                )}
-                title={activeTicket.subject || "Conversation"}
-              >
-                {inboxStyle
-                  ? activeTicket.contactName || "Customer"
-                  : activeTicket.subject || "Conversation"}
-              </h2>
-              {inboxStyle ? (
+              <div className="min-w-0 flex-1">
+                <h2
+                  className="truncate text-sm leading-5 font-semibold"
+                  title={activeTicket.subject || "Conversation"}
+                >
+                  {activeTicket.contactName || "Customer"}
+                </h2>
                 <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-foreground-muted">
                   <span className="shrink-0 capitalize">
                     {activeTicket.channel === "web"
@@ -1963,115 +1925,84 @@ function InboxInspector({
                     {ownershipLabel}
                   </span>
                 </div>
-              ) : (
-                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-foreground-muted">
-                  <span
-                    className="truncate"
-                    title={activeTicket.contactName || "Customer"}
-                  >
-                    {activeTicket.contactName || "Customer"}
-                  </span>
-                  {activeTicket.channel ? (
-                    <>
-                      <span aria-hidden>·</span>
-                      <span className="shrink-0 capitalize">
-                        {activeTicket.channel === "web"
-                          ? "Website"
-                          : activeTicket.channel}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              )}
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {inboxStyle ? (
-                <>
-                  {statusControl}
-                  <TabsList aria-label="Conversation sections">
-                    {[
-                      {
-                        value: "conversation",
-                        label: "Conversation",
-                        icon: MessageSquare,
-                      },
-                      ...(ticketId
-                        ? [
-                            {
-                              value: "notes",
-                              label: "Notes",
-                              icon: StickyNote,
-                            },
-                            { value: "details", label: "Details", icon: Info },
-                          ]
-                        : []),
-                    ].map(({ value, label, icon: Icon }) => (
-                      <Tooltip key={value}>
-                        <TooltipTrigger asChild>
-                          <TabsTrigger
-                            value={value}
-                            size="icon"
-                            aria-label={label}
-                          >
-                            <Icon aria-hidden />
-                          </TabsTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          {label}
-                          {value === "notes" && activeTicket.notes.length > 0
-                            ? ` (${activeTicket.notes.length})`
-                            : ""}
-                        </TooltipContent>
-                      </Tooltip>
-                    ))}
-                  </TabsList>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost-muted"
-                        aria-label="Conversation actions"
-                        title="Conversation actions"
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={
-                          !ownershipAvailable ||
-                          takeover.isPending ||
-                          (!canReply && !canTakeover)
-                        }
-                        onSelect={() =>
-                          void ownership(canReply ? "resume" : "takeover")
-                        }
-                      >
-                        {canReply ? (
-                          <Play className="size-4" />
-                        ) : (
-                          <UserRound className="size-4" />
-                        )}
-                        {canReply ? "Resume AI" : "Take over"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={refreshInspector}>
-                        <RefreshCw className="size-4" />
-                        Refresh conversation
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              ) : (
-                <Button
-                  size="icon-sm"
-                  variant="ghost-muted"
-                  aria-label="Refresh conversation"
-                  title="Refresh conversation"
-                  onClick={refreshInspector}
-                >
-                  <RefreshCw className="size-3.5" />
-                </Button>
-              )}
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <>
+                {statusControl}
+                <TabsList aria-label="Conversation sections">
+                  {[
+                    {
+                      value: "conversation",
+                      label: "Conversation",
+                      icon: MessageSquare,
+                    },
+                    ...(ticketId
+                      ? [
+                          {
+                            value: "notes",
+                            label: "Notes",
+                            icon: StickyNote,
+                          },
+                          { value: "details", label: "Details", icon: Info },
+                        ]
+                      : []),
+                  ].map(({ value, label, icon: Icon }) => (
+                    <Tooltip key={value}>
+                      <TooltipTrigger asChild>
+                        <TabsTrigger
+                          value={value}
+                          size="icon"
+                          aria-label={label}
+                        >
+                          <Icon aria-hidden />
+                        </TabsTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {label}
+                        {value === "notes" && activeTicket.notes.length > 0
+                          ? ` (${activeTicket.notes.length})`
+                          : ""}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TabsList>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost-muted"
+                      aria-label="Conversation actions"
+                      title="Conversation actions"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      disabled={
+                        !ownershipAvailable ||
+                        takeover.isPending ||
+                        (!canReply && !canTakeover)
+                      }
+                      onSelect={() =>
+                        void ownership(canReply ? "resume" : "takeover")
+                      }
+                    >
+                      {canReply ? (
+                        <Play className="size-4" />
+                      ) : (
+                        <UserRound className="size-4" />
+                      )}
+                      {canReply ? "Resume AI" : "Take over"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={refreshInspector}>
+                      <RefreshCw className="size-4" />
+                      Refresh conversation
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
               <Button
                 size="icon-sm"
                 variant="ghost-muted"
@@ -2083,64 +2014,6 @@ function InboxInspector({
               </Button>
             </div>
           </div>
-          {!inboxStyle && (
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <span
-                className="inline-flex items-center gap-1.5 text-xs text-foreground-muted"
-                role="status"
-              >
-                {!ownershipAvailable ? (
-                  <LoaderCircle
-                    aria-hidden
-                    className={
-                      ownershipState.error
-                        ? "size-3.5 text-warning"
-                        : "size-3.5 motion-safe:animate-spin"
-                    }
-                  />
-                ) : activeTicket.ownerType === "human" ? (
-                  <UserRound aria-hidden className="size-3.5 text-success" />
-                ) : (
-                  <Bot aria-hidden className="size-3.5 text-info" />
-                )}
-                {!ownershipAvailable
-                  ? ownershipState.error
-                    ? "Ownership unavailable"
-                    : "Checking ownership…"
-                  : canReply
-                    ? "Handled by you"
-                    : activeTicket.ownerType === "human"
-                      ? canTakeover
-                        ? "Waiting for a teammate"
-                        : "Handled by a teammate"
-                      : "Handled by AI"}
-              </span>
-              <div className="ml-auto flex items-center gap-2">
-                {statusControl}
-                <Button
-                  size="sm"
-                  variant={canReply ? "outline" : "default"}
-                  onClick={() =>
-                    void ownership(canReply ? "resume" : "takeover")
-                  }
-                  loading={takeover.isPending}
-                  disabled={!ownershipAvailable || (!canReply && !canTakeover)}
-                >
-                  {canReply ? (
-                    <>
-                      <Play className="size-3.5" />
-                      Resume AI
-                    </>
-                  ) : (
-                    <>
-                      <UserRound className="size-3.5" />
-                      Take over
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          )}
           {error ? <Notice variant="error">{error.message}</Notice> : null}
           {linkedTicket.error ? (
             <Notice variant="error">
@@ -2163,37 +2036,31 @@ function InboxInspector({
           ) : null}
         </header>
 
-        {!inboxStyle && (
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-            <TabsList variant="underline" aria-label="Conversation sections">
-              <TabsTrigger value="conversation">Conversation</TabsTrigger>
-              {ticketId ? (
-                <>
-                  <TabsTrigger value="notes">
-                    Notes
-                    {activeTicket.notes.length > 0 ? (
-                      <span className="text-xs text-foreground-muted">
-                        {activeTicket.notes.length}
-                      </span>
-                    ) : null}
-                  </TabsTrigger>
-                  <TabsTrigger value="details">Details</TabsTrigger>
-                </>
-              ) : null}
-            </TabsList>
-          </div>
-        )}
-        {inboxStyle && ownershipAvailable && !canReply && canTakeover && (
-          <div className="flex shrink-0 justify-end border-b border-border px-4 py-2">
-            <Button
-              size="sm"
-              variant="outline"
-              loading={takeover.isPending}
-              onClick={() => void ownership("takeover")}
-            >
-              <UserRound className="size-3.5" />
-              Take over
+        {conversationId && (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+            <Button size="sm" variant="ghost-muted" asChild>
+              <Link
+                href={href(
+                  `/traces?${new URLSearchParams({
+                    filter: `sessionId = ${JSON.stringify(conversationId)}`,
+                  })}`
+                )}
+              >
+                <productIcons.traces className="size-3.5" aria-hidden />
+                View traces
+              </Link>
             </Button>
+            {ownershipAvailable && !canReply && canTakeover && (
+              <Button
+                size="sm"
+                variant="outline"
+                loading={takeover.isPending}
+                onClick={() => void ownership("takeover")}
+              >
+                <UserRound className="size-3.5" />
+                Take over
+              </Button>
+            )}
           </div>
         )}
         <TabsContent
@@ -2201,7 +2068,7 @@ function InboxInspector({
           className="flex min-h-0 flex-1 flex-col"
         >
           <Chat
-            variant={inboxStyle ? "inbox" : "default"}
+            variant="inbox"
             perspective="operator"
             messages={activeTicket.messages.map((item) => ({
               id: item.id,
@@ -2228,9 +2095,7 @@ function InboxInspector({
             canSubmit={canReply && !!message.trim() && !send.isPending}
             placeholder={
               canReply
-                ? inboxStyle
-                  ? "Message"
-                  : "Write a reply…"
+                ? "Message"
                 : "Take over the conversation before replying…"
             }
             transcriptNotice={
@@ -2244,13 +2109,11 @@ function InboxInspector({
               const approval = approvalFromMessage(item)
               return (
                 <>
-                  {inboxStyle &&
-                    item.id === latestResponse?.id &&
-                    responseFeedback && (
-                      <div className="mt-1 flex justify-end">
-                        <ChatFeedback {...responseFeedback} hideLabel />
-                      </div>
-                    )}
+                  {item.id === latestResponse?.id && responseFeedback && (
+                    <div className="mt-1 flex justify-end">
+                      <ChatFeedback {...responseFeedback} hideLabel />
+                    </div>
+                  )}
                   {approval ? (
                     <ApprovalActionCard
                       approval={approval}
@@ -2267,7 +2130,6 @@ function InboxInspector({
                 </>
               )
             }}
-            feedback={inboxStyle ? undefined : responseFeedback}
             composerFooter={
               <div className="mt-2 space-y-2">
                 {!canReply ? (
