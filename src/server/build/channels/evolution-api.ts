@@ -135,6 +135,7 @@ export function evolutionMessage(data: unknown) {
   return {
     phone,
     replyJid,
+    addressingMode: key.addressingMode === "lid" ? "lid" : "pn",
     id,
     fromMe: key.fromMe,
     receivedAt: new Date(time).toISOString(),

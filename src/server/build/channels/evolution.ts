@@ -460,15 +460,67 @@ export async function sendEvolutionEnvelope(
     // Only a received message on this conversation and provider instance may
     // supply an alternate address. Outbound caller metadata is not routing authority.
     const address = await ctx.database.execute<Row>(sql`
-      SELECT content_json->'metadata'->'evolution'->>'replyJid' AS reply_jid
+      SELECT id, provider_message_id,
+        content_json->'metadata'->'evolution'->>'replyJid' AS reply_jid,
+        content_json->'metadata'->'evolution'->>'addressingMode' AS addressing_mode,
+        content_json->'metadata'->'evolution'->>'observedAt' AS observed_at
       FROM build_channel_message
       WHERE project_id=${ctx.projectId} AND connection_id=${envelope.connectionId}::uuid
         AND conversation_id=${envelope.conversationId} AND direction='inbound'
         AND content_json->'metadata'->'evolution'->>'instance'=${b.instance_name}
-        AND content_json->'metadata'->'evolution'->>'replyJid' ~ '^[0-9]{5,20}@lid$'
       ORDER BY content_json->'metadata'->'evolution'->>'observedAt' DESC NULLS LAST, created_at DESC
       LIMIT 1
     `)
+    const source = address.rows[0]
+    let replyJid =
+      typeof source?.reply_jid === "string" &&
+      /^[0-9]{5,20}@lid$/.test(source.reply_jid)
+        ? source.reply_jid
+        : null
+    // Evolution 2.3.7 saves the original key, then overwrites remoteJid with
+    // remoteJidAlt in its webhook. Recover only this inbound message, using the
+    // instance credential, and verify its phone, direction, ID and timestamp.
+    // Pre-fix inbound rows have no addressingMode and need the same lookup.
+    if (source && !replyJid && source.addressing_mode !== "pn") {
+      const lookup = await evolutionRequest(
+        `/chat/findMessages/${b.instance_name}`,
+        {
+          token: credentials(c, ctx).token,
+          method: "POST",
+          body: {
+            where: { key: { id: source.provider_message_id } },
+            offset: 2,
+            page: 1,
+          },
+        }
+      )
+      const found = evolutionObject(lookup.messages)
+      const records = Array.isArray(found.records) ? found.records : []
+      const original =
+        records.length === 1 ? evolutionMessage(records[0]) : null
+      if (
+        found.total !== 1 ||
+        !original ||
+        original.fromMe ||
+        original.id !== source.provider_message_id ||
+        original.phone !== recipient ||
+        original.receivedAt !== source.observed_at ||
+        ((source.addressing_mode === "lid" ||
+          original.addressingMode === "lid") &&
+          !original.replyJid)
+      )
+        throw new WhatsAppApiError(
+          "INVALID_PROVIDER_RESPONSE",
+          "Evolution could not verify the reply address for this incoming message."
+        )
+      replyJid = original.replyJid
+      if (replyJid)
+        await ctx.database.execute(sql`
+          UPDATE build_channel_message
+          SET content_json=jsonb_set(content_json,'{metadata,evolution,replyJid}',${JSON.stringify(replyJid)}::jsonb)
+          WHERE project_id=${ctx.projectId} AND id=${source.id}
+        `)
+    }
     const result = await evolutionRequest(
       `/message/sendText/${b.instance_name}`,
       {
@@ -476,7 +528,7 @@ export async function sendEvolutionEnvelope(
         method: "POST",
         sending: true,
         body: {
-          number: address.rows[0]?.reply_jid ?? recipient,
+          number: replyJid ?? recipient,
           text: envelope.text,
           linkPreview: false,
         },
@@ -621,6 +673,7 @@ export async function ingestEvolutionWebhook(
         evolution: {
           instance: b.instance_name,
           replyJid: msg.replyJid,
+          addressingMode: msg.addressingMode,
           observedAt: msg.receivedAt,
         },
       },
