@@ -125,8 +125,16 @@ export function evolutionMessage(data: unknown) {
     typeof message.conversation === "string"
       ? message.conversation
       : evolutionObject(message.extendedTextMessage).text
+  // Preserve the provider address only when this event also identifies a phone.
+  // A LID is opaque and must never become a phone-based conversation identity.
+  const replyJid =
+    [key.remoteJid, key.remoteJidAlt].find(
+      (value): value is string =>
+        typeof value === "string" && /^[0-9]{5,20}@lid$/.test(value)
+    ) ?? null
   return {
     phone,
+    replyJid,
     id,
     fromMe: key.fromMe,
     receivedAt: new Date(time).toISOString(),

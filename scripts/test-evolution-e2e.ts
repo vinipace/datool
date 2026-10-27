@@ -16,6 +16,7 @@ let sends = 0,
   failSend = false,
   failDelete = false,
   remoteOpen = false
+const sentNumbers: string[] = []
 const instances = new Map<
   string,
   { token: string; webhook?: Record<string, unknown> }
@@ -70,6 +71,7 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname.startsWith("/message/sendText/")) {
     sends++
+    sentNumbers.push(body.number)
     return out(
       failSend ? 500 : 201,
       failSend ? {} : { key: { id: `provider-${sends}`, fromMe: true } }
@@ -220,8 +222,20 @@ try {
       .status,
     400
   )
-  assert.equal((await webhook(incoming("in-1"))).status, 200)
-  assert.equal((await webhook(incoming("in-1"))).status, 200)
+  const lidIncoming = incoming("in-1")
+  const lidPayload = {
+    ...lidIncoming,
+    data: {
+      ...lidIncoming.data,
+      key: {
+        ...lidIncoming.data.key,
+        remoteJid: "123456789012345@lid",
+        remoteJidAlt: lidIncoming.data.key.remoteJid,
+      },
+    },
+  }
+  assert.equal((await webhook(lidPayload)).status, 200)
+  assert.equal((await webhook(lidPayload)).status, 200)
   const messages = await database.execute<Record<string, unknown>>(
     sql`SELECT * FROM build_channel_message WHERE connection_id=${c.id}::uuid`
   )
@@ -241,6 +255,7 @@ try {
     channel: "whatsapp" as const,
     idempotencyKey: randomUUID(),
     text: "Reply",
+    metadata: { evolution: { replyJid: "999999999999999@lid" } },
   }
   const external = "5511999990001:5511999990002"
   await channels.enqueueOutboundEnvelope(ctx, envelope, external)
@@ -257,6 +272,11 @@ try {
   )
   assert.equal(sends, 1)
   assert.equal(ids[0], "provider-1")
+  assert.equal(
+    sentNumbers[0],
+    "123456789012345@lid",
+    "Reply to the authenticated incoming LID without changing the phone-based conversation identity"
+  )
   assert.deepEqual(
     await evo.sendEvolutionEnvelope(
       ctx,
@@ -271,7 +291,41 @@ try {
     1,
     "A concurrent retry that waited for the connection lock must reuse the committed receipt"
   )
-  for (const status of ["READ", "SERVER_ACK", "DELIVERY_ACK"]) {
+  for (const status of ["ERROR", "SERVER_ACK"]) {
+    assert.equal(
+      (
+        await webhook({
+          event: "messages.update",
+          instance,
+          data: { keyId: ids[0], fromMe: true, status },
+        })
+      ).status,
+      200
+    )
+  }
+  const rejectedDelivery = (await withWorkspace(identity, () =>
+    executeBuildOperation("build_get_whatsapp_delivery", {
+      connectionId: c.id,
+      messageId: String(message.id),
+    })
+  )) as { status: string; delivery: { status: string }; errorCode: string }
+  assert.equal(
+    rejectedDelivery.status,
+    "failed",
+    "A provider error must not remain sent or be revived by a delayed server ACK"
+  )
+  assert.equal(rejectedDelivery.delivery.status, "failed")
+  assert.equal(rejectedDelivery.errorCode, "WHATSAPP_DELIVERY_FAILED")
+  await assert.rejects(
+    evo.sendEvolutionEnvelope(ctx, envelope, external, String(message.id)),
+    /rejected/i
+  )
+  assert.equal(
+    sends,
+    1,
+    "A provider rejection must not automatically resend the same message"
+  )
+  for (const status of ["READ", "SERVER_ACK", "DELIVERY_ACK", "ERROR"]) {
     assert.equal(
       (
         await webhook({
@@ -288,8 +342,14 @@ try {
       connectionId: c.id,
       messageId: String(message.id),
     })
-  )) as { delivery: { status: string } }
+  )) as {
+    status: string
+    delivery: { status: string }
+    errorCode: string | null
+  }
   assert.equal(delivery.delivery.status, "read")
+  assert.equal(delivery.status, "delivered")
+  assert.equal(delivery.errorCode, null)
   assert.equal((await webhook(incoming(ids[0], true, "Reply"))).status, 200)
   let conv = (
     await database.execute<Record<string, unknown>>(
@@ -309,6 +369,46 @@ try {
   assert.equal(conv.owner_type, "human")
   console.log(
     "PASS authenticated ingress, deduplication, provider echo and manual handoff"
+  )
+  const otherIncoming = incoming("other-customer")
+  otherIncoming.data.key.remoteJid = "5511999990003@s.whatsapp.net"
+  assert.equal((await webhook(otherIncoming)).status, 200)
+  const otherConversation = (
+    await database.execute<Record<string, unknown>>(
+      sql`SELECT id FROM build_conversations WHERE project_id=${target.projectId} AND external_conversation_id='5511999990001:5511999990003'`
+    )
+  ).rows[0]
+  const otherEnvelope = {
+    ...envelope,
+    conversationId: String(otherConversation.id),
+    idempotencyKey: randomUUID(),
+  }
+  await channels.enqueueOutboundEnvelope(
+    ctx,
+    otherEnvelope,
+    "5511999990001:5511999990003"
+  )
+  const otherMessage = (
+    await database.execute<Record<string, unknown>>(
+      sql`SELECT id FROM build_channel_message WHERE idempotency_key=${otherEnvelope.idempotencyKey}`
+    )
+  ).rows[0]
+  await database.execute(
+    sql`UPDATE build_evolution_instance SET last_send_at=NULL WHERE connection_id=${c.id}::uuid`
+  )
+  await evo.sendEvolutionEnvelope(
+    ctx,
+    otherEnvelope,
+    "5511999990001:5511999990003",
+    String(otherMessage.id)
+  )
+  assert.equal(
+    sentNumbers.at(-1),
+    "5511999990003",
+    "Never borrow another conversation's LID or route from outbound caller metadata"
+  )
+  console.log(
+    "PASS trusted LID replies, phone fallback, address isolation and terminal error receipts"
   )
   await assert.rejects(
     channels.enqueueOutboundEnvelope(
@@ -334,7 +434,7 @@ try {
         sql`SELECT id FROM build_channel_job WHERE connection_id=${c.id}::uuid AND kind='process_inbound'`
       )
     ).rows.length,
-    1
+    2
   )
   await evo.refreshEvolutionConnection(ctx, c.id)
   assert.equal((await evo.getEvolutionConnection(ctx, c.id)).status, "paused")
