@@ -48,11 +48,22 @@ export async function prepareWhatsAppText(
       !(url.origin === base && url.pathname.startsWith("/l/")) &&
       urls.size < 20
     )
-      urls.set(url.href, label.slice(0, 200))
+      urls.set(url.href, label === target ? "" : label.slice(0, 200))
     return target
   })
   const replacements = new Map<string, string>()
-  for (const [destination, label] of urls) {
+  for (const [original, label] of urls) {
+    const target = new URL(original)
+    for (const [name, value] of [
+      ["utm_source", "trydatool.com"],
+      ["utm_medium", "whatsapp"],
+    ]) {
+      // Append without reserializing existing checkout query parameters.
+      if (!target.searchParams.has(name))
+        target.search += `${target.search ? "&" : "?"}${name}=${value}`
+    }
+    const destination = target.href
+    if (destination.length > 2048) continue
     const hash = createHash("sha256").update(destination).digest("hex")
     const result = await context.database.execute<{ token: string }>(sql`
       INSERT INTO build_channel_link(token,project_id,message_id,destination,destination_hash,label)
@@ -60,7 +71,7 @@ export async function prepareWhatsAppText(
       ON CONFLICT(project_id,message_id,destination_hash) DO UPDATE SET label=build_channel_link.label
       RETURNING token
     `)
-    replacements.set(destination, `${base}/l/${result.rows[0].token}`)
+    replacements.set(original, `${base}/l/${result.rows[0].token}`)
   }
   return whatsappText(text, (url) => replacements.get(new URL(url).href) ?? url)
 }

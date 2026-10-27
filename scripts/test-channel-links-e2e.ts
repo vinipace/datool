@@ -56,7 +56,9 @@ try {
     metadata: { connectionId: connection.id },
   })
   const destination =
-    "https://shop.example.com/cart/123:1?discount=SAVE&source=chat#checkout"
+    "https://shop.example.com/cart/123:1?discount=SAVE%20NOW&source=chat#checkout"
+  const trackedDestination =
+    "https://shop.example.com/cart/123:1?discount=SAVE%20NOW&source=chat&utm_source=trydatool.com&utm_medium=whatsapp#checkout"
   const envelope = {
     connectionId: connection.id,
     conversationId: conversation.id,
@@ -77,7 +79,7 @@ try {
     "Retries and repeated URLs must reuse one persisted link"
   )
   const link = rows.rows[0]
-  assert.equal(link.destination, destination)
+  assert.equal(link.destination, trackedDestination)
   const stored = await database.execute<{ text: string }>(
     sql`SELECT content_json->>'text' AS text FROM build_channel_message WHERE id=${link.message_id}`
   )
@@ -106,7 +108,7 @@ try {
   )
   const head = await route.HEAD(request("HEAD"), params)
   assert.equal(head.status, 302)
-  assert.equal(head.headers.get("Location"), destination)
+  assert.equal(head.headers.get("Location"), trackedDestination)
   assert.equal(head.headers.get("Referrer-Policy"), "no-referrer")
   assert(head.headers.get("Cache-Control")?.includes("no-store"))
   await route.GET(request("GET", "facebookexternalhit/1.1"), params)
@@ -144,6 +146,54 @@ try {
     (await database.execute(sql`SELECT * FROM build_channel_link`)).rows.length,
     1
   )
+  const attributionCases = [
+    [
+      "https://shop.example.com/products/board#details",
+      "https://shop.example.com/products/board?utm_source=trydatool.com&utm_medium=whatsapp#details",
+    ],
+    [
+      "https://shop.example.com/cart/123:1?utm_source=partner&utm_medium=email&utm_campaign=sale%20today",
+      "https://shop.example.com/cart/123:1?utm_source=partner&utm_medium=email&utm_campaign=sale%20today",
+    ],
+    [
+      "https://shop.example.com/products/board?utm_source=partner",
+      "https://shop.example.com/products/board?utm_source=partner&utm_medium=whatsapp",
+    ],
+    [
+      "https://shop.example.com/products/board?utm_medium=social",
+      "https://shop.example.com/products/board?utm_medium=social&utm_source=trydatool.com",
+    ],
+  ]
+  for (const [original, expected] of attributionCases) {
+    const key = `attribution-${original}`
+    await enqueueOutboundEnvelope(
+      context,
+      { ...envelope, idempotencyKey: key, text: original },
+      "link-test"
+    )
+    const result = await database.execute<{
+      token: string
+      message_id: string
+    }>(sql`
+      SELECT l.token,l.message_id FROM build_channel_link l
+      JOIN build_channel_message m ON m.project_id=l.project_id AND m.id=l.message_id
+      WHERE m.project_id=${context.projectId} AND m.idempotency_key=${key}
+    `)
+    assert.equal(result.rows.length, 1)
+    const row = result.rows[0]
+    await database.execute(
+      sql`UPDATE build_channel_message SET status='sent' WHERE id=${row.message_id}`
+    )
+    const response = await route.GET(request(), {
+      params: Promise.resolve({ token: row.token }),
+    })
+    assert.equal(response.status, 302)
+    assert.equal(
+      response.headers.get("Location"),
+      expected,
+      "Attribution must fill missing UTMs without changing checkout parameters or existing UTMs"
+    )
+  }
   await database.execute(
     sql`UPDATE build_channel_link SET expires_at=now()-interval '1 second' WHERE token=${link.token}`
   )
@@ -160,7 +210,7 @@ try {
     0
   )
   console.log(
-    "PASS atomic link admission, retries, WhatsApp formatting, redirect target integrity, HEAD/preview separation, click counters, project isolation, expiry and deletion"
+    "PASS atomic link admission, retries, WhatsApp formatting, redirect target integrity, UTM attribution, HEAD/preview separation, click counters, project isolation, expiry and deletion"
   )
 } finally {
   if (pools) {
