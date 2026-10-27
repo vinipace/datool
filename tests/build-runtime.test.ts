@@ -623,3 +623,41 @@ describe("Build agent runtime", () => {
     expect(trace.spans.filter((span) => span.kind === "llm")).toEqual([])
   }, 30_000)
 })
+
+test("authenticated channel image reaches the model without persisting its bytes in history or traces", async () => {
+  const { context, service } = await makeContext()
+  const data = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlWQAAAAASUVORK5CYII=", "base64"))
+  const model = new MockLanguageModelV4({
+    modelId: "vision-contract",
+    doGenerate: {
+      content: [{ type: "text", text: "A red product." }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: { inputTokens: { total: 20, noCache: 20, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 4, text: 4, reasoning: 0 } },
+      warnings: [],
+    },
+  })
+  const result = await runAgentTurn(context, {
+    agentId: "agent-a", channel: "whatsapp", requestKey: "image-contract", message: "What is this?",
+    metadata: { channelAttachments: [{ type: "image", fileId: "provider-id" }] },
+  }, {
+    conversationService: service,
+    agent: agent(context, { model: "vision-contract", channelAllowlist: ["whatsapp"] }),
+    trustedChannelImages: [{ data, mediaType: "image/png" }],
+    dependencies: {
+      generateText: options => generateText({ ...options, model }),
+      resolveActions: async () => [], resolveProcedures: async () => [], retrieveKnowledge: async () => null,
+    },
+  })
+  expect(result.text).toBe("A red product.")
+  const prompt = model.doGenerateCalls[0].prompt
+  const message = prompt.findLast(m => m.role === "user")
+  expect(message?.content[0]).toEqual({ type: "text", text: "What is this?" })
+  expect(message?.content[1]).toMatchObject({ type: "file", data: { type: "data", data }, mediaType: "image/png" })
+  const history = await service.getMessagesForModel(result.conversation.id)
+  expect(history.find(m => m.role === "user")?.content).toBe("What is this?")
+  const trace = await runTracerEffect(new TracerService(context.database).getTrace(result.traceId!))
+  const persisted = JSON.stringify(trace)
+  expect(persisted).not.toContain(Buffer.from(data).toString("base64"))
+  expect(persisted).not.toContain('"0":137')
+  expect(persisted).toContain("image bytes omitted")
+}, 30_000)

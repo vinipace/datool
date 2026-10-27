@@ -203,6 +203,9 @@ jobs:
       - checkout
       - install-dependencies
       - run:
+          name: Install audio decoder for media integration tests
+          command: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run:
           name: Check dependency security advisories
           command: bun audit --audit-level high
       - start-services
@@ -234,6 +237,7 @@ jobs:
               bun --no-env-file test tests/build-channel-durable.test.ts --test-name-pattern 'keeps visitor history' --timeout 30000
               bun --no-env-file test tests/shopify-chat-security.test.ts --test-name-pattern 'session preserves the conversation' --timeout 30000
               bun run test:build:access
+              bun --no-env-file test tests/build-runtime.test.ts --test-name-pattern 'authenticated channel image' --timeout 30000
               bun run test:evolution:e2e
               bun --no-env-file scripts/test-channel-links-e2e.ts
             ) > "$logs/critical" 2>&1 &

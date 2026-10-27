@@ -23,6 +23,7 @@ import {
   jsonSchema,
   tool,
   type LanguageModelCallEndEvent,
+  type ModelMessage,
 } from "ai"
 import { sql } from "drizzle-orm"
 import { z } from "zod"
@@ -336,6 +337,21 @@ function redactTraceValue(
   value: unknown,
   knownSecrets: readonly string[]
 ): unknown {
+  if (value instanceof Uint8Array) return "[image bytes omitted]"
+  if (
+    value &&
+    typeof value === "object" &&
+    "type" in value &&
+    (value.type === "image" ||
+      (value.type === "blob" &&
+        "modality" in value &&
+        value.modality === "image") ||
+      (value.type === "file" &&
+        "mediaType" in value &&
+        typeof value.mediaType === "string" &&
+        value.mediaType.startsWith("image/")))
+  )
+    return { type: "image", data: "[image bytes omitted]" }
   if (typeof value === "string") {
     try {
       const parsed: unknown = JSON.parse(value)
@@ -1194,6 +1210,8 @@ type ProcedureResult = {
 }
 
 export type RunAgentTurnOptions = {
+  /** Server-decoded media only; never populated from public metadata or URLs. */
+  trustedChannelImages?: import("@/src/lib/build/channels").ChannelImage[]
   dependencies?: RuntimeDependencies
   conversationService?: ConversationService
   /** Server-internal override for tests or an already-authorized worker. */
@@ -3224,11 +3242,30 @@ export async function runAgentTurn(
     ]
       .filter(Boolean)
       .join("\n\n")
-    const modelMessages = (await service.getMessagesForModel(conversation.id))
+    const modelMessages: ModelMessage[] = (
+      await service.getMessagesForModel(conversation.id)
+    )
       .filter(
         (message) => message.role === "user" || message.role === "assistant"
       )
-      .map((message) => {
+      .map((message): ModelMessage => {
+        if (
+          message.id === turn.inputMessageId &&
+          message.role === "user" &&
+          options.trustedChannelImages?.length
+        ) {
+          return {
+            role: "user",
+            content: [
+              { type: "text", text: textFromContent(message.content) },
+              ...options.trustedChannelImages.map((image) => ({
+                type: "image" as const,
+                image: image.data,
+                mediaType: image.mediaType,
+              })),
+            ],
+          }
+        }
         return {
           role: message.role as "user" | "assistant",
           content: [
@@ -3463,11 +3500,18 @@ export async function runAgentTurn(
               // Include history, retrieved knowledge, tool schemas and prior tool
               // results. UTF-8 bytes plus protocol overhead conservatively bound
               // text tokens; do not assume every turn is a single model call.
-              const prompt = JSON.stringify({
-                system,
-                messages: step.messages,
-                tools: aiTools,
-              })
+              const prompt = JSON.stringify(
+                {
+                  system,
+                  messages: step.messages,
+                  tools: aiTools,
+                },
+                (key, value) =>
+                  key === "image" &&
+                  (value instanceof Uint8Array || value?.type === "Buffer")
+                    ? " ".repeat(16_000)
+                    : value
+              )
               const quote = defaultEstimateCostUsd({
                 agent,
                 channel: parsed.channel,

@@ -119,16 +119,20 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
     const requestKey = input.metadata.requestKey
     if (typeof requestKey !== "string" || !requestKey)
       throw new Error("Channel execution requires a durable request key.")
-    const result = await runAgentTurn(context, {
-      agentId: input.agentId,
-      channel: input.channel,
-      conversationId: input.conversationId,
-      externalConversationId: input.metadata.externalConversationId as
-        string | undefined,
-      requestKey,
-      message: latest?.content ?? "",
-      metadata,
-    })
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: input.agentId,
+        channel: input.channel,
+        conversationId: input.conversationId,
+        externalConversationId: input.metadata.externalConversationId as
+          string | undefined,
+        requestKey,
+        message: latest?.content ?? "",
+        metadata,
+      },
+      { trustedChannelImages: input.images }
+    )
     if (result.status === "busy")
       throw Object.assign(
         new Error("The conversation is processing another turn."),

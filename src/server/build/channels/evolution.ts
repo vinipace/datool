@@ -666,7 +666,7 @@ export async function ingestEvolutionWebhook(
       externalContactId: identity,
       receivedAt: msg.receivedAt,
       text: msg.text,
-      attachments: [],
+      attachments: msg.attachments,
       contact: { externalId: identity, displayName: msg.name },
       metadata: {
         provider: "evolution",
@@ -729,4 +729,93 @@ export async function reconcileEvolutionConnection(
   } else if (evolutionEnabled(context.projectId)) {
     await refreshEvolutionConnection(context, id)
   }
+}
+
+/** Resolve only a recorded inbound message in this authenticated project/session.
+ * Never forward a webhook URL or media key to an arbitrary network destination. */
+export async function downloadEvolutionMedia(
+  context: BuildContext,
+  messageId: string
+) {
+  enabled(context)
+  const found = await context.database.execute<Row>(sql`
+    SELECT m.provider_message_id, m.connection_id, m.content_json, c.external_conversation_id
+    FROM build_channel_message m
+    JOIN build_conversations c ON c.project_id=m.project_id AND c.id=m.conversation_id
+    WHERE m.project_id=${context.projectId} AND m.id=${messageId} AND m.direction='inbound'
+  `)
+  const row = found.rows[0]
+  if (!row) throw invalid("Media message was not found.")
+  const c = await channel(context, String(row.connection_id))
+  const b = await binding(context, String(row.connection_id))
+  if (!b || b.state !== "open" || b.desired_state !== "active")
+    throw invalid("The WhatsApp connection is unavailable.")
+  const token = credentials(c, context).token
+  const lookup = await evolutionRequest(
+    `/chat/findMessages/${b.instance_name}`,
+    {
+      token,
+      method: "POST",
+      body: {
+        where: { key: { id: row.provider_message_id } },
+        page: 1,
+        offset: 2,
+      },
+    }
+  )
+  const records = evolutionObject(lookup.messages).records
+  const original =
+    Array.isArray(records) && records.length === 1 ? records[0] : null
+  const parsed = evolutionMessage(original)
+  if (
+    !parsed ||
+    parsed.fromMe ||
+    parsed.id !== row.provider_message_id ||
+    `${b.phone}:${parsed.phone}` !== row.external_conversation_id ||
+    !parsed.attachments.length
+  )
+    throw invalid("Media could not be matched to this conversation.")
+  const result = await evolutionRequest(
+    `/chat/getBase64FromMediaMessage/${b.instance_name}`,
+    {
+      token,
+      method: "POST",
+      body: { message: { key: { id: parsed.id } }, convertToMp4: false },
+      maxResponseBytes: 23_000_000,
+    }
+  )
+  const base64 = result.base64
+  const mime =
+    typeof result.mimetype === "string"
+      ? result.mimetype.split(";")[0].trim().toLowerCase()
+      : ""
+  if (
+    typeof base64 !== "string" ||
+    !base64.length ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)
+  )
+    throw invalid("Media could not be decoded.")
+  const bytes = Buffer.from(base64, "base64")
+  const type = parsed.attachments[0].type
+  const maxBytes = type === "image" ? 5_000_000 : 16_000_000
+  if (
+    !bytes.length ||
+    bytes.length > maxBytes ||
+    !(
+      type === "image"
+        ? ["image/jpeg", "image/png", "image/webp"]
+        : [
+            "audio/ogg",
+            "audio/mpeg",
+            "audio/mp4",
+            "audio/aac",
+            "audio/wav",
+            "audio/x-wav",
+            "audio/webm",
+            "video/mp4",
+          ]
+    ).includes(mime)
+  )
+    throw invalid("Media format or size is not supported.")
+  return { bytes, mime, type }
 }

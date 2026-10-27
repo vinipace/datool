@@ -314,7 +314,7 @@ export function EvolutionEditor({
                   ? "Replies are disabled while this project is outside the pilot."
                   : paused
                     ? "The number stays connected. Resume when you are ready to reply."
-                    : "Your agent replies to individual text conversations started by customers."}
+                    : "Your agent can read text, images and voice messages from customers. Audio transcription uses execution credits."}
               </p>
             </div>
             <Button
@@ -498,8 +498,9 @@ export function EvolutionEditor({
             </div>
           </div>
           <div className="border-t border-border px-5 py-3 text-xs leading-5 text-foreground-muted sm:px-6">
-            Pilot: individual text conversations started by customers. No
-            campaigns or group chats.
+            Pilot: individual conversations started by customers. Images up to 5
+            MB; audio up to 5 minutes. Replies are text. No campaigns or group
+            chats.
           </div>
         </Card>
       ) : null}
