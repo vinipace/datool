@@ -13,6 +13,7 @@ import { Notice } from "@/components/ui/notice"
 import { authClient } from "@/lib/auth-client"
 import { useHydrated } from "@/lib/use-hydrated"
 import { workspaceRequest } from "@/lib/workspace-api"
+import { trackCheckout } from "@/lib/site-analytics"
 import {
   navigateWorkspace,
   selectOrganization,
@@ -95,6 +96,7 @@ export function BillingOnboarding({
           body: JSON.stringify({ plan }),
         }
       )
+      await trackCheckout(plan, prices?.[plan].amount)
       navigateWorkspace(result.url)
     } catch (cause) {
       setError(
@@ -224,7 +226,9 @@ export function BillingOnboarding({
             className="w-full"
             type="submit"
             loading={busy}
-            disabled={!hydrated || !!(plan && !prices) || (!created && !name.trim())}
+            disabled={
+              !hydrated || !!(plan && !prices) || (!created && !name.trim())
+            }
           >
             {!billingEnabled
               ? created

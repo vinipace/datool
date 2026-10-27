@@ -5,6 +5,11 @@ import { ShopifyBillingReturn } from "@/components/workspace/shopify-onboarding"
 import { Notice } from "@/components/ui/notice"
 import { shopifyDomain } from "@/src/server/build/integrations/shopify-provider"
 
+export const metadata = {
+  title: "Shopify billing",
+  robots: { index: false, follow: false },
+}
+
 export default async function Page({
   searchParams,
 }: {

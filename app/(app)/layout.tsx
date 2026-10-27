@@ -2,10 +2,15 @@ import "../globals.css"
 import { Inter, Geist_Mono } from "next/font/google"
 import { rootMetadata } from "@/lib/page-metadata"
 import { Toaster } from "@/components/ui/toast"
+import { SiteAnalytics } from "@/components/site-analytics"
 
 export const metadata = rootMetadata
 
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" })
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+})
 
 const inter = Inter({
   subsets: ["latin"],
@@ -27,6 +32,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         {children}
         <Toaster />
+        <SiteAnalytics />
       </body>
     </html>
   )

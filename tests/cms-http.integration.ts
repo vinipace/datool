@@ -40,9 +40,19 @@ for (const [path, expected] of [
     assert.ok(!body.includes("NEXT_REDIRECT"))
   }
   if (path === "/" || path === "/landing-page") {
-    const canonical = new URL("/", base).href
-    assert.ok(body.includes(`rel="canonical" href="${canonical}"`))
-    assert.ok(body.includes(`property="og:url" content="${canonical}"`))
+    const canonical: string = new URL("/", base).href
+    assert.equal(
+      new URL(
+        body.match(/rel="canonical" href="([^"]+)"/)?.[1] || "about:blank"
+      ).href,
+      canonical
+    )
+    assert.equal(
+      new URL(
+        body.match(/property="og:url" content="([^"]+)"/)?.[1] || "about:blank"
+      ).href,
+      canonical
+    )
     assert.ok(!body.includes('href="/landing-page"'))
   }
   if (path === "/faq") assert.ok(body.includes('href="/faq/what-is-datool"'))
@@ -66,6 +76,12 @@ const sitemap = await fetch(new URL("/sitemap.xml", base))
 assert.equal(sitemap.status, 200)
 const sitemapBody = await sitemap.text()
 assert.ok(sitemapBody.includes(`<loc>${new URL("/", base).href}</loc>`))
+assert.ok(sitemapBody.includes(`<loc>${new URL("/faq", base).href}</loc>`))
+assert.ok(
+  sitemapBody.includes(
+    `<loc>${new URL("/faq/what-is-datool", base).href}</loc>`
+  )
+)
 assert.ok(!sitemapBody.includes("/landing-page"))
 for (const feature of productPillars) {
   const path = `/product/${feature.slug}`

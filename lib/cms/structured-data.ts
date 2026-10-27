@@ -1,9 +1,41 @@
 import type { Faq } from "@/payload-types"
 import { getFAQDescription, getFAQPath, richTextToPlainText } from "./faq"
+import { publicOrigin } from "@/lib/public-origin"
 
 function absoluteURL(path: string) {
-  return new URL(path, process.env.BETTER_AUTH_URL || "http://localhost:3000")
-    .href
+  return new URL(path, publicOrigin()).href
+}
+
+export function websiteStructuredData() {
+  const origin = publicOrigin()
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${origin}/#organization`,
+        name: "Datool",
+        url: origin,
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${origin}/#website`,
+        name: "Datool",
+        url: origin,
+        publisher: { "@id": `${origin}/#organization` },
+      },
+      {
+        "@type": "SoftwareApplication",
+        name: "Datool",
+        url: origin,
+        applicationCategory: "DeveloperApplication",
+        operatingSystem: "Web",
+        description:
+          "Trace AI workflows, evaluate real examples, and measure quality with Datool.",
+        publisher: { "@id": `${origin}/#organization` },
+      },
+    ],
+  }
 }
 
 export function faqStructuredData(faq: Faq) {

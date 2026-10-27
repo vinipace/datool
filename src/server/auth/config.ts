@@ -39,6 +39,8 @@ import {
 } from "./invitation-email"
 import { hasInvitationSignInAccess } from "./invitation-access"
 import { organizationDetailsSchema } from "@/src/lib/organization-settings"
+import { siteMeasurementId } from "@/lib/site-analytics-config"
+import { analyticsConsentCookie, signupCookie } from "@/lib/site-analytics"
 
 export function authBaseUrl() {
   const url = new URL(process.env.BETTER_AUTH_URL || "http://localhost:3000")
@@ -223,6 +225,32 @@ export function organizationAuthOptions(
     databaseHooks: {
       user: {
         create: {
+          after: async (_user, ctx) => {
+            if (
+              !ctx ||
+              !siteMeasurementId() ||
+              ctx.getCookie(analyticsConsentCookie) !== "granted"
+            )
+              return
+            const callback = ctx.query?.callbackURL
+            if (
+              typeof callback === "string" &&
+              callback.startsWith("datool-inbox:")
+            )
+              return
+            // Only a newly persisted account gets this one-use, non-identifying marker.
+            ctx.setCookie(
+              signupCookie,
+              ctx.path === "/magic-link/verify" ? "email" : "google",
+              {
+                path: "/",
+                maxAge: 600,
+                sameSite: "lax",
+                secure: baseURL.startsWith("https:"),
+                httpOnly: false,
+              }
+            )
+          },
           before: async (user, ctx) => {
             if (
               ctx?.path === "/magic-link/verify" &&
