@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto"
 
 import { sql } from "drizzle-orm"
+import { z } from "zod"
+import { TracerError } from "@/src/server/tracer/errors"
 
 import {
   agentAppearanceSchema,
@@ -321,8 +323,23 @@ export class ConversationService {
 
   async list(value: unknown = {}) {
     const input = listConversationsInputSchema.parse(value)
+    let cursor: [string, string] | undefined
+    if (input.cursor) {
+      try {
+        cursor = z
+          .tuple([z.string().min(1), z.string().min(1)])
+          .parse(JSON.parse(Buffer.from(input.cursor, "base64url").toString()))
+        if (!Number.isFinite(Date.parse(cursor[0])))
+          throw new Error("Invalid date")
+      } catch {
+        throw new TracerError(
+          "VALIDATION_ERROR",
+          "Invalid conversations cursor."
+        )
+      }
+    }
     const result = await this.database.execute<Record<string, unknown>>(sql`
-      select c.*,a.name as agent_name,
+      select c.*,c.updated_at::text as cursor_updated_at,a.name as agent_name,
         a.current_config_json->'appearance' as agent_appearance,
         contact.display_name as contact_name,contact.id as contact_id,
         t.id as ticket_id,t.version as ticket_version,t.status as ticket_status,
@@ -345,7 +362,7 @@ export class ConversationService {
       ) preview on true
       where c.project_id=${this.projectId}
         ${input.agentId ? sql`and c.agent_id=${input.agentId}` : sql``}
-        ${input.cursor ? sql`and c.id>${input.cursor}` : sql``}
+        ${cursor ? sql`and (c.updated_at,c.id)<(${cursor[0]}::timestamptz,${cursor[1]})` : sql``}
         ${input.status ? sql`and c.status=${input.status}` : sql``}
         ${input.channel ? sql`and c.channel=${input.channel}` : sql``}
         ${
@@ -358,7 +375,7 @@ export class ConversationService {
         )`
             : sql``
         }
-      order by c.id asc limit ${input.limit + 1}
+      order by c.updated_at desc,c.id desc limit ${input.limit + 1}
     `)
     const rows = result.rows.slice(0, input.limit)
     return {
@@ -374,7 +391,11 @@ export class ConversationService {
         ticketStatus: row.ticket_status as string | null,
       })),
       nextCursor:
-        result.rows.length > input.limit ? String(rows.at(-1)!.id) : null,
+        result.rows.length > input.limit
+          ? Buffer.from(
+              JSON.stringify([rows.at(-1)!.cursor_updated_at, rows.at(-1)!.id])
+            ).toString("base64url")
+          : null,
     }
   }
 

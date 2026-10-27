@@ -185,7 +185,7 @@ const meta = {
   beforeEach: () => {
     const original = useSearchParams.getMockImplementation()
     const url = new URL(window.location.href)
-    for (const key of ["ticket", "status", "view", "q"])
+    for (const key of ["ticket", "conversation", "status", "view", "q"])
       url.searchParams.delete(key)
     window.history.replaceState(null, "", url)
     const push = window.history.pushState,
@@ -331,6 +331,134 @@ export const LoadError: Story = {
           )
         ),
         ...handlers,
+      ],
+    },
+  },
+}
+
+const conversations = tickets.map((ticket, index) => ({
+  ...ticket,
+  id: ticket.conversationId,
+  ticketId: null,
+  ticketStatus: null,
+  ticketVersion: null,
+  agentName: "Shop assistant",
+  status: ["active", "handed_off", "closed", "blocked"][index],
+}))
+const conversationHandlers = [
+  http.post("/api/build/build_list_conversations", async ({ request }) => {
+    const { status } = (await request.json()) as { status?: string }
+    return HttpResponse.json({
+      data: {
+        items: conversations.filter(
+          (item) => !status || item.status === status
+        ),
+        nextCursor: null,
+      },
+    })
+  }),
+  http.post("/api/build/build_get_conversation", () =>
+    HttpResponse.json({ data: { ownerType: "ai", status: "active" } })
+  ),
+  http.post("/api/build/build_get_conversation_ownership", () =>
+    HttpResponse.json({
+      data: { mode: "ai", canReply: false, canTakeover: true },
+    })
+  ),
+  ...handlers,
+]
+const conversationParameters = {
+  nextjs: { navigation: { pathname: "/p/demo/build/conversations" } },
+  msw: { handlers: conversationHandlers },
+}
+
+export const Conversations: Story = {
+  args: { view: "conversations" },
+  parameters: conversationParameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    for (const status of ["Ongoing", "Taken over", "Ended", "Blocked"]) {
+      await expect(canvas.findByText(status)).resolves.toBeVisible()
+    }
+    const row = await canvas.findByRole("row", {
+      name: "Open Can you help me find the right size?",
+    })
+    row.focus()
+    await userEvent.keyboard("{Enter}")
+    const page = within(canvasElement.ownerDocument.body)
+    await expect(
+      page.findByRole("heading", { name: "Marina Costa" })
+    ).resolves.toBeVisible()
+    const traceLink = await page.findByRole("link", { name: "View traces" })
+    const url = new URL(traceLink.getAttribute("href")!, window.location.origin)
+    expect(url.pathname).toBe("/p/demo/traces")
+    expect(url.searchParams.get("filter")).toBe('sessionId = "conversation-0"')
+    await expect(
+      page.findByRole("button", { name: "Take over" })
+    ).resolves.toBeEnabled()
+    expect(page.queryByRole("tab", { name: "Notes" })).not.toBeInTheDocument()
+    expect(
+      page.queryByRole("combobox", { name: "Ticket status" })
+    ).not.toBeInTheDocument()
+    await expect(
+      page.findByRole("textbox", { name: "Message" })
+    ).resolves.toBeDisabled()
+    await userEvent.click(
+      page.getByRole("button", { name: "Close conversation" })
+    )
+    await expect(row).toHaveFocus()
+    await userEvent.keyboard("{Enter}")
+    await expect(
+      page.findByRole("link", { name: "View traces" })
+    ).resolves.toBeVisible()
+  },
+}
+export const ConversationsEmpty: Story = {
+  args: { view: "conversations" },
+  parameters: {
+    ...conversationParameters,
+    msw: {
+      handlers: [
+        http.post("/api/build/build_list_conversations", () =>
+          HttpResponse.json({ data: { items: [], nextCursor: null } })
+        ),
+        ...conversationHandlers,
+      ],
+    },
+  },
+}
+export const ConversationsLoading: Story = {
+  args: { view: "conversations" },
+  parameters: {
+    ...conversationParameters,
+    msw: {
+      handlers: [
+        http.post("/api/build/build_list_conversations", async () => {
+          await delay("infinite")
+          return HttpResponse.json({ data: [] })
+        }),
+        ...conversationHandlers,
+      ],
+    },
+  },
+}
+export const ConversationsError: Story = {
+  args: { view: "conversations" },
+  parameters: {
+    ...conversationParameters,
+    msw: {
+      handlers: [
+        http.post("/api/build/build_list_conversations", () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: "Could not load conversations. Please try again.",
+              },
+            },
+            { status: 503 }
+          )
+        ),
+        ...conversationHandlers,
       ],
     },
   },

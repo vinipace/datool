@@ -6,7 +6,7 @@ export const collectionTable = {
   runningRow: "bg-warning/10 hover:bg-warning/15",
   cell: "h-10 px-3 py-0 align-middle first:rounded-l-md last:rounded-r-md",
   compactRow: "[&>td]:h-10! [&>td]:py-0! [&>td]:align-middle!",
-  compactCellContent: "max-h-6 overflow-hidden text-ellipsis whitespace-nowrap [&_*]:whitespace-nowrap [&_p]:m-0 [&_br]:hidden has-[button]:max-h-8 has-[input]:max-h-8 has-[[data-slot=user-avatar]]:max-h-8 has-[[data-slot=percentage-cell]]:max-h-8",
+  compactCellContent: "max-h-6 overflow-hidden text-ellipsis whitespace-nowrap [&_*]:whitespace-nowrap [&_p]:m-0 [&_br]:hidden has-[button]:max-h-8 has-[input]:max-h-8 has-[[data-slot=user-avatar]]:max-h-8 has-[[data-slot=conversation-avatar]]:max-h-10 has-[[data-slot=conversation-avatar]]:overflow-visible has-[[data-slot=percentage-cell]]:max-h-8",
   compactContent: "max-h-6 overflow-hidden text-ellipsis whitespace-nowrap [&_*]:whitespace-nowrap [&_p]:m-0",
   tallContent: "whitespace-pre-wrap [overflow-wrap:anywhere]",
 }

@@ -792,10 +792,10 @@
 }
 .collection-table-row[data-selected="true"] td,
 .collection-table-row[data-selected="true"] td a,
-.collection-table-row[data-selected="true"] td span:not(:has(svg)):not(.token),
+.collection-table-row[data-selected="true"] td span:not(:has(svg)):not(.token):not([data-slot="conversation-avatar"], [data-slot="conversation-avatar"] *),
 .collection-table-row[data-selected="true"] dd,
 .collection-table-row[data-selected="true"] dd a,
-.collection-table-row[data-selected="true"] dd span:not(:has(svg)):not(.token) {
+.collection-table-row[data-selected="true"] dd span:not(:has(svg)):not(.token):not([data-slot="conversation-avatar"], [data-slot="conversation-avatar"] *) {
   color: inherit;
 }
 

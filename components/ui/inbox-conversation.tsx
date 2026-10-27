@@ -36,6 +36,7 @@ export function ConversationAvatar({
     .toUpperCase()
   return (
     <span
+      data-slot="conversation-avatar"
       aria-hidden
       className={cn(
         "relative inline-flex shrink-0",

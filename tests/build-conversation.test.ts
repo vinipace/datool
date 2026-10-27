@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
+import { sql } from "drizzle-orm"
 
 import {
   closeTracerDatabase,
@@ -112,7 +113,17 @@ describe("Build conversation ledger", () => {
       id: "support",
       reason: "Investigate refund",
     })
+    // Updated order must win over the random conversation IDs, down to
+    // PostgreSQL microseconds (which a JavaScript Date would truncate).
+    const [olderId, newerId] = [ordinary.id, escalated.id].sort()
+    await database.execute(sql`
+      update build_conversations set updated_at = case
+        when id = ${newerId} then '2026-10-27 12:00:00.123456+00'::timestamptz
+        else '2026-10-27 12:00:00.123455+00'::timestamptz end
+      where project_id = ${projectId}
+    `)
     const all = await service.list()
+    expect(all.items.map((item) => item.id)).toEqual([newerId, olderId])
     expect(all.items).toHaveLength(2)
     expect(all.items.find((item) => item.id === ordinary.id)).toMatchObject({
       subject: "Opening hours",
@@ -205,6 +216,36 @@ describe("Build conversation ledger", () => {
         })
       ).items.map((item) => item.id)
     ).toEqual([escalated.id])
+
+    // Equal timestamps use the descending ID as a stable page boundary.
+    await database.execute(sql`
+      update build_conversations set updated_at = '2026-10-27 12:00:00.123456+00'
+      where project_id = ${projectId} and agent_id = 'agent-a'
+    `)
+    const tiedFirst = await service.list({ agentId: "agent-a", limit: 1 })
+    const tiedSecond = await service.list({
+      agentId: "agent-a",
+      limit: 1,
+      cursor: tiedFirst.nextCursor,
+    })
+    expect(tiedFirst.items.map((item) => item.id)).toEqual([newerId])
+    expect(tiedSecond.items.map((item) => item.id)).toEqual([olderId])
+    expect(tiedSecond.nextCursor).toBeNull()
+
+    // A later message brings the older conversation back to the top.
+    await service.appendMessage(olderId, {
+      role: "user",
+      content: "Following up",
+      status: "completed",
+      metadata: {},
+    })
+    expect((await service.list({ agentId: "agent-a" })).items[0]?.id).toBe(
+      olderId
+    )
+    await rejects(
+      service.list({ cursor: "invalid-cursor" }),
+      /Invalid conversations cursor/
+    )
 
     const { service: otherProject } = await makeService()
     expect((await otherProject.list({ search: "Refund" })).items).toEqual([])
