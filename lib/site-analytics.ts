@@ -42,8 +42,9 @@ export function initializeAnalytics(id: string) {
   if (!analyticsAllowed()) return
   const target = window as AnalyticsWindow
   target.dataLayer ??= []
-  target.gtag ??= function (...args: unknown[]) {
-    target.dataLayer!.push(args)
+  target.gtag ??= function () {
+    // Google's command queue requires Arguments objects, not arrays.
+    target.dataLayer!.push(arguments)
   }
   target.gtag("js", new Date())
   target.gtag("config", id, {
