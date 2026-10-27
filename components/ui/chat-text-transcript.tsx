@@ -31,7 +31,7 @@ export function ChatTextTranscript({
       },
     }))
   return (
-    <div className="space-y-3">
+    <div>
       {transcript.map((message, index) => (
         <article
           key={message.id}
@@ -44,7 +44,11 @@ export function ChatTextTranscript({
                 : "Assistant message"
           }
           className={cn(
-            "flex min-w-0 flex-col py-1",
+            "flex min-w-0 flex-col",
+            index > 0 &&
+              (sameChatMessageGroup(transcript[index - 1], message)
+                ? "mt-1"
+                : "mt-5"),
             message.outgoing ? "items-end" : "items-start"
           )}
         >
@@ -71,7 +75,11 @@ export function ChatTextTranscript({
           {renderMessageFooter?.(message.id)}
         </article>
       ))}
-      {pendingReply}
+      {pendingReply && (
+        <div className={transcript.length > 0 ? "mt-5" : undefined}>
+          {pendingReply}
+        </div>
+      )}
     </div>
   )
 }

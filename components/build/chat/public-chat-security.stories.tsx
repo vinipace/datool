@@ -1030,6 +1030,10 @@ export const HumanReplies: Story = {
       continuation.querySelector('[data-slot="user-avatar"]')
     ).toBeNull()
     await expect(within(continuation).queryByText("Marina")).toBeNull()
+    await expect(
+      continuation.getBoundingClientRect().top -
+        reply.getBoundingClientRect().bottom
+    ).toBeLessThanOrEqual(4)
     await expect(reply.querySelector("time")).toBeNull()
     await expect(
       within(reply).queryByRole("button", { name: "Helpful" })

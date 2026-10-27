@@ -229,8 +229,8 @@ export function MessageTranscript({
   return (
     <div
       className={cn(
-        "relative space-y-3 whitespace-normal",
-        variant !== "customer" && "font-sans",
+        "relative whitespace-normal",
+        variant !== "customer" && "space-y-3 font-sans",
         variant === "inbox" && "space-y-2"
       )}
     >
@@ -299,7 +299,9 @@ export function MessageTranscript({
                     : undefined
               }
               className={cn(
-                "min-w-0 py-1",
+                "min-w-0",
+                !customer && "py-1",
+                customer && index > 0 && (continuesGroup ? "mt-1" : "mt-5"),
                 (variant !== "default" || isOutgoing) &&
                   "flex flex-col items-start",
                 isOutgoing && "items-end",
@@ -519,7 +521,7 @@ export function MessageTranscript({
         {pendingReply ? (
           <motion.div
             key="pending-reply"
-            className="flex justify-start py-1"
+            className={cn("flex justify-start py-1", variant === "customer" && transcript.length > 0 && "mt-5")}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

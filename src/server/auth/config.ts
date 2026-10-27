@@ -266,11 +266,16 @@ export function organizationAuthOptions(
                   clientId: process.env.GOOGLE_CLIENT_ID!,
                   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
                 }).getUserInfo(tokens)
-                return profile &&
-                  (isAllowedGoogleUser(profile.user) ||
-                    (await hasInvitationSignInAccess(database, profile.user)))
-                  ? profile
-                  : null
+                if (!profile?.user.email || !(isAllowedGoogleUser(profile.user) ||
+                  (await hasInvitationSignInAccess(database, profile.user)))) return null
+                // Keep deliberate Datool edits while still refreshing untouched profiles.
+                const customized = await database.query<{ name: string; image: string | null }>(
+                  'SELECT u.name,u.image FROM "user" u JOIN user_profile p ON p.user_id=u.id WHERE u.email=$1',
+                  [profile.user.email.toLowerCase()]
+                )
+                return customized.rows[0]
+                  ? { ...profile, user: { ...profile.user, name: customized.rows[0].name, image: customized.rows[0].image ?? undefined } }
+                  : profile
               },
             },
           }
