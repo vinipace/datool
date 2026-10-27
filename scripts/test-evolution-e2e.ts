@@ -4,6 +4,8 @@ import assert from "node:assert/strict"
 import { createServer } from "node:http"
 import { once } from "node:events"
 import { randomUUID } from "node:crypto"
+import sharp from "sharp"
+import { execFileSync } from "node:child_process"
 import { sql } from "drizzle-orm"
 import {
   createIsolatedPostgres,
@@ -19,6 +21,37 @@ let sends = 0,
 const sentNumbers: string[] = []
 const storedMessages = new Map<string, Record<string, unknown>>()
 let lookupFailure = ""
+let mediaBase64 = "",
+  mediaMime = "image/png"
+let transcriptions = 0,
+  transcriptionMode = "ok"
+const realFetch = globalThis.fetch
+// Exercise the production multipart transport and credit ledger without a paid call.
+globalThis.fetch = (async (input, init) => {
+  if (String(input) !== "https://api.openai.com/v1/audio/transcriptions")
+    return realFetch(input, init)
+  transcriptions++
+  assert.equal(
+    new Headers(init?.headers).get("authorization"),
+    "Bearer synthetic-transcription"
+  )
+  const form = init?.body as FormData
+  assert.equal(form.get("model"), "gpt-transcribe")
+  const file = form.get("file") as Blob
+  const bytes = Buffer.from(await file.arrayBuffer())
+  assert.equal(bytes.toString("ascii", 0, 4), "RIFF")
+  if (transcriptionMode === "timeout")
+    throw new Error("synthetic lost response")
+  if (transcriptionMode === "rejected")
+    return Response.json({}, { status: 429 })
+  return Response.json(
+    {
+      text: "Quero ver três produtos",
+      usage: { type: "duration", seconds: 1 },
+    },
+    { headers: { "x-request-id": "transcription-test" } }
+  )
+}) as typeof fetch
 const instances = new Map<
   string,
   { token: string; webhook?: Record<string, unknown> }
@@ -85,6 +118,11 @@ const server = createServer(async (req, res) => {
     if (lookupFailure === "wrong-time") stored.messageTimestamp = 1
     const records = lookupFailure === "duplicates" ? [stored, stored] : [stored]
     return out(200, { messages: { total: records.length, records } })
+  }
+  if (url.pathname.startsWith("/chat/getBase64FromMediaMessage/")) {
+    assert(storedMessages.has(body.message.key.id))
+    assert.equal(body.convertToMp4, false)
+    return out(200, { base64: mediaBase64, mimetype: mediaMime })
   }
   if (url.pathname.startsWith("/message/sendText/")) {
     sends++
@@ -521,6 +559,288 @@ try {
     evo.sendEvolutionEnvelope(ctx, envelope2, external, String(msg2.id)),
     (error: unknown) => (error as { uncertain: boolean }).uncertain === true
   )
+  failSend = false
+  Object.assign(process.env, {
+    DATOOL_BILLING_ENABLED: "true",
+    DATOOL_MANAGED_EXECUTION_ENABLED: "true",
+    DATOOL_TRANSCRIPTION_OPENAI_API_KEY: "synthetic-transcription",
+  })
+  const { executionCredits } =
+    await import("../src/server/execution-credits/ledger")
+  const { prepareEvolutionMedia } =
+    await import("../src/server/build/channels/media")
+  await database.execute(
+    sql`INSERT INTO organization_billing(organization_id,subscription_id,price_id,status,access_until,checkout_attempt_id) VALUES(${target.organizationId},'sub','price_core','active',now()+interval '30 days','attempt')`
+  )
+  await executionCredits.grant({
+    organizationId: target.organizationId,
+    subscriptionId: "sub",
+    invoiceId: "invoice",
+    start: new Date(Date.now() - 1000),
+    end: new Date(Date.now() + 86400000),
+    plan: "core",
+  })
+  // Drain unrelated jobs without executing additional synthetic turns.
+  await database.execute(
+    sql`UPDATE build_channel_job SET status='succeeded',lock_token=NULL,locked_at=NULL WHERE project_id=${target.projectId}`
+  )
+  async function admitMedia(id: string, type: "image" | "audio", caption = true) {
+    const base = incoming(id)
+    base.data.key.remoteJid = "5511999990007@s.whatsapp.net"
+    const payload = {
+      ...base,
+      data: {
+        ...base.data,
+        message: {
+          [type + "Message"]: {
+            mimetype: mediaMime,
+            caption:
+              type === "image" && caption ? "O que aparece aqui?" : undefined,
+            url: "http://127.0.0.1/never-fetch",
+            mediaKey: "do-not-persist",
+          },
+        },
+      },
+    }
+    storedMessages.set(id, payload.data)
+    assert.equal((await webhook(payload)).status, 200)
+    assert.equal((await webhook(payload)).status, 200)
+    const message = (
+      await database.execute<Record<string, unknown>>(
+        sql`SELECT * FROM build_channel_message WHERE project_id=${target.projectId} AND provider_message_id=${id}`
+      )
+    ).rows[0]
+    assert.equal(
+      message.status,
+      "accepted",
+      "Media must be admitted to an AI turn, not silently ignored"
+    )
+    assert(!JSON.stringify(message.content_json).includes("do-not-persist"))
+    const job = await channels.claimNextChannelJob(database)
+    assert(job && job.kind === "process_inbound")
+    assert.equal(job.messageId, message.id)
+    return { message, job }
+  }
+  async function runMedia(
+    job: NonNullable<Awaited<ReturnType<typeof channels.claimNextChannelJob>>>,
+    check: (input: import("../src/lib/build/channels").AgentTurnInput) => void
+  ) {
+    let calls = 0
+    await channels.processChannelJob(
+      job,
+      async (input) => {
+        calls++
+        check(input)
+        return { messages: [{ text: "Entendi sua mensagem." }] }
+      },
+      database
+    )
+    await channels.completeChannelJob(database, job)
+    await database.execute(
+      sql`UPDATE build_channel_job SET status='succeeded' WHERE project_id=${target.projectId} AND kind='deliver_outbound'`
+    )
+    return calls
+  }
+  mediaBase64 = (
+    await sharp({
+      create: { width: 10, height: 10, channels: 3, background: "red" },
+    })
+      .png()
+      .toBuffer()
+  ).toString("base64")
+  const imageJob = await admitMedia("image-1", "image")
+  assert.equal(
+    await runMedia(imageJob.job, (input) => {
+      assert.equal(input.messages.at(-1)?.content, "O que aparece aqui?")
+      assert.equal(input.images?.length, 1)
+      assert.equal(input.images?.[0].mediaType, "image/jpeg")
+      assert(input.images![0].data.length > 0)
+    }),
+    1
+  )
+  const bareImage = await admitMedia("image-no-caption", "image", false)
+  assert.equal(
+    await runMedia(bareImage.job, (input) => {
+      assert.equal(input.messages.at(-1)?.content, "[Image]")
+      assert.equal(input.images?.length, 1)
+    }),
+    1
+  )
+  await assert.rejects(
+    prepareEvolutionMedia(
+      { ...ctx, projectId: "other-project" },
+      String(imageJob.message.id),
+      async () => {}
+    )
+  )
+  // A one-second PCM fixture exercises real local decoding and multipart upload.
+  const wav = Buffer.alloc(44 + 32000)
+  wav.write("RIFF")
+  wav.writeUInt32LE(wav.length - 8, 4)
+  wav.write("WAVEfmt ", 8)
+  wav.writeUInt32LE(16, 16)
+  wav.writeUInt16LE(1, 20)
+  wav.writeUInt16LE(1, 22)
+  wav.writeUInt32LE(16000, 24)
+  wav.writeUInt32LE(32000, 28)
+  wav.writeUInt16LE(2, 32)
+  wav.writeUInt16LE(16, 34)
+  wav.write("data", 36)
+  wav.writeUInt32LE(32000, 40)
+  mediaMime = "audio/ogg; codecs=opus"
+  mediaBase64 = execFileSync(
+    "ffmpeg",
+    [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "pipe:0",
+      "-c:a",
+      "libopus",
+      "-f",
+      "ogg",
+      "pipe:1",
+    ],
+    { input: wav, maxBuffer: 100_000 }
+  ).toString("base64")
+  const audioJob = await admitMedia("audio-1", "audio")
+  assert.equal(
+    await runMedia(audioJob.job, (input) => {
+      assert.equal(input.messages.at(-1)?.content, "Quero ver três produtos")
+      assert.equal(input.images?.length, 0)
+    }),
+    1
+  )
+  assert.equal(transcriptions, 1)
+  assert.equal(
+    (
+      await prepareEvolutionMedia(
+        ctx,
+        String(audioJob.message.id),
+        async () => {}
+      )
+    ).text,
+    "Quero ver três produtos"
+  )
+  assert.equal(
+    transcriptions,
+    1,
+    "A retry reuses the transcript and never dispatches another paid request"
+  )
+  const usage = await executionCredits.usage(target.organizationId)
+  assert.equal(usage.used, 0.000075)
+  assert.equal(usage.reserved, 0)
+  const attributed = (
+    await database.execute<Record<string, unknown>>(
+      sql`SELECT * FROM build_usage_event WHERE project_id=${target.projectId} AND model='gpt-transcribe'`
+    )
+  ).rows
+  assert.equal(attributed.length, 1)
+  assert.equal(attributed[0].conversation_id, audioJob.message.conversation_id)
+  assert.equal(Number(attributed[0].cost_nano_usd), 75000)
+  const cancelled = await admitMedia("audio-cancelled", "audio")
+  let admissionChecks = 0
+  await assert.rejects(
+    prepareEvolutionMedia(ctx, String(cancelled.message.id), async () => {
+      admissionChecks++
+      if (admissionChecks === 3) throw new Error("Ownership changed")
+    })
+  )
+  assert.equal(admissionChecks, 3)
+  assert.equal(transcriptions, 1)
+  assert.equal(
+    (await executionCredits.usage(target.organizationId)).reserved,
+    0
+  )
+  assert.equal(
+    await runMedia(cancelled.job, () =>
+      assert.fail("Cancelled audio must not invoke AI")
+    ),
+    0
+  )
+  transcriptionMode = "rejected"
+  const rejectedAudio = await admitMedia("audio-rejected", "audio")
+  assert.equal(
+    await runMedia(rejectedAudio.job, () =>
+      assert.fail("Rejected audio must not invoke AI")
+    ),
+    0
+  )
+  assert.equal(
+    (await executionCredits.usage(target.organizationId)).reserved,
+    0
+  )
+  assert.equal(
+    (await executionCredits.usage(target.organizationId)).used,
+    0.000075
+  )
+  transcriptionMode = "timeout"
+  const uncertainAudio = await admitMedia("audio-uncertain", "audio")
+  assert.equal(
+    await runMedia(uncertainAudio.job, () =>
+      assert.fail("Uncertain audio must not invoke AI")
+    ),
+    0
+  )
+  const attempts = transcriptions
+  await assert.rejects(
+    prepareEvolutionMedia(
+      ctx,
+      String(uncertainAudio.message.id),
+      async () => {}
+    )
+  )
+  assert.equal(transcriptions, attempts)
+  assert.equal(
+    (await executionCredits.usage(target.organizationId)).reserved,
+    0.0225
+  )
+  await database.execute(
+    sql`UPDATE execution_credit_period SET allowance=spent+reserved WHERE organization_id=${target.organizationId}`
+  )
+  const unfunded = await admitMedia("audio-no-credits", "audio")
+  assert.equal(
+    await runMedia(unfunded.job, () =>
+      assert.fail("Unfunded audio must not invoke AI")
+    ),
+    0
+  )
+  assert.equal(
+    transcriptions,
+    attempts,
+    "No paid request when credits are exhausted"
+  )
+  assert(
+    (
+      await database.execute(
+        sql`SELECT 1 FROM build_channel_message WHERE project_id=${target.projectId} AND direction='outbound' AND content_json->>'text' LIKE '%envie sua mensagem por texto%'`
+      )
+    ).rows.length >= 3
+  )
+  // Wrong-conversation provider records and malformed images never reach AI.
+  lookupFailure = "wrong-phone"
+  mediaMime = "image/png"
+  const wrongMedia = await admitMedia("image-wrong-owner", "image")
+  assert.equal(
+    await runMedia(wrongMedia.job, () =>
+      assert.fail("Mismatched media must not invoke AI")
+    ),
+    0
+  )
+  lookupFailure = ""
+  mediaBase64 = Buffer.from("not an image").toString("base64")
+  const malformed = await admitMedia("image-malformed", "image")
+  assert.equal(
+    await runMedia(malformed.job, () =>
+      assert.fail("Invalid image must not invoke AI")
+    ),
+    0
+  )
+  assert.equal(transcriptions, attempts)
+  console.log(
+    "PASS image bytes and caption, audio transcript, measured credits, retry reuse, rejected/uncertain/unfunded outcomes and customer feedback"
+  )
   process.env.DATOOL_EVOLUTION_ENABLED = "false"
   await assert.rejects(
     evo.assertEvolutionOutbound(ctx, envelope, external),
@@ -639,6 +959,7 @@ try {
     "PASS exclusive number ownership, opaque LIDs, disconnect revocation and credential removal"
   )
 } finally {
+  globalThis.fetch = realFetch
   server.closeAllConnections()
   server.close()
   await pools?.db.end()

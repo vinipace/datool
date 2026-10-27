@@ -122,7 +122,11 @@ export type OutboundEnvelope = {
   metadata?: Record<string, unknown>
 }
 
+export type ChannelImage = { data: Uint8Array; mediaType: string }
+
 export type AgentTurnInput = {
+  /** Server-fetched bytes; never accepted from public request metadata. */
+  images?: ChannelImage[]
   projectId: string
   agentId: string
   conversationId: string

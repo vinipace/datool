@@ -1,3 +1,4 @@
+import { prepareEvolutionMedia, ChannelMediaError } from "./media"
 import { prepareWhatsAppText } from "./links"
 import { evolutionEnabled } from "./evolution-api"
 import { assertEvolutionOutbound, sendEvolutionEnvelope, setEvolutionStatus } from "./evolution"
@@ -2359,38 +2360,73 @@ export async function processChannelJob(
       agentId: String(message.agent_id),
       channel: loaded.connection.channel,
     })
-    output = await runner({
-      projectId: job.projectId,
-      agentId: String(message.agent_id),
-      conversationId: String(message.conversation_id),
-      channel: loaded.connection.channel,
-      contactId: String(message.contact_id ?? ""),
-      messages: [
-        ...historyRows.rows.map((row) => {
-          const content = messageContent(row)
-          const role: "user" | "assistant" =
-            row.direction === "inbound" ? "user" : "assistant"
-          return {
-            role,
-            content: content.text,
-            attachments: content.attachments,
-          }
-        }),
-        (() => {
-          const content = messageContent(message)
-          return {
-            role: "user" as const,
-            content: content.text,
-            attachments: content.attachments,
-          }
-        })(),
-      ],
-      metadata: {
-        ...jsonObject(job.payload),
-        requestKey: `channel:${job.id}`,
-        externalConversationId: String(message.conversation_external_id ?? ""),
-      },
-    })
+    const currentContent = messageContent(message)
+    let images: import("@/src/lib/build/channels").ChannelImage[] = []
+    let mediaFailure: string | undefined
+    if (
+      loaded.connection.config.provider === "evolution" &&
+      currentContent.attachments.some(
+        (a) => a.type === "image" || a.type === "audio"
+      )
+    ) {
+      try {
+        const prepared = await prepareEvolutionMedia(context, job.messageId, async () => {
+          await assertChannelJobReady(database, job, { agentId: String(message.agent_id), channel: loaded.connection.channel })
+          const current = await database.execute(sql`SELECT 1 FROM build_conversations WHERE project_id=${job.projectId} AND id=${String(message.conversation_id)} AND owner_type='ai' AND owner_fence=${ownerFence} AND status='active'`)
+          if (!current.rows.length) throw new ChannelLeaseLostError()
+        })
+        images = prepared.images
+        if (prepared.text !== undefined) currentContent.text = prepared.text
+      } catch (error) {
+        if (!(error instanceof ChannelMediaError)) throw error
+        mediaFailure = String(message.conversation_external_id).startsWith("55")
+          ? "Não consegui processar esta imagem ou áudio. Por favor, envie sua mensagem por texto."
+          : "I couldn't process this image or audio. Please send your message as text."
+        await database.execute(
+          sql`UPDATE build_channel_message SET error_code=${error.code},error_message='Media processing failed.' WHERE project_id=${job.projectId} AND id=${job.messageId}`
+        )
+      }
+      await assertChannelJobReady(database, job, {
+        agentId: String(message.agent_id),
+        channel: loaded.connection.channel,
+      })
+    }
+    output = mediaFailure
+      ? { messages: [{ text: mediaFailure }] }
+      : await runner({
+          images,
+          projectId: job.projectId,
+          agentId: String(message.agent_id),
+          conversationId: String(message.conversation_id),
+          channel: loaded.connection.channel,
+          contactId: String(message.contact_id ?? ""),
+          messages: [
+            ...historyRows.rows.map((row) => {
+              const content = messageContent(row)
+              const role: "user" | "assistant" =
+                row.direction === "inbound" ? "user" : "assistant"
+              return {
+                role,
+                content: content.text,
+                attachments: content.attachments,
+              }
+            }),
+            (() => {
+              return {
+                role: "user" as const,
+                content: currentContent.text,
+                attachments: currentContent.attachments,
+              }
+            })(),
+          ],
+          metadata: {
+            ...jsonObject(job.payload),
+            requestKey: `channel:${job.id}`,
+            externalConversationId: String(
+              message.conversation_external_id ?? ""
+            ),
+          },
+        })
   } catch (error) {
     await assertChannelJobReady(database, job, {
       agentId: String(message.agent_id),

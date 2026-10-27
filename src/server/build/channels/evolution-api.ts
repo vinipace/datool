@@ -42,6 +42,7 @@ export async function evolutionRequest<T = EvolutionObject>(
     method?: string
     body?: unknown
     sending?: boolean
+    maxResponseBytes?: number
   } = {}
 ): Promise<T> {
   const config = evolutionConfig()
@@ -83,7 +84,23 @@ export async function evolutionRequest<T = EvolutionObject>(
     )
   }
   try {
-    return (await response.json()) as T
+    const limit = options.maxResponseBytes ?? 2_000_000
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error("Missing body")
+    const chunks: Uint8Array[] = []
+    let size = 0
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        size += value.byteLength
+        if (size > limit) throw new Error("Response limit exceeded")
+        chunks.push(value)
+      }
+    } finally {
+      void reader.cancel().catch(() => {})
+    }
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as T
   } catch {
     throw new WhatsAppApiError(
       "INVALID_PROVIDER_RESPONSE",
@@ -100,7 +117,13 @@ export function evolutionPhone(jid: unknown) {
 export function evolutionMessage(data: unknown) {
   const raw = evolutionObject(data),
     key = evolutionObject(raw.key),
-    message = evolutionObject(raw.message)
+    originalMessage = evolutionObject(raw.message)
+  let message = originalMessage
+  for (let depth = 0; depth < 3; depth++) {
+    const ephemeral = evolutionObject(message.ephemeralMessage).message
+    if (!ephemeral) break
+    message = evolutionObject(ephemeral)
+  }
   if (
     typeof key.remoteJid !== "string" ||
     !/@(?:s\.whatsapp\.net|lid)$/.test(key.remoteJid)
@@ -121,10 +144,19 @@ export function evolutionMessage(data: unknown) {
     time > Date.now() + 60_000
   )
     return null
+  // View-once media stays unsupported; do not bypass its intended lifecycle.
+  const mediaType: "image" | "audio" | null = message.imageMessage
+    ? "image"
+    : message.audioMessage
+      ? "audio"
+      : null
+  const media = evolutionObject(
+    mediaType === "image" ? message.imageMessage : message.audioMessage
+  )
   const body =
     typeof message.conversation === "string"
       ? message.conversation
-      : evolutionObject(message.extendedTextMessage).text
+      : (evolutionObject(message.extendedTextMessage).text ?? media.caption)
   // Preserve the provider address only when this event also identifies a phone.
   // A LID is opaque and must never become a phone-based conversation identity.
   const replyJid =
@@ -142,8 +174,28 @@ export function evolutionMessage(data: unknown) {
     text:
       typeof body === "string"
         ? body.slice(0, 16_000)
-        : "[Unsupported message]",
-    supported: typeof body === "string",
+        : mediaType === "image"
+          ? "[Image]"
+          : mediaType === "audio"
+            ? "[Audio message]"
+            : "[Unsupported message]",
+    supported: typeof body === "string" || mediaType !== null,
+    attachments: mediaType
+      ? [
+          {
+            type: mediaType,
+            fileId: id,
+            mimeType:
+              typeof media.mimetype === "string"
+                ? media.mimetype.slice(0, 100)
+                : undefined,
+            caption:
+              typeof media.caption === "string"
+                ? media.caption.slice(0, 16_000)
+                : undefined,
+          },
+        ]
+      : [],
     name: typeof raw.pushName === "string" ? raw.pushName.slice(0, 200) : "",
   }
 }
