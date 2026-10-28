@@ -36,7 +36,7 @@ for (const [path, expected] of [
   console.log(`${path}: ${response.status}`)
   if (path === "/") {
     assert.equal(response.redirected, false)
-    assert.ok(body.includes("See what your AI is doing."))
+    assert.ok(body.includes("Build AI agents."))
     assert.ok(!body.includes("NEXT_REDIRECT"))
   }
   if (path === "/" || path === "/landing-page") {

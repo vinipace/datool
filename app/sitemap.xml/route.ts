@@ -8,6 +8,10 @@ import {
 import { getFAQPath } from "@/lib/cms/faq"
 import { getPagePath } from "@/lib/cms/page-path"
 import { cmsEnabled } from "@/lib/cms/config"
+import {
+  agentLandingPath,
+  agentLandingSlugs,
+} from "@/cms/agent-landing-content"
 
 // Deployment origins are runtime configuration, including in the Docker image.
 export const dynamic = "force-dynamic"
@@ -29,7 +33,9 @@ export async function GET(request: Request) {
     getPublishedFAQs(),
   ])
   const paths = [
-    ...(cmsEnabled() ? ["/", "/pricing"] : []),
+    ...(cmsEnabled()
+      ? ["/", "/pricing", ...agentLandingSlugs.map(agentLandingPath)]
+      : []),
     ...(faqPage && !faqPage.seo?.noIndex ? ["/faq"] : []),
     ...faqs
       .filter((faq) => !faq.seo?.noIndex)

@@ -24,7 +24,8 @@ export default async function Preview({
     type !== "pages" &&
     type !== "landing-page" &&
     type !== "faq-page" &&
-    type !== "faqs"
+    type !== "faqs" &&
+    type !== "agent-landings"
   )
     notFound()
   return (

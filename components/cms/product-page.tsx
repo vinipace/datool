@@ -10,6 +10,7 @@ import { productIcons } from "@/components/product-icons"
 import { Button } from "@/components/ui/button"
 import { ContentLink } from "@/components/ui/content-link"
 import { safeHref } from "@/cms/access"
+import { PageBlocks } from "./page-blocks"
 import { ProductPreview, FeatureVisual } from "./product-visuals"
 import styles from "./product.module.css"
 
@@ -51,11 +52,17 @@ const takeaways = {
 export function ProductPillarPage({
   page,
   pillar,
+  preview = false,
 }: {
   page: Page
   pillar: ProductPillar
+  preview?: boolean
 }) {
   const hero = page.layout[0]?.blockType === "hero" ? page.layout[0] : null
+  // Blocks named "story" replace the standard introduction with the landing
+  // story, as on Observe.
+  const story = page.layout.filter((block) => block.blockName === "story")
+  const faq = page.layout.find((block) => block.blockType === "faq")
   const features = productFeatures.filter(
     (feature) =>
       feature.group === pillar.name ||
@@ -83,52 +90,58 @@ export function ProductPillarPage({
           </Button>
         ))}
       </nav>
-      <section className={styles.hero}>
-        <div className={styles.heroGrid}>
-          <h1>{hero?.title ?? page.title}</h1>
-          <div className={styles.heroAside}>
-            <p>{hero?.description}</p>
-            <div className={styles.heroActions}>
-              {hero?.actions
-                ?.filter((action) => safeHref(action.href))
-                .map((action, index) => (
-                  <Button
-                    asChild
-                    key={action.id || index}
-                    variant={index === 0 ? "marketing" : "link"}
-                    size="lg"
-                  >
-                    <Link href={action.href}>
-                      {action.label}
-                      <ArrowUpRight aria-hidden="true" />
-                    </Link>
-                  </Button>
-                ))}
+      {story.length > 0 ? (
+        <PageBlocks blocks={story} preview={preview} landing />
+      ) : (
+        <>
+          <section className={styles.hero}>
+            <div className={styles.heroGrid}>
+              <h1>{hero?.title ?? page.title}</h1>
+              <div className={styles.heroAside}>
+                <p>{hero?.description}</p>
+                <div className={styles.heroActions}>
+                  {hero?.actions
+                    ?.filter((action) => safeHref(action.href))
+                    .map((action, index) => (
+                      <Button
+                        asChild
+                        key={action.id || index}
+                        variant={index === 0 ? "marketing" : "link"}
+                        size="lg"
+                      >
+                        <Link href={action.href}>
+                          {action.label}
+                          <ArrowUpRight aria-hidden="true" />
+                        </Link>
+                      </Button>
+                    ))}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
-      <section
-        id={pillar.slug === "evaluate" ? "evaluations" : "walkthrough"}
-        className={styles.walkthrough}
-        aria-label={`${pillar.name} explained`}
-      >
-        <ProductPreview pillar={pillar} />
-      </section>
-      <section className={styles.thesis}>
-        <div>
-          <p className={styles.eyebrow}>THE QUESTION THAT MATTERS</p>
-          <h2>{questions[pillar.slug]}</h2>
-        </div>
-        <div className={styles.takeaways}>
-          {takeaways[pillar.slug].map((line, index) => (
-            <p key={line}>
-              <span>0{index + 1}</span>
-              {line}
-            </p>
-          ))}
-        </div>
-      </section>
+          </section>
+          <section
+            id={pillar.slug === "evaluate" ? "evaluations" : "walkthrough"}
+            className={styles.walkthrough}
+            aria-label={`${pillar.name} explained`}
+          >
+            <ProductPreview pillar={pillar} />
+          </section>
+          <section className={styles.thesis}>
+            <div>
+              <p className={styles.eyebrow}>THE QUESTION THAT MATTERS</p>
+              <h2>{questions[pillar.slug]}</h2>
+            </div>
+            <div className={styles.takeaways}>
+              {takeaways[pillar.slug].map((line, index) => (
+                <p key={line}>
+                  <span>0{index + 1}</span>
+                  {line}
+                </p>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
       <nav aria-label={`${pillar.name} features`} className={styles.featureNav}>
         {features
           .filter(
@@ -229,6 +242,7 @@ export function ProductPillarPage({
           })}
         </div>
       </section>
+      {faq && <PageBlocks blocks={[faq]} preview={preview} landing />}
       <section className={styles.closing}>
         <p className={styles.eyebrow}>START WITH ONE REQUEST</p>
         <h2>

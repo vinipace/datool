@@ -1,0 +1,648 @@
+.features {
+  margin-top: 8rem;
+}
+.title {
+  max-width: 16ch;
+  font-size: clamp(2.5rem, 6vw, 4.75rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+.title em {
+  color: var(--foreground-muted);
+  font-family: var(--font-landing-accent), ui-sans-serif, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+.grid {
+  display: grid;
+  grid-auto-flow: dense;
+  gap: 0.75rem;
+  margin-top: 3rem;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  min-height: 17rem;
+  padding: 1.25rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: var(--muted);
+  transition: border-color 0.3s;
+}
+.tile:hover {
+  border-color: color-mix(
+    in oklab,
+    var(--commerce-whatsapp) 45%,
+    var(--border)
+  );
+}
+.tile:is([data-visual="whatsapp"], [data-visual="website"]) {
+  border-color: transparent;
+  background-color: var(--commerce-panel);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      var(--commerce-panel-line) 0 1px,
+      transparent 1px 72px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      var(--commerce-panel-line) 0 1px,
+      transparent 1px 72px
+    );
+  color: var(--commerce-chat-text);
+}
+.tile:is([data-visual="whatsapp"], [data-visual="website"]) .tileText {
+  color: var(--commerce-chat-meta);
+}
+.visual {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 8rem;
+  margin-bottom: 1.25rem;
+}
+.tileTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+.tile[data-size="large"] .tileTitle {
+  max-width: 14ch;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  letter-spacing: -0.045em;
+}
+.tileText {
+  margin-top: 0.4rem;
+  color: var(--foreground-muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* Shared chat bits inside the illustrations */
+.bubbleIn,
+.bubbleOut {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+  background: var(--commerce-chat-incoming);
+  color: var(--commerce-chat-text);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+.bubbleOut {
+  align-self: flex-end;
+  border-radius: 0.75rem 0.75rem 0.2rem 0.75rem;
+  background: var(--commerce-chat-outgoing);
+}
+
+/* WhatsApp and website: a short conversation in each channel's frame */
+.channels {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+}
+.browser,
+.miniPhone {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  background: var(--commerce-chat-canvas);
+  box-shadow: 0 30px 60px -30px var(--commerce-device);
+}
+.browser {
+  position: relative;
+  flex: 1;
+  max-width: 19rem;
+  min-height: 12rem;
+  border-radius: 0.9rem;
+}
+.browserBar,
+.miniHeader {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin: -0.75rem -0.75rem 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--commerce-chat-header);
+  color: var(--commerce-chat-meta);
+  font-size: 0.68rem;
+}
+.browserBar {
+  border-radius: 0.9rem 0.9rem 0 0;
+}
+.browserBar svg,
+.miniHeader svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+.miniHeader svg {
+  color: var(--commerce-whatsapp-text);
+}
+.launcher {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--commerce-whatsapp);
+  color: var(--commerce-whatsapp-ink);
+}
+.launcher svg {
+  width: 1rem;
+  height: 1rem;
+}
+.browser[data-size="large"] {
+  max-width: 26rem;
+  min-height: 15rem;
+  padding-bottom: 3.5rem;
+}
+.miniPhone {
+  width: 10rem;
+  min-height: 14rem;
+  border: 0.35rem solid var(--commerce-device);
+  border-radius: 1.4rem;
+}
+.miniPhone[data-size="large"] {
+  width: 15rem;
+  min-height: 17rem;
+}
+.miniHeader {
+  margin: -0.75rem -0.75rem 0.4rem;
+  padding-top: 0.9rem;
+  border-radius: 1rem 1rem 0 0;
+}
+
+/* In-product: the app with a docked guide panel */
+.inproduct {
+  display: flex;
+  width: 100%;
+  max-width: 30rem;
+  height: 13rem;
+  overflow: hidden;
+  border-radius: 0.9rem;
+  background: var(--commerce-chat-canvas);
+  box-shadow: 0 30px 60px -30px var(--commerce-device);
+}
+.appFrame {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+}
+.appSide,
+.appBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0.6rem;
+}
+.appSide {
+  background: var(--commerce-chat-header);
+}
+.appSide span,
+.appBody span {
+  height: 1rem;
+  border-radius: 0.3rem;
+  background: var(--commerce-chat-incoming);
+}
+.appBody span:first-child {
+  width: 50%;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 55%;
+  padding: 0.75rem;
+  border-left: 1px solid var(--commerce-panel-line);
+  background: var(--commerce-chat-canvas);
+}
+.panelHeader {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-bottom: 0.3rem;
+  color: var(--commerce-chat-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.panelHeader svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--commerce-whatsapp-text);
+}
+
+/* Spotlight: a highlighted button with a hint */
+.spotlight {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 2.25rem 0.75rem 0.75rem;
+  border-radius: 0.8rem;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.ghostButton {
+  width: 4rem;
+  height: 2rem;
+  border-radius: 0.45rem;
+  background: var(--muted);
+}
+.target {
+  position: relative;
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  height: 2rem;
+  padding-inline: 0.75rem;
+  border-radius: 0.45rem;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.78rem;
+  font-weight: 600;
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.target svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.tip {
+  position: absolute;
+  bottom: calc(100% + 0.6rem);
+  left: 50%;
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.4rem;
+  background: var(--commerce-whatsapp);
+  color: var(--commerce-whatsapp-ink);
+  font-size: 0.68rem;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* Catalog */
+.catalog {
+  display: flex;
+  gap: 0.6rem;
+}
+.product {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 6.5rem;
+  height: 8rem;
+  padding: 0.6rem;
+  border-radius: 0.9rem;
+  background: var(--marketing-leaf);
+  color: var(--marketing-ink);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.product[data-tone="lilac"] {
+  background: var(--marketing-lilac);
+}
+.product[data-tone="peach"] {
+  background: var(--marketing-peach);
+}
+.product svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  opacity: 0.7;
+}
+.tile:hover .product:nth-child(1) {
+  transform: translateY(-0.4rem) rotate(-3deg);
+}
+.tile:hover .product:nth-child(3) {
+  transform: translateY(-0.4rem) rotate(3deg);
+}
+.productMeta {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.stock {
+  color: var(--marketing-ink-muted);
+  font-weight: 500;
+}
+
+/* Handoff */
+.handoff {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 12rem;
+}
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--foreground-muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.avatar[data-kind="human"] {
+  background: var(--commerce-whatsapp);
+  color: var(--commerce-whatsapp-ink);
+  box-shadow: none;
+}
+.avatar svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.handoffLine {
+  position: relative;
+  flex: 1;
+  height: 2px;
+  overflow: hidden;
+  background: var(--border);
+}
+.handoffLine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--commerce-whatsapp);
+  animation: travel 2.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+/* Knowledge */
+.doc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 12rem;
+  padding: 0.9rem;
+  border-radius: 0.75rem;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.docTitle {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-bottom: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.docTitle svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--foreground-muted);
+}
+.docLine {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+.docLine[data-highlight="true"] {
+  background: var(--commerce-whatsapp);
+  animation: glow 2.4s ease-in-out infinite;
+}
+.docLine[data-short="true"] {
+  width: 60%;
+}
+
+/* Actions */
+.actions {
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 18rem;
+}
+.actions li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: 0.78rem;
+}
+.actions code {
+  font-family: var(--font-geist-mono, ui-monospace), monospace;
+}
+.actions svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--commerce-whatsapp-text);
+}
+.actions li:nth-child(2) {
+  margin-left: 1rem;
+}
+.actions li:nth-child(3) {
+  margin-left: 2rem;
+}
+
+/* Widgets */
+.widget {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border-radius: 0.8rem;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.widget span {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.5rem;
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--foreground-muted);
+  font-size: 0.8rem;
+}
+.widget span[data-selected="true"] {
+  background: var(--commerce-whatsapp);
+  box-shadow: none;
+  color: var(--commerce-whatsapp-ink);
+  font-weight: 600;
+}
+
+/* Leads */
+.lead {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.7rem 0.9rem 0.7rem 0.7rem;
+  border-radius: 0.9rem;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.leadAvatar {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: var(--marketing-lilac);
+  color: var(--marketing-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.leadRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+.tag {
+  width: fit-content;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--commerce-whatsapp) 14%, transparent);
+  color: var(--commerce-whatsapp-text);
+  font-size: 0.68rem;
+}
+
+/* Campaigns */
+.campaign {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-end;
+}
+.campaign > svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--commerce-whatsapp-text);
+  animation: ring 2.8s ease-in-out infinite;
+}
+
+/* Guardrails */
+.guardrail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.blocked {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  align-self: flex-end;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--destructive) 16%, transparent);
+  color: var(--destructive);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+.blocked svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+/* Analytics */
+.chart {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-end;
+  width: 100%;
+  max-width: 20rem;
+  height: 7rem;
+}
+.chart span {
+  flex: 1;
+  border-radius: 0.35rem 0.35rem 0.15rem 0.15rem;
+  background: color-mix(in oklab, var(--commerce-whatsapp) 30%, var(--muted));
+  transform-origin: bottom;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.chart span:last-child {
+  background: var(--commerce-whatsapp);
+}
+.tile:hover .chart span {
+  transform: scaleY(1.06);
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tile[data-size="wide"],
+  .tile[data-size="large"] {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .tile[data-size="large"] {
+    grid-row: span 2;
+    padding: 2rem;
+  }
+}
+
+@keyframes travel {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--commerce-whatsapp);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 9px color-mix(in oklab, var(--commerce-whatsapp) 35%, transparent);
+  }
+}
+@keyframes glow {
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes ring {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0);
+  }
+  76% {
+    transform: rotate(-12deg);
+  }
+  82% {
+    transform: rotate(10deg);
+  }
+  88% {
+    transform: rotate(-6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handoffLine::after,
+  .target,
+  .docLine[data-highlight="true"],
+  .campaign > svg {
+    animation: none;
+  }
+  .product,
+  .chart span {
+    transition: none;
+  }
+}

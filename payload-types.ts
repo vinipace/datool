@@ -70,6 +70,7 @@ export interface Config {
     'cms-users': CmsUser;
     pages: Page;
     faqs: Faq;
+    'agent-landings': AgentLanding;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -80,6 +81,7 @@ export interface Config {
     'cms-users': CmsUsersSelect<false> | CmsUsersSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
     faqs: FaqsSelect<false> | FaqsSelect<true>;
+    'agent-landings': AgentLandingsSelect<false> | AgentLandingsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -200,6 +202,10 @@ export interface FeaturesBlock {
   items: {
     title: string;
     description: string;
+    /**
+     * Optional page the item links to.
+     */
+    href?: string | null;
     id?: string | null;
   }[];
   id?: string | null;
@@ -297,6 +303,141 @@ export interface CallToActionBlock {
   blockType: 'callToAction';
 }
 /**
+ * One landing page per AI agent, published at /agents/<slug>. Each tells one customer's story.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agent-landings".
+ */
+export interface AgentLanding {
+  id: number;
+  title: string;
+  /**
+   * The page is published at /agents/<slug>.
+   */
+  slug: string;
+  /**
+   * Where the story's conversation happens.
+   */
+  channel: 'web' | 'whatsapp' | 'app';
+  /**
+   * Every demo request opens this WhatsApp conversation.
+   */
+  whatsapp: {
+    number: string;
+    message: string;
+  };
+  hero: {
+    title: string;
+    /**
+     * Shown on its own line in the accent style.
+     */
+    accent?: string | null;
+    description: string;
+    primaryLabel: string;
+    /**
+     * Invites visitors to scroll into the story.
+     */
+    scrollLabel?: string | null;
+  };
+  /**
+   * One customer's conversation, revealed chapter by chapter as visitors scroll.
+   */
+  story: {
+    /**
+     * Customer name, shown in WhatsApp.
+     */
+    contact: string;
+    /**
+     * Assistant name, shown in the website and in-product widgets.
+     */
+    assistant: string;
+    /**
+     * Address bar text for the website and in-product frames.
+     */
+    site: string;
+    chapters: {
+      /**
+       * Shown above the chapter title, e.g. Thursday.
+       */
+      time: string;
+      title: string;
+      text: string;
+      messages: {
+        from: 'customer' | 'agent' | 'human' | 'event';
+        /**
+         * Links such as store.com/checkout are styled as links. Events show as a notification beside the device.
+         */
+        text: string;
+        /**
+         * Attach the products below.
+         */
+        showProducts?: boolean | null;
+        /**
+         * In-product only: spotlights the app's main button.
+         */
+        highlight?: boolean | null;
+        id?: string | null;
+      }[];
+      id?: string | null;
+    }[];
+    products?:
+      | {
+          name: string;
+          price: string;
+          tone: 'leaf' | 'lilac' | 'peach';
+          id?: string | null;
+        }[]
+      | null;
+  };
+  /**
+   * Bento grid shown after the story.
+   */
+  features: {
+    title: string;
+    /**
+     * Shown after the title in the accent style.
+     */
+    accent?: string | null;
+    items: {
+      title: string;
+      text: string;
+      visual:
+        | 'whatsapp'
+        | 'website'
+        | 'inproduct'
+        | 'spotlight'
+        | 'catalog'
+        | 'handoff'
+        | 'knowledge'
+        | 'actions'
+        | 'widgets'
+        | 'leads'
+        | 'campaigns'
+        | 'guardrails'
+        | 'analytics';
+      size: 'regular' | 'wide' | 'large';
+      id?: string | null;
+    }[];
+  };
+  faq: {
+    title: string;
+    items: (number | Faq)[];
+  };
+  cta: {
+    title: string;
+    description?: string | null;
+    label: string;
+  };
+  seo?: {
+    title?: string | null;
+    description?: string | null;
+    noIndex?: boolean | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -331,6 +472,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'faqs';
         value: number | Faq;
+      } | null)
+    | ({
+        relationTo: 'agent-landings';
+        value: number | AgentLanding;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -456,6 +601,7 @@ export interface FeaturesBlockSelect<T extends boolean = true> {
     | {
         title?: T;
         description?: T;
+        href?: T;
         id?: T;
       };
   id?: T;
@@ -511,6 +657,100 @@ export interface FaqsSelect<T extends boolean = true> {
       };
   order?: T;
   publishedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agent-landings_select".
+ */
+export interface AgentLandingsSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  channel?: T;
+  whatsapp?:
+    | T
+    | {
+        number?: T;
+        message?: T;
+      };
+  hero?:
+    | T
+    | {
+        title?: T;
+        accent?: T;
+        description?: T;
+        primaryLabel?: T;
+        scrollLabel?: T;
+      };
+  story?:
+    | T
+    | {
+        contact?: T;
+        assistant?: T;
+        site?: T;
+        chapters?:
+          | T
+          | {
+              time?: T;
+              title?: T;
+              text?: T;
+              messages?:
+                | T
+                | {
+                    from?: T;
+                    text?: T;
+                    showProducts?: T;
+                    highlight?: T;
+                    id?: T;
+                  };
+              id?: T;
+            };
+        products?:
+          | T
+          | {
+              name?: T;
+              price?: T;
+              tone?: T;
+              id?: T;
+            };
+      };
+  features?:
+    | T
+    | {
+        title?: T;
+        accent?: T;
+        items?:
+          | T
+          | {
+              title?: T;
+              text?: T;
+              visual?: T;
+              size?: T;
+              id?: T;
+            };
+      };
+  faq?:
+    | T
+    | {
+        title?: T;
+        items?: T;
+      };
+  cta?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        label?: T;
+      };
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        noIndex?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
   _status?: T;

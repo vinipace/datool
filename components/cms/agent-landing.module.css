@@ -1,0 +1,900 @@
+/* Declared on both so the closing panel resolves the pattern with its own line color. */
+.page,
+.cta {
+  --commerce-pattern:
+    repeating-linear-gradient(
+      45deg,
+      var(--commerce-panel-line) 0 1px,
+      transparent 1px 72px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      var(--commerce-panel-line) 0 1px,
+      transparent 1px 72px
+    );
+}
+.page {
+  --commerce-radius: 1.5rem;
+  padding-bottom: 2rem;
+  /* The hero glow bleeds past the edges; clip keeps the sticky stage working. */
+  overflow-x: clip;
+}
+
+/* Hero */
+.hero {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  padding-block: 3rem 2.5rem;
+  text-align: center;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -10% -10% 10%;
+  z-index: -1;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--commerce-whatsapp) 16%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+.headline {
+  font-size: clamp(2.75rem, 11vw, 4rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+.line {
+  display: block;
+}
+.headline em {
+  margin-top: 0.08em;
+  color: var(--foreground-muted);
+  font-family: var(--font-landing-accent), ui-sans-serif, sans-serif;
+  font-size: 1em;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+.lede {
+  max-width: 30rem;
+  margin-top: 1.5rem;
+  color: var(--foreground-muted);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  text-wrap: balance;
+}
+.actions {
+  margin-top: 2rem;
+}
+.scrollCue {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 2rem;
+  color: var(--foreground-muted);
+  font:
+    500 0.72rem var(--font-geist-mono, ui-monospace),
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+.scrollCue:hover {
+  color: var(--foreground);
+}
+.scrollCue:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.scrollCue svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  animation: nudge 1.8s ease-in-out infinite;
+}
+
+/* Story: sticky phone, chapters scroll past it */
+.story {
+  display: grid;
+}
+/* Narrow screens: the stage fills the viewport and captions the active chapter,
+   while the chapter list below only sets the scroll length. */
+.stage {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: calc(100svh - 1rem);
+  padding: 0.75rem;
+  border-radius: var(--commerce-radius);
+  background-color: var(--commerce-panel);
+  background-image: var(--commerce-pattern);
+}
+.caption {
+  display: grid;
+  flex: none;
+  align-content: start;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 8.25rem;
+  padding: 0.85rem 1rem 1rem;
+  border-radius: 1rem;
+  background: var(--background);
+  box-shadow: 0 0 0 1px var(--commerce-panel-line);
+}
+.captionMeta {
+  display: flex;
+  gap: 0.75rem;
+  color: var(--foreground-muted);
+  font:
+    500 0.68rem var(--font-geist-mono, ui-monospace),
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.captionMeta span {
+  color: var(--commerce-whatsapp-text);
+}
+.captionTrack {
+  overflow: hidden;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.captionProgress {
+  display: block;
+  height: 100%;
+  background: var(--commerce-whatsapp);
+  transform-origin: left;
+}
+.captionTitle {
+  margin-top: 0.3rem;
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.captionText {
+  margin-top: 0.35rem;
+  color: var(--foreground-muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.chapters {
+  position: relative;
+  padding-bottom: 20svh;
+  padding-left: 1.75rem;
+}
+.rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0.3rem;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--commerce-whatsapp);
+  transform-origin: top;
+}
+.chapters::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0.3rem;
+  width: 2px;
+  background: var(--border);
+}
+.chapter {
+  display: flex;
+  flex-direction: column;
+  min-height: 55svh;
+  padding-top: 2.5rem;
+  color: var(--foreground-muted);
+  transform: translateY(0.75rem) scale(0.97);
+  transform-origin: left center;
+  transition:
+    color 0.6s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.chapter[data-active="true"] {
+  color: var(--foreground);
+  transform: none;
+}
+.chapterTime {
+  display: flex;
+  gap: 0.75rem;
+  color: var(--foreground-muted);
+  font:
+    500 0.75rem var(--font-geist-mono, ui-monospace),
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.chapter[data-active="true"] .chapterTime span {
+  color: var(--commerce-whatsapp-text);
+}
+.chapterTitle {
+  max-width: 13ch;
+  margin-top: 1rem;
+  font-size: clamp(2.25rem, 5vw, 4rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+.chapterText {
+  max-width: 26rem;
+  margin-top: 1.25rem;
+  color: var(--foreground-muted);
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 959px) {
+  /* The device takes whatever the caption leaves. */
+  .stage .device {
+    flex: 1 1 0;
+  }
+  /* Kept for screen readers; the stage caption shows the active chapter. */
+  .chapters {
+    opacity: 0;
+  }
+}
+
+/* Story device: a phone for WhatsApp, a browser window for the website and the app */
+.device {
+  --chat-canvas: var(--background);
+  --chat-header: var(--muted);
+  --chat-text: var(--foreground);
+  --chat-meta: var(--foreground-muted);
+  --chat-in: var(--muted);
+  --chat-out: var(--foreground);
+  --chat-out-text: var(--background);
+  --chat-accent: var(--foreground);
+  --chat-link: var(--foreground);
+  position: relative;
+  display: grid;
+  /* A fixed track lets the phone and window fill the stage instead of their content. */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.device[data-channel="whatsapp"] {
+  --chat-canvas: var(--commerce-chat-canvas);
+  --chat-header: var(--commerce-chat-header);
+  --chat-text: var(--commerce-chat-text);
+  --chat-meta: var(--commerce-chat-meta);
+  --chat-in: var(--commerce-chat-incoming);
+  --chat-out: var(--commerce-chat-outgoing);
+  --chat-out-text: var(--commerce-chat-text);
+  --chat-accent: var(--commerce-whatsapp-text);
+  --chat-link: var(--commerce-chat-link);
+}
+
+/* Phone */
+.phone {
+  position: relative;
+  width: min(100%, 320px);
+  height: 100%;
+  max-height: 640px;
+  padding: 0.55rem;
+  border-radius: 2.6rem;
+  background: var(--commerce-device);
+  box-shadow:
+    0 0 0 1px var(--commerce-panel-line),
+    0 40px 80px -30px var(--commerce-device);
+}
+.phoneNotch {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  z-index: 2;
+  width: 5.5rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: var(--commerce-device);
+  transform: translateX(-50%);
+}
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 2.1rem;
+  background: var(--chat-canvas);
+  color: var(--chat-text);
+  text-align: left;
+}
+.chatHeader {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 2.6rem 1rem 0.85rem;
+  background: var(--chat-header);
+}
+.chatAvatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: var(--marketing-lilac);
+  color: var(--marketing-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.chatTitle {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.chatStatus {
+  display: block;
+  color: var(--chat-meta);
+  font-size: 0.72rem;
+}
+.chatLog {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  padding: 1rem 0.8rem 1.25rem;
+  /* Only the story scrolls the chat, so wheel and touch always move the page. */
+  overflow: hidden;
+}
+.chatItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 86%;
+  transform-origin: bottom left;
+}
+/* WhatsApp is the business's view; the widgets are the customer's. */
+.device[data-channel="whatsapp"]
+  .chatItem:is([data-from="agent"], [data-from="human"]),
+.device:not([data-channel="whatsapp"]) .chatItem[data-from="customer"] {
+  align-self: flex-end;
+  align-items: flex-end;
+  transform-origin: bottom right;
+}
+.chatItem[data-from="time"],
+.bubble {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.9rem 0.9rem 0.9rem 0.25rem;
+  background: var(--chat-in);
+  color: var(--chat-text);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.device[data-channel="whatsapp"]
+  .chatItem:is([data-from="agent"], [data-from="human"])
+  .bubble,
+.device:not([data-channel="whatsapp"]) .chatItem[data-from="customer"] .bubble {
+  border-radius: 0.9rem 0.9rem 0.25rem 0.9rem;
+  background: var(--chat-out);
+  color: var(--chat-out-text);
+}
+.chatItem[data-from="human"] .bubble {
+  box-shadow: inset 0 0 0 1px var(--chat-accent);
+}
+.sender {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  margin-top: 0.3rem;
+  color: var(--chat-meta);
+  font-size: 0.68rem;
+}
+.sender svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.chatLink {
+  color: var(--chat-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+/* Events arrive as a system notification over the stage, not as chat messages. */
+.notices {
+  position: absolute;
+  top: 0;
+  right: 0.25rem;
+  left: 0.25rem;
+  /* Above the phone's notch, like a system banner. */
+  z-index: 5;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+.notice {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  width: min(100%, 19rem);
+  padding: 0.65rem 0.85rem 0.65rem 0.65rem;
+  border-radius: 1rem;
+  background: color-mix(in oklab, var(--background) 92%, transparent);
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 18px 40px -18px var(--commerce-device);
+  backdrop-filter: blur(12px);
+}
+.noticeIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.6rem;
+  background: var(--commerce-whatsapp);
+  color: var(--commerce-whatsapp-ink);
+}
+.noticeIcon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.noticeTitle {
+  display: block;
+  color: var(--foreground-muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+.noticeText {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.typing {
+  display: flex;
+  gap: 0.25rem;
+  padding-block: 0.8rem;
+}
+.typing span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--chat-meta);
+  animation: typing 1.1s ease-in-out infinite;
+}
+.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.chatProducts {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.chatProduct {
+  display: flex;
+  flex-direction: column;
+  width: 5.4rem;
+  padding: 0.35rem;
+  border-radius: 0.7rem;
+  background: var(--chat-in);
+  color: var(--chat-text);
+}
+.productTile {
+  display: grid;
+  place-items: center;
+  height: 3.6rem;
+  border-radius: 0.5rem;
+  background: var(--marketing-leaf);
+  color: var(--marketing-ink);
+}
+.productTile[data-tone="lilac"] {
+  background: var(--marketing-lilac);
+}
+.productTile[data-tone="peach"] {
+  background: var(--marketing-peach);
+}
+.productTile svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  opacity: 0.7;
+}
+.chatProductName {
+  margin-top: 0.35rem;
+  overflow: hidden;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chatProductPrice {
+  color: var(--chat-accent);
+  font-size: 0.68rem;
+}
+
+/* Browser window for the website widget and the in-product panel */
+.window {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  max-height: 600px;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--background);
+  color: var(--foreground);
+  text-align: left;
+  box-shadow:
+    0 0 0 1px var(--commerce-panel-line),
+    0 40px 80px -30px var(--commerce-device);
+}
+.addressBar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
+}
+.dots {
+  display: flex;
+  gap: 0.3rem;
+}
+.dots span {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+.address {
+  display: flex;
+  flex: 1;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
+  height: 1.5rem;
+  margin-right: 2.5rem;
+  border-radius: 0.4rem;
+  background: var(--background);
+  color: var(--foreground-muted);
+  font-size: 0.7rem;
+}
+.address svg {
+  width: 0.65rem;
+  height: 0.65rem;
+}
+.viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.storefront {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+.skeletonHero {
+  height: 42%;
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, var(--marketing-leaf) 30%, var(--muted));
+}
+.skeletonRow {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.skeletonRow span {
+  border-radius: 0.6rem;
+  background: var(--muted);
+}
+.widget {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  bottom: 4rem;
+  display: flex;
+  flex-direction: column;
+  width: min(20rem, calc(100% - 1.5rem));
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--chat-canvas);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 24px 48px -24px var(--commerce-device);
+}
+.device[data-channel="app"] .widget {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 62%;
+  border-radius: 0;
+  box-shadow: -1px 0 0 var(--border);
+}
+.widgetHeader {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--chat-header);
+}
+.widgetAvatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+}
+.widgetAvatar svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.launcher {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+}
+.launcher svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.appShell {
+  position: absolute;
+  inset: 0 62% 0 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.appNav {
+  display: none;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 0.7rem;
+  border-right: 1px solid var(--border);
+  background: var(--muted);
+}
+.appNav span {
+  height: 1.35rem;
+  border-radius: 0.4rem;
+  background: var(--border);
+}
+.appMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1rem 0.6rem;
+}
+.appToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.appHeading {
+  flex: 1;
+  min-width: 2rem;
+  max-width: 7rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+.appButton {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.45rem;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.appButton svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.appButton[data-spotlight="true"] {
+  animation: spotlight 1.6s ease-in-out infinite;
+}
+.appRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.appRows span {
+  height: 1.6rem;
+  border-radius: 0.4rem;
+  background: var(--muted);
+}
+
+/* FAQ */
+.faq {
+  --faq-accent: var(--commerce-whatsapp-text);
+  margin-top: 8rem;
+}
+
+/* Closing */
+.cta {
+  display: grid;
+  justify-items: center;
+  margin-top: 6rem;
+  padding: 6rem 1.25rem;
+  border-radius: var(--commerce-radius);
+  --commerce-panel-line: var(--commerce-cta-line);
+  background-color: var(--commerce-cta);
+  background-image: var(--commerce-pattern);
+  color: var(--commerce-cta-text);
+  text-align: center;
+}
+.ctaTitle {
+  max-width: 12ch;
+  font-size: clamp(3rem, 9vw, 7rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+  text-wrap: balance;
+}
+.ctaDescription {
+  max-width: 32rem;
+  margin-top: 1.75rem;
+  color: var(--commerce-cta-meta);
+  font-size: 1.25rem;
+  line-height: 1.6;
+}
+.ctaActions {
+  display: grid;
+  justify-items: center;
+  gap: 1.25rem;
+  margin-top: 3rem;
+}
+.ctaButton {
+  height: 3.75rem;
+  padding-inline: 1.5rem;
+  font-size: 1.125rem;
+  box-shadow: 0 0 0 0.5rem
+    color-mix(in oklab, var(--commerce-whatsapp) 18%, transparent);
+}
+.ctaNumber {
+  color: var(--commerce-cta-meta);
+  font:
+    1rem var(--font-geist-mono, ui-monospace),
+    monospace;
+}
+
+@media (min-width: 640px) {
+  .ctaButton {
+    height: 4.5rem;
+    padding-inline: 2.5rem;
+    font-size: 1.5rem;
+  }
+}
+
+@media (min-width: 960px) {
+  .device[data-channel="app"] .widget {
+    width: 55%;
+  }
+  .appShell {
+    right: 55%;
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+  }
+  .appNav {
+    display: flex;
+  }
+  .notices {
+    top: 6%;
+    right: auto;
+    left: -4rem;
+    justify-items: start;
+  }
+  .story {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+    grid-template-areas:
+      "intro stage"
+      "chapters stage";
+    column-gap: 4rem;
+  }
+  .hero {
+    grid-area: intro;
+    place-content: center start;
+    justify-items: start;
+    min-height: 90vh;
+    padding-block: 2rem;
+    text-align: left;
+  }
+  .headline {
+    font-size: clamp(3.5rem, 6.2vw, 6.5rem);
+  }
+  .lede {
+    font-size: 1.25rem;
+  }
+  .scrollCue {
+    margin-top: 3.5rem;
+  }
+  .stage {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    place-items: center;
+    gap: 0;
+    grid-area: stage;
+    align-self: start;
+    top: 5vh;
+    height: 90vh;
+    max-height: 760px;
+    padding: 2rem;
+    box-shadow: none;
+  }
+  .chapters {
+    grid-area: chapters;
+    padding-block: 0;
+    padding-left: 3rem;
+  }
+  .chapter {
+    justify-content: center;
+    min-height: 72vh;
+    padding-top: 0;
+  }
+  .cta {
+    padding: 9rem 3rem;
+  }
+}
+
+@keyframes typing {
+  50% {
+    opacity: 0.3;
+    transform: translateY(-2px);
+  }
+}
+@keyframes spotlight {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--commerce-whatsapp);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 9px color-mix(in oklab, var(--commerce-whatsapp) 35%, transparent);
+  }
+}
+@keyframes nudge {
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chapter {
+    transition: none;
+    transform: none;
+  }
+  .scrollCue svg,
+  .typing span,
+  .appButton[data-spotlight="true"] {
+    animation: none;
+  }
+}

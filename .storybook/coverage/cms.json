@@ -16,6 +16,12 @@
     "story": "components/cms/marketing-shell.stories.tsx"
   },
   {
+    "component": "components/cms/marketing-footer.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "ProductNavigation checks that the footer links every public page in column order."
+  },
+  {
     "component": "components/cms/admin-login.tsx",
     "kind": "composite",
     "story": "components/cms/marketing-shell.stories.tsx",
@@ -49,13 +55,13 @@
     "component": "components/cms/page-blocks.tsx",
     "kind": "composite",
     "story": "components/cms/marketing-shell.stories.tsx",
-    "reason": "LandingPage and NarrowLanding render all CMS blocks and expand complete FAQ answers."
+    "reason": "ObserveLanding and NarrowObserveLanding render all CMS blocks and expand complete FAQ answers."
   },
   {
     "component": "components/cms/structured-data.tsx",
     "kind": "composite",
     "story": "components/cms/marketing-shell.stories.tsx",
-    "reason": "LandingPage includes the nonvisual JSON-LD script alongside its rendered content."
+    "reason": "ObserveLanding includes the nonvisual JSON-LD script alongside its rendered content."
   },
   {
     "component": "components/ui/content-disclosure.tsx",
@@ -68,5 +74,63 @@
     "kind": "composite",
     "story": "components/cms/marketing-shell.stories.tsx",
     "reason": "AnswerWithConnections renders the shared question and related-page links."
+  },
+  {
+    "component": "components/cms/home-page.tsx",
+    "kind": "direct",
+    "story": "components/cms/home-page.stories.tsx"
+  },
+  {
+    "component": "components/cms/platform-preview-build.tsx",
+    "kind": "composite",
+    "story": "components/cms/home-page.stories.tsx",
+    "reason": "The Home story switches the product screen to Build and shows the example conversations table and chat."
+  },
+  {
+    "component": "components/cms/platform-preview-improve.tsx",
+    "kind": "composite",
+    "story": "components/cms/home-page.stories.tsx",
+    "reason": "The Home story picks Improve and shows the example eval results and run comparison."
+  },
+  {
+    "component": "components/cms/platform-tour.tsx",
+    "kind": "composite",
+    "story": "components/cms/home-page.stories.tsx",
+    "reason": "The Home story uses the Build, Observe and Improve slider to switch the product screen."
+  },
+  {
+    "component": "components/cms/home-quality-chart.tsx",
+    "kind": "composite",
+    "story": "components/cms/home-page.stories.tsx",
+    "reason": "The Home story renders the helpful answers dashboard chart in the Observe card."
+  },
+  {
+    "component": "components/cms/agent-landing.tsx",
+    "kind": "direct",
+    "story": "components/cms/agent-landing.stories.tsx"
+  },
+  {
+    "component": "components/cms/agent-landing-chat.tsx",
+    "kind": "composite",
+    "story": "components/cms/agent-landing.stories.tsx",
+    "reason": "Each agent story renders the scroll-driven device on its first channel and reveals the first chapter of the conversation."
+  },
+  {
+    "component": "components/cms/agent-landing-features.tsx",
+    "kind": "composite",
+    "story": "components/cms/agent-landing.stories.tsx",
+    "reason": "The agent stories render the features bento grid with every tile illustration."
+  },
+  {
+    "component": "components/cms/landing-faq.tsx",
+    "kind": "composite",
+    "story": "components/cms/agent-landing.stories.tsx",
+    "reason": "The Sales story opens a FAQ answer and checks its expanded state; the Home story renders rich-text answers."
+  },
+  {
+    "component": "components/cms/marketing-navigation.tsx",
+    "kind": "composite",
+    "story": "components/cms/marketing-shell.stories.tsx",
+    "reason": "The marketing shell story renders the navigation with its Product and Agents menus."
   }
 ]

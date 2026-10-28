@@ -16,6 +16,8 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         marketing:
           "bg-marketing-primary text-marketing-primary-foreground hover:bg-marketing-primary-hover focus-visible:ring-marketing-signal",
+        whatsapp:
+          "bg-commerce-whatsapp text-commerce-whatsapp-ink hover:bg-commerce-whatsapp/90 focus-visible:ring-commerce-whatsapp focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
