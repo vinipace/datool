@@ -479,9 +479,27 @@ jobs:
               echo "Invalid image size" >&2
               exit 1
             fi
-            ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            # Report actual bytes written, so slow uploads do not hit the silence
+            # timeout. A stalled pipe still stops reporting and times out normally.
+            python3 -c '
+            import os, sys, time
+            size = os.path.getsize("image.tar.gz")
+            sent = 0
+            reported = time.monotonic()
+            print(f"Uploading verified image: {size} bytes", file=sys.stderr, flush=True)
+            with open("image.tar.gz", "rb") as archive:
+                while chunk := archive.read(65536):
+                    sys.stdout.buffer.write(chunk)
+                    sys.stdout.buffer.flush()
+                    sent += len(chunk)
+                    now = time.monotonic()
+                    if now - reported >= 15:
+                        print(f"Image upload: {sent}/{size} bytes", file=sys.stderr, flush=True)
+                        reported = now
+            print(f"Image upload complete: {sent}/{size} bytes; waiting for Dokku release", file=sys.stderr, flush=True)
+            ' | ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
-              "datool-deploy@$DOKKU_SSH_HOST" disk:load-image datool "$image" "$image_bytes" < image.tar.gz
+              "datool-deploy@$DOKKU_SSH_HOST" disk:load-image datool "$image" "$image_bytes"
       - run:
           name: Verify web, ingestion, and Build processes
           command: |
