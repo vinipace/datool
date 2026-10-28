@@ -15,7 +15,8 @@ The model must support vision. Raw images are not saved in conversation history
 or traces; later turns retain the caption and the agent's textual interpretation.
 
 Audio is decoded locally to bounded mono PCM using FFmpeg, including WhatsApp
-OGG/Opus voice notes. It is sent to OpenAI's `gpt-transcribe` model; the resulting
+OGG/Opus voice notes. It is sent through the Datool-funded Vercel AI Gateway using
+`openai/gpt-transcribe`; the resulting
 text becomes the user message for the agent and appears in the channel ledger.
 Temporary audio files are removed after decoding, and audio bytes are not stored
 in PostgreSQL. The transcript follows conversation retention/deletion.
@@ -26,7 +27,7 @@ Transcription uses the existing organization execution-credit ledger, attributed
 to the project, agent and conversation as a model operation. It requires managed
 execution, an active paid allowance and sufficient available credits. The worker
 reserves $0.0225 (the five-minute maximum) before the paid request, then settles
-at $0.0045/minute using the provider's measured seconds. The rest is released.
+at $0.0045/minute using the Gateway's `durationInSeconds`. The rest is released.
 The rate is pinned in code with a version and must be reviewed when pricing
 changes. This is separate from the agent's model inference cost and daily budget.
 
@@ -46,11 +47,22 @@ worker lease are checked again before paid dispatch and before running the agent
 ## Deployment and verification
 
 Migration `0075_channel_media.sql` adds the transcription checkpoint table. The
-production image includes FFmpeg. Configure `DATOOL_TRANSCRIPTION_OPENAI_API_KEY`
-for a dedicated transcription key, or use the existing managed
-`DATOOL_SCORER_OPENAI_API_KEY` fallback. Both require
-`DATOOL_BILLING_ENABLED=true` and `DATOOL_MANAGED_EXECUTION_ENABLED=true`; no
-customer-provided key is silently charged. No WhatsApp reconnection is required.
+production image includes FFmpeg. Configure the server-owned
+`DATOOL_AI_GATEWAY_API_KEY`, or reuse the existing server `AI_GATEWAY_API_KEY`.
+The dedicated Datool key takes precedence. Both require
+`DATOOL_BILLING_ENABLED=true` and `DATOOL_MANAGED_EXECUTION_ENABLED=true`.
+Project-owned provider keys and OpenAI/scorer keys are never used for paid
+transcription. Existing OpenAI transcription configuration no longer enables it.
+No WhatsApp reconnection is required.
+
+The worker calls the documented Gateway REST transcription endpoint with bounded
+WAV audio encoded as base64 JSON. It does not use SDK retries or fall back to
+another provider after an uncertain attempt. Transcription is in Gateway beta;
+verify model access on the Datool account before enabling production traffic.
+The public Gateway model catalog currently reports $0.000075 per audio second
+for `openai/gpt-transcribe`. Usage events identify `vercel-ai-gateway` and the
+fully qualified model. The existing transcript checkpoints and credit records
+are retained; this change requires no new migration.
 
 The Evolution integration test uses real PostgreSQL, FFmpeg and the worker, with
 simulated Evolution/transcription HTTP responses. It covers image/caption
@@ -62,6 +74,7 @@ image and voice note from another number, verify replies, and check the usage
 entry and credit delta. Do not replay historical customer media automatically.
 
 Provider contracts:
+
 - [Evolution 2.3.7 media implementation](https://github.com/evolution-foundation/evolution-api/blob/2.3.7/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts)
-- [OpenAI file transcription](https://developers.openai.com/api/docs/guides/speech-to-text)
-- [OpenAI pricing](https://developers.openai.com/api/docs/pricing)
+- [Gateway speech-to-text REST contract](https://vercel.com/docs/ai-gateway/modalities/speech-to-text)
+- [Gateway model pricing catalog](https://ai-gateway.vercel.sh/v1/models)

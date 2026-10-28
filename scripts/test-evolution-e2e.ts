@@ -26,28 +26,39 @@ let mediaBase64 = "",
 let transcriptions = 0,
   transcriptionMode = "ok"
 const realFetch = globalThis.fetch
-// Exercise the production multipart transport and credit ledger without a paid call.
+// Exercise the documented Gateway REST contract and real credit ledger without a paid call.
 globalThis.fetch = (async (input, init) => {
-  if (String(input) !== "https://api.openai.com/v1/audio/transcriptions")
+  if (String(input).startsWith("https://api.openai.com/"))
+    throw new Error(
+      "Direct OpenAI calls are forbidden for managed transcription"
+    )
+  if (
+    String(input) !== "https://ai-gateway.vercel.sh/v4/ai/transcription-model"
+  )
     return realFetch(input, init)
   transcriptions++
   assert.equal(
     new Headers(init?.headers).get("authorization"),
     "Bearer synthetic-transcription"
   )
-  const form = init?.body as FormData
-  assert.equal(form.get("model"), "gpt-transcribe")
-  const file = form.get("file") as Blob
-  const bytes = Buffer.from(await file.arrayBuffer())
+  const headers = new Headers(init?.headers)
+  assert.equal(headers.get("ai-model-id"), "openai/gpt-transcribe")
+  assert.equal(headers.get("ai-gateway-protocol-version"), "0.0.1")
+  assert.equal(headers.get("ai-transcription-model-specification-version"), "4")
+  assert.equal(headers.get("content-type"), "application/json")
+  const body = JSON.parse(String(init?.body))
+  assert.equal(body.mediaType, "audio/wav")
+  const bytes = Buffer.from(body.audio, "base64")
   assert.equal(bytes.toString("ascii", 0, 4), "RIFF")
   if (transcriptionMode === "timeout")
     throw new Error("synthetic lost response")
-  if (transcriptionMode === "rejected")
-    return Response.json({}, { status: 429 })
+  if (transcriptionMode.startsWith("rejected-"))
+    return Response.json({}, { status: Number(transcriptionMode.slice(9)) })
   return Response.json(
     {
       text: "Quero ver três produtos",
-      usage: { type: "duration", seconds: 1 },
+      durationInSeconds:
+        transcriptionMode === "missing-duration" ? undefined : 1.25,
     },
     { headers: { "x-request-id": "transcription-test" } }
   )
@@ -563,7 +574,10 @@ try {
   Object.assign(process.env, {
     DATOOL_BILLING_ENABLED: "true",
     DATOOL_MANAGED_EXECUTION_ENABLED: "true",
-    DATOOL_TRANSCRIPTION_OPENAI_API_KEY: "synthetic-transcription",
+    DATOOL_AI_GATEWAY_API_KEY: "synthetic-transcription",
+    AI_GATEWAY_API_KEY: "wrong-fallback-key",
+    DATOOL_TRANSCRIPTION_OPENAI_API_KEY: "must-not-use-openai",
+    DATOOL_SCORER_OPENAI_API_KEY: "must-not-use-scorer",
   })
   const { executionCredits } =
     await import("../src/server/execution-credits/ledger")
@@ -584,7 +598,11 @@ try {
   await database.execute(
     sql`UPDATE build_channel_job SET status='succeeded',lock_token=NULL,locked_at=NULL WHERE project_id=${target.projectId}`
   )
-  async function admitMedia(id: string, type: "image" | "audio", caption = true) {
+  async function admitMedia(
+    id: string,
+    type: "image" | "audio",
+    caption = true
+  ) {
     const base = incoming(id)
     base.data.key.remoteJid = "5511999990007@s.whatsapp.net"
     const payload = {
@@ -729,16 +747,17 @@ try {
     "A retry reuses the transcript and never dispatches another paid request"
   )
   const usage = await executionCredits.usage(target.organizationId)
-  assert.equal(usage.used, 0.000075)
+  assert.equal(usage.used, 0.00009375)
   assert.equal(usage.reserved, 0)
   const attributed = (
     await database.execute<Record<string, unknown>>(
-      sql`SELECT * FROM build_usage_event WHERE project_id=${target.projectId} AND model='gpt-transcribe'`
+      sql`SELECT * FROM build_usage_event WHERE project_id=${target.projectId} AND model='openai/gpt-transcribe'`
     )
   ).rows
   assert.equal(attributed.length, 1)
+  assert.equal(attributed[0].provider, "vercel-ai-gateway")
   assert.equal(attributed[0].conversation_id, audioJob.message.conversation_id)
-  assert.equal(Number(attributed[0].cost_nano_usd), 75000)
+  assert.equal(Number(attributed[0].cost_nano_usd), 93750)
   const cancelled = await admitMedia("audio-cancelled", "audio")
   let admissionChecks = 0
   await assert.rejects(
@@ -759,22 +778,41 @@ try {
     ),
     0
   )
-  transcriptionMode = "rejected"
-  const rejectedAudio = await admitMedia("audio-rejected", "audio")
+  // A missing managed key cannot fall back to direct OpenAI/scorer credentials.
+  delete process.env.DATOOL_AI_GATEWAY_API_KEY
+  delete process.env.AI_GATEWAY_API_KEY
+  const unconfigured = await admitMedia("audio-no-managed-key", "audio")
   assert.equal(
-    await runMedia(rejectedAudio.job, () =>
-      assert.fail("Rejected audio must not invoke AI")
+    await runMedia(unconfigured.job, () =>
+      assert.fail("Missing Gateway key must block AI")
     ),
     0
   )
+  assert.equal(transcriptions, 1)
   assert.equal(
     (await executionCredits.usage(target.organizationId)).reserved,
     0
   )
-  assert.equal(
-    (await executionCredits.usage(target.organizationId)).used,
-    0.000075
-  )
+  // The existing server-wide Gateway key is supported without copying it.
+  process.env.AI_GATEWAY_API_KEY = "synthetic-transcription"
+  for (const status of [401, 402, 429]) {
+    transcriptionMode = `rejected-${status}`
+    const rejectedAudio = await admitMedia(`audio-rejected-${status}`, "audio")
+    assert.equal(
+      await runMedia(rejectedAudio.job, () =>
+        assert.fail("Rejected audio must not invoke AI")
+      ),
+      0
+    )
+    assert.equal(
+      (await executionCredits.usage(target.organizationId)).reserved,
+      0
+    )
+    assert.equal(
+      (await executionCredits.usage(target.organizationId)).used,
+      0.00009375
+    )
+  }
   transcriptionMode = "timeout"
   const uncertainAudio = await admitMedia("audio-uncertain", "audio")
   assert.equal(
@@ -796,6 +834,31 @@ try {
     (await executionCredits.usage(target.organizationId)).reserved,
     0.0225
   )
+  transcriptionMode = "missing-duration"
+  const unmeasured = await admitMedia("audio-unmeasured", "audio")
+  assert.equal(
+    await runMedia(unmeasured.job, () =>
+      assert.fail("Unmeasured audio must not reach AI")
+    ),
+    0
+  )
+  await assert.rejects(
+    prepareEvolutionMedia(ctx, String(unmeasured.message.id), async () => {})
+  )
+  assert.equal(
+    transcriptions,
+    attempts + 1,
+    "Missing duration cannot trigger a second paid attempt"
+  )
+  assert.equal(
+    (await executionCredits.usage(target.organizationId)).used,
+    0.00009375
+  )
+  assert.equal(
+    (await executionCredits.usage(target.organizationId)).reserved,
+    0.045
+  )
+  const finalAttempts = transcriptions
   await database.execute(
     sql`UPDATE execution_credit_period SET allowance=spent+reserved WHERE organization_id=${target.organizationId}`
   )
@@ -808,7 +871,7 @@ try {
   )
   assert.equal(
     transcriptions,
-    attempts,
+    finalAttempts,
     "No paid request when credits are exhausted"
   )
   assert(
@@ -837,7 +900,7 @@ try {
     ),
     0
   )
-  assert.equal(transcriptions, attempts)
+  assert.equal(transcriptions, finalAttempts)
   console.log(
     "PASS image bytes and caption, audio transcript, measured credits, retry reuse, rejected/uncertain/unfunded outcomes and customer feedback"
   )

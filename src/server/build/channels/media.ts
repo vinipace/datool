@@ -13,11 +13,12 @@ import type { BuildContext } from "../context"
 import { downloadEvolutionMedia } from "./evolution"
 
 const run = promisify(execFile)
-const MODEL = "gpt-transcribe"
-// https://developers.openai.com/api/docs/pricing — $0.0045/min, 2026-10-27.
+const MODEL = "openai/gpt-transcribe"
+// Gateway /v1/models: transcription_duration_cost_per_second = $0.000075.
+// Verified 2026-10-27; the organization rate stays versioned and bounded.
 const NANO_PER_SECOND = 75_000
 const MAX_SECONDS = 300
-const RATE = "gpt-transcribe-2026-10-27"
+const RATE = "gateway-gpt-transcribe-2026-10-27"
 export class ChannelMediaError extends Error {
   constructor(readonly code: string) {
     super("This media message could not be processed.")
@@ -154,9 +155,9 @@ export async function prepareEvolutionMedia(
       throw new ChannelMediaError("IMAGE_INVALID")
     }
   }
+  // Server-owned credentials only: never bill credits against a project BYOK key.
   const apiKey =
-    process.env.DATOOL_TRANSCRIPTION_OPENAI_API_KEY ||
-    process.env.DATOOL_SCORER_OPENAI_API_KEY
+    process.env.DATOOL_AI_GATEWAY_API_KEY || process.env.AI_GATEWAY_API_KEY
   if (!managedExecutionEnabled() || !apiKey)
     throw new ChannelMediaError("TRANSCRIPTION_NOT_CONFIGURED")
   const audio = await audioFile(media.bytes)
@@ -186,19 +187,11 @@ export async function prepareEvolutionMedia(
   }
   await context.database.execute(sql`
     INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,model,status,cost_source,credit_operation_id)
-    SELECT ${randomUUID()}::uuid,p.organization_id,m.project_id,c.agent_id,c.id,${`channel-transcription:${messageId}`},${`transcription:${messageId}`},'model','openai',${MODEL},'pending','unknown',${operationId}::uuid
+    SELECT ${randomUUID()}::uuid,p.organization_id,m.project_id,c.agent_id,c.id,${`channel-transcription:${messageId}`},${`transcription:${messageId}`},'model','vercel-ai-gateway',${MODEL},'pending','unknown',${operationId}::uuid
     FROM build_channel_message m JOIN project p ON p.id=m.project_id JOIN build_conversations c ON c.id=m.conversation_id AND c.project_id=m.project_id
     WHERE m.project_id=${context.projectId} AND m.id=${messageId}
     ON CONFLICT(project_id,event_key) DO NOTHING
   `)
-  const form = new FormData()
-  form.set("model", MODEL)
-  form.set("response_format", "json")
-  form.set(
-    "file",
-    new Blob([new Uint8Array(audio.data)], { type: "audio/wav" }),
-    "audio.wav"
-  )
   let resultPersisted = false
   try {
     try {
@@ -216,13 +209,20 @@ export async function prepareEvolutionMedia(
       throw new ChannelMediaError("MEDIA_CANCELLED")
     }
     const response = await fetch(
-      "https://api.openai.com/v1/audio/transcriptions",
+      "https://ai-gateway.vercel.sh/v4/ai/transcription-model",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
+          "ai-gateway-protocol-version": "0.0.1",
+          "ai-transcription-model-specification-version": "4",
+          "ai-model-id": MODEL,
+          "Content-Type": "application/json",
         },
-        body: form,
+        body: JSON.stringify({
+          audio: audio.data.toString("base64"),
+          mediaType: "audio/wav",
+        }),
         signal: AbortSignal.timeout(60_000),
         redirect: "error",
       }
@@ -233,7 +233,9 @@ export async function prepareEvolutionMedia(
       purpose: "audio_transcription",
       channelMessageId: messageId,
     })
-    if ([400, 401, 403, 404, 413, 415, 422, 429].includes(response.status)) {
+    if (
+      [400, 401, 402, 403, 404, 413, 415, 422, 429].includes(response.status)
+    ) {
       await executionCredits.settle(operationId, 0, providerId, {
         rejected: true,
         httpStatus: response.status,
@@ -263,11 +265,10 @@ export async function prepareEvolutionMedia(
       void reader.cancel().catch(() => {})
     }
     const result = JSON.parse(Buffer.concat(chunks).toString("utf8"))
-    const seconds = result.usage?.seconds
+    const seconds = result.durationInSeconds
     if (
       typeof result.text !== "string" ||
       result.text.length > 50_000 ||
-      result.usage?.type !== "duration" ||
       typeof seconds !== "number" ||
       !Number.isFinite(seconds) ||
       seconds <= 0 ||
