@@ -1,3 +1,4 @@
+import { getZernioConnection, beginZernioSignup, finishZernioSignup, disconnectZernio } from "../channels/zernio"
 import { listChannelLinks } from "../channels/links"
 import { beginEvolutionConnection, getEvolutionConnection, getEvolutionPairing, refreshEvolutionConnection, disconnectEvolution } from "../channels/evolution"
 import { evolutionEnabled } from "../channels/evolution-api"
@@ -911,6 +912,42 @@ register(
   (context, input) => listCopilotAudit(context, input.proposalId as string),
 )
 
+
+register(
+  "build_get_zernio_whatsapp",
+  "Read official WhatsApp setup and connection status.",
+  ["build:read"],
+  z.object({ connectionId: z.string().uuid() }),
+  (context, input) => getZernioConnection(context, String(input.connectionId))
+)
+register(
+  "build_begin_zernio_whatsapp",
+  "Start the official WhatsApp signup for this channel.",
+  ["build:write"],
+  z.object({ connectionId: z.string().uuid(), mode: whatsappModeSchema }),
+  (context, input) => beginZernioSignup(context, input as never),
+  { openWorld: true, idempotency: "required" }
+)
+register(
+  "build_finish_zernio_whatsapp",
+  "Verify the account returned by the official WhatsApp signup.",
+  ["build:write"],
+  z.object({
+    connectionId: z.string().uuid(),
+    signupId: z.string().uuid(),
+    accountId: z.string().min(1).max(200),
+  }),
+  (context, input) => finishZernioSignup(context, input as never),
+  { openWorld: true, idempotency: "required" }
+)
+register(
+  "build_disconnect_zernio_whatsapp",
+  "Disconnect this official WhatsApp account from Zernio and stop local routing.",
+  ["build:write"],
+  z.object({ connectionId: z.string().uuid() }),
+  (context, input) => disconnectZernio(context, String(input.connectionId)),
+  { idempotency: "required", destructive: true, openWorld: true }
+)
 
 // WhatsApp uses the same authenticated registry for browser, CLI and MCP.
 register("build_get_whatsapp_setup", "Read WhatsApp installation readiness and public Embedded Signup settings. Never returns secrets.", ["build:read"], z.object({}), () => getWhatsAppSetup())

@@ -39,7 +39,7 @@ function eventTime(value: unknown) {
     : null
 }
 
-async function receipt(
+export async function recordWhatsAppReceipt(
   context: BuildContext,
   connectionId: string,
   value: Row
@@ -137,7 +137,7 @@ export async function ingestWhatsAppWebhook(
         )
           continue
         for (const status of list(value.statuses))
-          await receipt(context, connectionId, status)
+          await recordWhatsAppReceipt(context, connectionId, status)
         if (change.field === "messages")
           for (const raw of list(value.messages)) {
             const profile = list(value.contacts).find(

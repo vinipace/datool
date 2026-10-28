@@ -12,6 +12,7 @@ import { GATEWAY_PROVIDER } from "@/src/lib/model-providers"
 import { getProjectProviderKey } from "@/src/server/model-providers/store"
 import type { BuildContext } from "../context"
 import { downloadEvolutionMedia } from "./evolution"
+import { downloadZernioMedia } from "./zernio"
 
 const run = promisify(execFile)
 const MODEL = "openai/gpt-transcribe"
@@ -126,7 +127,8 @@ async function completeTranscript(
 export async function prepareEvolutionMedia(
   context: BuildContext,
   messageId: string,
-  assertReady: () => Promise<void>
+  assertReady: () => Promise<void>,
+  provider: "evolution" | "zernio" = "evolution"
 ): Promise<{ text?: string; images: ChannelImage[] }> {
   await assertReady()
   const previous = await context.database.execute<Record<string, unknown>>(sql`
@@ -141,7 +143,9 @@ export async function prepareEvolutionMedia(
   }
   let media: Awaited<ReturnType<typeof downloadEvolutionMedia>>
   try {
-    media = await downloadEvolutionMedia(context, messageId)
+    media = await (
+      provider === "zernio" ? downloadZernioMedia : downloadEvolutionMedia
+    )(context, messageId)
   } catch {
     throw new ChannelMediaError("MEDIA_UNAVAILABLE")
   }
