@@ -1000,6 +1000,33 @@
   background: var(--bubble-accent);
   color: var(--bubble-accent-text);
 }
+/* WhatsApp agent tests reuse the shared customer chat and channel
+   palette. The phone follows the workspace theme rather than widget branding. */
+.datool-chat-surface[data-chat-variant="whatsapp"] {
+  color-scheme: inherit;
+  --background: var(--commerce-chat-canvas);
+  --surface-canvas: var(--commerce-chat-canvas);
+  --foreground: var(--commerce-chat-text);
+  --foreground-muted: var(--commerce-chat-meta);
+  --muted: var(--commerce-chat-incoming);
+  --input-background: var(--commerce-chat-incoming);
+  --border: var(--commerce-chat-header);
+  --primary: var(--commerce-whatsapp);
+  --primary-foreground: var(--commerce-whatsapp-ink);
+  --bubble-accent: var(--commerce-chat-outgoing);
+  --bubble-accent-text: var(--commerce-chat-text);
+  --bubble-radius: 12px;
+  --bubble-font: system-ui, sans-serif;
+  --bubble-font-size: 13px;
+  --color-ring: var(--commerce-whatsapp);
+}
+.datool-chat-surface[data-chat-variant="whatsapp"] [data-bubble-composer] {
+  border-radius: 24px;
+}
+.datool-chat-surface[data-chat-variant="whatsapp"] [data-bubble-send] {
+  background: var(--commerce-whatsapp);
+  color: var(--commerce-whatsapp-ink);
+}
 @keyframes bubble-typing {
   0%, 60%, 100% { opacity: .4; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-2px); }
@@ -1059,4 +1086,26 @@
   opacity: .2;
   filter: blur(16px);
   pointer-events: none;
+}
+
+/* WhatsApp preview colors, scoped through the shared product theme. */
+:root {
+  --commerce-whatsapp: #25d366;
+  --commerce-whatsapp-ink: #03150a;
+  --commerce-chat-canvas: #efeae2;
+  --commerce-chat-header: #f0f2f5;
+  --commerce-chat-incoming: #ffffff;
+  --commerce-chat-outgoing: #d9fdd3;
+  --commerce-chat-text: #111b21;
+  --commerce-chat-meta: #54656f;
+  --commerce-chat-link: #0069a1;
+}
+.dark {
+  --commerce-chat-canvas: #0b141a;
+  --commerce-chat-header: #1f2c34;
+  --commerce-chat-incoming: #202c33;
+  --commerce-chat-outgoing: #005c4b;
+  --commerce-chat-text: #e9edef;
+  --commerce-chat-meta: #8696a0;
+  --commerce-chat-link: #7fd3f7;
 }

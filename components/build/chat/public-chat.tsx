@@ -210,6 +210,8 @@ export function PublicChat({
   initialAppearance,
   onBeforeSend,
   onClose,
+  variant = "default",
+  renderHeader,
 }: {
   channelId: string
   embedded?: boolean
@@ -222,6 +224,11 @@ export function PublicChat({
   initialAppearance?: Appearance
   onBeforeSend?: () => Promise<void>
   onClose?: () => void
+  variant?: "default" | "whatsapp"
+  renderHeader?: (controls: {
+    onNewChat: () => void
+    disabled: boolean
+  }) => React.ReactNode
 }) {
   const { verify: verifyChallenge, element: challengeElement } =
     usePublicChallenge()
@@ -1334,7 +1341,8 @@ export function PublicChat({
       className={cn(
         "shrink-0 bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
         helpPage && "mx-auto w-full max-w-3xl bg-transparent",
-        helpPage && !messages.length && "p-0 pb-0"
+        helpPage && !messages.length && "p-0 pb-0",
+        variant === "whatsapp" && "p-2 pb-2"
       )}
     >
       {session &&
@@ -1457,10 +1465,11 @@ export function PublicChat({
     </footer>
   )
 
+  const ChatSurface = previewAgentId || embedded ? "div" : "main"
   return (
     <ChatNavigationContext.Provider value={linkNavigation}>
       {challengeElement}
-      <main
+      <ChatSurface
         className={cn(
           "datool-chat-surface flex min-h-0 w-full justify-center bg-background text-foreground",
           previewAgentId ? "h-full" : "h-dvh",
@@ -1468,7 +1477,8 @@ export function PublicChat({
         )}
         lang={language}
         data-theme={theme}
-        style={bubbleStyle(appearance)}
+        data-chat-variant={variant}
+        style={variant === "whatsapp" ? undefined : bubbleStyle(appearance)}
       >
         {helpPage ? <HelpPageSidebar {...navigation} /> : null}
         <section
@@ -1480,7 +1490,12 @@ export function PublicChat({
             !helpPage && !previewAgentId && "border-x border-border shadow-sm"
           )}
         >
-          {helpPage ? (
+          {renderHeader ? (
+            renderHeader({
+              onNewChat: () => void resetConversation(),
+              disabled: loading || sending || !session,
+            })
+          ) : helpPage ? (
             <HelpPageToolbar {...navigation} />
           ) : (
             <header
@@ -1763,7 +1778,7 @@ export function PublicChat({
           ) : null}
           {!helpPage || messages.length > 0 ? composer : null}
         </section>
-      </main>
+      </ChatSurface>
     </ChatNavigationContext.Provider>
   )
 }
