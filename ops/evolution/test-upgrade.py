@@ -42,12 +42,14 @@ class UpgradeTest(unittest.TestCase):
             def localpath(value):
                 value=str(value)
                 if value.startswith('/var/backups/'):return root/'backups'
+                if value.endswith('/evolution-redis/PASSWORD'):
+                    p=root/'PASSWORD';p.write_text('test-password');return p
                 return Path(value)
             real_open=open
             def localopen(value,*args,**kwargs):
                 if str(value).startswith('/run/'):value=root/Path(value).name
                 return real_open(value,*args,**kwargs)
-            def command(args,stdout=None,stderr=None,timeout=None):
+            def command(args,stdout=None,stderr=None,timeout=None,env=None,umask=None,input=None):
                 nonlocal version
                 calls.append(args)
                 result=b'';status=0
@@ -55,13 +57,21 @@ class UpgradeTest(unittest.TestCase):
                 elif args[:3]==['docker','image','inspect']:
                     result=json.dumps([{'Id':image_id,'Architecture':'amd64','Config':{'Labels':{'org.datool.evolution.baileys':'7.0.0-rc14','org.datool.evolution.base':'2.3.7'}}}]).encode()
                 elif args[:2]==['docker','inspect']:result=OLD.encode()
+                elif args[:2]==['dokku','postgres:connect']:
+                    result=json.dumps({'name':INSTANCE,'state':state,'reason':401}).encode()
+                elif args[:2]==['docker','cp']:
+                    Path(args[-1]).write_bytes(b'REDIS'+b'test snapshot'*8)
+                elif args[:2]==['docker','exec'] and args[2]=='-e':
+                    self.assertEqual(env['REDISCLI_AUTH'],'test-password')
+                    if fail_backup:status=1
+                elif args[:3]==['docker','exec','dokku.redis.evolution-redis']:
+                    pass
                 elif args[:2]==['docker','exec']:
                     result=json.dumps({'version':version,'instances':[{'name':INSTANCE,'state':state,'reason':401}]}).encode()
                 elif args[0]=='dokku' and args[1].endswith(':help'):
                     plugin=args[1].split(':')[0];result=(' '.join(plugin+':'+x for x in ['export','from-image','stop','start'])).encode()
                 elif args[:2]==['dokku','git:from-image']:
                     version='7.0.0-rc14' if args[-1]==IMAGE else '7.0.0-rc.9'
-                elif args[:2]==['dokku','redis:export'] and fail_backup:status=1
                 if stdout is not subprocess.PIPE:
                     stdout.write(b'backup fixture data '*4)
                     result=None
@@ -86,19 +96,18 @@ class UpgradeTest(unittest.TestCase):
         self.assertNotIn(['dokku','ps:stop','datool-evolution'],calls)
         self.assertFalse(any(c[:2]==['dokku','git:from-image'] for c in calls))
 
-    def test_failed_backup_restores_old_image_without_deploying_candidate(self):
+    def test_failed_backup_does_not_deploy_or_roll_back(self):
         result,calls=self.execute(fail_backup=True)
         self.assertEqual(result,1)
         deployments=[c[-1] for c in calls if c[:2]==['dokku','git:from-image']]
-        self.assertEqual(len(deployments),1)
-        self.assertTrue(deployments[0].startswith('datool-evolution:rollback-'))
+        self.assertEqual(deployments,[])
 
     def test_stop_and_all_state_backups_precede_new_image(self):
         result,calls=self.execute()
         self.assertEqual(result,0)
         stop=calls.index(['dokku','ps:stop','datool-evolution'])
         deploy=calls.index(['dokku','git:from-image','datool-evolution',IMAGE])
-        for prefix in [['dokku','postgres:export'],['dokku','redis:export'],['tar','-czf']]:
+        for prefix in [['dokku','postgres:export'],['docker','cp'],['tar','-czf']]:
             at=next(i for i,c in enumerate(calls) if c[:2]==prefix)
             self.assertLess(stop,at);self.assertLess(at,deploy)
         self.assertFalse(any('datool' in c for c in calls))

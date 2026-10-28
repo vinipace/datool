@@ -164,6 +164,10 @@ the restricted pilot before broader rollout.
 For a revoked pilot, `upgrade-revoked.py` accepts a reviewed image manifest and
 archive. It requires exactly the expected revoked instance, takes recovery copies
 of all three state stores with Evolution stopped, and uses stop-before-start
-Dokku deployment so only one process owns the session. It does not restart Datool
+Dokku deployment so only one process owns the session. It can resume with Evolution
+already stopped and does not automatically redeploy the prior image on failure. It does not restart Datool
 or modify its configuration. The manifest contains `archive`, `sha256`, `image`,
 `imageId`, and `instance`; generate installation-specific manifests outside Git.
+
+Redis snapshots use authenticated `redis-cli --rdb` and `redis-check-rdb` directly,
+so they work with Alpine services whose Dokku exporter incorrectly assumes bash.

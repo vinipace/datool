@@ -73,8 +73,9 @@ def main():
     backup=Path('/var/backups/datool-evolution')/('upgrade-'+stamp)
     backup.mkdir(parents=True,mode=0o700)
     log=open(backup/'upgrade.log','w')
-    def run(args,timeout=180,output=None):
-        p=subprocess.run(args,stdout=output or subprocess.PIPE,stderr=log,timeout=timeout)
+    def run(args,timeout=180,output=None,env=None):
+        # Dokku creates app-readable build context; private logs/backups stay 0700/0600.
+        p=subprocess.run(args,stdout=output or subprocess.PIPE,stderr=log,timeout=timeout,env=env,umask=0o022 if args[0]=='dokku' else 0o077)
         if p.returncode:
             if output is None:log.write(p.stdout.decode(errors='replace'));log.flush()
             raise RuntimeError('Command failed: '+args[0]+' '+args[1])
@@ -88,13 +89,11 @@ def main():
     def export(args,target):
         with open(backup/target,'wb') as out:run(args,180,out)
         if (backup/target).stat().st_size<32:raise RuntimeError('Backup is empty: '+target)
-    stopped=False
-    rollback=None
     try:
         if shutil.disk_usage('/var/lib/docker').free < 4*1024**3:
             raise RuntimeError('Need at least 4 GiB free Docker disk space')
         # Require backup/deployment commands before stopping the existing service.
-        for plugin,command in [('redis','export'),('postgres','export'),('git','from-image'),('ps','stop'),('ps','start')]:
+        for plugin,command in [('postgres','export'),('git','from-image'),('ps','stop')]:
             if plugin+':'+command not in run(['dokku',plugin+':help']):
                 raise RuntimeError('Required Dokku command missing: '+plugin+':'+command)
         digest=hashlib.sha256()
@@ -111,17 +110,27 @@ def main():
         labels=info['Config'].get('Labels') or {}
         if labels.get('org.datool.evolution.baileys')!='7.0.0-rc14' or labels.get('org.datool.evolution.base')!='2.3.7':
             raise RuntimeError('Unexpected Evolution/Baileys release labels')
-        before=meta()
-        if before['version']!='7.0.0-rc.9' or before['instances']!=[{'name':manifest['instance'],'state':'close','reason':401}]:
-            raise RuntimeError('Upgrade refused: expected only the original revoked pilot; no sessions changed')
-        old_image=run(['docker','inspect','--format','{{.Image}}',container()])
-        rollback='datool-evolution:rollback-'+stamp.lower()
-        run(['docker','tag',old_image,rollback])
-        (backup/'release.json').write_text(json.dumps({'oldImageId':old_image,'rollbackImage':rollback,'newImageId':manifest['imageId'],'instance':manifest['instance']},indent=2))
+        query="""BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; SELECT json_build_object('name',name,'state',"connectionStatus",'reason',"disconnectionReasonCode") FROM "Instance"; ROLLBACK;"""
+        result=subprocess.run(['dokku','postgres:connect','evolution-db'],input=query.encode(),stdout=subprocess.PIPE,stderr=log,timeout=30,umask=0o022)
+        if result.returncode:raise RuntimeError('Unable to verify revoked pilot in PostgreSQL')
+        instances=[json.loads(line) for line in result.stdout.decode().splitlines() if line.strip().startswith('{')]
+        if instances!=[{'name':manifest['instance'],'state':'close','reason':401}]:
+            raise RuntimeError('Upgrade refused: expected only the revoked pilot; no sessions changed')
+        (backup/'release.json').write_text(json.dumps({'newImageId':manifest['imageId'],'instance':manifest['instance']},indent=2))
         print('Revoked pilot verified. Stopping only Evolution and backing up session state.',flush=True)
-        run(['dokku','ps:stop',APP]);stopped=True
+        run(['dokku','ps:stop',APP])
         export(['dokku','postgres:export','evolution-db'],'postgres.dump')
-        export(['dokku','redis:export','evolution-redis'],'redis.rdb')
+        redis_temp='/tmp/datool-evolution-'+stamp+'.rdb'
+        redis_env=dict(os.environ,REDISCLI_AUTH=Path('/var/lib/dokku/services/redis/evolution-redis/PASSWORD').read_text().strip())
+        try:
+            run(['docker','exec','-e','REDISCLI_AUTH','dokku.redis.evolution-redis','sh','-c','umask 077; exec redis-cli --rdb '+redis_temp],120,env=redis_env)
+            run(['docker','exec','dokku.redis.evolution-redis','redis-check-rdb',redis_temp],60)
+            run(['docker','cp','dokku.redis.evolution-redis:'+redis_temp,str(backup/'redis.rdb')])
+            with (backup/'redis.rdb').open('rb') as snapshot:
+                if snapshot.read(5)!=b'REDIS':raise RuntimeError('Redis snapshot format validation failed')
+        finally:
+            redis_env.pop('REDISCLI_AUTH',None)
+            run(['docker','exec','dokku.redis.evolution-redis','rm','-f',redis_temp])
         export(['tar','-czf','-','-C','/var/lib/dokku/data/storage/datool-evolution','instances'],'instances.tgz')
         # Existing deployment uses stop-before-start; explicitly preserve that contract.
         run(['dokku','checks:disable',APP,'web'])
@@ -141,14 +150,7 @@ def main():
         (backup/'verified.json').write_text(json.dumps(after,indent=2))
     except Exception as exc:
         print(str(exc) if isinstance(exc,RuntimeError) else 'Upgrade interrupted; raw details withheld.',flush=True)
-        if stopped and rollback:
-            print('Restoring the previous Evolution image; no state store will be reset.',flush=True)
-            try:
-                run(['dokku','git:from-image',APP,rollback],600)
-                meta()
-                print('Previous image restored and authenticated API verified.',flush=True)
-            except Exception:
-                print('Automatic image recovery incomplete. Inspect private log before further changes.',flush=True)
+        print('Upgrade stopped. Previous image will not be redeployed automatically.',flush=True)
         print('Private diagnostics: '+str(backup/'upgrade.log'),flush=True)
         return 1
     finally:
