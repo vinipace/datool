@@ -135,7 +135,15 @@ def main():
         # Existing deployment uses stop-before-start; explicitly preserve that contract.
         run(['dokku','checks:disable',APP,'web'])
         print('Backups completed. Deploying Evolution with Baileys 7.0.0-rc14.',flush=True)
-        run(['dokku','git:from-image',APP,manifest['image']],600)
+        deployment=subprocess.run(['dokku','git:from-image',APP,manifest['image']],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=600,umask=0o022)
+        deployment_output=(deployment.stdout+deployment.stderr).decode(errors='replace')
+        if deployment.returncode:
+            log.write(deployment_output);log.flush()
+            if ('No changes detected' not in deployment_output or 'ps:rebuild' not in deployment_output or
+                run(['dokku','git:report',APP,'--git-source-image'])!=manifest['image']):
+                raise RuntimeError('Command failed: dokku git:from-image')
+            print('Candidate already registered; rebuilding that image.',flush=True)
+            run(['dokku','ps:rebuild',APP],600)
         after=None
         for attempt in range(30):
             try:

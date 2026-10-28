@@ -24,7 +24,7 @@ INSTANCE='dt-00000000-0000-0000-0000-000000000001'
 IMAGE='datool-evolution:baileys-rc14-candidate'
 
 class UpgradeTest(unittest.TestCase):
-    def execute(self,state='close',fail_backup=False,image_id=NEW):
+    def execute(self,state='close',fail_backup=False,image_id=NEW,no_changes=False,source_image=IMAGE):
         calls=[];version='7.0.0-rc.9'
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);archive=root/'image.tgz'
@@ -70,8 +70,14 @@ class UpgradeTest(unittest.TestCase):
                     result=json.dumps({'version':version,'instances':[{'name':INSTANCE,'state':state,'reason':401}]}).encode()
                 elif args[0]=='dokku' and args[1].endswith(':help'):
                     plugin=args[1].split(':')[0];result=(' '.join(plugin+':'+x for x in ['export','from-image','stop','start'])).encode()
+                elif args[:2]==['dokku','git:report']:
+                    result=source_image.encode()
                 elif args[:2]==['dokku','git:from-image']:
-                    version='7.0.0-rc14' if args[-1]==IMAGE else '7.0.0-rc.9'
+                    if no_changes:
+                        result=b'No changes detected. Call ps:rebuild on app.';status=1
+                    else: version='7.0.0-rc14' if args[-1]==IMAGE else '7.0.0-rc.9'
+                elif args[:2]==['dokku','ps:rebuild']:
+                    version='7.0.0-rc14'
                 if stdout is not subprocess.PIPE:
                     stdout.write(b'backup fixture data '*4)
                     result=None
@@ -89,6 +95,16 @@ class UpgradeTest(unittest.TestCase):
         result,calls=self.execute(image_id='sha256:'+'c'*64)
         self.assertEqual(result,1)
         self.assertNotIn(['dokku','ps:stop','datool-evolution'],calls)
+
+    def test_existing_candidate_rebuilds_same_image(self):
+        result,calls=self.execute(no_changes=True)
+        self.assertEqual(result,0)
+        self.assertIn(['dokku','ps:rebuild','datool-evolution'],calls)
+
+    def test_unexpected_source_is_never_rebuilt(self):
+        result,calls=self.execute(no_changes=True,source_image='other:image')
+        self.assertEqual(result,1)
+        self.assertNotIn(['dokku','ps:rebuild','datool-evolution'],calls)
 
     def test_active_session_refuses_stop_or_deploy(self):
         result,calls=self.execute(state='open')
