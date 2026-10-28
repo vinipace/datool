@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { publicOrigin } from "@/lib/public-origin"
 
 /** Shared names for browser titles, navigation, and page headers. */
 export const pageTitles = {
@@ -84,7 +85,7 @@ export const socialPreviewImage = {
 
 /** The brand suffix belongs only to the root layout. */
 export const rootMetadata: Metadata = {
-  metadataBase: new URL(process.env.BETTER_AUTH_URL || "https://trydatool.com"),
+  metadataBase: new URL(publicOrigin()),
   applicationName: "Datool",
   title: {
     default: "Datool",

@@ -21,6 +21,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { InspectorSection } from "@/components/ui/inspector-section"
+import { ShopifyChatSetup } from "./shopify-chat-setup"
 import { IntegrationAccount } from "./integration-account"
 import { BuildStatus } from "@/components/build/shared/build-layout"
 import { useRemote } from "@/components/tracer/hooks"
@@ -32,6 +33,8 @@ const descriptions: Record<string, string> = {
     "Bring calendar events and scheduling context into your agent’s conversations.",
   slack: "Bring messages and team conversations into your agent’s workflow.",
   shopify: "Help customers with store, product, and order information.",
+  shopify_native:
+    "Show live products, prices and availability, and answer questions using your store’s policies.",
   zendesk: "Bring support tickets and help center context into conversations.",
   github:
     "Give your agent context from repositories, issues, and pull requests.",
@@ -129,7 +132,9 @@ export function IntegrationsTab({
     return run(async () => {
       const result = await buildApi.call<{ id: string; redirectUrl: string }>(
         "build_connect_app",
-        { toolkit: slug }
+        {
+          toolkit: slug,
+        }
       )
       setAuthorization({ id: result.id, url: result.redirectUrl })
       connections.refresh()
@@ -152,29 +157,34 @@ export function IntegrationsTab({
 
   function renderAccount(account: IntegrationCatalog["connections"][number]) {
     return (
-      <IntegrationAccount
-        key={account.id}
-        account={account}
-        name={
-          accounts.filter(
-            (item) =>
-              item.label === account.label && item.status === account.status
-          ).length > 1
-            ? `${account.label} · Account ${accounts.filter((item) => item.status === account.status).indexOf(account) + 1}`
-            : `${account.label} account`
-        }
-        busy={busy}
-        checking={checkingId === account.id}
-        authorizationUrl={
-          authorization?.id === account.id ? authorization.url : undefined
-        }
-        onCheck={() => checkConnection(account.id)}
-        onDisconnect={(element) => {
-          disconnectTrigger.current = element
-          setError(null)
-          setDisconnectId(account.id)
-        }}
-      />
+      <div key={account.id} className="space-y-3">
+        <IntegrationAccount
+          account={account}
+          name={
+            accounts.filter(
+              (item) =>
+                item.label === account.label && item.status === account.status
+            ).length > 1
+              ? `${account.label} · Account ${accounts.filter((item) => item.status === account.status).indexOf(account) + 1}`
+              : `${account.label} account`
+          }
+          busy={busy}
+          checking={checkingId === account.id}
+          authorizationUrl={
+            authorization?.id === account.id ? authorization.url : undefined
+          }
+          onCheck={() => checkConnection(account.id)}
+          onDisconnect={(element) => {
+            disconnectTrigger.current = element
+            setError(null)
+            setDisconnectId(account.id)
+          }}
+        />
+        {account.toolkit === "shopify_native" &&
+          account.status === "active" && (
+            <ShopifyChatSetup connectionId={account.id} />
+          )}
+      </div>
     )
   }
 
@@ -276,7 +286,12 @@ export function IntegrationsTab({
                       trigger.current = event.currentTarget
                       setAppSlug(item.slug)
                       setError(null)
-                      if (!manage) void connect(item.slug)
+                      if (
+                        !manage &&
+                        !item.connectionMethod &&
+                        item.available !== false
+                      )
+                        void connect(item.slug)
                     }}
                   >
                     {manage ? "Manage" : "Connect"}
@@ -350,6 +365,32 @@ export function IntegrationsTab({
                       </Button>
                     </Notice>
                   )}
+                  {app.available === false ? (
+                    <Notice>
+                      This integration needs administrator setup before you can
+                      connect an account.
+                    </Notice>
+                  ) : app.connectionMethod === "shopify" ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-foreground-muted">
+                        Choose your store and review Datool’s requested access
+                        in Shopify. Your existing Datool billing stays in place.
+                      </p>
+                      {authorization ? (
+                        <Button asChild>
+                          <a href={authorization.url}>Continue to Shopify</a>
+                        </Button>
+                      ) : (
+                        <Button
+                          loading={busy}
+                          disabled={busy}
+                          onClick={() => void connect(app.slug)}
+                        >
+                          Connect store
+                        </Button>
+                      )}
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between gap-3">
                     <h3
                       ref={accountSection}
@@ -358,22 +399,24 @@ export function IntegrationsTab({
                     >
                       Accounts
                     </h3>
-                    {visibleAccounts.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => connect(app.slug)}
-                      >
-                        <Plus aria-hidden /> Add account
-                      </Button>
-                    )}
+                    {visibleAccounts.length > 0 &&
+                      !app.connectionMethod &&
+                      app.available !== false && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => connect(app.slug)}
+                        >
+                          <Plus aria-hidden /> Add account
+                        </Button>
+                      )}
                   </div>
                   {visibleAccounts.length > 0 ? (
                     <div className="space-y-3">
                       {visibleAccounts.map(renderAccount)}
                     </div>
-                  ) : (
+                  ) : !app.connectionMethod && app.available !== false ? (
                     <Card className="space-y-4 p-4">
                       <div className="space-y-1">
                         <p className="text-sm font-medium">
@@ -388,7 +431,7 @@ export function IntegrationsTab({
                         <Plus aria-hidden /> Connect account
                       </Button>
                     </Card>
-                  )}
+                  ) : null}
                   <p className="text-xs leading-relaxed text-foreground-muted">
                     Accounts are shared across agents in this project.
                   </p>

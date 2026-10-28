@@ -9,6 +9,7 @@ const pending = appIntegrationScenario("pending")
 const catalog = appIntegrationScenario("catalog")
 const disconnect = appIntegrationScenario()
 const connectError = appIntegrationScenario("connect-error")
+const shopify = appIntegrationScenario("shopify")
 const meta = {
   title: "Build/AgentIntegrations",
   component: IntegrationsTab,
@@ -17,6 +18,36 @@ const meta = {
 } satisfies Meta<typeof IntegrationsTab>
 export default meta
 type Story = StoryObj<typeof meta>
+export const Shopify: Story = {
+  parameters: { msw: { handlers: shopify.handlers } },
+  beforeEach: shopify.reset,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole("button", { name: /^Connect$/ })
+    )
+    const dialog = within(
+      await within(canvasElement.ownerDocument.body).findByRole("dialog", {
+        name: "Shopify",
+      })
+    )
+    await expect(
+      dialog.queryByLabelText("Store address")
+    ).not.toBeInTheDocument()
+    await userEvent.click(dialog.getByRole("button", { name: "Connect store" }))
+    await expect(
+      dialog.findByRole("link", { name: "Continue to Shopify" })
+    ).resolves.toHaveAttribute(
+      "href",
+      "https://datool.example/api/shopify/install?intent=fixture"
+    )
+  },
+}
+export const ShopifySetupRequired: Story = {
+  parameters: {
+    msw: { handlers: appIntegrationScenario("shopify-unconfigured").handlers },
+  },
+}
 export const Connected: Story = {
   beforeEach: active.reset,
   play: async ({ canvasElement }) => {

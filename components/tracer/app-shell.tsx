@@ -29,7 +29,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { workspacePrefix } from "@/lib/workspace-routing"
 import { pageTitles } from "@/lib/page-metadata"
@@ -255,19 +254,25 @@ function DemoWorkflowButton({ compact = false }: { compact?: boolean }) {
 }
 
 type WorkspaceShellProps = {
+  buildEnabled?: boolean
   user: AccountMenuUser
   organization: WorkspaceOrganization
   project: Pick<WorkspaceProject, "id" | "name" | "slug">
 }
 
-function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
+function AppSidebar({
+  organization,
+  project,
+  user,
+  buildEnabled = false,
+}: WorkspaceShellProps) {
   const pathname = usePathname()
   const { isMobile, setOpenMobile } = useSidebar()
   const closeMobileNavigation = () => {
     if (isMobile) setOpenMobile(false)
   }
   const prefix = projectWorkspaceHref(organization, project)
-  const inInbox = pathname === `${prefix}/build/inbox`
+  const inInbox = buildEnabled && pathname === `${prefix}/build/inbox`
   const inSettings =
     pathname === `${prefix}/settings` ||
     pathname.startsWith(`${prefix}/settings/`)
@@ -291,39 +296,43 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
           project={project}
           only="organization"
         />
-        {!inSettings && (
-          <Tabs value={mode} activationMode="manual">
-            <TabsList
-              aria-label="Workspace area"
-              variant="sidebar"
-              className="grid grid-cols-2"
+        {!inSettings && buildEnabled && (
+          <nav aria-label="Workspace area" className="grid grid-cols-2 gap-1">
+            <Button
+              asChild
+              size="sm"
+              variant={mode === "observe" ? "secondary" : "ghost-muted"}
             >
-              <TabsTrigger value="observe" asChild>
-                <Link
-                  href={prefix || "/"}
-                  prefetch={true}
-                  onClick={closeMobileNavigation}
-                >
-                  Observe
-                </Link>
-              </TabsTrigger>
-              <TabsTrigger value="build" asChild>
-                <Link
-                  href={`${prefix}/build/agents`}
-                  prefetch={true}
-                  onClick={closeMobileNavigation}
-                >
-                  Build
-                </Link>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+              <Link
+                href={prefix || "/"}
+                prefetch
+                onClick={closeMobileNavigation}
+                aria-current={mode === "observe" ? "page" : undefined}
+              >
+                Observe
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="sm"
+              variant={mode === "build" ? "secondary" : "ghost-muted"}
+            >
+              <Link
+                href={`${prefix}/build/agents`}
+                prefetch
+                onClick={closeMobileNavigation}
+                aria-current={mode === "build" ? "page" : undefined}
+              >
+                Build
+              </Link>
+            </Button>
+          </nav>
         )}
       </SidebarHeader>
 
       <SidebarContent>
         <AgentSidebarTarget>
-          {mode === "observe" && !inSettings && (
+          {!inSettings && !inInbox && (
             <SidebarGroup>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -348,11 +357,14 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
           {inInbox ? (
             <InboxSidebar />
           ) : (
-            routeGroups.map((group) => (
+            (inSettings
+              ? [{ label: "Project settings", routes: settingsRoutes }]
+              : routeGroups.filter(
+                  (group) => group.label !== "Build" || buildEnabled
+                )
+            ).map((group) => (
               <SidebarGroup key={group.label}>
-                {mode === "observe" || inSettings ? (
-                  <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-                ) : null}
+                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
                 <SidebarMenu>
                   {group.routes.map((route) => {
                     const href = `${prefix}${route.href}`
@@ -438,6 +450,7 @@ export function TracerAppShell(
 
 function TracerAppShellContent({
   children,
+  buildEnabled = false,
   organization,
   project,
   user,
@@ -450,6 +463,7 @@ function TracerAppShellContent({
       <AgentSidebarProvider key={project.id}>
         <InboxSidebarProvider>
           <AppSidebar
+            buildEnabled={buildEnabled}
             organization={organization}
             project={project}
             user={user}

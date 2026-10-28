@@ -6,7 +6,7 @@ import {
   type ManagedAgent,
 } from "@/src/lib/build/contracts"
 import type { ChannelConnection } from "@/src/lib/build/channels"
-import { WhatsAppEditor } from "./whatsapp-editor"
+import { MetaWhatsAppEditor } from "./whatsapp-editor"
 
 const agent: ManagedAgent = {
   id: "support-agent",
@@ -169,7 +169,7 @@ function handlers({
 }
 const meta = {
   title: "Build/Channels/WhatsApp",
-  component: WhatsAppEditor,
+  component: MetaWhatsAppEditor,
   args: { connection, agent, fromAgent: false },
   parameters: {
     layout: "fullscreen",
@@ -185,7 +185,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof WhatsAppEditor>
+} satisfies Meta<typeof MetaWhatsAppEditor>
 export default meta
 type Story = StoryObj<typeof meta>
 export const Connected: Story = {}
@@ -259,10 +259,13 @@ export const AgentTest: Story = {
     await expect(message).toHaveValue("")
     await userEvent.type(message, "Fail this turn")
     await userEvent.keyboard("{Enter}")
-    await expect(await canvas.findByRole("alert")).toHaveTextContent(
-      "The model is temporarily unavailable."
-    )
-    await expect(message).toHaveValue("Fail this turn")
+    await expect(
+      await canvas.findByRole("button", { name: "Retry sending" })
+    ).toBeVisible()
+    await expect(
+      within(canvas.getByRole("log")).getByText("Fail this turn")
+    ).toBeVisible()
+    await expect(message).toHaveValue("")
     await userEvent.click(reset)
     await waitFor(() => expect(reset).toBeEnabled())
     await expect(

@@ -67,6 +67,8 @@ import {
   widgetCodeDeclarations,
 } from "@/src/lib/build/widget-code"
 
+import { widgetComponents } from "@/src/lib/build/widget-components"
+
 const starter: WidgetDefinition = {
   name: "Untitled widget",
   description: "",
@@ -342,36 +344,23 @@ export function WidgetEditor({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        insert({ type: "text", text: "Your message" })
-                      }
-                    >
-                      Text
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        insert({
-                          type: "card",
-                          title: "Card title",
-                          body: "Supporting details",
-                          actionId: null,
-                        })
-                      }
-                    >
-                      Card
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        insert({
-                          type: "list",
-                          itemsPath: "items",
-                          itemTemplate: "{{title}}",
-                        })
-                      }
-                    >
-                      List
-                    </DropdownMenuItem>
+                    {widgetComponents
+                      .filter((item) => !("requiresFunction" in item))
+                      .map((item) => (
+                        <DropdownMenuItem
+                          key={item.name}
+                          onSelect={() => {
+                            setInsertRequest({
+                              id: crypto.randomUUID(),
+                              text: item.example,
+                            })
+                            setTab("code")
+                            setMobileView("editor")
+                          }}
+                        >
+                          {item.name}
+                        </DropdownMenuItem>
+                      ))}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => setTab("functions")}>
                       Button or form → connect a function

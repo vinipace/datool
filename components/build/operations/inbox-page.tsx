@@ -25,6 +25,7 @@ import {
   ConversationRow,
   InboxQueueChip,
   ConversationListSkeleton,
+  TakeoverIndicator,
 } from "@/components/ui/inbox-conversation"
 import {
   DropdownMenu,
@@ -118,6 +119,7 @@ import { NewTicketDialog } from "./new-ticket-dialog"
 
 type Ticket = {
   id: string
+  needsTakeover?: boolean
   agentName?: string | null
   agentAvatar?: Pick<
     AgentAppearance,
@@ -575,6 +577,7 @@ export function InboxPage({
                         ticket.contactName ||
                         "Untitled conversation"}
                     </span>
+                    {ticket.needsTakeover && <TakeoverIndicator compact />}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -784,7 +787,7 @@ export function InboxPage({
                 <ConversationRow
                   key={ticket.id}
                   selected={ticket.id === selectedId}
-                  aria-label={`Open ${ticket.contactName || ticket.subject || "conversation"}`}
+                  aria-label={`Open ${ticket.contactName || ticket.subject || "conversation"}${ticket.needsTakeover ? ", needs takeover" : ""}`}
                   onClick={(event) => {
                     returnFocusRef.current = event.currentTarget
                     setSelectedId(ticket.id)
@@ -823,7 +826,11 @@ export function InboxPage({
                   }
                   metadata={
                     <>
-                      <TicketStatusIndicator status={ticket.status} />
+                      {ticket.needsTakeover ? (
+                        <TakeoverIndicator />
+                      ) : (
+                        <TicketStatusIndicator status={ticket.status} />
+                      )}
                       <span className="truncate">
                         {ticket.assigneeName || ticket.teamName || "Unassigned"}
                       </span>
@@ -904,7 +911,7 @@ export function InboxPage({
                     <td className={collectionTable.cell}>
                       <span className="flex min-w-0 items-center gap-2 font-medium">
                         <ConversationAvatar
-                          size="sm"
+                          compact
                           name={
                             ticket.contactName || ticket.subject || "Customer"
                           }
@@ -1653,12 +1660,7 @@ function InboxInspector({
   }
   async function submitMessage(event: React.FormEvent) {
     event.preventDefault()
-    if (
-      !message.trim() ||
-      activeTicket.ownerType !== "human" ||
-      !activeTicket.conversationId
-    )
-      return
+    if (!message.trim() || !canReply || !activeTicket.conversationId) return
     try {
       await send.run(() =>
         buildApi.call("build_send_human_reply", {
@@ -1827,7 +1829,10 @@ function InboxInspector({
     }
   }
 
-  const canReply = ownershipAvailable && activeTicket.ownerType === "human"
+  const canReply =
+    ownershipAvailable && asRecord(ownershipState.data).canReply === true
+  const canTakeover =
+    ownershipAvailable && asRecord(ownershipState.data).canTakeover === true
 
   const statusControl = ticketId ? (
     <TicketStatusSelect
@@ -1855,9 +1860,13 @@ function InboxInspector({
     ? ownershipState.error
       ? "Ownership unavailable"
       : "Checking ownership…"
-    : activeTicket.ownerType === "human"
-      ? "Handled by team"
-      : "Handled by AI"
+    : canReply
+      ? "Handled by you"
+      : activeTicket.ownerType === "human"
+        ? canTakeover
+          ? "Waiting for a teammate"
+          : "Handled by a teammate"
+        : "Handled by AI"
   const latestResponse = [...activeTicket.messages]
     .reverse()
     .find((item) => item.role === "assistant")
@@ -1885,7 +1894,7 @@ function InboxInspector({
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex min-w-0 flex-1 basis-48 items-center gap-3">
               <ConversationAvatar
-                size="md"
+                compact
                 name={activeTicket.contactName || "Customer"}
                 identity={
                   activeTicket.contactId ||
@@ -1971,23 +1980,21 @@ function InboxInspector({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      disabled={!ownershipAvailable || takeover.isPending}
+                      disabled={
+                        !ownershipAvailable ||
+                        takeover.isPending ||
+                        (!canReply && !canTakeover)
+                      }
                       onSelect={() =>
-                        void ownership(
-                          activeTicket.ownerType === "human"
-                            ? "resume"
-                            : "takeover"
-                        )
+                        void ownership(canReply ? "resume" : "takeover")
                       }
                     >
-                      {activeTicket.ownerType === "human" ? (
+                      {canReply ? (
                         <Play className="size-4" />
                       ) : (
                         <UserRound className="size-4" />
                       )}
-                      {activeTicket.ownerType === "human"
-                        ? "Resume AI"
-                        : "Take over"}
+                      {canReply ? "Resume AI" : "Take over"}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={refreshInspector}>
                       <RefreshCw className="size-4" />
@@ -2043,7 +2050,7 @@ function InboxInspector({
                 View traces
               </Link>
             </Button>
-            {ownershipAvailable && activeTicket.ownerType !== "human" && (
+            {ownershipAvailable && !canReply && canTakeover && (
               <Button
                 size="sm"
                 variant="outline"
@@ -2133,7 +2140,9 @@ function InboxInspector({
                         ? "Loading ownership state before enabling replies…"
                         : !conversationId
                           ? "This ticket has no linked conversation for a human reply."
-                          : "AI is handling this conversation. Take over to reply."}
+                          : canTakeover
+                            ? "Take over this conversation to reply."
+                            : "Another teammate is handling this conversation."}
                   </p>
                 ) : null}
                 {send.error ? (

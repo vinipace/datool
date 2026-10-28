@@ -16,7 +16,7 @@ export async function reconcileCloudBilling({
     )
   const { rows } = await db.query<{ organization_id: string }>(
     `SELECT organization_id FROM organization_billing
-     WHERE customer_id IS NOT NULL AND reconcile_after <= now()
+     WHERE (customer_id IS NOT NULL OR provider='shopify') AND reconcile_after <= now()
      ORDER BY reconcile_after,organization_id LIMIT $1`,
     [batchSize]
   )

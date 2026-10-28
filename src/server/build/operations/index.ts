@@ -1,3 +1,8 @@
+import { getZernioConnection, beginZernioSignup, finishZernioSignup, disconnectZernio } from "../channels/zernio"
+import { listChannelLinks } from "../channels/links"
+import { beginEvolutionConnection, getEvolutionConnection, getEvolutionPairing, refreshEvolutionConnection, disconnectEvolution } from "../channels/evolution"
+import { evolutionEnabled } from "../channels/evolution-api"
+import { EVOLUTION_ACCEPTANCE_VERSION } from "@/src/lib/build/evolution"
 import { getWhatsAppDelivery, getWhatsAppMedia } from "../channels/whatsapp"
 import { z } from "zod"
 import { metaIdSchema, whatsappModeSchema, whatsappRecipientSchema, whatsappTemplateSchema } from "@/src/lib/build/whatsapp"
@@ -321,7 +326,7 @@ for (const [kind, list, get, save, listVersions, remove] of [
   )
   register(
     `build_save_${kind}`,
-    `Create or update a ${kind} definition with optimistic revision checks.`,
+    `Create or update a ${kind} definition with optimistic revision checks.${kind === "widget" ? " Before authoring, discover build_list_widget_templates and build_get_widget_components. Supply representative states.default data; use build_validate_widget and the browser's build_validate_widget_preview, then reopen the saved widget. Saving does not prove a rendered preview." : ""}`,
     ["build:write"],
     agentId.extend({ id: id.optional(), slug: z.string().trim().max(120).optional(), definition, expectedRevision: z.number().int().positive().optional() }),
     (context, input) => save(context, input.agentId as string, input as never),
@@ -475,9 +480,9 @@ register(
 )
 register(
   "build_update_channel",
-  "Edit a channel name, allowed origins or Chat Bubble display and launcher settings without changing credentials or delivery state.",
+  "Edit a channel name, allowed origins, visitor security or Chat Bubble display and launcher settings without changing credentials or delivery state.",
   ["build:write"],
-  z.object({ connectionId: id, label: z.string().trim().min(1).max(200).optional(), originAllowlist: z.array(z.string().url()).max(100).optional(), bubble: chatBubbleOverridesSchema.optional() }),
+  z.object({ connectionId: id, label: z.string().trim().min(1).max(200).optional(), originAllowlist: z.array(z.string().url()).max(100).optional(), shopifyShop: z.string().max(253).optional(), publicAdmission: z.record(z.string(), z.json()).optional(), bubble: chatBubbleOverridesSchema.optional() }),
   (context, input) => updateChannelConnection(context, input as never),
   { idempotency: "required" }
 )
@@ -487,7 +492,7 @@ register(
   ["build:write"],
   z.object({ connectionId: id, status: z.enum(["draft", "connected", "paused", "error", "disconnected"]), error: z.string().max(2_000).optional() }),
   (context, input) => updateChannelStatus(context, input.connectionId as string, input.status as never, input.error as string | undefined),
-  { idempotency: "required" }
+  { idempotency: "required", openWorld: true }
 )
 register(
   "build_register_telegram",
@@ -908,6 +913,42 @@ register(
 )
 
 
+register(
+  "build_get_zernio_whatsapp",
+  "Read official WhatsApp setup and connection status.",
+  ["build:read"],
+  z.object({ connectionId: z.string().uuid() }),
+  (context, input) => getZernioConnection(context, String(input.connectionId))
+)
+register(
+  "build_begin_zernio_whatsapp",
+  "Start the official WhatsApp signup for this channel.",
+  ["build:write"],
+  z.object({ connectionId: z.string().uuid(), mode: whatsappModeSchema }),
+  (context, input) => beginZernioSignup(context, input as never),
+  { openWorld: true, idempotency: "required" }
+)
+register(
+  "build_finish_zernio_whatsapp",
+  "Verify the account returned by the official WhatsApp signup.",
+  ["build:write"],
+  z.object({
+    connectionId: z.string().uuid(),
+    signupId: z.string().uuid(),
+    accountId: z.string().min(1).max(200),
+  }),
+  (context, input) => finishZernioSignup(context, input as never),
+  { openWorld: true, idempotency: "required" }
+)
+register(
+  "build_disconnect_zernio_whatsapp",
+  "Disconnect this official WhatsApp account from Zernio and stop local routing.",
+  ["build:write"],
+  z.object({ connectionId: z.string().uuid() }),
+  (context, input) => disconnectZernio(context, String(input.connectionId)),
+  { idempotency: "required", destructive: true, openWorld: true }
+)
+
 // WhatsApp uses the same authenticated registry for browser, CLI and MCP.
 register("build_get_whatsapp_setup", "Read WhatsApp installation readiness and public Embedded Signup settings. Never returns secrets.", ["build:read"], z.object({}), () => getWhatsAppSetup())
 register("build_get_whatsapp_connection", "Read the connected business number, coexistence mode, authorization expiry and import status.", ["build:read"], z.object({ connectionId: z.string().uuid() }), (context, input) => getWhatsAppConnection(context, input.connectionId as string))
@@ -927,3 +968,18 @@ register("build_sync_whatsapp_app", "Request a one-time, consented Business App 
 
 register("build_get_whatsapp_delivery", "Read provider delivery/read receipts and queue state for a project-owned outbound WhatsApp message.", ["build:read"], z.object({ connectionId: z.string().uuid(), messageId: id }), (context, input) => getWhatsAppDelivery(context, input as never))
 register("build_get_whatsapp_media", "Download an attachment received on this channel as base64, up to 5 MiB. Never returns a Meta access token or media URL.", ["build:read"], z.object({ connectionId: z.string().uuid(), mediaId: metaIdSchema }), (context, input) => getWhatsAppMedia(context, input as never), { openWorld: true })
+
+register("build_get_evolution_setup", "Read whether the managed Evolution pilot is enabled for this project.", ["build:read"], z.object({}), context => ({ enabled: evolutionEnabled(context.projectId), acceptanceVersion: EVOLUTION_ACCEPTANCE_VERSION }))
+register("build_get_evolution_connection", "Read the project's Evolution session status without credentials or QR.", ["build:read"], z.object({ connectionId:z.string().uuid() }), (context,input) => getEvolutionConnection(context,String(input.connectionId)))
+register("build_begin_evolution_connection", "Accept the unofficial connection notice and pair a managed WhatsApp session. QR is sensitive and short lived.", ["build:write"], z.object({ connectionId:z.string().uuid(), acceptanceVersion:z.literal(EVOLUTION_ACCEPTANCE_VERSION) }), (context,input) => beginEvolutionConnection(context,input as never), { openWorld:true, idempotency:"required" })
+register("build_get_evolution_pairing", "Obtain a fresh short-lived QR for this project's accepted session. Never persist or share the QR.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => getEvolutionPairing(context,String(input.connectionId)), { openWorld:true })
+register("build_refresh_evolution_connection", "Reconcile the authenticated Evolution session with its provider.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => refreshEvolutionConnection(context,String(input.connectionId)), { openWorld:true })
+register("build_disconnect_evolution", "Revoke this session locally, cancel queued sends, and delete its remote instance. Retry completes pending cleanup.", ["build:write"], z.object({ connectionId:z.string().uuid() }), (context,input) => disconnectEvolution(context,String(input.connectionId)), { openWorld:true, idempotency:"required", destructive:true })
+
+register(
+  "build_list_channel_links",
+  "Read the latest 20 sent links with estimated clicks and automated visits. Repeated visits count; this is not unique-person attribution.",
+  ["build:read"],
+  z.object({ connectionId: z.string().uuid() }),
+  (context, input) => listChannelLinks(context, String(input.connectionId))
+)

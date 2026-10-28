@@ -23,8 +23,10 @@ const prefix = `/p/${storybookProject.slug}`
 
 function AppShellExample({
   user = { name: "Ana Martins", email: "ana@example.com", image: null },
+  buildEnabled = false,
 }: {
   user?: AccountMenuUser
+  buildEnabled?: boolean
 }) {
   return (
     <ProjectScopeProvider
@@ -37,6 +39,7 @@ function AppShellExample({
           organization={storybookOrganization}
           project={storybookProject}
           user={user}
+          buildEnabled={buildEnabled}
         >
           <div className="space-y-4 p-4">
             <h2 className="text-lg font-semibold">Trace workspace</h2>
@@ -89,6 +92,19 @@ type Story = StoryObj<typeof AppShellExample>
 export const WorkspaceShell: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    const toggle = within(
+      canvas.getByRole("banner", { name: "Page controls" })
+    ).getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    expect(
+      canvas.queryByRole("link", { name: "Conversations" })
+    ).not.toBeInTheDocument()
+    expect(canvas.queryByText("Build", { exact: true })).not.toBeInTheDocument()
+    expect(canvas.getByRole("link", { name: "Traces" })).toHaveAttribute(
+      "href",
+      `${prefix}/traces`
+    )
     await expect(
       canvas.getByRole("banner", { name: "Page controls" })
     ).toBeVisible()
@@ -102,6 +118,7 @@ export const WorkspaceShell: Story = {
 }
 
 export const InboxSidebar: Story = {
+  render: () => <AppShellExample buildEnabled />,
   parameters: {
     nextjs: { navigation: { pathname: `${prefix}/build/inbox`, query: {} } },
   },
@@ -127,6 +144,37 @@ export const InboxSidebar: Story = {
     await expect(
       canvas.queryByRole("link", { name: "Traces" })
     ).not.toBeInTheDocument()
+  },
+}
+
+export const BuildEnabled: Story = {
+  parameters: {
+    nextjs: { navigation: { pathname: `${prefix}/build/agents` } },
+  },
+  render: () => <AppShellExample buildEnabled />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const toggle = within(
+      canvas.getByRole("banner", { name: "Page controls" })
+    ).getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    await expect(
+      within(
+        canvas.getByRole("navigation", { name: "Workspace area" })
+      ).getByRole("link", { name: "Build" })
+    ).toBeVisible()
+    for (const [label, route] of [
+      ["Agents", "agents"],
+      ["Conversations", "conversations"],
+      ["Inbox", "inbox"],
+      ["Contacts", "contacts"],
+    ]) {
+      await expect(canvas.getByRole("link", { name: label })).toHaveAttribute(
+        "href",
+        `${prefix}/build/${route}`
+      )
+    }
   },
 }
 
@@ -165,6 +213,7 @@ export const NewScorerRoute: Story = {
 }
 
 export const BuildNavigation: Story = {
+  render: () => <AppShellExample buildEnabled />,
   parameters: {
     nextjs: { navigation: { pathname: `${prefix}/build/agents`, query: {} } },
   },
@@ -177,14 +226,16 @@ export const BuildNavigation: Story = {
     await expect(
       header.getByRole("button", { name: /Switch project/ })
     ).toBeVisible()
-    await expect(canvas.getByRole("tab", { name: "Build" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    )
-    await expect(canvas.getByRole("tab", { name: "Observe" })).toHaveAttribute(
-      "href",
-      prefix
-    )
+    await expect(
+      within(
+        canvas.getByRole("navigation", { name: "Workspace area" })
+      ).getByRole("link", { name: "Build" })
+    ).toHaveAttribute("aria-current", "page")
+    await expect(
+      within(
+        canvas.getByRole("navigation", { name: "Workspace area" })
+      ).getByRole("link", { name: "Observe" })
+    ).toHaveAttribute("href", prefix)
     await expect(canvas.getByRole("link", { name: "Agents" })).toHaveAttribute(
       "aria-current",
       "page"
@@ -273,7 +324,7 @@ export const AccountIdentity: Story = {
     await userEvent.keyboard("{Enter}")
     await expect(
       within(canvasElement.ownerDocument.body).getByRole("menuitem", {
-        name: "Sign out",
+        name: "Profile",
       })
     ).toHaveFocus()
     await userEvent.keyboard("{Escape}")
@@ -374,5 +425,103 @@ export const AccountWithoutName: Story = {
     )
     await expect(within(menu).getByText("Signed in as")).toBeVisible()
     await userEvent.keyboard("{Escape}")
+  },
+}
+
+const profilePhoto =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEklEQVQImWNIm7kqbeYqBggFAC16BqWT5yU/AAAAAElFTkSuQmCC"
+let profileAttempts = 0
+export const EditProfile: Story = {
+  beforeEach: () => {
+    profileAttempts = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post("/api/profile", async ({ request }) => {
+          const body = (await request.json()) as {
+            name: string
+            photo?: string | null
+          }
+          await delay(250)
+          if (++profileAttempts === 1)
+            return HttpResponse.json(
+              { error: { message: "Unable to save your profile. Try again." } },
+              { status: 503 }
+            )
+          return HttpResponse.json({
+            data: {
+              name: body.name,
+              email: "ana@example.com",
+              image: body.photo === null ? null : profilePhoto,
+            },
+          })
+        }),
+        ...storybookAuthHandlers,
+        ...workspaceProjectHandlers(),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const { trigger, menu } = await openAccountMenu(canvasElement)
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Profile" })
+    )
+    const dialog = within(await body.findByRole("dialog", { name: "Profile" }))
+    const name = dialog.getByRole("textbox", { name: "Name" })
+    await userEvent.clear(name)
+    await expect(
+      dialog.getByRole("button", { name: "Save changes" })
+    ).toBeDisabled()
+    await userEvent.type(name, "Ana Support")
+    const bytes = Uint8Array.from(atob(profilePhoto.split(",")[1]), (c) =>
+      c.charCodeAt(0)
+    )
+    await userEvent.upload(
+      dialog.getByLabelText("Photo", { exact: true }),
+      new File([bytes], "avatar.png", { type: "image/png" })
+    )
+    await waitFor(() =>
+      expect(dialog.getByRole("button", { name: "Remove photo" })).toBeVisible()
+    )
+    await waitFor(() => {
+      const preview = body
+        .getByRole("dialog", { name: "Profile" })
+        .querySelector("img")
+      expect(preview?.naturalWidth).toBe(256)
+    })
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }))
+    await expect(await dialog.findByRole("alert")).toHaveTextContent(
+      "Unable to save"
+    )
+    await expect(name).toHaveValue("Ana Support")
+    await expect(
+      dialog.getByRole("button", { name: "Remove photo" })
+    ).toBeVisible()
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }))
+    await expect(await dialog.findByText("Profile saved.")).toBeVisible()
+    await expect(trigger).toHaveTextContent("Ana Support")
+    await userEvent.click(dialog.getByRole("button", { name: "Done" }))
+    await waitFor(() => expect(trigger).toHaveFocus())
+    await userEvent.click(trigger)
+    await userEvent.click(body.getByRole("menuitem", { name: "Profile" }))
+    const reopened = within(
+      await body.findByRole("dialog", { name: "Profile" })
+    )
+    await expect(reopened.getByRole("textbox", { name: "Name" })).toHaveValue(
+      "Ana Support"
+    )
+    await userEvent.click(
+      reopened.getByRole("button", { name: "Remove photo" })
+    )
+    await userEvent.click(
+      reopened.getByRole("button", { name: "Save changes" })
+    )
+    await expect(await reopened.findByText("Profile saved.")).toBeVisible()
+    await expect(
+      reopened.queryByRole("button", { name: "Remove photo" })
+    ).toBeNull()
+    await userEvent.click(reopened.getByRole("button", { name: "Done" }))
   },
 }

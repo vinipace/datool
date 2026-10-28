@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { widgetComponentCatalog } from "./widget-components"
 import {
   actionDefinitionSchema,
   agentConfigurationSchema,
@@ -18,7 +19,8 @@ export const authoringTopicSchema = z.enum([
 /** Public sandbox component contract; JSX props include functions and React nodes,
  * so these signatures are documentation rather than JSON instance schemas. */
 export function widgetComponentsGuide() {
-  return {
+  const catalog = widgetComponentCatalog()
+  const notes = {
     imports: { jsx: ["react", "@datool/widgets"], schema: ["zod"] },
     entrypoint:
       "export default function Widget({ data, locale, t }) { return <Text>{t(data.title)}</Text> }",
@@ -93,6 +95,18 @@ export function widgetComponentsGuide() {
     isolation:
       "Code and Zod schemas run in an opaque iframe. No arbitrary imports, parent access or network fetches. Use connected named Functions for external actions. Server save checks syntax; it does not prove browser rendering or successful action execution.",
   }
+  return {
+    ...catalog,
+    entrypoint: notes.entrypoint,
+    props: notes.props,
+    isolation: notes.isolation,
+    components: catalog.components.map((component) => ({
+      ...component,
+      authoringNotes: notes.components.find(
+        (note) => note.name === component.name
+      )?.props,
+    })),
+  }
 }
 
 export function buildAuthoringGuide(
@@ -146,7 +160,7 @@ export function buildAuthoringGuide(
     ],
     action: [
       "Use build_save_action with agentId and definition. Inspect connected app tools with build_list_app_tools before defining integration actions. Bind verified connection/tool IDs, never guessed ones.",
-      "Choose the matching discriminated type: integration, http, client, widget, form or handoff. Retain canonical input names/enums. HTTP header values are sensitive and reads redact them; follow the save operation's preservation behavior.",
+      "Choose the matching discriminated type: integration, shopify, http, client, widget, form or handoff. Retain canonical input names/enums. HTTP header values are sensitive and reads redact them; follow the save operation's preservation behavior.",
       "Native form actions support translations, checkbox fields and captureLead. A successful standalone native form result lets the agent acknowledge naturally; a captured request is not a confirmed meeting. Custom JSX Form instead invokes its bound function.",
     ],
     skill: [

@@ -1,6 +1,7 @@
 "use client"
 
 import type * as React from "react"
+import { UserRoundPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
 
@@ -10,22 +11,17 @@ const avatarTones = [
   "bg-inbox-avatar-rose text-inbox-avatar-ink",
   "bg-inbox-avatar-stone text-inbox-avatar-ink",
 ] as const
-const avatarSizes = {
-  sm: "size-6 text-[0.625rem]",
-  md: "size-9 text-sm",
-  lg: "size-11 text-sm",
-} as const
 
 export function ConversationAvatar({
   name,
   identity = name,
   badge,
-  size = "lg",
+  compact = false,
 }: {
   name: string
   identity?: string
   badge?: React.ReactNode
-  size?: keyof typeof avatarSizes
+  compact?: boolean
 }) {
   const hash = Array.from(identity).reduce(
     (value, char) => value + char.charCodeAt(0),
@@ -42,11 +38,14 @@ export function ConversationAvatar({
     <span
       data-slot="conversation-avatar"
       aria-hidden
-      className={cn("relative inline-flex shrink-0", avatarSizes[size])}
+      className={cn(
+        "relative inline-flex shrink-0",
+        compact ? "size-9" : "size-11"
+      )}
     >
       <span
         className={cn(
-          "relative flex size-full items-center justify-center overflow-hidden rounded-full font-semibold",
+          "relative flex size-full items-center justify-center overflow-hidden rounded-full text-sm font-semibold",
           avatarTones[hash % avatarTones.length]
         )}
       >
@@ -155,5 +154,21 @@ export function ConversationListSkeleton() {
         </div>
       ))}
     </div>
+  )
+}
+
+/** A text label as well as color makes waiting handoffs easy to identify. */
+export function TakeoverIndicator({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      title="Needs takeover"
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-md text-xs font-medium text-warning",
+        !compact && "bg-warning-background px-2 py-1"
+      )}
+    >
+      <UserRoundPlus className="size-3.5" aria-hidden />
+      <span className={compact ? "sr-only" : undefined}>Needs takeover</span>
+    </span>
   )
 }

@@ -114,14 +114,14 @@ try {
     assert.equal(picker.response.headers.get("location"), null)
     assert.ok(picker.body.includes("Home fixture 0"))
     assert.ok(!picker.body.includes("Home fixture 2"))
-    assert.ok(!picker.body.includes("See what your AI is doing."))
+    assert.ok(!picker.body.includes("Build AI agents."))
   }
   const selection = await request("/?returnTo=%2Fprojects", memberCookie)
   assert.equal(selection.response.status, 200)
   assert.ok(selection.body.includes("Home fixture 0"))
   const publicAlias = await request("/landing-page", memberCookie)
   assert.equal(publicAlias.response.status, 200)
-  assert.ok(publicAlias.body.includes("See what your AI is doing."))
+  assert.ok(publicAlias.body.includes("Build AI agents."))
   // A subsequent anonymous request must not reuse the signed-in response.
   await expectLanding()
   console.log(

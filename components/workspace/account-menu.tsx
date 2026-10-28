@@ -17,6 +17,8 @@ import { Notice } from "@/components/ui/notice"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 import { UserAvatarImage } from "@/components/ui/user-avatar"
 import { authClient } from "@/lib/auth-client"
+import { Dialog } from "@/components/ui/dialog"
+import { ProfileEditor } from "./profile-editor"
 
 export type AccountMenuUser = {
   name: string
@@ -24,7 +26,11 @@ export type AccountMenuUser = {
   image?: string | null
 }
 
-export function AccountMenu({ user }: { user: AccountMenuUser }) {
+export function AccountMenu({ user: initialUser }: { user: AccountMenuUser }) {
+  const [savedUser, setSavedUser] = React.useState<AccountMenuUser | null>(null)
+  const [profileOpen, setProfileOpen] = React.useState(false)
+  const user = savedUser ?? initialUser
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
   const router = useRouter()
   const [isPending, setIsPending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -51,13 +57,16 @@ export function AccountMenu({ user }: { user: AccountMenuUser }) {
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
             size="lg"
+            ref={triggerRef}
             aria-label={`Account menu for ${user.email}`}
             aria-busy={isPending}
           >
             <UserAvatarImage name={name} image={user.image ?? null} />
             <span className="grid min-w-0 flex-1 text-xs leading-4">
               <span className="truncate font-medium">{name}</span>
-              <span className="truncate text-foreground-muted">{user.email}</span>
+              <span className="truncate text-foreground-muted">
+                {user.email}
+              </span>
             </span>
             {isPending ? (
               <LoaderCircle className="animate-spin" />
@@ -69,18 +78,27 @@ export function AccountMenu({ user }: { user: AccountMenuUser }) {
         <DropdownMenuContent
           align="end"
           side="top"
-          className="w-(--radix-dropdown-menu-trigger-width) min-w-56 max-w-[calc(100vw-2rem)]"
+          className="w-(--radix-dropdown-menu-trigger-width) max-w-[calc(100vw-2rem)] min-w-56"
         >
           <DropdownMenuLabel className="font-normal">
-            <span className="block text-xs text-foreground-muted">Signed in as</span>
-            <span className="block wrap-anywhere font-medium">{name}</span>
-            <span className="block wrap-anywhere text-xs text-foreground-muted">
+            <span className="block text-xs text-foreground-muted">
+              Signed in as
+            </span>
+            <span className="block font-medium wrap-anywhere">{name}</span>
+            <span className="block text-xs wrap-anywhere text-foreground-muted">
               {user.email}
             </span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild><Link href="/members">Members</Link></DropdownMenuItem>
-          <DropdownMenuItem asChild><Link href="/billing">Billing</Link></DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setProfileOpen(true)}>
+            Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/members">Members</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/billing">Billing</Link>
+          </DropdownMenuItem>
           <DropdownMenuItem
             disabled={isPending}
             onSelect={(event) => {
@@ -91,9 +109,26 @@ export function AccountMenu({ user }: { user: AccountMenuUser }) {
             {isPending ? <LoaderCircle className="animate-spin" /> : <LogOut />}
             {isPending ? "Signing out…" : "Sign out"}
           </DropdownMenuItem>
-          {error ? <Notice variant="error" role="alert">{error}</Notice> : null}
+          {error ? (
+            <Notice variant="error" role="alert">
+              {error}
+            </Notice>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        {profileOpen && (
+          <ProfileEditor
+            user={user}
+            onCloseAutoFocus={() => triggerRef.current?.focus()}
+            onClose={() => setProfileOpen(false)}
+            onSaved={(updated) => {
+              setSavedUser(updated)
+              router.refresh()
+            }}
+          />
+        )}
+      </Dialog>
     </>
   )
 }

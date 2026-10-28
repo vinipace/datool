@@ -1,3 +1,4 @@
+import { buildEnabled } from "@/lib/build/config"
 import { db } from "@/lib/db"
 import { createTracerDatabase } from "@/src/server/tracer/db"
 import { ingestWhatsAppWebhook } from "@/src/server/build/channels/whatsapp-webhook"
@@ -60,19 +61,21 @@ export async function POST(request: Request) {
           connection_id: string
           organization_id: string
         }>(
-          `SELECT a.project_id,a.connection_id,c.organization_id FROM build_whatsapp_account a JOIN build_channel_connection c ON c.id=a.connection_id WHERE a.waba_id=$1 AND ($2::text IS NULL OR a.phone_number_id=$2)`,
+          `SELECT a.project_id,a.connection_id,p.organization_id FROM build_whatsapp_account a JOIN project p ON p.id=a.project_id WHERE a.waba_id=$1 AND ($2::text IS NULL OR a.phone_number_id=$2)`,
           [wabaId, phoneId]
         )
-        return targets.rows.map((row) => ({
-          connectionId: row.connection_id,
-          context: {
-            database: createTracerDatabase(undefined, {
+        return targets.rows
+          .filter((row) => buildEnabled(row.organization_id))
+          .map((row) => ({
+            connectionId: row.connection_id,
+            context: {
+              database: createTracerDatabase(undefined, {
+                projectId: row.project_id,
+              }),
               projectId: row.project_id,
-            }),
-            projectId: row.project_id,
-            organizationId: row.organization_id,
-          },
-        }))
+              organizationId: row.organization_id,
+            },
+          }))
       }
     )
     return Response.json({ ok: true, ...result }, { headers })

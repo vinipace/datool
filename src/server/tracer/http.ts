@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { audited } from "@/src/server/security/audit"
 import { traceReadCache, traceReadCacheMode } from "./trace-read-cache"
 import { sharedReadCache } from "./shared-read-cache"
 import { apiErrorHint } from "@/lib/api-error-hint"
@@ -200,52 +201,70 @@ export async function api<T>(
   action: (service: TracerService, context: TracerApiContext) => TracerEffect<T> | Promise<TracerEffect<T>>,
   options?: { mutation?: boolean; readCache?: "trace-versioned" | "trace-shared" | "shared" },
 ) {
-  try {
-    const context = await authorizeProject(request)
+  return auditProjectRequest(request, async (context) => {
     if (options?.mutation) assertTracerMutationOrigin(request)
-    return await withWorkspace(context.identity, async () => {
-      const service = await getTracerService(context.projectId)
-      const load = async () => {
-        const program = await action(service, context)
-        return runWithTracerService(service, () => program)
+    const service = await getTracerService(context.projectId)
+    const load = async () => {
+      const program = await action(service, context)
+      return runWithTracerService(service, () => program)
+    }
+    if (options?.readCache && request.method === "GET") {
+      const url = new URL(request.url)
+      url.searchParams.sort()
+      const input = {
+        projectId: context.projectId,
+        key: `${url.pathname}?${url.searchParams}`,
+        etag: request.headers.get("if-none-match"),
+        force: request.headers.get("x-datool-refresh") === "force",
+        load,
       }
-      if (options?.readCache && request.method === "GET") {
-        const url = new URL(request.url)
-        url.searchParams.sort()
-        const input = {
-          projectId: context.projectId,
-          key: `${url.pathname}?${url.searchParams}`,
-          etag: request.headers.get("if-none-match"),
-          force: request.headers.get("x-datool-refresh") === "force",
-          load,
-        }
-        const result = options.readCache === "shared"
-          ? await sharedReadCache()({ ...input, enabled: process.env.DATOOL_COLLECTION_READ_CACHE !== "off" })
-          : await traceReadCache()({ ...input, versioned: options.readCache === "trace-versioned", mode: traceReadCacheMode() })
-        const headers = {
-          "Cache-Control": "no-store", "X-Datool-Cache": result.state,
-          ...(result.etag ? { ETag: result.etag } : {}),
-        }
-        if (result.unchanged) return new NextResponse(null, { status: 304, headers })
-        return NextResponse.json({ data: result.data } satisfies ApiEnvelope<T>, { headers })
+      const result = options.readCache === "shared"
+        ? await sharedReadCache()({ ...input, enabled: process.env.DATOOL_COLLECTION_READ_CACHE !== "off" })
+        : await traceReadCache()({ ...input, versioned: options.readCache === "trace-versioned", mode: traceReadCacheMode() })
+      const headers = {
+        "Cache-Control": "no-store", "X-Datool-Cache": result.state,
+        ...(result.etag ? { ETag: result.etag } : {}),
       }
-      const data = await load()
-      return NextResponse.json({ data } satisfies ApiEnvelope<T>, { headers: { "Cache-Control": "no-store" } })
-    })
+      if (result.unchanged) return new NextResponse(null, { status: 304, headers })
+      return NextResponse.json({ data: result.data } satisfies ApiEnvelope<T>, { headers })
+    }
+    const data = await load()
+    return NextResponse.json({ data } satisfies ApiEnvelope<T>, { headers: { "Cache-Control": "no-store" } })
+  })
+}
+
+// Known route families only: paths, query filters and unknown names are not logged.
+const auditResources = new Set([
+  "agent", "build", "ingest", "traces", "spans", "sessions", "reviews",
+  "human-scores", "human-score-collections", "metrics", "datasets", "dataset-items",
+  "scorers", "prompts", "evaluators", "views", "custom-views", "page-views",
+  "object-views", "view-preferences", "react-views", "custom-fields", "dashboards",
+  "reports", "project-home", "evals", "imported-scores", "apps", "playgrounds",
+  "demo", "resources", "cli",
+])
+
+async function auditProjectRequest(request: Request, handler: (context: TracerApiContext) => Promise<Response>) {
+  const resource = new URL(request.url).pathname.split("/")[2]
+  const method = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].includes(request.method) ? request.method : "OTHER"
+  const details = { action: `http.${method}.${auditResources.has(resource) ? resource : "unknown"}` }
+  let context: TracerApiContext
+  try {
+    context = await authorizeProject(request)
   } catch (error) {
-    return apiError(error)
+    // Failed auth cannot establish the claimed project or credential as trusted.
+    return audited({ ...details, identity: { actorType: "unknown" } }, () => apiError(error))
   }
+  return withWorkspace(context.identity, () => audited(details, async () => {
+    try { return await handler(context) } catch (error) { return apiError(error) }
+  }))
 }
 
 /** Apply project authorization to auxiliary app handlers too. */
 export function workspaceRoute<Args extends unknown[]>(handler: (request: Request, ...args: Args) => Promise<Response>) {
-  return async (request: Request, ...args: Args) => {
-    try {
-      const context = await authorizeProject(request)
-      if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) assertTracerMutationOrigin(request)
-      return await withWorkspace(context.identity, () => handler(request, ...args))
-    } catch (error) { return apiError(error) }
-  }
+  return async (request: Request, ...args: Args) => auditProjectRequest(request, async () => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) assertTracerMutationOrigin(request)
+    return handler(request, ...args)
+  })
 }
 
 /** Compatibility name for already-authorized auxiliary handlers. */

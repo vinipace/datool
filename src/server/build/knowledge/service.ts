@@ -1,3 +1,4 @@
+import { enabledBuildProject } from "../access"
 import { createHash, randomUUID } from "node:crypto"
 import { Buffer } from "node:buffer"
 
@@ -757,13 +758,16 @@ export async function runKnowledgeJob(
   }
   const sourceId = claimed[0].sourceId
   try {
-    const heartbeat = async (progress?: CrawlProgress) => {
+    const heartbeat = async (progress?: CrawlProgress | string) => {
       await heartbeatKnowledgeJob(ctx, {
         jobId: claimed[0].jobId,
         leaseToken: claimed[0].leaseToken,
       })
       if (progress) {
-        const message = `Crawling: ${progress.indexedPages} pages read, ${progress.discoveredPages} discovered${progress.failedPages ? `, ${progress.failedPages} failed` : ""}.`
+        const message =
+          typeof progress === "string"
+            ? progress
+            : `Crawling: ${progress.indexedPages} pages read, ${progress.discoveredPages} discovered${progress.failedPages ? `, ${progress.failedPages} failed` : ""}.`
         await ctx.database.execute(sql`
           update build_knowledge_sources set status_message=${message}
           where project_id=${ctx.projectId} and id=${sourceId}
@@ -868,11 +872,16 @@ export async function runKnowledgeJob(
       throw new KnowledgeServiceError(
         `The source exceeds the ${chunkLimit} chunk limit.`
       )
+    await heartbeat(
+      website
+        ? `Indexing ${payload.pages.length} pages. Preparing content for your agent.`
+        : "Indexing content for your agent."
+    )
     const embeddings = await embedKnowledgeChunks(ctx, chunks, {
       sourceId,
       heartbeat,
     })
-    await heartbeat()
+    await heartbeat("Saving index. Almost ready.")
     // Source revisions fence edits. Index revisions are separate so a resync
     // can stage a fresh chunk set while the previous active revision remains
     // queryable until the replacement commits.
@@ -1401,4 +1410,24 @@ export async function retrieveGroundedKnowledge(
     })),
     results,
   }
+}
+
+/** Cross-project worker admission; excluded organizations retain all queued work. */
+export async function listKnowledgeProjectsWithPendingWork(
+  database: TracerDatabase,
+  limit = 50
+): Promise<string[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
+    throw new Error("Knowledge work limit must be between 1 and 1000.")
+  const pending = await database.execute<{ projectId: string }>(sql`
+    select project_id as "projectId" from (
+      select project_id, queued_at as due from build_knowledge_jobs
+      where status='queued' or (status='running' and (lease_expires_at is null or lease_expires_at <= now()))
+      union all
+      select project_id, next_resync_at as due from build_knowledge_sources
+      where status <> 'deleted' and kind in ('website','sitemap') and next_resync_at <= now()
+    ) work where ${enabledBuildProject(sql`work.project_id`)}
+    group by project_id order by min(due), project_id limit ${limit}
+  `)
+  return pending.rows.map((row) => row.projectId)
 }

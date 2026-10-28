@@ -16,7 +16,47 @@ The implemented channel adapters are Website, Telegram, and WhatsApp (Embedded S
 messaging providers, and a Portuguese dashboard are outside this implementation.
 Additional adapters remain extension points and are not offered as available connections.
 
-## Start the worker
+## Enable Build and start the worker
+
+Build is disabled by default. Enable it for every organization with
+`DATOOL_BUILD_ENABLED=true`, or enable a limited rollout with:
+
+```dotenv
+DATOOL_BUILD_ENABLED=false
+DATOOL_BUILD_ORGANIZATION_IDS=organization-id-one,organization-id-two
+```
+
+The allowlist contains exact organization **IDs**, not names, slugs, project IDs,
+or email domains. Whitespace and duplicate entries are ignored; `*` is not a
+wildcard. Only the exact global value `true` enables every organization, even
+when an allowlist is present. With the global flag false or unset, an empty
+allowlist disables Build everywhere. An unknown organization is never admitted
+by the allowlist.
+
+Set the same runtime values on the web process and Build worker, then restart
+both. No image rebuild or new database migration is needed. Docker Compose
+passes both settings from `.env` to the services:
+
+```sh
+docker compose up -d --force-recreate app build-worker
+```
+
+For excluded organizations, the Build navigation group is hidden, Build pages
+are unavailable, authenticated Build API calls return 404, and Build MCP tools
+are unavailable. Public chat and widget endpoints check the channel's owning
+organization, so they also become unavailable. Telegram admission is rejected;
+the shared WhatsApp webhook acknowledges signed batches but ignores events for
+excluded organizations, including delivery receipts. Existing organization
+membership, project permissions, and allowed-origin checks still apply.
+
+The worker filters channel delivery, polling, procedure waits, knowledge work,
+simulations, and campaigns before selecting or claiming jobs. Excluded work
+stays in the database with its existing status and retry count; re-enabling an
+organization makes eligible work available again. Removing an organization
+requires restarting both processes and does not undo already completed external
+actions. If Build is disabled everywhere, its routes return 404 before database
+access and the worker remains idle without opening a database connection.
+Observe, Test, and trace ingestion remain available.
 
 Build requires the web process, the checked-in database migrations, and a
 long-lived Build worker. Run migrations using the installation's normal release
@@ -207,13 +247,41 @@ the completed form and internal submission messages. It does not add a fixed
 “Form submitted” response. Saved completion survives a model failure, preventing
 the same form from capturing a second lead on retry. Forms inside structured
 skills continue through their configured steps.
+Widget authoring discovery is shared across the editor, MCP and the generic CLI:
+`build_list_widget_templates`, `build_get_widget_template` and
+`build_get_widget_components` return the maintained starters and component props.
+`build_validate_widget` performs read-only static checks and explicitly returns
+`rendered:false` and `schemaValidated:false`. It never evaluates customer source
+on the server. While the Widgets section is open, the browser WebMCP operation
+`build_validate_widget_preview` checks a candidate definition or a saved widget ID
+in the existing opaque sandbox. It checks Zod data, visible content, image loads,
+undefined direct style-variable references and viewport overflow without
+dispatching actions. The preview's **Check preview**
+button uses the same checker. Intentional empty-state checks can set `allowEmpty`;
+normal previews should contain representative example data. Browser reports are
+observations, not publication receipts or proof of visual quality.
+
+Run `bun run test:widgets:e2e` with `DATOOL_TEST_DATABASE_URL` pointing to a
+disposable loopback PostgreSQL database with pgvector. The check creates and drops
+its own schema, starts a local app, exercises real MCP and CLI discovery, validates
+positive and negative previews, and reopens a saved widget in the editor. The
+browser regression CI runs this deterministic check. For the authoring-agent
+evaluation, run `bun --no-env-file scripts/test-widget-authoring-e2e.ts --live-model`
+after building browser assets, with `OPENAI_API_KEY` set in the environment.
+This additionally gives a model only the public tools, distributed skill and a
+synthetic product-widget request; it grades discovery before saving, component
+reuse, saved preview data, responsive rendering and product links. It is capped
+at 24 steps and four minutes and incurs model usage. The model defaults to
+`gpt-4.1`; `DATOOL_WIDGET_EVAL_MODEL` overrides it. Reports, screenshots and model
+tool events are written under ignored `artifacts/widget-authoring-e2e/`. A
+deterministic pass does not imply the live model evaluation was run.
 
 | Area                      | Purpose                                                                                            |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
 | Agents                    | Configuration, applied revisions, cloning, and archive lifecycle                                   |
 | Knowledge                 | Text, Q&A, document extraction, website/sitemap crawling, indexing, refresh, retrieval, provenance |
 | Actions                   | Validated HTTP/client/widget/handoff operations with channel and approval constraints              |
-| Procedures                | Bounded steps, conditions, variables, action references, and conversation continuations            |
+| Skills                    | Reusable task instructions, when-to-use guidance, linked actions, and editable templates; existing structured procedures remain supported |
 | Playground                | Hosted runtime with conversation and tool evidence                                                 |
 | Conversations             | All customer chats, their transcripts, and conversation ownership, including chats without tickets |
 | Inbox                     | Escalated support cases, ticket status, assignment, notes, replies, routing, macros, and satisfaction records |
@@ -222,6 +290,30 @@ skills continue through their configured steps.
 | Dashboards                | Customer experience template with conversation activity, inbox, handoffs, and satisfaction metrics |
 | Simulations               | Frozen configurations, customer scenarios, mocked actions, transcripts, and explicit verdicts      |
 | Copilot                   | Proposed changes, review, approval, application, and audit history                                 |
+
+Skills teach an agent how to handle a specific task. **My skills** lists the
+agent's saved skills; **Templates** offers support, exchange, refund, billing
+and lead/meeting starters with an instruction preview. Using a template opens
+an editable, disabled draft. Review your policies and mention existing actions
+with `@` in Instructions, then enable and save the skill when it is ready.
+
+Each skill has a name, description, when-to-use guidance and Markdown instructions.
+The agent always chooses skills by relevance: the model sees the name and
+when-to-use description, then loads the instructions through a tool when relevant.
+Type `@` to search actions and insert an inline mention. Mentions are stored as Markdown links to
+stable action slugs; the server derives action references from those links.
+Removing a mention removes its link, and unknown references are rejected.
+Linked actions marked
+procedure-only become available for that turn after selection; channel and
+approval constraints still apply. Instructions guide the model; they are not
+emitted as a scripted customer message.
+
+Existing structured procedures keep their bounded steps, variables, branches
+and continuations. The `section=procedures` deep link and `build_*_procedure`
+operations remain compatible, including legacy keyword, event and manual triggers.
+Saving through the Skills editor uses relevance-based selection. Definitions
+accept either `instructions` or structured `steps`; both use the existing
+versioned catalog without a migration.
 
 Incoming messages create conversations, not tickets. A runtime handoff, operator
 takeover, or explicit `build_create_ticket` creates the support case. Repeated

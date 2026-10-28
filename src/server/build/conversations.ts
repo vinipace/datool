@@ -864,6 +864,67 @@ export class ConversationService {
     })
   }
 
+  /** Grow a turn's reservation before another model call; serialize with new turns. */
+  async extendBudgetReservation(input: {
+    agentId: string
+    reservationId: string
+    ownerFence: number
+    estimatedUsd: number
+    dailyLimitUsd: number
+  }) {
+    if (
+      !Number.isFinite(input.estimatedUsd) ||
+      input.estimatedUsd < 0 ||
+      !Number.isFinite(input.dailyLimitUsd) ||
+      input.dailyLimitUsd < 0
+    )
+      throw new Error("Budget amounts must be finite and non-negative.")
+    const date = new Date(this.currentTime())
+    const dayStart = new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    ).toISOString()
+    return this.database.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${this.projectId}:${input.agentId}`},0))`
+      )
+      const reservation = await tx.execute<{
+        estimated_usd: string
+        created_at: string
+      }>(sql`
+        SELECT r.estimated_usd,r.created_at FROM build_conversation_budget_reservations r
+        JOIN build_conversations c ON c.id=r.conversation_id AND c.project_id=r.project_id
+        JOIN build_conversation_turns t ON t.id=r.turn_id AND t.project_id=r.project_id
+        WHERE r.project_id=${this.projectId} AND r.id=${input.reservationId} AND r.agent_id=${input.agentId}
+          AND r.status='reserved' AND r.owner_fence=${input.ownerFence}
+          AND c.owner_fence=${input.ownerFence} AND t.owner_fence=${input.ownerFence}
+          AND t.status IN ('started','running')
+        FOR UPDATE OF r
+      `)
+      const row = reservation.rows[0]
+      if (!row) throw new ConversationOwnershipLostError(input.reservationId)
+      const target = Math.max(Number(row.estimated_usd), input.estimatedUsd)
+      const total = await tx.execute<{ committed: string }>(sql`
+        SELECT COALESCE(sum(CASE WHEN status='settled' THEN actual_usd
+          WHEN status IN ('reserved','uncertain') THEN estimated_usd ELSE 0 END),0) AS committed
+        FROM build_conversation_budget_reservations
+        WHERE project_id=${this.projectId} AND agent_id=${input.agentId} AND created_at>=${dayStart}
+      `)
+      const previous =
+        new Date(row.created_at).getTime() >= Date.parse(dayStart)
+          ? Number(row.estimated_usd)
+          : 0
+      if (
+        Number(total.rows[0]?.committed ?? 0) - previous + target >
+        input.dailyLimitUsd + 1e-12
+      )
+        throw new ConversationBudgetExceededError()
+      await tx.execute(sql`UPDATE build_conversation_budget_reservations
+        SET estimated_usd=${target}, created_at=GREATEST(created_at,${dayStart}::timestamptz)
+        WHERE project_id=${this.projectId} AND id=${input.reservationId}`)
+      return target
+    })
+  }
+
   /** Settle a reservation from measured provider usage or retain it as unknown. */
   async settleBudget(input: {
     reservationId: string

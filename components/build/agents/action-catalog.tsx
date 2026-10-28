@@ -41,7 +41,11 @@ const identities: Record<
     tone: "text-action-form",
   },
   form: { label: "Form", icon: FileInput, tone: "text-action-form" },
-  widget: { label: "Show Widget", icon: PanelsTopLeft, tone: "text-action-widget" },
+  widget: {
+    label: "Show Widget",
+    icon: PanelsTopLeft,
+    tone: "text-action-widget",
+  },
 }
 
 const catalog: {
@@ -50,7 +54,13 @@ const catalog: {
   description: string
   actions: { preset: ActionPreset; label: string }[]
 }[] = [
-  { id: "integration", title: "Connected app", description: "Let your agent use apps such as Google Calendar through a connected account.", actions: [{ preset: "integration", label: "Use connected app" }] },
+  {
+    id: "integration",
+    title: "Connected app",
+    description:
+      "Let your agent use apps such as Google Calendar through a connected account.",
+    actions: [{ preset: "integration", label: "Use connected app" }],
+  },
   {
     id: "handoff",
     title: "Escalations",
@@ -131,16 +141,21 @@ export function ActionCatalog({
   onCreate: (preset: ActionPreset) => void
   search?: string
 }) {
-  const matches = catalog.filter(category =>
-    `${category.title} ${category.description} ${category.actions.map(action => action.label).join(" ")}`
-      .toLowerCase().includes(search.trim().toLowerCase())
+  const matches = catalog.filter((category) =>
+    `${category.title} ${category.description} ${category.actions.map((action) => action.label).join(" ")}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase())
   )
   return (
     <section
       aria-label="Add an action"
       className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3"
     >
-      {!matches.length && <p className="col-span-full py-16 text-center text-sm text-foreground-muted">No matching action templates.</p>}
+      {!matches.length && (
+        <p className="col-span-full py-16 text-center text-sm text-foreground-muted">
+          No matching action templates.
+        </p>
+      )}
       {matches.map((category) => (
         <Card key={category.id} className="flex min-w-0 flex-col">
           <CardHeader className="gap-3">

@@ -1,7 +1,12 @@
 import { Inter, Geist_Mono } from "next/font/google"
 import { Toaster } from "@/components/ui/toast"
+import { SiteAnalytics } from "@/components/site-analytics"
 
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" })
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+})
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,6 +31,7 @@ export function Document({
       <body className="font-sans antialiased">
         {children}
         <Toaster />
+        <SiteAnalytics />
       </body>
     </html>
   )

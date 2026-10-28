@@ -31,6 +31,7 @@ import type {
   KnowledgePage,
   KnowledgePageDetail,
   KnowledgePageList,
+  KnowledgeSourceStatus,
 } from "@/src/lib/build/knowledge"
 
 function pagePath(url: string) {
@@ -44,9 +45,11 @@ function pagePath(url: string) {
 
 export function KnowledgePages({
   sourceId,
+  sourceStatus,
   settings,
 }: {
   sourceId: string
+  sourceStatus: KnowledgeSourceStatus
   settings: React.ReactNode
 }) {
   const [search, setSearch] = React.useState("")
@@ -216,7 +219,13 @@ export function KnowledgePages({
           <p className="py-6 text-center text-sm text-foreground-muted">
             {query
               ? "No pages match your search."
-              : "No pages indexed yet. Pages appear after indexing finishes."}
+              : sourceStatus === "error"
+                ? "No pages indexed. Fix the source and reindex to try again."
+                : sourceStatus === "pending"
+                  ? "Waiting to start. Pages will appear after indexing finishes."
+                  : sourceStatus === "indexing"
+                    ? "Your source is being processed. Pages will appear after indexing finishes."
+                    : "No pages indexed yet."}
           </p>
         ) : null}
         {data ? <InfiniteScroll {...state} itemLabel="pages" /> : null}

@@ -1,6 +1,7 @@
 import type { WidgetDefinition } from "./contracts"
 import { widgetSchemaFromData } from "./widget-code"
 import { widgetTemplateTranslations } from "./widget-template-translations"
+import { widgetExampleAssets } from "./widget-example-assets"
 
 export type WidgetTemplate = {
   id: string
@@ -278,9 +279,9 @@ function action(name: string, fields: string[]): WidgetDefinition["functions"] {
   ]
 }
 
-const productImage = "/widget-template-assets/sneaker.webp"
-const fitnessImage = "/widget-template-assets/fitness.webp"
-const hotelImage = "/widget-template-assets/hotel.webp"
+const productImage = widgetExampleAssets.product.path
+const fitnessImage = widgetExampleAssets.fitness.path
+const hotelImage = widgetExampleAssets.hotel.path
 
 const visualTemplates = [
   visualTemplate(

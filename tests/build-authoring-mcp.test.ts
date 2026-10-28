@@ -13,6 +13,9 @@ import {
 import { withWorkspace } from "@/src/server/auth/context"
 import { createMcpServer } from "@/src/server/mcp/server"
 import type { TracerService } from "@/src/server/tracer/service"
+import { configureBuildTestEnvironment } from "./helpers/build-env"
+
+configureBuildTestEnvironment()
 
 async function withClient(
   scopes: string[],
@@ -153,14 +156,20 @@ test("MCP authoring schemas validate their examples and reject invalid author in
     }
     const components = z
       .object({
-        imports: z.object({ jsx: z.array(z.string()) }),
-        components: z.array(z.object({ name: z.string(), props: z.string() })),
+        imports: z.array(z.string()),
+        components: z.array(
+          z.object({
+            name: z.string(),
+            props: z.record(z.string(), z.string()),
+          })
+        ),
       })
       .parse(await call(client, "build_get_widget_components"))
-    expect(components.imports.jsx).toContain("@datool/widgets")
+    expect(components.imports).toContain("@datool/widgets")
     expect(
       components.components.find((item) => item.name === "Form")?.props
-    ).toContain("onSubmitAction")
+        .onSubmitAction
+    ).toBe("Action (required)")
     for (const args of [{ topic: "invalid" }, {}]) {
       expect(
         (

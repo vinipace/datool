@@ -1,3 +1,4 @@
+import { buildEnabled } from "@/lib/build/config"
 import { sql } from "drizzle-orm"
 import { z } from "zod"
 import type { TracerDatabase } from "@/src/server/tracer/db"
@@ -80,7 +81,7 @@ export async function drainInboxPush(database: TracerDatabase) {
       join inbox_mobile_devices d on d.id=j.device_id and d.token=j.token and d.user_id=j.user_id
       ${joins} where j.id=${job.id} and ${eligible}`)
     const target = current.rows[0]
-    if (!target || !await organizationHasBillingAccess(target.organization_id)) {
+    if (!target || !buildEnabled(target.organization_id) || !await organizationHasBillingAccess(target.organization_id)) {
       await database.execute(sql`update inbox_mobile_push_jobs set status='cancelled' where id=${job.id}`)
       continue
     }

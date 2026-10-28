@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Bot, ChevronRight, UserRound } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { ChatLink } from "./chat-navigation"
 import type {
   InspectorMessage,
   InspectorToolCall,
@@ -16,9 +17,11 @@ import {
 import { SyntaxCode } from "./syntax-code"
 import { CodeEditor } from "./code-editor"
 import { UserAvatarImage } from "./user-avatar"
+import { ChatMessageAuthor } from "./chat-message-author"
 import { AgentAvatar } from "./agent-avatar"
 import { SpanKindIcon } from "@/components/tracer/span-kind-icon"
 import { cn } from "@/lib/utils"
+import { sameChatMessageGroup } from "@/src/lib/build/chat-message-grouping"
 import {
   ChatRichContent,
   type ChatInteractionHandler,
@@ -196,8 +199,11 @@ export function MessageTranscript({
   renderMessageFooter,
   pendingReply,
   locale = "en",
+  getMessageKey,
 }: {
   messages: InspectorMessage[]
+  /** Keep optimistic messages mounted when their persisted IDs arrive. */
+  getMessageKey?: (message: InspectorMessage) => string | undefined
   raw?: boolean
   variant?: "default" | "chat" | "bubbles" | "customer" | "inbox"
   perspective?: "customer" | "operator"
@@ -232,8 +238,8 @@ export function MessageTranscript({
   return (
     <div
       className={cn(
-        "relative space-y-3 whitespace-normal",
-        variant !== "customer" && "font-sans",
+        "relative whitespace-normal",
+        variant !== "customer" && "space-y-3 font-sans",
         variant === "inbox" && "space-y-2"
       )}
     >
@@ -265,6 +271,10 @@ export function MessageTranscript({
               : message.role
           const customer = variant === "customer"
           const inbox = variant === "inbox"
+          const continuesGroup =
+            customer && sameChatMessageGroup(transcript[index - 1]?.message, message)
+          const endsGroup =
+            !customer || !sameChatMessageGroup(message, transcript[index + 1]?.message)
           const previousDate = transcript[index - 1]?.message.createdAt
           const startsDay =
             inbox &&
@@ -279,7 +289,11 @@ export function MessageTranscript({
               message.content.some((part) => !isTextOrToolPart(part)))
           return (
             <motion.article
-              key={message.id ?? `${message.role}-${index}`}
+              key={
+                getMessageKey?.(message) ??
+                message.id ??
+                `${message.role}-${index}`
+              }
               data-chat-message=""
               layout={customer && !reducedMotion ? "position" : false}
               initial={
@@ -296,11 +310,15 @@ export function MessageTranscript({
                   : customer
                     ? isUser
                       ? "Your message"
-                      : "Assistant message"
+                      : isHumanReply
+                        ? `${message.author?.name || "Support teammate"} message`
+                        : "Assistant message"
                     : undefined
               }
               className={cn(
-                "min-w-0 py-1",
+                "min-w-0",
+                !customer && "py-1",
+                customer && index > 0 && (continuesGroup ? "mt-1" : "mt-5"),
                 (variant !== "default" || isOutgoing) &&
                   "flex flex-col items-start",
                 isOutgoing && "items-end",
@@ -320,6 +338,12 @@ export function MessageTranscript({
                     })}
                   </time>
                 </div>
+              )}
+              {(customer || inbox) && isHumanReply && !continuesGroup && (
+                <ChatMessageAuthor
+                  name={message.author?.name || "Support teammate"}
+                  image={message.author?.image ?? null}
+                />
               )}
               {!customer && !inbox && (
                 <span
@@ -384,7 +408,7 @@ export function MessageTranscript({
                         : "bg-muted text-foreground")
                   )}
                 >
-                  {inbox && isAssistant && (
+                  {inbox && isAssistant && !isHumanReply && (
                     <p className="mb-1 text-xs font-semibold text-inherit">
                       {label}
                       {!isHumanReply && " · AI"}
@@ -393,7 +417,8 @@ export function MessageTranscript({
                   {text !== null && (
                     <div
                       className={cn(
-                        "mt-1.5 text-sm leading-6 [overflow-wrap:anywhere] text-foreground",
+                        "mt-1.5 leading-6 [overflow-wrap:anywhere] text-foreground",
+                        !customer && "text-sm",
                         !customer &&
                           !inbox &&
                           (isOutgoing || variant === "bubbles") &&
@@ -428,6 +453,7 @@ export function MessageTranscript({
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
+                              a: ChatLink,
                               code: ({ className, children }) => {
                                 const language =
                                   /(?:^|\s)language-(json|ya?ml)(?:\s|$)/.exec(
@@ -507,14 +533,14 @@ export function MessageTranscript({
                   onCodeStatus={onCodeStatus}
                 />
               )}
-              {customer && renderMessageFooter?.(message)}
+              {customer && (isUser || endsGroup) && renderMessageFooter?.(message)}
             </motion.article>
           )
         })}
         {pendingReply ? (
           <motion.div
             key="pending-reply"
-            className="flex justify-start py-1"
+            className={cn("flex justify-start py-1", variant === "customer" && transcript.length > 0 && "mt-5")}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

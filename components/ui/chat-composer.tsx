@@ -43,6 +43,7 @@ export function ChatComposer({
   sendLabel = "Send message",
   variant = "default",
   accentSend,
+  allowDraftWhileRunning = false,
   maxLength,
 }: {
   text: string
@@ -56,6 +57,7 @@ export function ChatComposer({
   variant?: "default" | "customer" | "help-page" | "inbox"
   accentSend?: boolean
   maxLength?: number
+  allowDraftWhileRunning?: boolean
 }) {
   return (
     <div
@@ -86,7 +88,7 @@ export function ChatComposer({
               : "max-h-32 min-h-8 flex-1 resize-none"
         }
         value={text}
-        readOnly={running}
+        readOnly={running && !allowDraftWhileRunning}
         disabled={disabled}
         maxLength={maxLength}
         onChange={(event) => onTextChange(event.target.value)}

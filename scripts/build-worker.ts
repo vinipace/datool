@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm"
+import { reconcileEvolutionConnection } from "../src/server/build/channels/evolution"
 import { drainInboxPush } from "../src/server/build/mobile/push"
+import { enqueueShopifyReconciliationJobs } from "../src/server/build/integrations/shopify-reconciliation"
 import { createTracerDatabase } from "../src/server/tracer/db"
 import { createBuildContext } from "../src/server/build/context"
 import {
@@ -8,7 +10,7 @@ import {
 } from "../src/server/build/runtime"
 import {
   pinContinuationWidgets,
-  runtimeMessageMetadata,
+  runtimeChannelMessage,
 } from "../src/server/build/runtime/continuations"
 import {
   claimNextChannelJob,
@@ -22,6 +24,7 @@ import {
 } from "../src/server/build/channels/service"
 import {
   enqueueDueKnowledgeResyncs,
+  listKnowledgeProjectsWithPendingWork,
   runQueuedKnowledgeJobs,
 } from "../src/server/build/knowledge/service"
 import {
@@ -35,6 +38,24 @@ import {
   processNextCampaignDelivery,
 } from "../src/server/build/operations/campaigns"
 import type { AgentTurnRunner } from "../src/lib/build/channels"
+import { buildAvailable } from "../lib/build/config"
+
+// Stay healthy under process supervisors without admitting or processing jobs.
+if (!buildAvailable()) {
+  console.info(
+    "[build-worker] disabled; set DATOOL_BUILD_ENABLED=true or DATOOL_BUILD_ORGANIZATION_IDS to enable"
+  )
+  await new Promise<void>((resolve) => {
+    const timer = setInterval(() => {}, 60_000)
+    const stop = () => {
+      clearInterval(timer)
+      resolve()
+    }
+    process.once("SIGINT", stop)
+    process.once("SIGTERM", stop)
+  })
+  process.exit(0)
+}
 
 /** Independent queues keep long crawls and simulations from delaying customer replies. */
 const workerDatabase = createTracerDatabase(undefined, {
@@ -98,16 +119,20 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
     const requestKey = input.metadata.requestKey
     if (typeof requestKey !== "string" || !requestKey)
       throw new Error("Channel execution requires a durable request key.")
-    const result = await runAgentTurn(context, {
-      agentId: input.agentId,
-      channel: input.channel,
-      conversationId: input.conversationId,
-      externalConversationId: input.metadata.externalConversationId as
-        string | undefined,
-      requestKey,
-      message: latest?.content ?? "",
-      metadata,
-    })
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: input.agentId,
+        channel: input.channel,
+        conversationId: input.conversationId,
+        externalConversationId: input.metadata.externalConversationId as
+          string | undefined,
+        requestKey,
+        message: latest?.content ?? "",
+        metadata,
+      },
+      { trustedChannelImages: input.images }
+    )
     if (result.status === "busy")
       throw Object.assign(
         new Error("The conversation is processing another turn."),
@@ -122,12 +147,7 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
       agentRevision: result.turn.snapshot.agentRevision,
       continuations: result.continuations,
     })
-    const continuationText = continuations
-      .map((item) => item.message ?? item.submitLabel ?? item.eventName ?? "")
-      .filter(Boolean)
-      .join("\n")
-    const text =
-      result.text || (input.channel === "web" ? "" : continuationText)
+    const message = runtimeChannelMessage(result, continuations)
     const handedOff =
       result.status === "handed_off" &&
       result.conversation.ownerType === "human"
@@ -140,16 +160,7 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
         : result.turn.ownerFence,
       ownerType: handedOff ? "human" : "ai",
       messages:
-        text || continuations.length
-          ? [
-              {
-                text,
-                ...(input.channel === "web"
-                  ? { metadata: runtimeMessageMetadata(result, continuations) }
-                  : {}),
-              },
-            ]
-          : [],
+        message.text || Object.keys(message.metadata).length ? [message] : [],
       ownership: handedOff ? "human" : undefined,
       metadata: {
         traceId: result.traceId,
@@ -259,16 +270,8 @@ async function waitTask() {
   return (await enqueueConversationWaitJobs(workerDatabase, { limit: 100 })) > 0
 }
 async function knowledgeTask() {
-  const pending = await workerDatabase.execute<{ projectId: string }>(sql`
-    select project_id as "projectId" from (
-      select project_id, queued_at as due from build_knowledge_jobs
-      where status='queued' or (status='running' and (lease_expires_at is null or lease_expires_at <= now()))
-      union all
-      select project_id, next_resync_at as due from build_knowledge_sources
-      where status <> 'deleted' and kind in ('website','sitemap') and next_resync_at <= now()
-    ) work group by project_id order by min(due), project_id limit 50
-  `)
-  for (const { projectId } of pending.rows) {
+  const projects = await listKnowledgeProjectsWithPendingWork(workerDatabase)
+  for (const projectId of projects) {
     if (stopped) break
     const context = projectContext(projectId)
     try {
@@ -278,7 +281,7 @@ async function knowledgeTask() {
       reportWorkerError("knowledge project job failed", error)
     }
   }
-  return pending.rows.length > 0
+  return projects.length > 0
 }
 async function simulationTask() {
   const projects = await listSimulationProjectsWithPendingRuns(
@@ -330,6 +333,15 @@ await Promise.all([
   ...Array.from({ length: 4 }, (_, index) =>
     loop("channel consumer " + (index + 1), channelTask)
   ),
+  loop("Evolution reconciliation failed", async () => {
+    const sessions = await workerDatabase.execute<{ connection_id: string; project_id: string }>(sql`SELECT connection_id,project_id FROM build_evolution_instance ORDER BY checked_at NULLS FIRST LIMIT 100`)
+    for (const session of sessions.rows) {
+      if (stopped) break
+      try { await reconcileEvolutionConnection(projectContext(session.project_id), session.connection_id) }
+      catch (error) { reportWorkerError("Evolution session reconciliation failed", error) }
+    }
+    return false
+  }, 30_000),
   loop("knowledge queue failed", knowledgeTask, 2000),
   loop("simulation queue failed", simulationTask, 2000),
   loop("campaign queue failed", campaignTask, 2000),
@@ -338,6 +350,11 @@ await Promise.all([
     await drainInboxPush(workerDatabase)
     return false
   }, 5000),
+  loop(
+    "Shopify reconciliation scheduler failed",
+    async () => (await enqueueShopifyReconciliationJobs(workerDatabase)) > 0,
+    2000
+  ),
 ])
 const { db, analyticsDb } = await import("../lib/db")
 await Promise.all([db.end(), analyticsDb.end()])

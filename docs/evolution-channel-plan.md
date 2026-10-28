@@ -1,6 +1,6 @@
 # Plano: WhatsApp via Evolution no Datool
 
-Data: 26/10/2026. Estado: proposto; nenhuma implementação ou alteração de produção realizada nesta tarefa.
+Data: 26/10/2026. Estado: implementação em validação. Produção e teste com aparelho ainda pendentes; consultar `ops/evolution/README.md` para o procedimento operacional.
 
 ## Resultado esperado
 

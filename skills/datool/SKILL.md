@@ -1,11 +1,13 @@
 ---
 name: datool
-description: Use Datool MCP, CLI, SDK and browser WebMCP to connect apps, integrate managed prompts, debug AI workflows, submit AI-labelled reviews, route evaluation work and customize Page or Object Views.
+description: Use Datool MCP, CLI, SDK and browser WebMCP to connect apps, author agent widgets, integrate managed prompts, debug AI workflows, submit AI-labelled reviews, route evaluation work and customize Page or Object Views.
 ---
 
 # Datool
 
 ## Connection and discovery
+
+For customer-facing agent widgets, read [widget authoring](references/widgets.md) before writing JSX. Discover templates and supported components, preserve representative preview data, and validate the saved widget in its browser sandbox. Widgets use a different component library from Page and Object Views.
 
 For custom Datool screens, first read [choosing Page Views and Object Views](references/views.md). Use a Table Page View for collection settings, a React or MDX Page View for custom collection content, and an Object View for one trace or dataset item. Discover the deployed schemas before using a renderer or transport.
 

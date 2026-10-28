@@ -1,7 +1,16 @@
+import { disconnectZernio, sendZernioEnvelope, zernioAccount } from "./zernio"
+import { prepareEvolutionMedia, ChannelMediaError } from "./media"
+import { prepareWhatsAppText } from "./links"
+import { evolutionEnabled } from "./evolution-api"
+import { assertEvolutionOutbound, sendEvolutionEnvelope, setEvolutionStatus } from "./evolution"
+import { verifyNewVisitorChallenge } from "./challenge"
+import { verifyChannelVisitor } from "./visitor-sessions"
 import { createHmac, randomUUID } from "node:crypto"
 import { isIP } from "node:net"
 
 import { sql } from "drizzle-orm"
+import { buildEnabled } from "@/lib/build/config"
+import { enabledBuildProject } from "../access"
 import {
   chatBubbleOverridesSchema,
   resolveChatBubbleSettings,
@@ -22,11 +31,7 @@ import {
   type OutboundEnvelope,
   type NormalizedAttachment,
 } from "@/src/lib/build/channels"
-import {
-  channelSigningSecret,
-  signVisitorContext,
-  verifyVisitorContext,
-} from "./visitor"
+import { channelSigningSecret, signVisitorContext } from "./visitor"
 import { db } from "@/lib/db"
 import {
   createTracerDatabase,
@@ -36,9 +41,10 @@ import {
 import { operationId, type BuildContext } from "../context"
 import { assertPublicHttpUrl } from "../http"
 import { TracerError } from "@/src/server/tracer/errors"
+import { securityAudit } from "@/src/server/security/audit"
 import {
   pinContinuationWidgets,
-  runtimeMessageMetadata,
+  runtimeChannelMessage,
 } from "../runtime/continuations"
 import type { RunAgentTurnResult, RuntimeContinuation } from "../runtime"
 import {
@@ -264,57 +270,87 @@ function publicAdmissionKey(clientKey: string | undefined) {
 }
 
 /**
- * Atomically admits one anonymous public request before contact, conversation,
- * or channel jobs are created. The key is intentionally independent of the
- * signed visitor id so fresh visitor tokens cannot evade the guard.
+ * Atomically counts each public request before contact, conversation, or jobs
+ * are created. Verified visitors have their own burst limit; a trusted client
+ * key also protects against attempts to reset identity to evade that limit.
  */
 export async function enforcePublicAdmission(
   context: BuildContext,
   connection: ChannelConnection,
   scope: PublicAdmissionScope,
-  clientKey?: string
+  clientKey?: string,
+  visitorId?: string
 ) {
   const policy = publicAdmissionPolicy(connection, scope)
+  const limits = jsonObject(jsonObject(connection.config).publicAdmission)
+  const bounded = (value: unknown, fallback: number, max: number) =>
+    Number.isInteger(value)
+      ? Math.max(1, Math.min(max, Number(value)))
+      : fallback
+  const dailyLimit = Number.isInteger(limits.visitorMessagesPerDay)
+    ? bounded(limits.visitorMessagesPerDay, 1, 10000)
+    : null
+  // A verified visitor is a safe fallback when the edge does not supply a
+  // trusted client IP. Do not combine every returning shopper into one bucket.
+  const client = clientKey?.trim()
+  const admissionKey =
+    (!client || client === "anonymous") && visitorId
+      ? `verified-visitor:${visitorId}`
+      : client
+  const buckets = [
+    ...(scope === "message" && visitorId
+      ? [
+          {
+            key: `visitor-minute:${visitorId}`,
+            max: bounded(limits.visitorMessagesPerMinute, 20, 120),
+            seconds: 60,
+          },
+          ...(dailyLimit === null
+            ? []
+            : [
+                {
+                  key: `visitor-day:${visitorId}`,
+                  max: dailyLimit,
+                  seconds: 86400,
+                },
+              ]),
+        ]
+      : []),
+    {
+      key: admissionKey,
+      max: policy.maxRequests,
+      seconds: policy.windowSeconds,
+    },
+  ]
   const now = Date.now()
-  const windowMs = policy.windowSeconds * 1_000
-  const windowStartedAt = new Date(Math.floor(now / windowMs) * windowMs)
-  const hashedClientKey = publicAdmissionKey(clientKey)
   const databaseHandle = database(context)
-
-  // Keep the anonymous ledger bounded without requiring a separate cleanup
-  // worker. Only old buckets for this connection are touched on a request.
+  // Keep optional daily buckets until their window has expired.
   await databaseHandle.execute(sql`
     DELETE FROM build_public_admission_bucket
     WHERE project_id = ${context.projectId}
       AND connection_id = ${connection.id}::uuid
-      AND window_started_at < ${new Date(now - Math.max(windowMs * 2, 120_000))}
+      AND window_started_at < ${new Date(now - 2 * 86_400_000)}
   `)
-  const result = await databaseHandle.execute<{
-    request_count: number | string
-    window_started_at: Date | string
-  }>(sql`
-    INSERT INTO build_public_admission_bucket
-      (project_id, connection_id, scope, client_key, window_started_at, request_count)
-    VALUES (${context.projectId}, ${connection.id}::uuid, ${scope}, ${hashedClientKey}, ${windowStartedAt}, 1)
-    ON CONFLICT (project_id, connection_id, scope, client_key, window_started_at)
-    DO UPDATE SET request_count = LEAST(build_public_admission_bucket.request_count + 1, 2147483647)
-    RETURNING request_count, window_started_at
-  `)
-  const requestCount = Number(result.rows[0]?.request_count ?? 0)
-  if (requestCount <= policy.maxRequests) return
-  const bucket =
-    result.rows[0]?.window_started_at instanceof Date
-      ? result.rows[0].window_started_at.getTime()
-      : Date.parse(
-          String(
-            result.rows[0]?.window_started_at ?? windowStartedAt.toISOString()
-          )
-        )
-  const retryAfterSeconds = Math.max(
-    1,
-    Math.ceil((bucket + windowMs - now) / 1_000)
-  )
-  throw new PublicAdmissionRateLimitError(retryAfterSeconds)
+  // Check visitor limits first: rejected flooding must not exhaust a shared
+  // IP's allowance and stop other shoppers from getting replies.
+  for (const bucket of buckets) {
+    const windowMs = bucket.seconds * 1000
+    const start = new Date(Math.floor(now / windowMs) * windowMs)
+    const admitted = await databaseHandle.execute<{
+      request_count: number
+    }>(sql`
+      INSERT INTO build_public_admission_bucket
+        (project_id,connection_id,scope,client_key,window_started_at,request_count)
+      VALUES (${context.projectId},${connection.id}::uuid,${scope},${publicAdmissionKey(bucket.key)},${start},1)
+      ON CONFLICT (project_id,connection_id,scope,client_key,window_started_at)
+      DO UPDATE SET request_count=LEAST(build_public_admission_bucket.request_count+1,2147483647)
+      RETURNING request_count
+    `)
+    if (Number(admitted.rows[0]?.request_count) > bucket.max)
+      throw new PublicAdmissionRateLimitError(
+        Math.max(1, Math.ceil((start.getTime() + windowMs - now) / 1000))
+      )
+  }
 }
 
 function connectionFromRow(row: Row): ChannelConnection {
@@ -403,11 +439,12 @@ export async function publicConnectionContext(
     project_id: string
     organization_id: string
   }>(
-    "SELECT project_id, organization_id FROM build_channel_connection WHERE id = $1::uuid LIMIT 1",
+    "SELECT c.project_id, p.organization_id FROM build_channel_connection c JOIN project p ON p.id = c.project_id WHERE c.id = $1::uuid LIMIT 1",
     [connectionId]
   )
   const row = result.rows[0]
-  if (!row) throw new Error("Channel connection was not found.")
+  if (!row || !buildEnabled(row.organization_id))
+    throw new Error("Channel connection was not found.")
   const scoped = createTracerDatabase(undefined, { projectId: row.project_id })
   return {
     database: scoped,
@@ -472,6 +509,8 @@ export async function updateChannelConnection(
     connectionId: string
     label?: string
     originAllowlist?: string[]
+    shopifyShop?: string
+    publicAdmission?: Record<string, unknown>
     bubble?: ChatBubbleOverrides
   }
 ) {
@@ -480,6 +519,29 @@ export async function updateChannelConnection(
     throw new Error("Allowed origins apply only to website channels.")
   if (input.bubble !== undefined && connection.channel !== "web")
     throw new Error("Chat bubble settings apply only to website channels.")
+  const security = CHANNEL_DESCRIPTORS.web.connectionSchema.parse({
+    ...(input.shopifyShop === undefined
+      ? {}
+      : { shopifyShop: input.shopifyShop }),
+    ...(input.publicAdmission === undefined
+      ? {}
+      : { publicAdmission: input.publicAdmission }),
+  }) as Record<string, unknown>
+  if (
+    (input.shopifyShop !== undefined || input.publicAdmission !== undefined) &&
+    connection.channel !== "web"
+  )
+    throw new Error("Visitor security settings apply only to website channels.")
+  if (input.shopifyShop !== undefined) {
+    const active = await database(context).execute(sql`
+      SELECT 1 FROM build_shopify_connections s JOIN build_app_connections a ON a.id=s.connection_id AND a.project_id=s.project_id
+      WHERE s.project_id=${context.projectId} AND s.shop=${security.shopifyShop} AND a.status='active'
+    `)
+    if (!active.rows.length)
+      throw new Error(
+        "Connect this Shopify store in the current project first."
+      )
+  }
   const bubble =
     input.bubble === undefined
       ? undefined
@@ -507,6 +569,17 @@ export async function updateChannelConnection(
       "Connection name must contain between 1 and 200 characters."
     )
   const patch = {
+    ...(input.shopifyShop === undefined
+      ? {}
+      : { shopifyShop: security.shopifyShop }),
+    ...(input.publicAdmission === undefined
+      ? {}
+      : {
+          publicAdmission: {
+            ...jsonObject(connection.config.publicAdmission),
+            ...jsonObject(security.publicAdmission),
+          },
+        }),
     ...(origins === undefined
       ? {}
       : { originAllowlist: [...new Set(origins)] }),
@@ -529,7 +602,17 @@ export async function updateChannelStatus(
 ) {
   requireConnectionId(connectionId)
   const loaded = await getChannelConnection(context, connectionId)
-  if (loaded.connection.channel === "whatsapp") {
+  if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider === "evolution") {
+    await setEvolutionStatus(context, connectionId, status)
+    return (await getChannelConnection(context, connectionId)).connection
+  }
+  if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider === "zernio") {
+    if (status === "disconnected") {
+      await disconnectZernio(context, connectionId)
+      return (await getChannelConnection(context, connectionId)).connection
+    }
+    if (status === "connected") await zernioAccount(context, connectionId)
+  } else if (loaded.connection.channel === "whatsapp") {
     if (status === "disconnected") {
       await disconnectWhatsApp(context, connectionId)
       return (await getChannelConnection(context, connectionId)).connection
@@ -649,15 +732,23 @@ export async function findOrCreateContact(
 ) {
   // WhatsApp's sender ID is stable across business numbers. Derive it from
   // the provider identity, never a phone supplied by a public chat visitor.
-  const whatsappSender = envelope.channel === "whatsapp"
-    ? /^[0-9]+:([1-9][0-9]{6,19})$/.exec(envelope.externalContactId)?.[1]
-    : undefined
+  const whatsappSender =
+    envelope.channel === "whatsapp"
+      ? /^[0-9]+:([1-9][0-9]{6,19})$/.exec(envelope.externalContactId)?.[1]
+      : undefined
   const externalId = whatsappSender
     ? `whatsapp:${whatsappSender}`
     : `${envelope.channel}:${envelope.connectionId}:${envelope.externalContactId}`
   const identityKey = `${envelope.connectionId}:${envelope.externalContactId}`
-  const phone = whatsappSender ? `+${whatsappSender}` : envelope.contact.phone ?? null
-  const metadata = JSON.stringify({ ...envelope.contact.metadata, username: envelope.contact.username, locale: envelope.contact.locale, channel: envelope.channel })
+  const phone = whatsappSender
+    ? `+${whatsappSender}`
+    : (envelope.contact.phone ?? null)
+  const metadata = JSON.stringify({
+    ...envelope.contact.metadata,
+    username: envelope.contact.username,
+    locale: envelope.contact.locale,
+    channel: envelope.channel,
+  })
 
   return database(context).transaction(async (tx) => {
     const knownIdentity = await tx.execute<{ contact_id: string }>(sql`
@@ -815,7 +906,8 @@ async function updateInboundTicket(
 
 export async function enqueueInboundEnvelope(
   context: BuildContext,
-  envelope: InboundEnvelope
+  envelope: InboundEnvelope,
+  shopifyIdentity?: { browserSessionId: string; identityVersion: number }
 ) {
   const connection = await getChannelConnection(context, envelope.connectionId)
   if (connection.connection.channel !== envelope.channel)
@@ -843,6 +935,20 @@ export async function enqueueInboundEnvelope(
       RETURNING id
     `)
     if (!inserted.rows.length) return { inserted: false }
+    if (shopifyIdentity) {
+      const bound = await tx.execute(sql`
+        INSERT INTO build_shopify_message_identity (project_id,message_id,browser_session_id,identity_version)
+        SELECT ${context.projectId},${messageId},id,identity_version
+        FROM build_shopify_visitor_sessions
+        WHERE project_id=${context.projectId} AND connection_id=${envelope.connectionId}::uuid
+          AND id=${shopifyIdentity.browserSessionId}::uuid AND identity_version=${shopifyIdentity.identityVersion}
+          AND visitor_id=${envelope.externalContactId} AND expires_at>now()
+          AND verified_at>now()-interval '5 minutes'
+        RETURNING message_id
+      `)
+      if (!bound.rows.length)
+        throw new Error("Shopify session changed. Reconnect the chat.")
+    }
     await tx.execute(sql`
       INSERT INTO build_channel_job
         (id, project_id, connection_id, kind, message_id, payload_json, idempotency_key)
@@ -900,7 +1006,12 @@ export type ClaimedChannelJob = {
   id: string
   projectId: string
   connectionId: string
-  kind: "process_inbound" | "deliver_outbound" | "telegram_poll" | "resume_wait"
+  kind:
+    | "process_inbound"
+    | "deliver_outbound"
+    | "telegram_poll"
+    | "resume_wait"
+    | "shopify_reconcile"
   messageId: string | null
   payload: Record<string, unknown>
   attempts: number
@@ -984,6 +1095,7 @@ export async function claimNextChannelJob(
       SET status = 'uncertain', locked_at = NULL, lock_token = NULL,
           last_error = 'The channel job lease was lost; delivery outcome is uncertain.'
       WHERE status = 'running'
+        AND ${enabledBuildProject(sql`build_channel_job.project_id`)}
         AND kind = 'deliver_outbound'
         AND locked_at < now() - interval '5 minutes'
       RETURNING id, project_id, message_id
@@ -1002,6 +1114,7 @@ export async function claimNextChannelJob(
       JOIN build_channel_connection c
         ON c.project_id = j.project_id AND c.id = j.connection_id
       WHERE c.status = 'connected'
+        AND ${enabledBuildProject(sql`j.project_id`)}
         AND NOT EXISTS (
           SELECT 1 FROM stale_outbound s
           WHERE s.project_id = j.project_id AND s.id = j.id
@@ -1014,7 +1127,7 @@ export async function claimNextChannelJob(
             AND active.kind = 'telegram_poll' AND active.status = 'running'
             AND active.locked_at >= now() - interval '5 minutes' AND active.id <> j.id
         ))
-      ORDER BY (j.kind = 'telegram_poll'), j.run_after, j.created_at, j.id
+      ORDER BY (j.kind IN ('telegram_poll','shopify_reconcile')), j.run_after, j.created_at, j.id
       FOR UPDATE SKIP LOCKED
       LIMIT 1
     )
@@ -1116,12 +1229,15 @@ export async function enqueueOutboundEnvelope(
     expectedOwnerFence?: number
     expectedOwnerType?: "ai" | "human"
     runtimeMessageId?: string
+    /** Persist an independently generated status update in model history atomically. */
+    recordRuntimeMessage?: boolean
   } = {}
 ) {
   const loaded = await getChannelConnection(context, envelope.connectionId)
   if (loaded.connection.channel !== envelope.channel) {
     throw new Error("Outbound envelope does not match its connection.")
   }
+  if (loaded.connection.config.provider === "evolution") await assertEvolutionOutbound(context, envelope, externalConversationId)
   const consistency = await database(context).execute<Row>(sql`
     SELECT c.agent_id AS conversation_agent_id,
            c.channel AS conversation_channel,
@@ -1209,12 +1325,44 @@ export async function enqueueOutboundEnvelope(
     `)
     if (!inserted.rows.length)
       return { inserted: false, channelJobId: undefined as string | undefined }
+    const outboundText =
+      envelope.channel === "whatsapp"
+        ? await prepareWhatsAppText(
+            { ...context, database: scopedTracerTransaction(context.database, tx) },
+            messageId,
+            envelope.text
+          )
+        : envelope.text
+    if (outboundText !== envelope.text)
+      await tx.execute(sql`
+        UPDATE build_channel_message
+        SET content_json=jsonb_set(content_json,'{text}',${JSON.stringify(outboundText)}::jsonb)
+        WHERE project_id=${context.projectId} AND id=${messageId}
+      `)
+    if (options.recordRuntimeMessage) {
+      const conversations = new ConversationService({
+        ...context,
+        database: scopedTracerTransaction(context.database, tx),
+      })
+      const message = await conversations.appendMessage(
+        envelope.conversationId,
+        {
+          role: "assistant",
+          content: envelope.text,
+          status: "completed",
+          metadata: { source: "channel_status_update" },
+        }
+      )
+      await tx.execute(
+        sql`UPDATE build_channel_message SET runtime_message_id=${message.id} WHERE project_id=${context.projectId} AND id=${messageId}`
+      )
+    }
     const jobResult = await tx.execute<Row>(sql`
       INSERT INTO build_channel_job
         (id, project_id, connection_id, kind, message_id, payload_json, idempotency_key)
       VALUES (${randomUUID()}::uuid, ${context.projectId}, ${envelope.connectionId}::uuid,
         'deliver_outbound', ${messageId},
-        ${JSON.stringify({ ...envelope, externalConversationId })}::jsonb,
+        ${JSON.stringify({ ...envelope, text: outboundText, externalConversationId })}::jsonb,
         ${`outbound:${envelope.connectionId}:${envelope.idempotencyKey}`})
         ON CONFLICT (project_id, idempotency_key) DO NOTHING
         RETURNING id
@@ -1455,26 +1603,18 @@ export async function enqueueAgentTurnResult(
       "The channel conversation has no external conversation identity."
     )
   const continuations = await pinRuntimeContinuations(context, result)
-  const continuationText = continuations
-    .map(
-      (item: RuntimeContinuation) =>
-        item.message ?? item.submitLabel ?? item.eventName ?? ""
-    )
-    .filter(Boolean)
-    .join("\n")
-  const text =
-    result.text ||
-    (result.conversation.channel === "web" ? "" : continuationText)
-  if (!text && !continuations.length)
+  const { text, metadata } = runtimeChannelMessage(result, continuations)
+  if (
+    !text &&
+    !continuations.length &&
+    !metadata?.shopifyProducts &&
+    !metadata?.shopifyCart
+  )
     return {
       queued: false,
       deduplicated: false,
       reason: "empty_result" as const,
     }
-  const metadata =
-    result.conversation.channel === "web"
-      ? runtimeMessageMetadata(result, continuations)
-      : undefined
   const contactId = result.conversation.metadata.contactId
   const replayedHandoffFence =
     result.status === "replayed"
@@ -1515,6 +1655,7 @@ export async function enqueueTelegramPollingJobs(database: TracerDatabase) {
     WITH due AS (
       SELECT c.id,c.project_id FROM build_channel_connection c
       WHERE c.channel = 'telegram' AND c.status = 'connected' AND c.webhook_mode = 'polling'
+        AND ${enabledBuildProject(sql`c.project_id`)}
         AND NOT EXISTS (
           SELECT 1 FROM build_channel_job j
           WHERE j.project_id=c.project_id AND j.connection_id=c.id
@@ -1558,6 +1699,7 @@ export async function enqueueConversationWaitJobs(
       ON cc.project_id = c.project_id
      AND cc.id::text = c.metadata_json->>'connectionId'
     WHERE tc.status = 'awaiting_client'
+      AND ${enabledBuildProject(sql`tc.project_id`)}
       AND tc.continuation_json->>'type' = 'wait'
       AND nullif(tc.continuation_json->>'continuationId', '') IS NOT NULL
       AND (
@@ -1637,7 +1779,7 @@ function messageContent(row: Row) {
   }
 }
 
-function publicMessageMetadata(metadata: Record<string, unknown>) {
+function publicMessageMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   const allowed = new Set([
     "widget",
     "widgetDefinition",
@@ -1646,6 +1788,9 @@ function publicMessageMetadata(metadata: Record<string, unknown>) {
     "items",
     "continuations",
     "completedContinuationId",
+    "shopifyCart",
+    "shopifyProducts",
+    "shopifyCartCleanup",
   ])
   return {
     ...Object.fromEntries(
@@ -1976,6 +2121,17 @@ export async function processChannelJob(
     agentId: loaded.connection.agentId,
     channel: loaded.connection.channel,
   })
+  if (loaded.connection.config.provider === "evolution" && !evolutionEnabled(context.projectId)) throw new WhatsAppApiError("WHATSAPP_DISCONNECTED", "Evolution is disabled for this project.")
+  if (job.kind === "shopify_reconcile") {
+    const { processShopifyReconciliation } =
+      await import("../integrations/shopify-reconciliation")
+    return processShopifyReconciliation(context, job, () =>
+      assertChannelJobReady(database, job, {
+        agentId: loaded.connection.agentId,
+        channel: loaded.connection.channel,
+      })
+    )
+  }
   if (job.kind === "telegram_poll")
     return processTelegramPoll(context, loaded, job, database)
   if (job.kind === "resume_wait") {
@@ -2070,7 +2226,7 @@ export async function processChannelJob(
         )
       )
     } else if (loaded.connection.channel === "whatsapp") {
-      ids = await sendWhatsAppEnvelope(
+      ids = await (loaded.connection.config.provider === "evolution" ? sendEvolutionEnvelope : loaded.connection.config.provider === "zernio" ? sendZernioEnvelope : sendWhatsAppEnvelope)(
         context,
         {
           connectionId: job.connectionId,
@@ -2100,7 +2256,7 @@ export async function processChannelJob(
         SET status = CASE WHEN status IN ('delivered','failed') THEN status ELSE 'sent' END, provider_message_id = ${ids[0] ?? null}, updated_at = now()
         WHERE project_id = ${job.projectId} AND id = ${job.messageId}
       `)
-      if (loaded.connection.channel === "whatsapp" && ids[0]) {
+      if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider !== "evolution" && ids[0]) {
         await database.execute(
           sql`UPDATE build_channel_message m SET status=CASE WHEN r.status='read' THEN 'delivered' ELSE r.status END,error_code=CASE WHEN r.status='failed' THEN 'WHATSAPP_' || COALESCE(r.error_code,'DELIVERY_FAILED') ELSE NULL END,error_message=CASE WHEN r.status='failed' THEN 'WhatsApp reported a delivery failure.' ELSE NULL END,content_json=jsonb_set(m.content_json,'{whatsappDelivery}',jsonb_build_object('status',r.status,'occurredAt',r.occurred_at)) FROM build_whatsapp_receipt r WHERE m.project_id=${job.projectId} AND m.id=${job.messageId} AND r.project_id=m.project_id AND r.connection_id=m.connection_id AND r.provider_message_id=${ids[0]}`
         )
@@ -2146,6 +2302,8 @@ export async function processChannelJob(
       throw error
     }
   }
+  if (String(message.status) === "ignored")
+    return { ignored: true, reason: "human_ownership" }
   if (String(message.owner_type) === "human") {
     await assertChannelJobReady(database, job, {
       agentId: String(message.agent_id),
@@ -2166,9 +2324,36 @@ export async function processChannelJob(
       }
     )
     if (recovered) return recovered
-    await database.execute(
-      sql`UPDATE build_channel_message SET status = 'ignored' WHERE project_id = ${job.projectId} AND id = ${job.messageId}`
-    )
+    await database.transaction(async (tx) => {
+      // Keep customer messages visible to support without starting an AI turn.
+      // The conversation lock serializes this with a concurrent turn admission.
+      await tx.execute(sql`
+        SELECT id FROM build_conversations
+        WHERE project_id=${job.projectId} AND id=${String(message.conversation_id)}
+        FOR UPDATE
+      `)
+      await tx.execute(sql`
+        INSERT INTO build_conversation_messages
+          (id,project_id,conversation_id,role,content_json,status,metadata_json,created_at,completed_at)
+        SELECT 'channel:' || m.id, m.project_id, m.conversation_id, 'user',
+          COALESCE(m.content_json->'text','""'::jsonb), 'completed',
+          jsonb_build_object('source','channel','channelMessageId',m.id,
+            'attachments',COALESCE(m.content_json->'attachments','[]'::jsonb)),
+          m.created_at, now()
+        FROM build_channel_message m
+        WHERE m.project_id=${job.projectId} AND m.id=${job.messageId}
+          AND NOT EXISTS (
+            SELECT 1 FROM build_conversation_turns t
+            WHERE t.project_id=m.project_id AND t.conversation_id=m.conversation_id
+              AND t.request_key=${`channel:${job.id}`}
+          )
+        ON CONFLICT (id) DO NOTHING
+      `)
+      await tx.execute(sql`
+        UPDATE build_channel_message SET status='ignored'
+        WHERE project_id=${job.projectId} AND id=${job.messageId}
+      `)
+    })
     return { ignored: true, reason: "human_ownership" }
   }
   const ownerFence = Number(message.owner_fence ?? 0)
@@ -2187,38 +2372,73 @@ export async function processChannelJob(
       agentId: String(message.agent_id),
       channel: loaded.connection.channel,
     })
-    output = await runner({
-      projectId: job.projectId,
-      agentId: String(message.agent_id),
-      conversationId: String(message.conversation_id),
-      channel: loaded.connection.channel,
-      contactId: String(message.contact_id ?? ""),
-      messages: [
-        ...historyRows.rows.map((row) => {
-          const content = messageContent(row)
-          const role: "user" | "assistant" =
-            row.direction === "inbound" ? "user" : "assistant"
-          return {
-            role,
-            content: content.text,
-            attachments: content.attachments,
-          }
-        }),
-        (() => {
-          const content = messageContent(message)
-          return {
-            role: "user" as const,
-            content: content.text,
-            attachments: content.attachments,
-          }
-        })(),
-      ],
-      metadata: {
-        ...jsonObject(job.payload),
-        requestKey: `channel:${job.id}`,
-        externalConversationId: String(message.conversation_external_id ?? ""),
-      },
-    })
+    const currentContent = messageContent(message)
+    let images: import("@/src/lib/build/channels").ChannelImage[] = []
+    let mediaFailure: string | undefined
+    if (
+      ["evolution", "zernio"].includes(String(loaded.connection.config.provider)) &&
+      currentContent.attachments.some(
+        (a) => a.type === "image" || a.type === "audio"
+      )
+    ) {
+      try {
+        const prepared = await prepareEvolutionMedia(context, job.messageId, async () => {
+          await assertChannelJobReady(database, job, { agentId: String(message.agent_id), channel: loaded.connection.channel })
+          const current = await database.execute(sql`SELECT 1 FROM build_conversations WHERE project_id=${job.projectId} AND id=${String(message.conversation_id)} AND owner_type='ai' AND owner_fence=${ownerFence} AND status='active'`)
+          if (!current.rows.length) throw new ChannelLeaseLostError()
+        }, loaded.connection.config.provider === "zernio" ? "zernio" : "evolution")
+        images = prepared.images
+        if (prepared.text !== undefined) currentContent.text = prepared.text
+      } catch (error) {
+        if (!(error instanceof ChannelMediaError)) throw error
+        mediaFailure = String(message.conversation_external_id).startsWith("55")
+          ? "Não consegui processar esta imagem ou áudio. Por favor, envie sua mensagem por texto."
+          : "I couldn't process this image or audio. Please send your message as text."
+        await database.execute(
+          sql`UPDATE build_channel_message SET error_code=${error.code},error_message='Media processing failed.' WHERE project_id=${job.projectId} AND id=${job.messageId}`
+        )
+      }
+      await assertChannelJobReady(database, job, {
+        agentId: String(message.agent_id),
+        channel: loaded.connection.channel,
+      })
+    }
+    output = mediaFailure
+      ? { messages: [{ text: mediaFailure }] }
+      : await runner({
+          images,
+          projectId: job.projectId,
+          agentId: String(message.agent_id),
+          conversationId: String(message.conversation_id),
+          channel: loaded.connection.channel,
+          contactId: String(message.contact_id ?? ""),
+          messages: [
+            ...historyRows.rows.map((row) => {
+              const content = messageContent(row)
+              const role: "user" | "assistant" =
+                row.direction === "inbound" ? "user" : "assistant"
+              return {
+                role,
+                content: content.text,
+                attachments: content.attachments,
+              }
+            }),
+            (() => {
+              return {
+                role: "user" as const,
+                content: currentContent.text,
+                attachments: currentContent.attachments,
+              }
+            })(),
+          ],
+          metadata: {
+            ...jsonObject(job.payload),
+            requestKey: `channel:${job.id}`,
+            externalConversationId: String(
+              message.conversation_external_id ?? ""
+            ),
+          },
+        })
   } catch (error) {
     await assertChannelJobReady(database, job, {
       agentId: String(message.agent_id),
@@ -2518,6 +2738,7 @@ export async function createPublicSession(
   connectionId: string,
   options: {
     visitorToken?: string
+    challengeToken?: string
     conversationId?: string
     origin?: string
     sameOrigin?: string
@@ -2536,7 +2757,10 @@ export async function createPublicSession(
   )
   const appearance = await readBubbleAppearance(context, loaded.connection)
   const visitor = options.visitorToken
-    ? verifyVisitorContext(options.visitorToken, { origin, connectionId })
+    ? await verifyChannelVisitor(context, options.visitorToken, {
+        origin,
+        connectionId,
+      })
     : {
         visitorId: randomUUID(),
         issuedAt: 0,
@@ -2558,7 +2782,13 @@ export async function createPublicSession(
       throw new Error("Conversation is not available for this visitor.")
     return {
       conversationId: String(resumed.rows[0].id),
-      visitorToken: options.visitorToken,
+      visitorToken: visitor.browserSessionId
+        ? options.visitorToken
+        : signVisitorContext({
+            visitorId: visitor.visitorId,
+            origin,
+            connectionId,
+          }),
       visitorId: visitor.visitorId,
       context: jsonObject(jsonObject(resumed.rows[0].metadata_json).context),
       appearance,
@@ -2570,6 +2800,8 @@ export async function createPublicSession(
     "session",
     options.clientKey
   )
+  if (!options.visitorToken)
+    await verifyNewVisitorChallenge(connectionId, options.challengeToken)
   const contactId = randomUUID()
   const conversationId = randomUUID()
   const contactExternalId = `web:${connectionId}:${visitor.visitorId}`
@@ -2599,9 +2831,9 @@ export async function createPublicSession(
     FROM build_channel_connection
     WHERE project_id = ${context.projectId} AND id = ${connectionId}::uuid
   `)
-  const token =
-    options.visitorToken ??
-    signVisitorContext({ visitorId: visitor.visitorId, origin, connectionId })
+  const token = visitor.browserSessionId
+    ? options.visitorToken!
+    : signVisitorContext({ visitorId: visitor.visitorId, origin, connectionId })
   return {
     conversationId,
     visitorToken: token,
@@ -2628,7 +2860,7 @@ export async function listPublicConversations(
     origin ?? null,
     sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, {
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
     origin: effectiveOrigin,
     connectionId,
   })
@@ -2649,6 +2881,7 @@ export async function listPublicConversations(
       AND c.metadata_json->>'connectionId' = ${connectionId} AND c.status <> 'blocked'
     ORDER BY latest_message.updated_at DESC, c.id DESC LIMIT 100
   `)
+  securityAudit({ action: "visitor.conversations.list", identity: { actorType: "visitor", actorId: visitor.visitorId, organizationId: context.organizationId, projectId: context.projectId }, connectionId })
   return rows.rows.map((row) => ({
     id: String(row.id),
     title: String(row.title || "New chat"),
@@ -2716,12 +2949,16 @@ export async function recordPublicFeedback(
     input.origin ?? null,
     input.sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, { origin, connectionId })
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
+    origin,
+    connectionId,
+  })
   await enforcePublicAdmission(
     context,
     loaded.connection,
     "feedback",
-    input.clientKey
+    input.clientKey,
+    visitor.visitorId
   )
   const ownership = await database(context).execute<Row>(sql`
     SELECT 1
@@ -2786,12 +3023,16 @@ export async function enqueuePublicMessage(
     input.origin ?? null,
     input.sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, { origin, connectionId })
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
+    origin,
+    connectionId,
+  })
   await enforcePublicAdmission(
     context,
     loaded.connection,
     "message",
-    input.clientKey
+    input.clientKey,
+    visitor.visitorId
   )
   const ownership = await database(context).execute<Row>(sql`
     SELECT c.id, c.status, c.owner_type, c.agent_id, c.external_conversation_id
@@ -2825,12 +3066,21 @@ export async function enqueuePublicMessage(
     attachments: input.attachments ?? [],
     contact: { externalId: visitor.visitorId, metadata: { origin } },
     metadata: {
+      ...jsonObject(input.metadata),
       visitorId: visitor.visitorId,
       origin,
-      ...jsonObject(input.metadata),
     },
   }
-  return enqueueInboundEnvelope(context, envelope)
+  return enqueueInboundEnvelope(
+    context,
+    envelope,
+    visitor.browserSessionId && visitor.identityVersion
+      ? {
+          browserSessionId: visitor.browserSessionId,
+          identityVersion: visitor.identityVersion,
+        }
+      : undefined
+  )
 }
 
 export async function readPublicConversation(
@@ -2850,18 +3100,27 @@ export async function readPublicConversation(
     origin ?? null,
     sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, {
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
     origin: effectiveOrigin,
     connectionId,
   })
   const rows = await database(context).execute<Row>(sql`
     SELECT m.id, m.direction, m.status, m.content_json, m.provider_message_id, m.created_at,
+      (m.direction='outbound' AND m.content_json->'metadata'->>'source'='human') AS human_reply,
+      author.name AS author_name, author.image AS author_image,
       (c.owner_type = 'ai' AND c.status = 'active' AND m.direction = 'inbound' AND EXISTS (
         SELECT 1 FROM build_channel_job j WHERE j.project_id = m.project_id AND j.message_id = m.id
           AND j.kind = 'process_inbound' AND j.status IN ('queued', 'running')
       )) AS pending_reply
     FROM build_conversations c
     LEFT JOIN build_channel_message m ON m.project_id = c.project_id AND m.conversation_id = c.id
+    LEFT JOIN "user" author ON m.direction='outbound'
+      AND m.content_json->'metadata'->>'source'='human'
+      AND author.id=m.content_json->'metadata'->>'actorId'
+      AND EXISTS (
+        SELECT 1 FROM member membership JOIN project p ON p.organization_id=membership."organizationId"
+        WHERE p.id=c.project_id AND membership."userId"=author.id
+      )
     WHERE c.project_id = ${context.projectId} AND c.id = ${conversationId}
       AND c.agent_id = ${loaded.connection.agentId}
       AND c.metadata_json->>'visitorId' = ${visitor.visitorId}
@@ -2883,10 +3142,14 @@ export async function readPublicConversation(
   const completedContinuationIds = receipts.rows
     .map((row) => row.continuation_id)
     .filter((id): id is string => typeof id === "string")
+  securityAudit({ action: "visitor.conversation.read", identity: { actorType: "visitor", actorId: visitor.visitorId, organizationId: context.organizationId, projectId: context.projectId }, connectionId, conversationId })
   return rows.rows
     .filter((row) => row.id !== null)
     .map((row) => {
       const content = messageContent(row)
+      const metadata = publicMessageMetadata(content.metadata)
+      if (completedContinuationIds.length) metadata.completedContinuationIds = completedContinuationIds
+      if (row.human_reply === true) metadata.source = "human"
       return {
         id: String(row.id),
         direction: String(row.direction),
@@ -2894,12 +3157,20 @@ export async function readPublicConversation(
         pendingReply: row.pending_reply === true,
         text: content.text,
         attachments: content.attachments,
-        metadata: {
-          ...publicMessageMetadata(content.metadata),
-          ...(completedContinuationIds.length
-            ? { completedContinuationIds }
-            : {}),
-        },
+        // Only publish the display identity of verified workspace senders.
+        // Internal actor IDs and email addresses stay out of visitor responses.
+        author: row.human_reply === true ? {
+          // Scope grouping identity to this conversation without exposing actor IDs.
+          key: typeof content.metadata?.actorId === "string" && content.metadata.actorId
+            ? createHmac("sha256", channelSigningSecret())
+                .update(JSON.stringify(["chat-author", context.projectId, conversationId, content.metadata.actorId]))
+                .digest("base64url")
+            : undefined,
+          name: typeof row.author_name === "string" && row.author_name.trim()
+            ? row.author_name.trim() : "Support teammate",
+          image: typeof row.author_image === "string" ? row.author_image : null,
+        } : null,
+        metadata,
         providerMessageId:
           row.provider_message_id == null
             ? null
@@ -2926,7 +3197,7 @@ export async function resetPublicConversation(
     origin ?? null,
     sameOrigin
   )
-  const visitor = verifyVisitorContext(visitorToken, {
+  const visitor = await verifyChannelVisitor(context, visitorToken, {
     origin: effectiveOrigin,
     connectionId,
   })

@@ -8,14 +8,15 @@ parameters:
     type: enum
     enum:
       - verify
+      - regression
       - publish
       - publish-hermes
       - disk-health
     default: verify
   verify-image:
     type: boolean
-    default: false
-    description: Also build and test the production image on a feature branch; never deploys that branch.
+    default: true
+    description: Build and smoke-test the deployable image on branches too; only main can deploy.
   release-version:
     type: string
     default: ""
@@ -201,151 +202,160 @@ jobs:
     steps:
       - checkout
       - install-dependencies
+      - run:
+          name: Install audio decoder for media integration tests
+          command: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run:
+          name: Check dependency security advisories
+          command: bun audit --audit-level high
       - start-services
       - run:
           name: Verify ingestion retries, retention, and safe diagnostics
           command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-inspection.test.ts tests/ingestion-sequence.test.ts tests/inbox-diagnostics.test.ts
       - run:
-          name: Verify release safety contracts
-          command: |-
-            python3 -m unittest discover -s tests -p 'dokku_*_test.py'
-            python3 -m unittest discover -s tests -p 'deployment_notifications_test.py'
-            bun test tests/release-command.test.ts tests/deployment-image-handoff.test.ts tests/cms-seed-options.test.ts tests/circleci-ssh-key.test.ts
+          name: Restore encrypted backups with disposable databases
+          command: bash ops/dokku-backup/test.sh
       - run:
-          name: Verify Hermes delivery and conversation rendering
+          name: Verify source and release contracts in parallel
           command: |
-            bun test tests/hermes-value-messages.test.ts tests/tool-message-results.test.ts tests/trace-output.test.ts tests/value-views.test.ts
+            logs="$(mktemp -d)"
+            trap 'rm -rf "$logs"' EXIT
+            (bun run lint && bun run check:styles) > "$logs/lint" 2>&1 &
+            lint_pid=$!
+            bun run typecheck > "$logs/types" 2>&1 &
+            types_pid=$!
+            (
+              python3 -m unittest discover -s tests -p 'dokku_*_test.py'
+              python3 -m unittest discover -s tests -p 'deployment_notifications_test.py'
+              bun --no-env-file test --timeout 30000 \
+                tests/release-command.test.ts tests/deployment-image-handoff.test.ts \
+                tests/cms-seed-options.test.ts tests/circleci-ssh-key.test.ts \
+                tests/organization-auth.test.ts tests/project-api-response.test.ts \
+                tests/build-inbox-mobile.test.ts tests/auth-magic-link.test.ts tests/profile.test.ts tests/launch-access.test.ts \
+                tests/ingestion-http.test.ts tests/ingestion-sequence.test.ts \
+                tests/execution-credits.test.ts tests/build-integrations.test.ts tests/build-shopify.test.ts \
+                tests/shopify-billing.test.ts tests/build-channel-presentation.test.ts tests/whatsapp-text.test.ts \
+                tests/build-feature-gate.test.ts tests/build-api.test.ts \
+                tests/build-mcp.test.ts tests/build-organization-worker.test.ts
+              bun --no-env-file test tests/build-channel-durable.test.ts --test-name-pattern 'keeps visitor history' --timeout 30000
+              bun --no-env-file test tests/shopify-chat-security.test.ts --test-name-pattern 'session preserves the conversation' --timeout 30000
+              bun run test:build:access
+              bun --no-env-file test tests/build-runtime.test.ts --test-name-pattern 'authenticated channel image' --timeout 30000
+              bun run test:evolution:e2e
+              bun --no-env-file scripts/test-channel-links-e2e.ts
+            ) > "$logs/critical" 2>&1 &
+            critical_pid=$!
+            status=0
+            for check in lint types critical; do
+              pid_variable="${check}_pid"
+              if wait "${!pid_variable}"; then
+                printf 'PASS %s\n' "$check"
+              else
+                printf 'FAIL %s\n' "$check"
+                status=1
+              fi
+              cat "$logs/$check"
+            done
+            exit "$status"
+  regression-backend:
+    executor: linux
+    resource_class: large
+    steps:
+      - checkout
+      - install-dependencies
+      - start-services
       - run:
-          name: Verify session hierarchy and complete trace loading
-          command: bun test tests/session-detail-loader.test.ts tests/session-conversation.test.ts tests/trace-inspector-data.test.ts tests/trace-detail-loader.test.ts
-      - run:
-          name: Verify lint, product styles, and types
-          command: bun run lint && bun run check:styles && bun run typecheck
-      - run:
-          name: Verify Build, channels, teams, and project home
+          name: Prepare runtime assets, built SDK and CLI, and scorer images
           command: |
+            bun run build:monaco
             bun run build:chatgpt
-            bun test tests/build-*.test.ts tests/build-*.test.tsx tests/project-home.test.ts tests/organization-teams.test.ts tests/chatgpt-trace-explorer.test.ts
+            bun run build:packages
+            docker pull node:22-bookworm-slim
+            docker pull python:3.13-slim
+      - run:
+          name: Run the complete Bun suite once
+          command: bun --no-env-file test tests --timeout 30000
+          environment:
+            DATOOL_TEST_SANDBOX_CONTAINERS: "1"
+      - run:
+          name: Exercise managed prompts and durable evaluation recovery
+          command: |
+            bun run scripts/test-managed-prompts-e2e.ts
+            bun --no-env-file scripts/test-evaluation-workflow-e2e.ts
+  regression-browser:
+    executor: linux
+    resource_class: large
+    steps:
+      - checkout
+      - install-dependencies
+      - start-services
       - run:
           name: Verify agent authoring and WhatsApp through HTTP and browser boundaries
           command: |
             bunx playwright install --with-deps chromium
             bun run build:monaco
+            bun run build:chatgpt
             bun --no-env-file scripts/test-build-e2e.ts --production
+            bun --no-env-file scripts/test-widget-authoring-e2e.ts
             bun run test:whatsapp:e2e
+      - store_artifacts:
+          path: artifacts/build-e2e
+          destination: build-browser-checks
+      - store_artifacts:
+          path: artifacts/widget-authoring-e2e
+          destination: widget-authoring-checks
+  regression-packages:
+    executor: linux
+    resource_class: large
+    steps:
+      - checkout
+      - install-dependencies
+      - start-services
       - run:
-          name: Verify public agent discovery contracts
-          command: |
-            bun run check:docs
-            bun test tests/agent-readiness.test.ts tests/project-api-response.test.ts
-      - run:
-          name: Validate public skills and installer discovery from the repository root
+          name: Validate public skills and installer discovery
           command: |
             bun run check:skills
             repository="$PWD"
-            # Keep npm from interpreting the Bun monorepo's dependency overrides.
             cd "$(mktemp -d)"
             npx --yes skills@1.5.25 add "$repository" --list
           environment:
             DISABLE_TELEMETRY: "1"
       - run:
-          name: Verify the skills' minimum published CLI on Node 24 and Bun
+          name: Verify the minimum published CLI on Node 24 and Bun
           command: node scripts/test-cli-distribution.mjs 0.3.0
-      - run:
-          name: Prepare JavaScript scorer sandbox
-          command: docker pull node:22-bookworm-slim
-      - run:
-          name: Verify sandbox execution, fallback, and project isolation
-          command: |
-            docker pull python:3.13-slim
-            bun test tests/sandbox-providers.test.ts tests/sandbox-providers-integration.test.ts
-          environment:
-            DATOOL_TEST_SANDBOX_CONTAINERS: "1"
       - run:
           name: Build and pack SDK and CLI once
           command: bun run pack:packages
       - run:
-          name: Verify CLI source and packed packages on Node 24
-          command: bun run test:packages
-      - run:
-          name: Verify relay reload races and source watching
-          command: bun test tests/relay-reload.test.ts tests/connect-source-watch.test.ts tests/cli-connect-watch.test.ts
-      - run:
-          name: Verify the built watched CLI with the real relay under Node 24 and Bun
+          name: Verify packed packages on Node 24 and Bun
           command: |
+            bun run scripts/test-packages.ts
             export DATOOL_TEST_CLI_BINARY="$PWD/packages/cli/dist/datool.js"
             for runtime in node bun; do
               DATOOL_TEST_CLI_RUNTIME="$runtime" bun test tests/cli-watch-relay.test.ts
             done
-      - run:
-          name: Verify CLI distribution on Node 24 and Bun
-          command: node scripts/test-cli-distribution.mjs "artifacts/npm/datool-cli-$(node -p 'require("./packages/cli/package.json").version').tgz"
-      - run:
-          name: bun test tests/managed-prompt-sdk.test.ts tests/prompts.test.ts tests/eval-input-overrides.test.ts tests/eval-recovery-iteration.test.ts
-          command: bun test tests/managed-prompt-sdk.test.ts tests/prompts.test.ts tests/eval-input-overrides.test.ts tests/eval-recovery-iteration.test.ts
-      - run:
-          name: Verify saved eval attribution and historical backfill
-          command: bun test tests/eval-attribution.test.ts tests/eval-quality-filters.test.ts tests/eval-attribution-backfill.test.ts tests/eval-attribution-performance.test.ts tests/tracer-postgres-migration.test.ts
-      - run:
-          name: bun run scripts/test-managed-prompts-e2e.ts
-          command: bun run scripts/test-managed-prompts-e2e.ts
-      - run:
-          name: Verify native evaluation resilience and large immutable snapshots
-          command: |
-            bun test tests/dataset-snapshot-scale.test.ts tests/app-relay.test.ts
-            bun --no-env-file scripts/test-evaluation-workflow-e2e.ts
-      - run:
-          name: bun test tests/organization-auth.test.ts tests/organization-settings.test.ts tests/system-overview.test.ts tests/invitations.test.ts tests/launch-access.test.ts tests/auth-magic-link.test.ts tests/mcp.test.ts
-          command: bun test tests/organization-auth.test.ts tests/organization-settings.test.ts tests/system-overview.test.ts tests/invitations.test.ts tests/launch-access.test.ts tests/auth-magic-link.test.ts tests/mcp.test.ts
-      - run:
-          name: Verify Stripe billing, reconciliation, and managed execution credits
-          command: bun test tests/billing.test.ts tests/billing-reconciliation.test.ts tests/execution-credits.test.ts tests/product-events.test.ts tests/product-events-billing.test.ts
-      - run:
-          name: Verify dashboard sources, bounded reads, and analytics agent contracts
-          command: bun test tests/dashboard-sources.test.ts tests/dashboard-sources-scale.test.ts tests/dashboard-read-retry.test.ts tests/dashboard-trace-links.test.ts tests/dashboard-health.test.ts tests/dashboard-templates.test.ts tests/semantic-snapshot.test.ts tests/semantic-tracer-service.test.ts tests/agent-operation-fixtures.test.ts tests/mcp-metrics.test.ts
-      - run:
-          name: Verify trace, session and evaluation refresh caching
-          command: bun test tests/trace-read-cache.test.ts tests/shared-read-cache.test.ts tests/eval-comparison-pagination.test.ts tests/polling-cache-budget.test.ts
-      - run:
-          name: Verify managed prompt caching and authorization
-          command: bun test tests/prompt-cache.test.ts tests/prompts.test.ts tests/prompts-integration.test.ts tests/prompt-publishing-migration.test.ts tests/redis-swr.test.ts tests/stale-while-revalidate.test.ts
-      - run:
-          name: Verify the complete Bun suite with PostgreSQL, Redis, and scorer containers
-          command: bun --no-env-file test tests --timeout 30000
-      - run:
-          name: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
-          command: bun test tests/pricing-catalog.test.ts tests/cost-backfill.test.ts tests/cost-backfill-postgres.test.ts tests/tracer-usage.test.ts tests/tracer-sdk.test.ts tests/tracer-instrumentation.test.ts tests/tracer-otel.test.ts tests/call-context.test.ts tests/app-connections.test.ts
+            node scripts/test-cli-distribution.mjs "artifacts/npm/datool-cli-$(node -p 'require("./packages/cli/package.json").version').tgz"
       - node/install:
           node-version: 22.18.0
           install-yarn: false
       - run:
-          name: Verify the same packed packages on Node 22
-          command: bun run scripts/test-packages.ts
-      - run:
-          name: Verify the built watched CLI with the real relay under Node 22
-          command: |-
-            export DATOOL_TEST_CLI_BINARY="$PWD/packages/cli/dist/datool.js"
-            bun test tests/cli-watch-relay.test.ts
-          environment:
-            DATOOL_TEST_CLI_RUNTIME: node
-      - run:
-          name: Verify CLI distribution on Node 22
-          command: node scripts/test-cli-distribution.mjs "artifacts/npm/datool-cli-$(node -p 'require("./packages/cli/package.json").version').tgz"
-          environment:
-            DATOOL_TEST_NODE_ONLY: "1"
+          name: Verify the same packages on Node 22
+          command: |
+            bun run scripts/test-packages.ts
+            DATOOL_TEST_CLI_BINARY="$PWD/packages/cli/dist/datool.js" DATOOL_TEST_CLI_RUNTIME=node bun test tests/cli-watch-relay.test.ts
+            DATOOL_TEST_NODE_ONLY=1 node scripts/test-cli-distribution.mjs "artifacts/npm/datool-cli-$(node -p 'require("./packages/cli/package.json").version').tgz"
       - store_artifacts:
           path: artifacts/npm
           destination: npm-packages
-      - store_artifacts:
-          path: artifacts/build-e2e
-          destination: build-browser-checks
   production-image:
     machine:
       image: ubuntu-2404:2026.05.1
+      docker_layer_caching: true
     resource_class: large
     environment:
       CI: "true"
       CIRCLE_PIPELINE_NUMBER: << pipeline.number >>
+      DATOOL_DOCKER_ARCHIVE_PATH: /tmp/datool-release-image.tar
     steps:
       - checkout
       - run:
@@ -355,8 +365,23 @@ jobs:
           name: Test deployment access and disk import safety
           command: python3 -m unittest discover -s tests -p 'dokku_*_test.py'
       - run:
+          name: Restore the named BuildKit builder
+          command: |
+            # A stable container builder keeps BuildKit state and cache mounts
+            # in a named volume that CircleCI DLC preserves between jobs.
+            docker buildx create --name datool-release --driver docker-container
+      - run:
           name: Build the production image on the CI runner
-          command: docker build --label "org.opencontainers.image.revision=$CIRCLE_SHA1" --tag "$DATOOL_DOCKER_TEST_IMAGE" .
+          command: |
+            # Build one archive and load that exact image for acceptance.
+            docker buildx build --builder datool-release --progress plain \
+              --output "type=docker,compression=gzip,compression-level=1,dest=$DATOOL_DOCKER_ARCHIVE_PATH" \
+              --build-arg DATOOL_CI_BUILD=true \
+              --label "org.opencontainers.image.revision=$CIRCLE_SHA1" \
+              --tag "$DATOOL_DOCKER_TEST_IMAGE" .
+      - run:
+          name: Load the archive for image acceptance
+          command: docker image load --input "$DATOOL_DOCKER_ARCHIVE_PATH"
       - run:
           name: Test release command, image handoff, and CMS seed guards
           command: |
@@ -366,13 +391,23 @@ jobs:
               --entrypoint bun "$DATOOL_DOCKER_TEST_IMAGE" test tests/release-command.test.ts tests/deployment-image-handoff.test.ts tests/cms-seed-options.test.ts
       - run:
           name: Exercise the production image with isolated services
-          command: bash scripts/test-docker.sh
+          command: |
+            # Acceptance runs containers without changing the built image, so
+            # its archive can be prepared concurrently. Both must succeed.
+            command -v pigz >/dev/null || sudo apt-get install -y pigz
+            (
+              pigz -1 < "$DATOOL_DOCKER_ARCHIVE_PATH" > image.tar.gz
+            ) &
+            archive_pid=$!
+            status=0
+            bash scripts/test-docker.sh || status=1
+            wait "$archive_pid" || status=1
+            exit "$status"
           environment:
             DATOOL_DOCKER_SKIP_BUILD: "1"
       - run:
-          name: Export the verified image
+          name: Checksum the verified image archive
           command: |
-            docker image save "$DATOOL_DOCKER_TEST_IMAGE" | gzip -1 > image.tar.gz
             printf '%s\n' "$DATOOL_DOCKER_TEST_IMAGE" > image-ref.txt
             docker image inspect "$DATOOL_DOCKER_TEST_IMAGE" --format '{{.Size}}' > image-size.txt
             sha256sum image.tar.gz image-ref.txt image-size.txt > image.sha256
@@ -386,6 +421,26 @@ jobs:
             - image.sha256
             - ops/notify-deployment.py
             - notification.sha256
+      - run:
+          name: Retain only the latest accepted runtime image
+          command: |
+            # Keep shared installed layers for the next acceptance run without
+            # accumulating another tagged runtime image for every commit.
+            docker image ls 'datool-release:*' --format '{{.Repository}}:{{.Tag}}' |
+              awk -v current="$DATOOL_DOCKER_TEST_IMAGE" '$0 != current' |
+              xargs --no-run-if-empty docker image rm ||
+              echo "Some cached runtime images are still in use; retaining them."
+      - run:
+          name: Bound the BuildKit cache before saving DLC
+          command: |
+            # DLC discards the entire snapshot when it grows too large.
+            # Leave room for the accepted runtime image and service images.
+            # Remove download mounts retained from older Dockerfile versions.
+            docker buildx prune --builder datool-release --force \
+              --filter 'type=exec.cachemount' \
+              --filter 'description~="/root/[.]bun/install/cache"'
+            docker buildx prune --builder datool-release --force --max-used-space 9gb
+            docker buildx du --builder datool-release
   deploy:
     executor: ssh
     environment:
@@ -414,6 +469,7 @@ jobs:
           key-file: datool_deploy
       - run:
           name: Import and release the verified image through Dokku
+          no_output_timeout: 30m
           command: |
             test "$CIRCLE_BRANCH" = main
             read -r image < image-ref.txt
@@ -426,9 +482,27 @@ jobs:
               echo "Invalid image size" >&2
               exit 1
             fi
-            ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            # Report actual bytes written, so slow uploads do not hit the silence
+            # timeout. A stalled pipe still stops reporting and times out normally.
+            python3 -c '
+            import os, sys, time
+            size = os.path.getsize("image.tar.gz")
+            sent = 0
+            reported = time.monotonic()
+            print(f"Uploading verified image: {size} bytes", file=sys.stderr, flush=True)
+            with open("image.tar.gz", "rb") as archive:
+                while chunk := archive.read(65536):
+                    sys.stdout.buffer.write(chunk)
+                    sys.stdout.buffer.flush()
+                    sent += len(chunk)
+                    now = time.monotonic()
+                    if now - reported >= 15:
+                        print(f"Image upload: {sent}/{size} bytes", file=sys.stderr, flush=True)
+                        reported = now
+            print(f"Image upload complete: {sent}/{size} bytes; waiting for Dokku release", file=sys.stderr, flush=True)
+            ' | ssh -i ~/.ssh/datool_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
-              "datool-deploy@$DOKKU_SSH_HOST" disk:load-image datool "$image" "$image_bytes" < image.tar.gz
+              "datool-deploy@$DOKKU_SSH_HOST" disk:load-image datool "$image" "$image_bytes"
       - run:
           name: Verify web, ingestion, and Build processes
           command: |
@@ -588,13 +662,36 @@ workflows:
           requires:
             - verify
             - production-image
-            - python-verify
-            - hermes-verify
           context: datool-production
           serial-group: << pipeline.project.slug >>/production
           filters:
             branches:
               only: main
+  regression:
+    when:
+      equal:
+        - regression
+        - << pipeline.parameters.operation >>
+    jobs:
+      - verify
+      - regression-backend
+      - regression-browser
+      - regression-packages
+      - python-verify
+      - hermes-verify
+  nightly-regression:
+    triggers:
+      - schedule:
+          cron: 32 6 * * *
+          filters:
+            branches:
+              only: main
+    jobs:
+      - regression-backend
+      - regression-browser
+      - regression-packages
+      - python-verify
+      - hermes-verify
   publish-hermes:
     when:
       equal:

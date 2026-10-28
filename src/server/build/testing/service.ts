@@ -1,3 +1,4 @@
+import { enabledBuildProject } from "../access"
 import { randomUUID } from "node:crypto"
 
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm"
@@ -813,6 +814,7 @@ export async function listSimulationProjectsWithPendingRuns(
     SELECT project_id AS "projectId"
     FROM build_test_runs
     WHERE status IN ('queued', 'running')
+      AND ${enabledBuildProject(sql`build_test_runs.project_id`)}
       AND (lease_expires_at IS NULL OR lease_expires_at <= now())
     GROUP BY project_id
     ORDER BY min(created_at) ASC, project_id ASC

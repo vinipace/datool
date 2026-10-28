@@ -14,7 +14,7 @@ export function IntegrationLogo({
 }) {
   const [failed, setFailed] = useState<string | null>(null)
   const src = /^[a-z][a-z0-9_]+$/.test(slug)
-    ? `https://logos.composio.dev/api/${slug}`
+    ? `https://logos.composio.dev/api/${slug === "shopify_native" ? "shopify" : slug}`
     : null
   return (
     <span

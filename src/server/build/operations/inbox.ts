@@ -59,6 +59,7 @@ type TicketRow = {
   created_at: unknown
   updated_at: unknown
   recent_updated_at?: string
+  needs_takeover?: boolean
 }
 
 function ticket(row: TicketRow) {
@@ -73,6 +74,7 @@ function ticket(row: TicketRow) {
     status: ticketStatusSchema.parse(row.status),
     priority: ticketPrioritySchema.parse(row.priority),
     tags: decodeJson<string[]>(row.tags_json, []),
+    needsTakeover: row.needs_takeover === true,
     assigneeUserId: row.assignee_user_id,
     assigneeName: row.assignee_name ?? null,
     assigneeImage: row.assignee_image ?? null,
@@ -87,6 +89,22 @@ function ticket(row: TicketRow) {
     updatedAt: iso(row.updated_at),
   }
 }
+
+// Assignment can name a queue before anyone claims the conversation. Only a
+// live lease for its current human owner means the handoff is being handled.
+const ticketNeedsTakeover = sql`(
+  t.status IN ('open', 'pending') AND EXISTS (
+    SELECT 1 FROM build_conversations conversation
+    WHERE conversation.project_id=t.project_id AND conversation.id=t.conversation_id
+      AND conversation.status='handed_off' AND conversation.owner_type='human'
+      AND NOT EXISTS (
+        SELECT 1 FROM build_conversation_ownership lease
+        WHERE lease.project_id=conversation.project_id AND lease.conversation_id=conversation.id
+          AND lease.mode='human' AND lease.owner_user_id=conversation.owner_id
+          AND (lease.lease_expires_at IS NULL OR lease.lease_expires_at>now())
+      )
+  )
+)`
 
 async function appendTicketEvent(
   database: BuildContext["database"],
@@ -146,7 +164,7 @@ export async function createTicket(context: BuildContext, value: unknown) {
 export async function getTicket(context: BuildContext, id: string) {
   const ctx = await prepareOperations(context)
   const result = await ctx.database.execute<TicketRow>(sql`
-    select t.*, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
+    select t.*, ${ticketNeedsTakeover} as needs_takeover, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
     left join build_contacts c on c.project_id=t.project_id and c.id=t.contact_id
     left join "user" u on u.id=t.assignee_user_id
     left join build_teams team on team.id=t.team_id
@@ -219,7 +237,7 @@ export async function listTickets(context: BuildContext, value?: unknown) {
     predicates.push(sql`(t.subject ilike ${query} or t.id ilike ${query} or t.conversation_id ilike ${query} or c.display_name ilike ${query} or c.email ilike ${query} or c.phone ilike ${query})`)
   }
   const result = await ctx.database.execute<TicketRow>(sql`
-    select t.*, t.updated_at::text as recent_updated_at, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
+    select t.*, ${ticketNeedsTakeover} as needs_takeover, t.updated_at::text as recent_updated_at, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
     left join build_contacts c on c.project_id=t.project_id and c.id=t.contact_id
     left join "user" u on u.id=t.assignee_user_id
     left join build_teams team on team.id=t.team_id
@@ -366,25 +384,36 @@ function ownership(row: OwnershipRow | undefined) {
 
 export async function getConversationOwnership(context: BuildContext, conversationId: string) {
   const ctx = await prepareOperations(context)
-  const result = await ctx.database.execute<OwnershipRow>(sql`
-    select * from build_conversation_ownership where project_id=${ctx.projectId} and conversation_id=${conversationId}
+  const result = await ctx.database.execute<{
+    project_id: string; id: string; owner_type: string; owner_id: string | null;
+    owner_fence: number | string; updated_at: unknown; lease: OwnershipRow | null;
+  }>(sql`
+    select c.project_id,c.id,c.owner_type,c.owner_id,c.owner_fence,c.updated_at,
+           row_to_json(o) as lease
+    from build_conversations c
+    left join build_conversation_ownership o
+      on o.project_id=c.project_id and o.conversation_id=c.id
+    where c.project_id=${ctx.projectId} and c.id=${conversationId}
   `)
-  if (result.rows[0]) return ownership(result.rows[0])
-  const conversation = await ctx.database.execute<{ project_id: string; id: string; owner_type: string; owner_id: string | null; owner_fence: number | string; updated_at: unknown }>(sql`
-    select project_id,id,owner_type,owner_id,owner_fence,updated_at from build_conversations where project_id=${ctx.projectId} and id=${conversationId}
-  `)
-  const row = conversation.rows[0]
+  const row = result.rows[0]
   if (!row) return null
+  const lease = row.lease
+  const activeLease = row.owner_type === "human" &&
+    lease?.mode === "human" && lease.owner_user_id === row.owner_id &&
+    (lease.lease_expires_at === null || new Date(String(lease.lease_expires_at)).getTime() > Date.now())
+  const canReply = Boolean(ctx.actorId && row.owner_id === ctx.actorId && activeLease)
   return {
     projectId: row.project_id,
     conversationId: row.id,
     mode: row.owner_type === "human" ? "human" as const : "ai" as const,
     ownerUserId: row.owner_id,
-    teamId: null,
-    leaseToken: null,
-    leaseExpiresAt: null,
-    version: Number(row.owner_fence),
+    teamId: lease?.team_id ?? null,
+    leaseToken: canReply ? lease?.lease_token ?? null : null,
+    leaseExpiresAt: activeLease ? iso(lease?.lease_expires_at) : null,
+    version: lease?.version ?? Number(row.owner_fence),
     updatedAt: iso(row.updated_at),
+    canReply,
+    canTakeover: Boolean(ctx.actorId && (!activeLease || row.owner_id === ctx.actorId)),
   }
 }
 
@@ -411,14 +440,9 @@ export async function takeoverConversation(context: BuildContext, value: unknown
     const ownerFence = Number(conversation.owner_fence)
     const currentVersion = row?.version ?? ownerFence
     if (input.expectedVersion !== undefined && currentVersion !== input.expectedVersion) throw new TracerError("CONFLICT", "Conversation ownership changed. Reload before taking it over.")
-    // Runtime handoffs can name a team (or team:<agent>) before a person claims
-    // the case. A member or a materialized human lease still protects an
-    // existing owner, including a lease issued before membership changed.
-    const ownerMember = conversation.owner_id ? await tx.execute(sql`
-      select 1 from member where "organizationId"=${ctx.organizationId}
-        and "userId"=${conversation.owner_id}
-    `) : { rows: [] }
-    const liveOther = conversation.owner_type === "human" && (ownerMember.rows.length > 0 || !!row?.lease_token) && conversation.owner_id !== ctx.actorId && (!row?.lease_expires_at || new Date(String(row.lease_expires_at)).getTime() > Date.now())
+    // Runtime handoff reserves a support queue without acquiring a user lease.
+    // Only a matching, live human lease can block another teammate's claim.
+    const liveOther = conversation.owner_type === "human" && row?.mode === "human" && row.owner_user_id === conversation.owner_id && conversation.owner_id !== ctx.actorId && (!row.lease_expires_at || new Date(String(row.lease_expires_at)).getTime() > Date.now())
     if (liveOther) throw new TracerError("CONFLICT", "Conversation is currently owned by another agent.")
     await ensureEscalationTicket(tx, ctx.projectId, input.conversationId, {
       actorId: ctx.actorId,
@@ -533,7 +557,7 @@ export async function sendHumanReply(context: BuildContext, value: unknown) {
     `)
     const row = ensureRows(conversation.rows, "Conversation", input.conversationId)
     if (row.owner_type !== "human" || row.owner_id !== ctx.actorId)
-      throw new TracerError("CONFLICT", "Conversation is not owned by this agent.", { details: { reason: "OWNERSHIP_CHANGED" } })
+      throw new TracerError("CONFLICT", "Take over this conversation before replying. Another teammate may have claimed it.", { details: { reason: "OWNERSHIP_CHANGED" } })
 
     // The canonical conversation owner is necessary but not sufficient: an
     // expired lease must stop a stale inbox tab from appending more replies.
@@ -554,7 +578,7 @@ export async function sendHumanReply(context: BuildContext, value: unknown) {
         (lease.lease_expires_at !== null &&
           new Date(String(lease.lease_expires_at)).getTime() <= Date.now()))
     ) {
-      throw new TracerError("CONFLICT", "Conversation human lease is no longer active.", { details: { reason: "LEASE_EXPIRED" } })
+      throw new TracerError("CONFLICT", "Your conversation lease expired. Take over the conversation again before replying.", { details: { reason: "LEASE_EXPIRED" } })
     }
     await assertTicketAssignment(tx, ctx.projectId, { assigneeUserId: actorId, teamId: null })
 

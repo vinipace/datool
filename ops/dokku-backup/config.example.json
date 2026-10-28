@@ -1,0 +1,21 @@
+{
+  "name": "datool",
+  "state_directory": "/var/lib/datool-backup",
+  "max_age_hours": 30,
+  "upload_kib_per_second": 4096,
+  "streams": [
+    {
+      "filename": "postgres.dump",
+      "command": ["dokku", "postgres:export", "datool-db"]
+    },
+    {
+      "filename": "redis.rdb",
+      "command": ["dokku", "redis:export", "datool-redis"]
+    },
+    {
+      "filename": "application.env",
+      "command": ["dokku", "config:export", "datool"]
+    }
+  ],
+  "paths": ["/var/lib/dokku/data/storage/datool"]
+}

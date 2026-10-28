@@ -1,3 +1,4 @@
+import { trustedAuthWebOrigins } from "@/lib/auth-origins"
 import { google } from "better-auth/social-providers"
 import { expo } from "@better-auth/expo"
 import { isAllowedEmail, isAllowedGoogleUser } from "./launch-access"
@@ -22,6 +23,7 @@ import {
 } from "better-auth/plugins/organization/access"
 import { oauthProvider } from "@better-auth/oauth-provider"
 import { apiKey } from "@better-auth/api-key"
+import { securityAudit } from "@/src/server/security/audit"
 import { selectedOAuthProject } from "./oauth-context"
 import type { Pool } from "pg"
 import { nextCookies } from "better-auth/next-js"
@@ -37,6 +39,8 @@ import {
 } from "./invitation-email"
 import { hasInvitationSignInAccess } from "./invitation-access"
 import { organizationDetailsSchema } from "@/src/lib/organization-settings"
+import { siteMeasurementId } from "@/lib/site-analytics-config"
+import { analyticsConsentCookie, signupCookie } from "@/lib/site-analytics"
 
 export function authBaseUrl() {
   const url = new URL(process.env.BETTER_AUTH_URL || "http://localhost:3000")
@@ -78,12 +82,27 @@ export function organizationAuthOptions(
     )
   return {
     database,
-    emailAndPassword: { enabled: false },
+    emailAndPassword: {
+      enabled: process.env.AUTH_PASSWORD_SIGN_IN_ENABLED === "true",
+      disableSignUp: true,
+      requireEmailVerification: true,
+      minPasswordLength: 16,
+      maxPasswordLength: 128,
+    },
     baseURL,
     secret,
-    trustedOrigins: [baseURL, "datool-inbox://"],
+    trustedOrigins: [...trustedAuthWebOrigins(baseURL), "datool-inbox://"],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (process.env.AUTH_PASSWORD_SIGN_IN_ENABLED === "true" &&
+          ctx.path === "/sign-in/email" && typeof ctx.body?.email === "string") {
+          const email = ctx.body.email.trim().toLowerCase()
+          if (!isAllowedEmail(email))
+            throw new APIError("UNAUTHORIZED", {
+              message: "Invalid email or password.",
+            })
+          ctx.body.email = email
+        }
         if (ctx.path === "/organization/invite-member") {
           const session = await getSessionFromCtx(ctx)
           const organizationId =
@@ -146,6 +165,39 @@ export function organizationAuthOptions(
           })
       }),
       after: createAuthMiddleware(async (ctx) => {
+        const auditActions: Record<string, string> = {
+          "/organization/update-member-role": "auth.member.role_updated",
+          "/organization/remove-member": "auth.member.removed",
+          "/organization/add-member": "auth.member.added",
+          "/organization/accept-invitation": "auth.invitation.accepted",
+          "/organization/cancel-invitation": "auth.invitation.canceled",
+          "/api-key/create": "auth.api_key.created",
+          "/api-key/update": "auth.api_key.updated",
+          "/api-key/delete": "auth.api_key.deleted",
+        }
+        const auditAction = auditActions[ctx.path]
+        if (auditAction) {
+          try {
+            const session = await getSessionFromCtx(ctx)
+            const result = ctx.context.returned
+            const failed = result instanceof APIError
+            const record = !failed && result && typeof result === "object" ? result as Record<string, unknown> : {}
+            const member = record.member && typeof record.member === "object" ? record.member as Record<string, unknown> : record
+            // IDs come from successful adapter results. A failed request's
+            // claimed organization/member is not an authenticated identity.
+            const organizationId = member.organizationId ?? record.referenceId
+            const targetId = member.id ?? (record.success === true ? ctx.body?.keyId : undefined)
+            securityAudit({
+              action: auditAction,
+              identity: { actorType: session ? "session" : ctx.headers ? "unknown" : "system", actorId: session?.user.id, organizationId: typeof organizationId === "string" ? organizationId : undefined },
+              targetId: typeof targetId === "string" ? targetId : undefined,
+              role: typeof member.role === "string" ? member.role : undefined,
+            }, failed ? result.statusCode : 200)
+          } catch {
+            // Audit enrichment must never turn a completed auth change into a retry.
+            securityAudit({ action: "auth.audit_unavailable", identity: { actorType: "unknown" } }, 503)
+          }
+        }
         if (ctx.path !== "/organization/invite-member") return
         const result = ctx.context.returned
         if (
@@ -173,6 +225,32 @@ export function organizationAuthOptions(
     databaseHooks: {
       user: {
         create: {
+          after: async (_user, ctx) => {
+            if (
+              !ctx ||
+              !siteMeasurementId() ||
+              ctx.getCookie(analyticsConsentCookie) !== "granted"
+            )
+              return
+            const callback = ctx.query?.callbackURL
+            if (
+              typeof callback === "string" &&
+              callback.startsWith("datool-inbox:")
+            )
+              return
+            // Only a newly persisted account gets this one-use, non-identifying marker.
+            ctx.setCookie(
+              signupCookie,
+              ctx.path === "/magic-link/verify" ? "email" : "google",
+              {
+                path: "/",
+                maxAge: 600,
+                sameSite: "lax",
+                secure: baseURL.startsWith("https:"),
+                httpOnly: false,
+              }
+            )
+          },
           before: async (user, ctx) => {
             if (
               ctx?.path === "/magic-link/verify" &&
@@ -216,11 +294,16 @@ export function organizationAuthOptions(
                   clientId: process.env.GOOGLE_CLIENT_ID!,
                   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
                 }).getUserInfo(tokens)
-                return profile &&
-                  (isAllowedGoogleUser(profile.user) ||
-                    (await hasInvitationSignInAccess(database, profile.user)))
-                  ? profile
-                  : null
+                if (!profile?.user.email || !(isAllowedGoogleUser(profile.user) ||
+                  (await hasInvitationSignInAccess(database, profile.user)))) return null
+                // Keep deliberate Datool edits while still refreshing untouched profiles.
+                const customized = await database.query<{ name: string; image: string | null }>(
+                  'SELECT u.name,u.image FROM "user" u JOIN user_profile p ON p.user_id=u.id WHERE u.email=$1',
+                  [profile.user.email.toLowerCase()]
+                )
+                return customized.rows[0]
+                  ? { ...profile, user: { ...profile.user, name: customized.rows[0].name, image: customized.rows[0].image ?? undefined } }
+                  : profile
               },
             },
           }

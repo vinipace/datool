@@ -1,18 +1,11 @@
 import type { WidgetComponent, WidgetDefinition } from "./contracts"
+import { widgetComponents } from "./widget-components"
 
 type WidgetFunction = WidgetDefinition["functions"][number]
 
 export const widgetCodeDeclarations = `
 declare const React: any;
-declare const Box: (props: any) => any;
-declare const Col: (props: any) => any;
-declare const Row: (props: any) => any;
-declare const Text: (props: any) => any;
-declare const Card: (props: any) => any;
-declare const Button: (props: any) => any;
-declare const Form: (props: any) => any;
-declare const List: (props: any) => any;
-declare const Image: (props: any) => any;
+${widgetComponents.map(({ name, description }) => `/** ${description} */\ndeclare const ${name}: (props: any) => any;`).join("\n")}
 declare function get(value: unknown, path: string): any;
 declare function format(template: string, data: unknown): string;
 `

@@ -51,6 +51,68 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+export const ShopifyBilling: Story = {
+  args: { prices: null },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get("/api/billing/status", () =>
+          HttpResponse.json({
+            ...activeUsage,
+            provider: "shopify",
+            shop: "sample.myshopify.com",
+            hasCustomer: false,
+          })
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.findByRole("button", { name: "Manage plan in Shopify" })
+    ).resolves.toBeEnabled()
+    await expect(
+      canvas.getByText(/Billing is managed through Shopify/)
+    ).toBeVisible()
+    await expect(
+      canvas.queryByRole("radio", { name: /^Core / })
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByText(/Plan prices are unavailable/)
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const ShopifyChoosePlan: Story = {
+  args: { prices: null },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get("/api/billing/status", () =>
+          HttpResponse.json({
+            ...unpaid,
+            provider: "shopify",
+            shop: "sample.myshopify.com",
+          })
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.findByRole("button", { name: "Choose a plan in Shopify" })
+    ).resolves.toBeEnabled()
+    await expect(
+      canvas.queryByRole("button", { name: /Subscribe to/ })
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("link", { name: "View pricing" })
+    ).not.toBeInTheDocument()
+  },
+}
+
 export const ProSelected: Story = {
   args: { initialPlan: "pro", checkout: "canceled" },
   play: async ({ canvasElement }) => {

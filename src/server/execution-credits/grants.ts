@@ -1,5 +1,5 @@
 import type Stripe from "stripe"
-import { executionCredits, type PaidPeriod } from "./ledger"
+import { executionCredits, type SubscriptionCreditPeriod } from "./ledger"
 import { billingConfig, getStripe } from "@/src/server/billing/config"
 
 /** Invoice lines, not event metadata or a browser-selected plan, establish the grant. */
@@ -9,7 +9,7 @@ export function paidInvoicePeriod(
   subscriptionId: string,
   priceId: string,
   currentEnd: number
-): PaidPeriod | null {
+): SubscriptionCreditPeriod | null {
   const subscription = invoice.parent?.subscription_details?.subscription
   if (
     invoice.status !== "paid" ||

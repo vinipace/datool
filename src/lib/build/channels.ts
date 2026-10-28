@@ -122,7 +122,11 @@ export type OutboundEnvelope = {
   metadata?: Record<string, unknown>
 }
 
+export type ChannelImage = { data: Uint8Array; mediaType: string }
+
 export type AgentTurnInput = {
+  /** Server-fetched bytes; never accepted from public request metadata. */
+  images?: ChannelImage[]
   projectId: string
   agentId: string
   conversationId: string
@@ -232,6 +236,8 @@ export function timingSafeStringEquals(left: string, right: string) {
 
 /** Signed visitor context for public web sessions. Contains no server secret. */
 export type VisitorContext = {
+  browserSessionId?: string
+  identityVersion?: number
   visitorId: string
   /** Binds a bearer visitor token to one hosted channel deployment. */
   connectionId?: string
@@ -248,9 +254,22 @@ export const CHANNEL_DESCRIPTORS: Record<ChannelId, ChannelDescriptor> = {
     capabilities: ["receive_text", "send_text", "human_handoff"],
     connectionSchema: z.object({
       originAllowlist: z.array(z.string().url()).default([]),
+      shopifyShop: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/)
+        .max(253)
+        .optional(),
       bubble: chatBubbleOverridesSchema.optional(),
       publicAdmission: z
         .object({
+          visitorMessagesPerMinute: z.number().int().min(1).max(120).optional(),
+          visitorMessagesPerDay: z
+            .number()
+            .int()
+            .min(1)
+            .max(10000)
+            .nullable()
+            .optional(),
           session: z
             .object({
               maxRequests: z.number().int().min(1).max(10_000).optional(),
@@ -292,8 +311,20 @@ export const CHANNEL_DESCRIPTORS: Record<ChannelId, ChannelDescriptor> = {
   whatsapp: {
     id: "whatsapp",
     label: "WhatsApp",
-    capabilities: ["receive_text", "receive_media", "send_text", "send_media", "webhook", "read_receipts", "human_handoff"],
-    connectionSchema: z.object({}).strict(),
+    capabilities: [
+      "receive_text",
+      "receive_media",
+      "send_text",
+      "send_media",
+      "webhook",
+      "read_receipts",
+      "human_handoff",
+    ],
+    connectionSchema: z
+      .object({
+        provider: z.enum(["meta", "evolution", "zernio"]).default("meta"),
+      })
+      .strict(),
   },
   messenger: {
     id: "messenger",

@@ -64,6 +64,7 @@ const meta = {
       >
         <div className="h-[900px]">
           <TracerAppShell
+            buildEnabled
             organization={storybookOrganization}
             project={{ id: "storybook-project", name: "Demo", slug: "demo" }}
             user={{

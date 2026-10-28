@@ -129,7 +129,11 @@ import type {
   KnowledgeSource,
   KnowledgeSourceDetail,
 } from "@/src/lib/build/knowledge"
-import { KNOWLEDGE_LIMITS } from "@/src/lib/build/knowledge"
+import {
+  KNOWLEDGE_LIMITS,
+  knowledgeSourceStatusLabel,
+  knowledgeSourceStatusMessage,
+} from "@/src/lib/build/knowledge"
 
 type AgentEditorProps = { agent?: ManagedAgent; initialTab?: string }
 
@@ -915,6 +919,12 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
   const [message, setMessage] = React.useState<string | null>(null)
   const [showSource, setShowSource] = React.useState(false)
   const rows = state.data ?? []
+  // Follow the list's live worker status without overwriting edits or their
+  // expected revision in the open form.
+  const liveSource = rows.find((source) => source.id === selected?.id) ?? selected
+  const sourceStatusMessage = liveSource
+    ? knowledgeSourceStatusMessage(liveSource)
+    : null
   const SourceTypeIcon = knowledgeSourceTypes[kind].icon
   const sourceFields = (
     <>
@@ -1033,8 +1043,8 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
       )
       setMessage(
         selected
-          ? "Source saved. Indexing updated content."
-          : "Knowledge source added and indexing started."
+          ? "Source saved. Indexing queued."
+          : "Knowledge source added. Indexing queued."
       )
       setShowSource(false)
       state.refresh()
@@ -1264,7 +1274,10 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
                         <SourceTypeIcon aria-hidden className="size-4" />
                         {knowledgeSourceTypes[kind].label}
                       </span>
-                      <BuildStatus state={selected.status} />
+                      <BuildStatus
+                        state={(liveSource ?? selected).status}
+                        label={knowledgeSourceStatusLabel(liveSource ?? selected)}
+                      />
                       <span className="text-xs text-foreground-muted">
                         Revision {selected.revision}
                       </span>
@@ -1313,17 +1326,19 @@ function KnowledgeTab({ agentId }: { agentId: string }) {
                       </CustomSelect>
                     </FormRow>
                   )}
-                  {selected?.statusMessage && !(selected.status === "ready" && /^\d+ pages indexed\.$/.test(selected.statusMessage)) ? (
+                  {sourceStatusMessage && !(liveSource?.status === "ready" && /^\d+ pages indexed\.$/.test(sourceStatusMessage)) ? (
                     <Notice
-                      variant={selected.status === "error" ? "error" : "info"}
+                      role={liveSource?.status === "error" ? "alert" : "status"}
+                      variant={liveSource?.status === "error" ? "error" : "info"}
                     >
-                      {selected.statusMessage}
+                      {sourceStatusMessage}
                     </Notice>
                   ) : null}
                   {selected && (kind === "website" || kind === "sitemap") ? (
                     <KnowledgePages
-                      key={`${selected.id}:${selected.activeRevision}`}
+                      key={`${selected.id}:${liveSource?.activeRevision}`}
                       sourceId={selected.id}
+                      sourceStatus={(liveSource ?? selected).status}
                       settings={<div className="space-y-6">{sourceFields}</div>}
                     />
                   ) : (

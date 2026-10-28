@@ -31,6 +31,7 @@ try {
   await migrateIsolatedPostgres(target)
   await seedTestWorkspace(target)
   Object.assign(process.env, {
+    DATOOL_BUILD_ENABLED: "true",
     DATABASE_URL: target.databaseUrl,
     BETTER_AUTH_SECRET: "b".repeat(64),
     DATOOL_META_APP_ID: "10000000001",
@@ -171,7 +172,7 @@ try {
               messaging_product: "whatsapp",
               metadata: {
                 phone_number_id: phoneId,
-                display_phone_number: "+5511888880001",
+                display_phone_number: `+551188888000${phoneId.slice(-1)}`,
               },
               ...value,
             },
@@ -242,7 +243,7 @@ try {
         data: [
           {
             id: listedPhone,
-            display_phone_number: "+5511888880001",
+            display_phone_number: `+551188888000${listedPhone.slice(-1)}`,
             verified_name: "Synthetic Store",
             is_on_biz_app: isBusinessApp,
           },
@@ -304,7 +305,7 @@ try {
       return Response.json({
         id: path,
         quality_rating: "GREEN",
-        display_phone_number: "+5511888880001",
+        display_phone_number: `+551188888000${path.slice(-1)}`,
         is_on_biz_app: isBusinessApp,
       })
     throw new Error(`Unexpected Meta path ${path}`)

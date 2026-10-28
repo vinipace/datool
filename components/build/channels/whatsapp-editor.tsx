@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { EvolutionEditor } from "./evolution-editor"
+import { ZernioEditor } from "./zernio-editor"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -22,7 +24,13 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
 import { Notice } from "@/components/ui/notice"
-import { Card } from "@/components/ui/card"
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import {
   DropdownMenu,
@@ -141,7 +149,7 @@ type Template = {
   category: string
 }
 
-export function WhatsAppEditor({
+export function MetaWhatsAppEditor({
   connection,
   agent,
   fromAgent,
@@ -1161,5 +1169,66 @@ export function WhatsAppEditor({
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export function WhatsAppEditor(props: {
+  connection: ChannelConnection | null
+  agent: ManagedAgent
+  fromAgent: boolean
+}) {
+  const [provider, setProvider] = React.useState<string | null>(
+    props.connection ? String(props.connection.config.provider ?? "meta") : null
+  )
+  const setup = useRemote(
+    (signal) =>
+      buildApi.call<{ enabled: boolean }>(
+        "build_get_evolution_setup",
+        {},
+        signal
+      ),
+    []
+  )
+  if (provider === "evolution") return <EvolutionEditor {...props} />
+  if (provider === "meta") return <MetaWhatsAppEditor {...props} />
+  if (provider === "zernio") return <ZernioEditor {...props} />
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Connect WhatsApp</CardTitle>
+        <CardDescription>
+          Choose how to connect your business number.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Button onClick={() => setProvider("zernio")}>
+            Official Meta API
+          </Button>
+          <p className="text-sm text-foreground-muted">
+            Connect through Meta's official business platform.
+          </p>
+        </div>
+        {setup.data?.enabled && (
+          <div className="space-y-2">
+            <Button variant="outline" onClick={() => setProvider("evolution")}>
+              Evolution · Unofficial connection
+            </Button>
+            <p className="text-sm text-foreground-muted">
+              Scan a QR code. This connection carries a risk of account
+              restrictions or bans.
+            </p>
+          </div>
+        )}
+        {setup.error && (
+          <Notice variant="error">
+            Could not check connection options.{" "}
+            <Button variant="outline" size="sm" onClick={setup.refresh}>
+              Retry
+            </Button>
+          </Notice>
+        )}
+      </CardContent>
+    </Card>
   )
 }

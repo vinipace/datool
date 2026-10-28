@@ -1,4 +1,7 @@
-import type { ActionDefinition } from "@/src/lib/build/contracts"
+import {
+  buildChannelSchema,
+  type ActionDefinition,
+} from "@/src/lib/build/contracts"
 
 export type ActionPreset = ActionDefinition["type"] | "leads" | "data"
 
@@ -67,7 +70,7 @@ export function newActionDraft(preset: ActionPreset): ActionDefinition {
       name: "",
       description: "",
       enabled: true,
-      channels: ["web", "telegram"],
+      channels: [...buildChannelSchema.options],
       procedureOnly: false,
       inputSchema: {},
       type: "http",

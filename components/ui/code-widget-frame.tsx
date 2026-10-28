@@ -4,18 +4,12 @@ import * as React from "react"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
 import type { WidgetTranslations } from "@/src/lib/build/widget-i18n"
 
-const themeProperties = [
-  "--color-background",
-  "--color-foreground",
-  "--color-muted",
-  "--color-foreground-muted",
-  "--color-border",
-  "--color-primary",
-  "--color-primary-foreground",
-  "--color-ring",
-  "--color-destructive",
-  "--color-data-series-primary",
-]
+import { ChatNavigationContext } from "./chat-navigation-context"
+import { isSafeHttpUrl } from "@/src/lib/build/urls"
+import {
+  widgetFrameDocument,
+  widgetThemeProperties,
+} from "@/src/lib/build/widget-frame"
 
 /** The same isolated React runtime is used by authoring previews and customer widgets. */
 export function CodeWidgetFrame({
@@ -41,12 +35,13 @@ export function CodeWidgetFrame({
   ) => void
   onStatus?: (error: string | null) => void
 }) {
+  const navigation = React.useContext(ChatNavigationContext)
   const frame = React.useRef<HTMLIFrameElement>(null)
   const host = React.useRef<HTMLDivElement>(null)
-  const current = React.useRef({ functions, onAction, onStatus })
+  const current = React.useRef({ functions, onAction, onStatus, navigation })
   React.useEffect(() => {
-    current.current = { functions, onAction, onStatus }
-  }, [functions, onAction, onStatus])
+    current.current = { functions, onAction, onStatus, navigation }
+  }, [functions, onAction, onStatus, navigation])
   const [origin, setOrigin] = React.useState("")
   const [height, setHeight] = React.useState(96)
   const [ready, setReady] = React.useState(false)
@@ -60,6 +55,7 @@ export function CodeWidgetFrame({
     enabled: Boolean(onAction),
     functions: functions.map((fn) => fn.name),
     theme,
+    navigationOrigin: navigation?.origin,
   })
   const request = React.useRef(0)
 
@@ -69,7 +65,7 @@ export function CodeWidgetFrame({
     const update = () => {
       const style = getComputedStyle(element)
       const next = Object.fromEntries(
-        themeProperties.map((name) => [
+        widgetThemeProperties.map((name) => [
           name,
           style.getPropertyValue(name).trim(),
         ])
@@ -107,7 +103,13 @@ export function CodeWidgetFrame({
         return
       }
       if (value?.requestId !== request.current) return
-      if (value.type === "widget-height" && Number.isFinite(value.height)) {
+      if (value.type === "widget-navigate") {
+        if (typeof value.href === "string" && isSafeHttpUrl(value.href))
+          current.current.navigation?.navigate(value.href)
+      } else if (
+        value.type === "widget-height" &&
+        Number.isFinite(value.height)
+      ) {
         setHeight(Math.max(40, Math.min(1600, Math.ceil(value.height))))
       } else if (value.type === "widget-status") {
         current.current.onStatus?.(
@@ -154,16 +156,14 @@ export function CodeWidgetFrame({
     return () => window.clearTimeout(timer)
   }, [ready, payload])
 
-  const source = origin
-    ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-eval' ${origin}/widget-runtime.js; style-src 'unsafe-inline' ${origin}/widget-runtime.css; img-src https: data: ${origin}/widget-template-assets/; connect-src 'none'; form-action 'none'; base-uri 'none';"><link rel="stylesheet" href="${origin}/widget-runtime.css"></head><body><div id="root"></div><script src="${origin}/widget-runtime.js"></script></body></html>`
-    : undefined
+  const source = origin ? widgetFrameDocument(origin) : undefined
   return (
     <div ref={host} className="w-full min-w-0">
       {origin ? (
         <iframe
           ref={frame}
           title="Widget content"
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
           srcDoc={source}
           className="block w-full border-0"
           style={{ height }}

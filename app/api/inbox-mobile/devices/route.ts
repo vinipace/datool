@@ -1,3 +1,4 @@
+import { buildEnabled } from "@/lib/build/config"
 import { getAuth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { requireProjectAccess } from "@/lib/project-access"
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
     const projectId = z.string().min(1).max(200).parse(request.headers.get("x-project-id"))
     const access = await requireProjectAccess(request, projectId)
     if (access.kind !== "ok") throw new TracerError("UNAUTHORIZED", "You cannot subscribe to this project.", { status: access.kind === "payment-required" ? 402 : 403 })
+    if (!buildEnabled(access.access.project.organizationId)) throw new TracerError("NOT_FOUND", "Build is disabled for this organization.")
     const data = await registerInboxDevice(createTracerDatabase(undefined, { projectId }), {
       projectId, userId: session.user.id, sessionId: session.session.id,
     }, await readJson(request, 4096))

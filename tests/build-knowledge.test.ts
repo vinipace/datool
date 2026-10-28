@@ -192,7 +192,8 @@ dbTest(
           path === "/page-129" &&
           new Headers(options?.headers).get("accept")?.includes("text/markdown")
         if (path === "/") rootRequests++
-        if (path === "/page-4" && !interrupted) {
+        // Interrupt in the second batch, after the root checkpoint is durable.
+        if (path === "/page-8" && !interrupted) {
           interrupted = true
           await database.execute(
             sql`update build_knowledge_jobs set lease_expires_at=now()-interval '1 second' where project_id=${context.projectId} and status='running'`

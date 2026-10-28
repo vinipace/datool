@@ -1071,12 +1071,17 @@ export async function saveProcedure(
   if (definition.instructions?.trim()) {
     const slugs = skillActionSlugs(definition.instructions)
     if (slugs.length > 100)
-      throw new DefinitionValidationError("A skill can mention at most 100 actions.")
+      throw new DefinitionValidationError(
+        "A skill can mention at most 100 actions."
+      )
     const actions = slugs.length ? await listActions(context, agentId) : []
-    const bySlug = new Map(actions.map(action => [action.slug, action.id]))
-    definition.actionRefs = slugs.map(slug => {
+    const bySlug = new Map(actions.map((action) => [action.slug, action.id]))
+    definition.actionRefs = slugs.map((slug) => {
       const id = bySlug.get(slug)
-      if (!id) throw new DefinitionValidationError(`Mentioned action @${slug} is not available on this agent.`)
+      if (!id)
+        throw new DefinitionValidationError(
+          `Mentioned action @${slug} is not available on this agent.`
+        )
       return id
     })
   }

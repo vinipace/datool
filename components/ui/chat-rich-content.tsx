@@ -11,6 +11,17 @@ import { Textarea } from "./textarea"
 import type { InspectorMessage } from "@/src/lib/tracer/value-messages"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
+import { shopifyCartCommandSchema } from "@/src/lib/build/shopify-cart"
+import { ShopifyProductsView } from "./shopify-products"
+import {
+  shopifyOrderQuoteSchema,
+  shopifyOrderSummary,
+} from "@/src/lib/build/shopify-order"
+import {
+  shopifyReturnQuoteSchema,
+  shopifyReturnSummary,
+} from "@/src/lib/build/shopify-return"
+import { ShopifyCartView } from "./shopify-cart"
 import { CodeWidgetFrame } from "./code-widget-frame"
 import { widgetText, widgetTranslationsSchema, type WidgetTranslations } from "@/src/lib/build/widget-i18n"
 
@@ -77,6 +88,29 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
             item?.type === "client_action"
         )
     : null
+  const cartCommand = shopifyCartCommandSchema.safeParse(
+    record(continuation?.shopifyCart)?.command
+  )
+  const orderQuote = shopifyOrderQuoteSchema.safeParse(
+    continuation?.shopifyOrderQuote
+  )
+  const returnQuote = shopifyReturnQuoteSchema.safeParse(
+    continuation?.shopifyReturnQuote
+  )
+  const reverify = continuation?.eventName === "Continue approved change"
+  let cartSummary: string | null = null
+  if (cartCommand.success && cartCommand.data.operation === "add") {
+    const count = cartCommand.data.items.reduce(
+      (sum, item) => sum + item.quantity,
+      0
+    )
+    cartSummary = `Add ${count} ${count === 1 ? "item" : "items"} to your cart. You can review everything before checkout.`
+  } else if (cartCommand.success && cartCommand.data.operation === "set") {
+    cartSummary =
+      cartCommand.data.quantity === 0
+        ? "Remove this item from your cart."
+        : `Change this cart item's quantity to ${cartCommand.data.quantity}.`
+  }
   let continuationWidget: ChatWidget | null = null
   const continuationFormActionId =
     typeof continuation?.submitActionId === "string" &&
@@ -126,12 +160,47 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
           ? continuation.eventName
           : undefined,
       components: [
+        ...(continuation.eventName === "Confirm changes" ||
+        reverify ||
+        cartSummary
+          ? [
+              {
+                type: "card" as const,
+                title:
+                  typeof continuation.title === "string"
+                    ? continuation.title
+                    : "Confirm change",
+                body: orderQuote.success
+                  ? shopifyOrderSummary(orderQuote.data)
+                  : returnQuote.success
+                    ? shopifyReturnSummary(returnQuote.data)
+                    : (cartSummary ??
+                      Object.entries(record(continuation.input) ?? {})
+                        .map(
+                          ([key, value]) =>
+                            `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "Remove")}`
+                        )
+                        .join("\n")),
+              },
+            ]
+          : []),
         {
           type: "button",
-          label:
-            typeof continuation.eventName === "string"
-              ? continuation.eventName
-              : "Continue",
+          label: reverify
+            ? "Continue approved change"
+            : orderQuote.success
+              ? orderQuote.data.paymentMethod === "online"
+                ? "Create checkout"
+                : orderQuote.data.paymentMethod === "free"
+                  ? "Place free order"
+                  : "Place order"
+              : returnQuote.success
+                ? returnQuote.data.replacements.length
+                  ? "Confirm exchange"
+                  : "Confirm return"
+                : typeof continuation.eventName === "string"
+                  ? continuation.eventName
+                  : "Continue",
           actionId: continuation.actionId,
         },
       ],
@@ -296,6 +365,21 @@ export function ChatRichContent({
           </a>
         ) : null
       })}
+      {message.role !== "user" ? (
+        <ShopifyProductsView
+          value={record(message.metadata)?.shopifyProducts}
+          completedContinuationIds={completedContinuationIds}
+          onSelect={
+            onInteraction
+              ? (interaction, label) =>
+                  onInteraction(message, interaction, label)
+              : undefined
+          }
+        />
+      ) : null}
+      {message.role !== "user" ? (
+        <ShopifyCartView value={record(message.metadata)?.shopifyCart} />
+      ) : null}
       {message.role !== "user" && widget ? (
         <ChatWidgetView
           widget={widget}
@@ -514,7 +598,9 @@ function ChatWidgetForm({
   component: Extract<WidgetComponent, { type: "form" }>
   onInteraction?: (interaction: Record<string, unknown>, label: string) => void
 }) {
-  const [values, setValues] = React.useState<Record<string, string | boolean>>({})
+  const [values, setValues] = React.useState<Record<string, string | boolean>>(
+    {}
+  )
   // Keep widget validation separate from a surrounding chat composer form.
   const formScope = React.useId()
   const fieldsRef = React.useRef<HTMLFieldSetElement>(null)
@@ -533,9 +619,14 @@ function ChatWidgetForm({
           : {}),
         actionId: component.submitActionId,
         input: {
-          ...Object.fromEntries(component.fields
-            .filter((field): field is FormField => typeof field !== "string" && field.type === "checkbox")
-            .map(field => [field.name, false])),
+          ...Object.fromEntries(
+            component.fields
+              .filter(
+                (field): field is FormField =>
+                  typeof field !== "string" && field.type === "checkbox"
+              )
+              .map((field) => [field.name, false])
+          ),
           ...values,
         },
       },
@@ -578,7 +669,10 @@ function ChatWidgetForm({
               }
         if (config.type === "checkbox") {
           return (
-            <label key={`${messageId}-${config.name}`} className="flex cursor-pointer items-start gap-2.5 text-xs leading-5">
+            <label
+              key={`${messageId}-${config.name}`}
+              className="flex cursor-pointer items-start gap-2.5 text-xs leading-5"
+            >
               <Checkbox
                 form={formScope}
                 name={config.name}

@@ -16,6 +16,8 @@ import {
 } from "@/src/lib/build/whatsapp"
 import type { OutboundEnvelope } from "@/src/lib/build/channels"
 import { encryptChannelCredentials, decryptChannelCredentials } from "./secrets"
+import { zernioAccount } from "./zernio"
+import { zernioRequest } from "./zernio-api"
 import {
   exchangeWhatsAppCode,
   metaConfig,
@@ -73,7 +75,7 @@ export function getWhatsAppSetup(): WhatsAppSetup {
 }
 async function connection(context: BuildContext, id: string) {
   const result = await context.database.execute<Row>(
-    sql`SELECT c.*, p.slug AS project_slug FROM build_channel_connection c JOIN project p ON p.id=c.project_id WHERE c.project_id=${context.projectId} AND c.id=${id}::uuid AND c.channel='whatsapp'`
+    sql`SELECT c.*, p.slug AS project_slug FROM build_channel_connection c JOIN project p ON p.id=c.project_id WHERE c.project_id=${context.projectId} AND c.id=${id}::uuid AND c.channel='whatsapp' AND COALESCE(c.config_json->>'provider','meta')='meta'`
   )
   if (!result.rows[0])
     throw new TracerError("NOT_FOUND", "WhatsApp channel was not found.")
@@ -438,10 +440,35 @@ export async function refreshWhatsAppConnection(
     qualityRating: phone.quality_rating ?? null,
   }
 }
+async function requireWhatsAppChannel(
+  context: BuildContext,
+  connectionId: string
+) {
+  const result = await context.database.execute(
+    sql`SELECT 1 FROM build_channel_connection WHERE project_id=${context.projectId} AND id=${connectionId}::uuid AND channel='whatsapp'`
+  )
+  if (!result.rows.length)
+    throw new TracerError("NOT_FOUND", "WhatsApp channel was not found.")
+}
+async function usesZernio(context: BuildContext, connectionId: string) {
+  const result = await context.database.execute<Row>(
+    sql`SELECT config_json->>'provider' AS provider FROM build_channel_connection WHERE project_id=${context.projectId} AND id=${connectionId}::uuid AND channel='whatsapp'`
+  )
+  return result.rows[0]?.provider === "zernio"
+}
 export async function listWhatsAppTemplates(
   context: BuildContext,
   input: { connectionId: string; after?: string }
 ) {
+  if (await usesZernio(context, input.connectionId)) {
+    if (input.after)
+      throw invalid("Template pagination is not supported by this provider.")
+    const { accountId } = await zernioAccount(context, input.connectionId)
+    const result = await zernioRequest<{ templates?: unknown[] }>(
+      `/whatsapp/templates?${new URLSearchParams({ accountId })}`
+    )
+    return { items: result.templates ?? [], nextCursor: null }
+  }
   const auth = await whatsappAuthorization(context, input.connectionId)
   const result = await metaRequest<{
     data: unknown[]
@@ -522,6 +549,25 @@ export async function createWhatsAppTemplate(
     components: Record<string, unknown>[]
   }
 ) {
+  if (await usesZernio(context, input.connectionId)) {
+    const { accountId } = await zernioAccount(context, input.connectionId)
+    return templateMutation(
+      context,
+      "build_create_whatsapp_template",
+      input,
+      () =>
+        zernioRequest("/whatsapp/templates", {
+          method: "POST",
+          body: {
+            accountId,
+            name: input.name,
+            language: input.language,
+            category: input.category,
+            components: input.components,
+          },
+        })
+    )
+  }
   const auth = await whatsappAuthorization(context, input.connectionId)
   return templateMutation(
     context,
@@ -543,6 +589,19 @@ export async function deleteWhatsAppTemplate(
   context: BuildContext,
   input: { connectionId: string; name: string }
 ) {
+  if (await usesZernio(context, input.connectionId)) {
+    const { accountId } = await zernioAccount(context, input.connectionId)
+    return templateMutation(
+      context,
+      "build_delete_whatsapp_template",
+      input,
+      () =>
+        zernioRequest(
+          `/whatsapp/templates/${encodeURIComponent(input.name)}?${new URLSearchParams({ accountId })}`,
+          { method: "DELETE" }
+        )
+    )
+  }
   const auth = await whatsappAuthorization(context, input.connectionId)
   return templateMutation(
     context,
@@ -565,7 +624,7 @@ export async function setWhatsAppConsent(
     note: string
   }
 ) {
-  await connection(context, input.connectionId)
+  await requireWhatsAppChannel(context, input.connectionId)
   await context.database.execute(
     sql`INSERT INTO build_whatsapp_recipient(project_id,connection_id,recipient_id,opted_out,template_opt_in,consent_note) VALUES(${context.projectId},${input.connectionId}::uuid,${input.recipient},${input.optedOut},${input.templateOptIn},${input.note}) ON CONFLICT(project_id,connection_id,recipient_id) DO UPDATE SET opted_out=EXCLUDED.opted_out,template_opt_in=EXCLUDED.template_opt_in,consent_note=EXCLUDED.consent_note,updated_at=now()`
   )
@@ -575,7 +634,7 @@ export async function getWhatsAppRecipient(
   context: BuildContext,
   input: { connectionId: string; recipient: string }
 ) {
-  await connection(context, input.connectionId)
+  await requireWhatsAppChannel(context, input.connectionId)
   const rows = await context.database.execute<Row>(
     sql`SELECT * FROM build_whatsapp_recipient WHERE project_id=${context.projectId} AND connection_id=${input.connectionId}::uuid AND recipient_id=${input.recipient}`
   )
@@ -695,14 +754,15 @@ export async function sendWhatsAppTemplate(
     idempotencyKey: string
   }
 ) {
-  const auth = await whatsappAuthorization(context, input.connectionId)
+  if (await usesZernio(context, input.connectionId))
+    await zernioAccount(context, input.connectionId)
+  else await whatsappAuthorization(context, input.connectionId)
   const rows = await context.database.execute<Row>(
     sql`SELECT external_conversation_id,metadata_json FROM build_conversations WHERE project_id=${context.projectId} AND id=${input.conversationId} AND channel='whatsapp' AND metadata_json->>'connectionId'=${input.connectionId}`
   )
   if (!rows.rows[0])
     throw new TracerError("NOT_FOUND", "WhatsApp conversation was not found.")
   const { enqueueOutboundEnvelope } = await import("./service")
-  void auth
   return enqueueOutboundEnvelope(
     context,
     {
@@ -723,7 +783,12 @@ export async function getWhatsAppDelivery(
   context: BuildContext,
   input: { connectionId: string; messageId: string }
 ) {
-  await connection(context, input.connectionId)
+  // Delivery is a shared WhatsApp read; provider credentials are not needed.
+  const owned = await context.database.execute(
+    sql`SELECT 1 FROM build_channel_connection WHERE project_id=${context.projectId} AND id=${input.connectionId}::uuid AND channel='whatsapp'`
+  )
+  if (!owned.rows.length)
+    throw new TracerError("NOT_FOUND", "WhatsApp connection was not found.")
   const result = await context.database.execute<Row>(
     sql`SELECT m.id,m.status,m.provider_message_id,m.error_code,m.error_message,m.content_json->'whatsappDelivery' AS receipt,j.status AS job_status FROM build_channel_message m LEFT JOIN build_channel_job j ON j.project_id=m.project_id AND j.message_id=m.id AND j.kind='deliver_outbound' WHERE m.project_id=${context.projectId} AND m.connection_id=${input.connectionId}::uuid AND m.id=${input.messageId} AND m.direction='outbound'`
   )

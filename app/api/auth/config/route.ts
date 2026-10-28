@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 export function GET() {
   return Response.json(
     {
+      password: process.env.AUTH_PASSWORD_SIGN_IN_ENABLED === "true",
       emailLink:
         authEmailConfigured() &&
         Boolean(

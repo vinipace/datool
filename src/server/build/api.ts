@@ -4,6 +4,7 @@ import { WhatsAppApiError } from "./channels/whatsapp-api"
 import type { BuildScope } from "@/src/lib/auth/permissions"
 import { workspaceIdentity } from "@/src/server/auth/context"
 import { getBuildContext, type BuildContext } from "./context"
+import { buildEnabled } from "@/lib/build/config"
 import { sanitizePublicActionResult } from "./definitions"
 import {
   beginBuildOperationReceiptInTransaction,
@@ -11,6 +12,7 @@ import {
 } from "./receipts"
 import { TracerError, validation } from "@/src/server/tracer/errors"
 import { scopedTracerTransaction } from "@/src/server/tracer/db"
+import { audited } from "@/src/server/security/audit"
 
 export { getBuildContext } from "./context"
 
@@ -319,7 +321,17 @@ export async function executeBuildOperation(
   input: unknown,
   options: BuildExecutionOptions = {}
 ) {
+  return audited({ action: findBuildOperation(name)?.name ?? "build.unknown" }, () => executeAuthorizedBuildOperation(name, input, options))
+}
+
+async function executeAuthorizedBuildOperation(
+  name: string,
+  input: unknown,
+  options: BuildExecutionOptions = {}
+) {
   const operation = findBuildOperation(name)
+  if (!buildEnabled(workspaceIdentity()?.organizationId))
+    throw new TracerError("NOT_FOUND", "Build is disabled for this organization.")
   if (!operation)
     throw new TracerError(
       "NOT_FOUND",

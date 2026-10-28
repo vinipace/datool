@@ -100,7 +100,7 @@ export function BuildPreview() {
                     <td aria-hidden className="p-0" />
                     <td className={collectionTable.cell}>
                       <span className="flex min-w-0 items-center gap-2 font-medium">
-                        <ConversationAvatar size="sm" name={item.customer} />
+                        <ConversationAvatar compact name={item.customer} />
                         <span className="truncate">{item.subject}</span>
                       </span>
                     </td>
@@ -132,7 +132,7 @@ export function BuildPreview() {
       </div>
       <section className={styles.inspector} aria-label="Example conversation">
         <div className={styles.inspectorHeader}>
-          <ConversationAvatar size="sm" name={selected.customer} />
+          <ConversationAvatar compact name={selected.customer} />
           <strong>{selected.customer}</strong>
           <span className={styles.inspectorMetadata}>
             <ChannelIcon channel={selected.channel} size="sm" />

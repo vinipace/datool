@@ -1,3 +1,4 @@
+import { configureBuildTestEnvironment } from "./helpers/build-env"
 import { expect, spyOn, test } from "bun:test"
 import assert from "node:assert/strict"
 import { sql } from "drizzle-orm"
@@ -10,6 +11,8 @@ import { getTracerProjectId } from "@/src/server/tracer/db"
 import { createTracerFixture, closeTracerFixture } from "./helpers/tracer-fixture"
 import { spawn } from "node:child_process"
 import { createIsolatedPostgres, migrateIsolatedPostgres } from "./helpers/postgres"
+
+configureBuildTestEnvironment()
 
 async function fixture() {
   const database = await createTracerFixture()
@@ -126,7 +129,7 @@ test("mobile HTTP routes authorize a real Better Auth session without crossing p
     await migrateIsolatedPostgres(target)
     await new Promise<void>((resolve, reject) => {
       const child = spawn(process.execPath, ["--no-env-file", "run", "tests/helpers/inbox-mobile-http.ts"], {
-        env: { ...process.env, DATABASE_URL: target.databaseUrl, BETTER_AUTH_URL: "http://localhost:3000", BETTER_AUTH_SECRET: "inbox-mobile-isolated-test-secret-not-for-production" }, stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, DATABASE_URL: target.databaseUrl, NODE_ENV: "production", BETTER_AUTH_URL: "https://www.trydatool.com", BETTER_AUTH_SECRET: "inbox-mobile-isolated-test-secret-not-for-production", GOOGLE_CLIENT_ID: "mobile-fixture.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "mobile-fixture-not-a-real-secret" }, stdio: ["ignore", "pipe", "pipe"],
       })
       let output = ""
       child.stdout.on("data", data => { output += data })

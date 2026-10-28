@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { widgetTranslationsSchema } from "./widget-i18n"
+import { shopifyActionSettingsSchema } from "./shopify"
 
 import type { JsonValue } from "@/src/lib/tracer/contracts"
 import { safeHttpUrlSchema } from "@/src/lib/build/urls"
@@ -212,7 +213,11 @@ export const actionDefinitionSchema = z.discriminatedUnion("type", [
   actionBaseSchema.extend({
     type: z.literal("integration"),
     connectionId: z.string().uuid(),
-    toolSlug: z.string().regex(/^[A-Z][A-Z0-9_]+$/).max(200),
+    toolSlug: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]+$/)
+      .max(200),
+    shopifySettings: shopifyActionSettingsSchema.optional(),
   }),
   actionBaseSchema.extend({
     type: z.literal("http"),
@@ -317,32 +322,46 @@ export const procedureStepSchema = z.discriminatedUnion("kind", [
 ])
 export type ProcedureStep = z.infer<typeof procedureStepSchema>
 
-export const procedureDefinitionSchema = z.object({
-  name: z.string().min(1).max(160),
-  description: z.string().max(2_000).default(""),
-  enabled: z.boolean().default(true),
-  trigger: procedureTriggerSchema,
-  instructions: z.string().max(32_000).optional(),
-  variables: z.record(z.string().max(120), z.json()).default({}),
-  steps: z.array(procedureStepSchema).max(15).default([]),
-  branches: z
-    .array(
-      z.object({
-        id: z.string().min(1).max(120),
-        condition: z.string().min(1).max(2_000),
-        steps: z.array(procedureStepSchema).max(15),
+export const procedureDefinitionSchema = z
+  .object({
+    name: z.string().min(1).max(160),
+    description: z.string().max(2_000).default(""),
+    enabled: z.boolean().default(true),
+    trigger: procedureTriggerSchema,
+    instructions: z.string().max(32_000).optional(),
+    variables: z.record(z.string().max(120), z.json()).default({}),
+    steps: z.array(procedureStepSchema).max(15).default([]),
+    branches: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(120),
+          condition: z.string().min(1).max(2_000),
+          steps: z.array(procedureStepSchema).max(15),
+        })
+      )
+      .max(5)
+      .default([]),
+    actionRefs: z.array(z.string().min(1).max(120)).max(100).default([]),
+  })
+  .superRefine((definition, context) => {
+    const hasInstructions = Boolean(definition.instructions?.trim())
+    if (!hasInstructions && !definition.steps.length)
+      context.addIssue({
+        code: "custom",
+        path: ["instructions"],
+        message: "Add skill instructions or at least one structured step.",
       })
+    if (
+      hasInstructions &&
+      (definition.steps.length || definition.branches.length)
     )
-    .max(5)
-    .default([]),
-  actionRefs: z.array(z.string().min(1).max(120)).max(100).default([]),
-}).superRefine((definition, context) => {
-  const hasInstructions = Boolean(definition.instructions?.trim())
-  if (!hasInstructions && !definition.steps.length)
-    context.addIssue({ code: "custom", path: ["instructions"], message: "Add skill instructions or at least one structured step." })
-  if (hasInstructions && (definition.steps.length || definition.branches.length))
-    context.addIssue({ code: "custom", path: ["steps"], message: "Use skill instructions or structured steps, not both." })
-})
+      context.addIssue({
+        code: "custom",
+        path: ["steps"],
+        message: "Use skill instructions or structured steps, not both.",
+      })
+  })
+
 export type ProcedureDefinition = z.infer<typeof procedureDefinitionSchema>
 
 export type ProcedureRecord = {

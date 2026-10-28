@@ -22,6 +22,7 @@ import { buildCall, buildOperations, listItems } from "../shared/build-api"
 import type { WidgetDefinition, WidgetRecord } from "@/src/lib/build/contracts"
 import { WidgetEditor } from "./widget-editor"
 import { WidgetTemplates } from "./widget-templates"
+import { useWidgetWebMcp } from "./use-widget-webmcp"
 
 export function WidgetsTab({
   agentId,
@@ -30,6 +31,7 @@ export function WidgetsTab({
   agentId: string
   onDefinitionDirty?: () => void
 }) {
+  useWidgetWebMcp(agentId)
   const load = useCallback(
     (signal: AbortSignal) =>
       buildCall<unknown>(

@@ -11,6 +11,8 @@ const previousEnvironment = {
   RESEND_API_KEY: process.env.RESEND_API_KEY,
   RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
   AUTH_ALLOWED_DOMAINS: process.env.AUTH_ALLOWED_DOMAINS,
+  DATOOL_CMS_ENABLED: process.env.DATOOL_CMS_ENABLED,
+  DATOOL_GA_MEASUREMENT_ID: process.env.DATOOL_GA_MEASUREMENT_ID,
 }
 let messages: { to: string[]; text: string; subject: string }[]
 let deliveryFails = false
@@ -19,6 +21,8 @@ beforeEach(() => {
   process.env.RESEND_API_KEY = "resend-test-key"
   process.env.RESEND_FROM_EMAIL = "Datool <signin@example.com>"
   process.env.AUTH_ALLOWED_DOMAINS = "example.com"
+  process.env.DATOOL_CMS_ENABLED = "true"
+  process.env.DATOOL_GA_MEASUREMENT_ID = "G-TEST"
   messages = []
   deliveryFails = false
   globalThis.fetch = (async (input, init) => {
@@ -82,14 +86,27 @@ function setup(rateLimit = false) {
 
 test("delivers a hashed, one-use link that creates a verified session and preserves the destination", async () => {
   const { auth, records, requestLink, link } = setup()
-  expect((await requestLink(" Alice@Example.com ")).status).toBe(200)
+  const requested = await requestLink(" Alice@Example.com ")
+  expect(requested.status).toBe(200)
+  expect(
+    requested.headers
+      .getSetCookie()
+      .some((value) => value.startsWith("datool_signup="))
+  ).toBe(false)
   expect(messages[0].to).toEqual(["alice@example.com"])
   expect(messages[0].subject).toBe("Sign in to Datool")
   const token = new URL(link()).searchParams.get("token")!
   expect(JSON.stringify(records.verification)).not.toContain(token)
   expect(records.user).toHaveLength(0)
-  const response = await auth.handler(new Request(link()))
+  const response = await auth.handler(
+    new Request(link(), { headers: { cookie: "datool_analytics=granted" } })
+  )
   expect(response.status).toBe(302)
+  expect(
+    response.headers
+      .getSetCookie()
+      .some((value) => value.startsWith("datool_signup=email;"))
+  ).toBe(true)
   expect(response.headers.get("location")).toBe(`${origin}/p/support/traces`)
   expect(records.user[0].emailVerified).toBe(true)
   const cookie = response.headers
@@ -103,6 +120,13 @@ test("delivers a hashed, one-use link that creates a verified session and preser
   const reused = await auth.handler(new Request(link()))
   expect(reused.headers.get("location")).toContain("error=INVALID_TOKEN")
   expect(records.session).toHaveLength(1)
+  await requestLink()
+  const returning = await auth.handler(new Request(link()))
+  expect(
+    returning.headers
+      .getSetCookie()
+      .some((value) => value.startsWith("datool_signup="))
+  ).toBe(false)
 })
 
 test("expired links cannot create a session", async () => {
@@ -187,4 +211,28 @@ test("limits repeated requests and rejects external redirect destinations", asyn
   ).toBe(403)
   expect(messages).toHaveLength(sent)
   expect(records.session).toHaveLength(0)
+})
+
+test("mobile sign-in returns a session cookie through the trusted native callback", async () => {
+  const { auth, requestLink, link } = setup()
+  expect(
+    (
+      await requestLink(
+        "alice@example.com",
+        "datool-inbox://auth-callback?state=fixture"
+      )
+    ).status
+  ).toBe(200)
+  const response = await auth.handler(new Request(link()))
+  expect(response.status).toBe(302)
+  const callback = new URL(response.headers.get("location")!)
+  expect(callback.protocol).toBe("datool-inbox:")
+  expect(callback.host).toBe("auth-callback")
+  expect(callback.searchParams.get("state")).toBe("fixture")
+  const cookie = callback.searchParams.get("cookie")!
+  expect(cookie).toContain("better-auth.session_token=")
+  const session = await auth.handler(
+    new Request(`${origin}/api/auth/get-session`, { headers: { cookie } })
+  )
+  expect((await session.json()).user.email).toBe("alice@example.com")
 })
