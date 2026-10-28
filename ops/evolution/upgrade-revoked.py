@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tarfile
 from datetime import datetime, timezone
 
 APP = 'datool-evolution'
@@ -22,6 +23,36 @@ META = r'''
  process.stdout.write(JSON.stringify({version,instances:items.map(i=>({name:i.name,state:i.connectionStatus,reason:Number(i.disconnectionReasonCode)}))}));
 })().catch(()=>process.exit(1));
 '''
+
+def archive_image_ids(archive, manifest):
+    """Legacy Docker IDs use config digests; containerd may use manifest digests."""
+    expected=manifest['imageId']
+    with tarfile.open(archive,'r:gz') as tar:
+        def read(name):
+            member=tar.getmember(name)
+            if not member.isfile() or member.size>4*1024*1024:
+                raise RuntimeError('Invalid image metadata in archive')
+            return tar.extractfile(member).read()
+        entries=json.loads(read('manifest.json'))
+        if len(entries)!=1 or manifest['image'] not in entries[0].get('RepoTags',[]):
+            raise RuntimeError('Archive tag does not match reviewed image')
+        config=read(entries[0]['Config'])
+        if 'sha256:'+hashlib.sha256(config).hexdigest()!=expected or json.loads(config).get('architecture')!='amd64':
+            raise RuntimeError('Archive configuration identity or architecture mismatch')
+        ids={expected}
+        index=json.loads(read('index.json'))
+        descriptors=index.get('manifests',[])
+        if len(descriptors)!=1:
+            raise RuntimeError('Expected a single image manifest in archive')
+        descriptor=descriptors[0]
+        digest=descriptor.get('digest','')
+        if not re.fullmatch(r'sha256:[a-f0-9]{64}',digest):
+            raise RuntimeError('Invalid archive manifest digest')
+        raw=read('blobs/sha256/'+digest.split(':')[1])
+        if 'sha256:'+hashlib.sha256(raw).hexdigest()!=digest or json.loads(raw).get('config',{}).get('digest')!=expected:
+            raise RuntimeError('Archive manifest does not identify the reviewed configuration')
+        ids.add(digest)
+        return ids
 
 def main():
     if os.geteuid()!=0 or len(sys.argv)!=2:
@@ -70,11 +101,13 @@ def main():
         with archive.open('rb') as src:
             for chunk in iter(lambda:src.read(1024*1024),b''):digest.update(chunk)
         if digest.hexdigest()!=manifest['sha256']:raise RuntimeError('Image archive checksum mismatch')
-        print('Verified image archive. Loading tested image.',flush=True)
+        expected_ids=archive_image_ids(archive,manifest)
+        print('Verified image archive and configuration. Loading tested image.',flush=True)
         run(['docker','load','-i',str(archive)],600)
         info=json.loads(run(['docker','image','inspect',manifest['image']]))[0]
-        if info['Id']!=manifest['imageId'] or info['Architecture']!='amd64':
-            raise RuntimeError('Image identity or architecture mismatch')
+        if info['Id'] not in expected_ids or info['Architecture']!='amd64':
+            raise RuntimeError('Image identity or architecture mismatch: '+str(info.get('Id'))+' / '+str(info.get('Architecture')))
+        print('Verified loaded image: '+info['Id']+' / amd64',flush=True)
         labels=info['Config'].get('Labels') or {}
         if labels.get('org.datool.evolution.baileys')!='7.0.0-rc14' or labels.get('org.datool.evolution.base')!='2.3.7':
             raise RuntimeError('Unexpected Evolution/Baileys release labels')
