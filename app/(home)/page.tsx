@@ -18,7 +18,7 @@ import { MarketingShell } from "@/components/cms/marketing-shell"
 import { cmsEnabled } from "@/lib/cms/config"
 import LandingPage, {
   generateMetadata as landingMetadata,
-} from "@/app/(marketing)/landing-page/page"
+} from "@/app/(light)/landing-page/page"
 
 export const dynamic = "force-dynamic"
 

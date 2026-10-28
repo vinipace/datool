@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { PageBlocks } from "@/components/cms/page-blocks"
+import { HomePage } from "@/components/cms/home-page"
 import { getPublishedLanding } from "@/lib/cms/content"
 import { cmsMetadata } from "@/lib/cms/metadata"
 import { StructuredData } from "@/components/cms/structured-data"
@@ -19,7 +19,7 @@ export default async function LandingPage() {
       {page.layout[0]?.blockType !== "hero" && (
         <h1 className="pt-16 text-4xl font-semibold">{page.title}</h1>
       )}
-      <PageBlocks blocks={page.layout} landing />
+      <HomePage blocks={page.layout} />
     </>
   )
 }

@@ -298,6 +298,77 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The home page frames the whole window and adds the app's area tabs. */
+.preview[data-areas="true"] {
+  left: 0;
+  width: 100%;
+  transform: none;
+}
+
+.preview[data-areas="true"] .stage {
+  height: 640px;
+  border-bottom: 0;
+  overflow: visible;
+}
+
+.preview[data-areas="true"] .backdrop {
+  display: none;
+}
+
+.preview[data-areas="true"] .window {
+  width: 100%;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.areas {
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.areaNavigation {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.headerAreas {
+  display: none;
+}
+
+.areaContent {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.areaContent > .panels {
+  flex: 1;
+}
+
+.evalSummary {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+@media (min-width: 1200px) {
+  .panels[data-area="improve"] {
+    grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  }
+  .panels[data-area="build"] {
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr);
+  }
+}
+
+.conversation {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 @media (max-width: 1199px) {
   .sidebar {
     width: 160px;
@@ -344,6 +415,13 @@
     height: 620px;
   }
   .sidebar {
+    display: none;
+  }
+  .headerAreas {
+    display: block;
+    margin-left: auto;
+  }
+  .headerAreas + .exampleLabel {
     display: none;
   }
   .inspectorHeader .completed,

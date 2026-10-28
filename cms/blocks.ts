@@ -38,6 +38,15 @@ export const pageBlocks: Block[] = [
         fields: [
           { name: "title", type: "text", required: true },
           { name: "description", type: "textarea", required: true },
+          {
+            ...href,
+            required: false,
+            validate: (value: unknown) =>
+              !value ||
+              safeHref(value) ||
+              "Use a relative path, anchor, or HTTP(S)/email link.",
+            admin: { description: "Optional page the item links to." },
+          },
         ],
       },
     ],

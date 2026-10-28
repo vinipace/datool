@@ -1,7 +1,18 @@
 import nextEnv from "@next/env"
 import { cmsSeedOptions } from "./cms-seed-options"
-import { faqContent, landingBlocks, richText } from "../cms/seed-content"
+import {
+  faqContent,
+  homeFaqSlugs,
+  landingBlocks,
+  landingMeta,
+  observeFaqSlugs,
+  richText,
+} from "../cms/seed-content"
 import { productSeedPages } from "../cms/product-content"
+import {
+  agentFaqContent,
+  agentLandingContent,
+} from "../cms/agent-landing-content"
 
 nextEnv.loadEnvConfig(process.cwd())
 const { dryRun, includeDraftExample } = cmsSeedOptions(
@@ -14,8 +25,11 @@ const { getPayload } = await import("payload")
 const { default: config } = await import("../payload.config")
 const cms = await getPayload({ config })
 try {
-  const ids: number[] = []
-  for (const [order, faq] of faqContent.entries()) {
+  const ids = new Map<string, number>()
+  const faqIds = (slugs: string[]) =>
+    slugs.flatMap((slug) => ids.get(slug) ?? [])
+  // Agent questions follow the general ones in the FAQ index.
+  for (const [order, faq] of [...faqContent, ...agentFaqContent].entries()) {
     const existing = (
       await cms.find({
         collection: "faqs",
@@ -37,7 +51,7 @@ try {
               _status: "published",
             },
           }))
-    if (doc) ids.push(doc.id)
+    if (doc) ids.set(faq.slug, doc.id)
     console.log(
       `${existing ? "Preserved" : dryRun ? "Would create" : "Created"} FAQ: ${faq.slug}`
     )
@@ -48,13 +62,9 @@ try {
       await cms.updateGlobal({
         slug: "landing-page",
         data: {
-          title: "Understand and improve your AI",
-          layout: landingBlocks(ids),
+          ...landingMeta,
+          layout: landingBlocks(faqIds(homeFaqSlugs)),
           _status: "published",
-          seo: {
-            description:
-              "Trace AI workflows, evaluate real examples, and measure quality with Datool.",
-          },
         },
       })
     console.log(`${dryRun ? "Would create" : "Created"} landing page`)
@@ -73,6 +83,31 @@ try {
       })
     console.log(`${dryRun ? "Would create" : "Created"} FAQ page`)
   } else console.log("Preserved FAQ page")
+  for (const [slug, content] of Object.entries(agentLandingContent)) {
+    const existing = await cms.find({
+      collection: "agent-landings",
+      where: { slug: { equals: slug } },
+      draft: true,
+      limit: 1,
+    })
+    if (existing.docs.length === 0) {
+      if (!dryRun)
+        await cms.create({
+          collection: "agent-landings",
+          data: {
+            ...content,
+            faq: {
+              title: content.faq.title,
+              items: faqIds(content.faq.items.map((item) => item.slug)),
+            },
+            _status: "published",
+          },
+        })
+      console.log(
+        `${dryRun ? "Would create" : "Created"} ${slug} agent landing`
+      )
+    } else console.log(`Preserved ${slug} agent landing`)
+  }
   for (const slug of includeDraftExample
     ? ["how-it-works", "draft-example"]
     : ["how-it-works"]) {
@@ -123,7 +158,7 @@ try {
       })
     console.log(`${dryRun ? "Would create" : "Created"} page: ${slug}`)
   }
-  for (const page of productSeedPages) {
+  for (const page of productSeedPages(faqIds(observeFaqSlugs))) {
     const existing = await cms.find({
       collection: "pages",
       where: { slug: { equals: page.slug } },

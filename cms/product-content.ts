@@ -6,7 +6,7 @@ import {
   productPageSlug,
   type ProductFeature,
 } from "../lib/marketing/product"
-import { richText } from "./seed-content"
+import { observeStoryBlocks, richText } from "./seed-content"
 
 type FeatureCopy = {
   title: string
@@ -407,78 +407,100 @@ const pillarCopy: Record<
 
 // Four editable pillar pages. Feature slugs remain stable section anchors and
 // compatibility redirects; the seed preserves existing editorial content.
-export const productSeedPages: Pick<
-  Page,
-  "slug" | "title" | "layout" | "seo" | "_status"
->[] = productPillars.map((pillar) => {
-  const content = pillarCopy[pillar.slug]
-  const features = productFeatures.filter(
-    (feature) =>
-      feature.group === pillar.name ||
-      (pillar.slug === "observe" && feature.slug === "dashboards")
-  )
-  return {
-    slug: productPageSlug(pillar.slug),
-    title: pillar.name,
-    _status: "published",
-    seo: { title: `${pillar.name} with Datool`, description: pillar.summary },
-    layout: [
-      {
-        blockType: "hero",
-        eyebrow: pillar.name,
-        title: content.title,
-        description: content.description,
-        actions: [
-          { label: "Start building", href: "/sign-up" },
-          { label: "Read the docs", href: pillar.docs },
-        ],
-      },
-      {
-        blockType: "features",
-        blockName: "workflow",
-        title: content.workflowTitle,
-        items: content.workflow.map(([title, description]) => ({
-          title,
-          description,
-        })),
-      },
-      ...features.flatMap((feature): Page["layout"] => {
-        const detail = copy[feature.slug]
-        return [
-          {
-            blockType: "hero",
-            blockName: feature.slug,
-            eyebrow: feature.name,
-            title: detail.title,
-            description: detail.description,
-            actions: [
-              { label: `${feature.name} documentation`, href: feature.docs },
-            ],
-          },
-          {
-            blockType: "features",
-            blockName: `${feature.slug}-capabilities`,
-            title: `Inside ${feature.name.toLowerCase()}`,
-            items: detail.capabilities.map(([title, description]) => ({
-              title,
-              description,
-            })),
-          },
-          {
-            blockType: "richContent",
-            blockName: `${feature.slug}-example`,
-            content: richText(detail.example),
-          },
-        ]
-      }),
-      {
-        blockType: "callToAction",
-        title: "Give your next change something to prove.",
-        description:
-          "Build, observe, evaluate, and discover in one workspace. Start with a single request and follow the evidence.",
-        label: "Get started with Datool",
-        href: "/sign-up",
-      },
-    ],
-  }
-})
+// Observe opens with the original home page story and its FAQ.
+export const productSeedPages = (
+  observeFaqIds: number[] = []
+): Pick<Page, "slug" | "title" | "layout" | "seo" | "_status">[] =>
+  productPillars.map((pillar) => {
+    const content = pillarCopy[pillar.slug]
+    const features = productFeatures.filter(
+      (feature) =>
+        feature.group === pillar.name ||
+        (pillar.slug === "observe" && feature.slug === "dashboards")
+    )
+    return {
+      slug: productPageSlug(pillar.slug),
+      title: pillar.name,
+      _status: "published",
+      seo: { title: `${pillar.name} with Datool`, description: pillar.summary },
+      layout: [
+        ...(pillar.slug === "observe"
+          ? observeStoryBlocks()
+          : [
+              {
+                blockType: "hero" as const,
+                eyebrow: pillar.name,
+                title: content.title,
+                description: content.description,
+                actions: [
+                  { label: "Start building", href: "/sign-up" },
+                  { label: "Read the docs", href: pillar.docs },
+                ],
+              },
+            ]),
+        {
+          blockType: "features",
+          blockName: "workflow",
+          title: content.workflowTitle,
+          items: content.workflow.map(([title, description]) => ({
+            title,
+            description,
+          })),
+        },
+        ...features.flatMap((feature): Page["layout"] => {
+          const detail = copy[feature.slug]
+          return [
+            {
+              blockType: "hero",
+              blockName: feature.slug,
+              eyebrow: feature.name,
+              title: detail.title,
+              description: detail.description,
+              actions: [
+                { label: `${feature.name} documentation`, href: feature.docs },
+              ],
+            },
+            {
+              blockType: "features",
+              blockName: `${feature.slug}-capabilities`,
+              title: `Inside ${feature.name.toLowerCase()}`,
+              items: detail.capabilities.map(([title, description]) => ({
+                title,
+                description,
+              })),
+            },
+            {
+              blockType: "richContent",
+              blockName: `${feature.slug}-example`,
+              content: richText(detail.example),
+            },
+          ]
+        }),
+        ...(pillar.slug === "observe" && observeFaqIds.length
+          ? [
+              {
+                blockType: "faq" as const,
+                title: "A few things you might be wondering.",
+                items: observeFaqIds,
+              },
+            ]
+          : []),
+        pillar.slug === "observe"
+          ? {
+              blockType: "callToAction",
+              title: "Your next improvement starts with a trace.",
+              description: "Connect your application and take a closer look.",
+              label: "Open Datool",
+              href: "/sign-in",
+            }
+          : {
+              blockType: "callToAction",
+              title: "Give your next change something to prove.",
+              description:
+                "Build, observe, evaluate, and discover in one workspace. Start with a single request and follow the evidence.",
+              label: "Get started with Datool",
+              href: "/sign-up",
+            },
+      ],
+    }
+  })

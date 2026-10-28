@@ -13,7 +13,7 @@ import {
   PanelLeft,
   X,
 } from "lucide-react"
-import { productIcons } from "@/components/product-icons"
+import { productIcons, selectedProductIcons } from "@/components/product-icons"
 import { pageTitles } from "@/lib/page-metadata"
 import { productFeatures, productFeatureHref } from "@/lib/marketing/product"
 import datoolLogo from "@/app/icon.svg"
@@ -26,10 +26,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PayloadSection } from "@/components/ui/payload-section"
 import { StructuredValueViewer } from "@/components/ui/structured-value-viewer"
 import { CollectionPanel } from "@/components/tracer/collection-panel"
@@ -49,6 +52,8 @@ import {
 import { usageDisplay } from "@/components/tracer/usage-display"
 import { readModel } from "@/src/lib/tracer/usage"
 import { platformPreviewTraces } from "./platform-preview-fixtures"
+import { BuildPreview } from "./platform-preview-build"
+import { ImprovePreview } from "./platform-preview-improve"
 import {
   defaultTableSettings,
   type CollectionTableSettings,
@@ -79,6 +84,132 @@ const navigation = (
     href: key === "traces" ? "#platform-preview" : productFeatureHref(feature),
   }
 })
+
+// The app's Observe and Build sidebars, linking to the matching public pages.
+const featureHref = (slug: string) => {
+  const feature = productFeatures.find((item) => item.slug === slug)
+  return feature ? productFeatureHref(feature) : "#platform-preview"
+}
+const areaNavigation = {
+  observe: [
+    {
+      label: null,
+      routes: [
+        { name: "Home", icon: productIcons.home, href: "#platform-preview" },
+      ],
+    },
+    {
+      label: "Observe",
+      routes: [
+        {
+          name: pageTitles.traces,
+          icon: productIcons.traces,
+          href: "#platform-preview",
+          page: "observe",
+        },
+        {
+          name: pageTitles.dashboards,
+          icon: productIcons.dashboards,
+          href: featureHref("dashboards"),
+        },
+        {
+          name: "Agent performance",
+          icon: productIcons.agents,
+          href: featureHref("agents"),
+        },
+        {
+          name: pageTitles.workflows,
+          icon: productIcons.workflows,
+          href: featureHref("workflows"),
+        },
+        {
+          name: pageTitles.sessions,
+          icon: productIcons.sessions,
+          href: featureHref("sessions"),
+        },
+        {
+          name: pageTitles.reports,
+          icon: productIcons.reports,
+          href: "/product/discover",
+        },
+        {
+          name: pageTitles.alerts,
+          icon: productIcons.alerts,
+          href: featureHref("alerts"),
+        },
+      ],
+    },
+    {
+      label: "Improve",
+      routes: [
+        {
+          name: pageTitles.playground,
+          icon: productIcons.playground,
+          href: featureHref("playground"),
+        },
+        {
+          name: pageTitles.evals,
+          icon: productIcons.evals,
+          href: "#platform-preview",
+          page: "improve",
+        },
+        {
+          name: pageTitles.datasets,
+          icon: productIcons.datasets,
+          href: featureHref("datasets"),
+        },
+        {
+          name: pageTitles.scorers,
+          icon: productIcons.scorers,
+          href: featureHref("scorers"),
+        },
+        {
+          name: pageTitles.reviews,
+          icon: productIcons.reviews,
+          href: featureHref("reviews"),
+        },
+        {
+          name: pageTitles.humanScores,
+          icon: productIcons.humanScores,
+          href: featureHref("human-scores"),
+        },
+        {
+          name: pageTitles.prompts,
+          icon: productIcons.prompts,
+          href: featureHref("prompts"),
+        },
+      ],
+    },
+  ],
+  build: [
+    {
+      label: null,
+      routes: [
+        {
+          name: pageTitles.buildAgents,
+          icon: productIcons.buildAgents,
+          href: "#agents",
+        },
+        {
+          name: pageTitles.buildConversations,
+          icon: selectedProductIcons.buildConversations,
+          href: "#platform-preview",
+          page: "build",
+        },
+        {
+          name: pageTitles.buildInbox,
+          icon: productIcons.buildInbox,
+          href: "/agents/whatsapp-support",
+        },
+        {
+          name: pageTitles.buildContacts,
+          icon: productIcons.buildContacts,
+          href: "/agents/website-sales",
+        },
+      ],
+    },
+  ],
+} as const
 
 const traces = platformPreviewTraces
 
@@ -139,24 +270,45 @@ function PreviewBackdrop() {
 }
 
 /** The app's real table, span tree, timeline and payload controls, using public example data. */
-export function PlatformPreview() {
+export type PreviewPage = "build" | "observe" | "improve"
+
+export function PlatformPreview({
+  areas = false,
+  page: controlledPage,
+  onPageChange,
+}: {
+  /** Show the app's Observe and Build tabs, as on the home page. */
+  areas?: boolean
+  /** The page shown in areas mode; Improve is the Evals page under Observe. */
+  page?: PreviewPage
+  onPageChange?: (page: PreviewPage) => void
+}) {
+  const [ownPage, setOwnPage] = useState<PreviewPage>("observe")
+  const page = controlledPage ?? ownPage
+  const setPage = (next: PreviewPage) => {
+    setOwnPage(next)
+    onPageChange?.(next)
+  }
+  const area = page === "build" ? "build" : "observe"
   const [selectedTraceId, setSelectedTraceId] = useState(traces[0].id)
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(
     "generate"
   )
   const [query, setQuery] = useState("")
-  const [tableSettings, setTableSettings] = useState<CollectionTableSettings>(() => ({
-    ...defaultTableSettings,
-    columnSizing: {
-      name: 168,
-      input: 108,
-      output: 108,
-      duration: 88,
-      inputTokens: 120,
-      outputTokens: 128,
-      cost: 136,
-    },
-  }))
+  const [tableSettings, setTableSettings] = useState<CollectionTableSettings>(
+    () => ({
+      ...defaultTableSettings,
+      columnSizing: {
+        name: 168,
+        input: 108,
+        output: 108,
+        duration: 88,
+        inputTokens: 120,
+        outputTokens: 128,
+        cost: 136,
+      },
+    })
+  )
   const [tab, setTab] = useState<"trace" | "timeline">("trace")
   const [mobileOpen, setMobileOpen] = useState(false)
   const [navigatorOpen, setNavigatorOpen] = useState(false)
@@ -208,306 +360,385 @@ export function PlatformPreview() {
       .includes(query.toLowerCase())
   )
 
+  const observePanels = (
+    <div className={styles.panels} data-mobile-open={mobileOpen}>
+      <div className={styles.traceList}>
+        <CollectionPanel label="Example traces" displayIconOnly>
+          <TableViewControls>
+            <HeaderSlot name="filter">
+              <CollectionSearch
+                label="Search example traces"
+                value={query}
+                onChange={setQuery}
+              />
+            </HeaderSlot>
+            <TraceListTable
+              settings={tableSettings}
+              onSettingsChange={setTableSettings}
+              columns={[
+                "name",
+                "input",
+                "output",
+                "duration",
+                "inputTokens",
+                "outputTokens",
+                "cost",
+              ]}
+              enableCardView={false}
+              emptyMessage="No matching example traces."
+              rowLabel={(item) => `Inspect example: ${item.name}`}
+              onOpenTrace={(id, trigger) => {
+                returnFocusRef.current = trigger
+                setSelectedTraceId(id)
+                const opened = traces.find((item) => item.id === id)!
+                setSelectedSpanId(
+                  opened.spans.find((span) => span.kind === "llm")?.id ??
+                    opened.spans[0].id
+                )
+                setNavigatorOpen(false)
+                setMobileOpen(true)
+              }}
+              selectedTraceId={trace.id}
+              traces={filtered}
+            />
+          </TableViewControls>
+        </CollectionPanel>
+      </div>
+
+      <section
+        className={styles.inspector}
+        aria-label="Example trace inspector"
+        onKeyDown={(event) => {
+          if (
+            event.key === "Escape" &&
+            !event.defaultPrevented &&
+            !navigatorOpen &&
+            !document.querySelector(
+              '[role="dialog"], [role="menu"], [role="listbox"]'
+            )
+          ) {
+            event.preventDefault()
+            closeTrace()
+          }
+        }}
+      >
+        <div className={styles.inspectorHeader}>
+          <SpanKindIcon kind={getTraceIconKind(trace)} />
+          <strong>{trace.name}</strong>
+          <span className={styles.inspectorMetadata}>
+            <Clock3 size={12} /> {formatTraceDuration(trace)}
+          </span>
+          <span
+            className={`${styles.inspectorMetadata} ${trace.status === "errored" ? styles.errored : styles.completed}`}
+          >
+            {trace.status === "errored" ? (
+              <CircleAlert size={12} />
+            ) : (
+              <Check size={12} />
+            )}
+            {statusLabel(trace.status)}
+          </span>
+          <Button
+            ref={closeButtonRef}
+            className={styles.mobileClose}
+            variant="ghost-muted"
+            size="icon-sm"
+            aria-label="Close trace inspector"
+            onClick={closeTrace}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        </div>
+        <div
+          className={styles.tabs}
+          role="group"
+          aria-label="Example trace view"
+        >
+          <Button
+            variant={tab === "trace" ? "secondary" : "ghost-muted"}
+            size="sm"
+            aria-pressed={tab === "trace"}
+            onClick={() => setTab("trace")}
+          >
+            <ListTree />
+            Trace
+          </Button>
+          <Button
+            variant={tab === "timeline" ? "secondary" : "ghost-muted"}
+            size="sm"
+            aria-pressed={tab === "timeline"}
+            onClick={() => setTab("timeline")}
+          >
+            <productIcons.traces />
+            Timeline
+          </Button>
+          <span>
+            {trace.spans.length} {trace.spans.length === 1 ? "span" : "spans"}
+          </span>
+        </div>
+        <Dialog
+          modal={false}
+          open={navigatorOpen}
+          onOpenChange={setNavigatorOpen}
+        >
+          <div className={styles.mobileNavigation}>
+            <DialogTrigger asChild>
+              <Button variant="ghost-muted" size="sm">
+                <ListTree aria-hidden="true" />
+                {tab === "timeline" ? "Browse timeline" : "Browse traces"}
+              </Button>
+            </DialogTrigger>
+          </div>
+          <DialogContent
+            variant="sidebar"
+            container={previewContainer}
+            className={`${styles.navigatorDrawer} gap-0 p-0`}
+          >
+            <div className="shrink-0 border-b border-border p-3">
+              <DialogTitle>
+                {tab === "timeline" ? "Timeline" : "Trace navigator"}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                Select a trace or span to view its details.
+              </DialogDescription>
+            </div>
+            <div className="scrollbar-hidden min-h-0 flex-1 overflow-hidden px-1 pt-2">
+              {tab === "trace" ? (
+                <SpanNavigator
+                  key={trace.id}
+                  scrollRef={mobileScrollRef}
+                  trace={trace}
+                  selectedSpanId={selected.id}
+                  onSelectSpan={selectMobileSpan}
+                />
+              ) : (
+                <TraceTimeline
+                  trace={trace}
+                  selectedSpanId={selected.id}
+                  onSelectSpan={selectMobileSpan}
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+        <div className={styles.traceWorkspace}>
+          <div className={styles.spanNavigation}>
+            {tab === "trace" ? (
+              <SpanNavigator
+                key={trace.id}
+                scrollRef={scrollRef}
+                trace={trace}
+                selectedSpanId={selected.id}
+                onSelectSpan={setSelectedSpanId}
+              />
+            ) : (
+              <TraceTimeline
+                trace={trace}
+                selectedSpanId={selected.id}
+                onSelectSpan={setSelectedSpanId}
+              />
+            )}
+          </div>
+          <div
+            className={styles.details}
+            aria-label="Example span details"
+            aria-live="polite"
+            tabIndex={0}
+          >
+            <div className={styles.spanHeading}>
+              <SpanKindIcon kind={selected.kind} />
+              <h2>{selected.name}</h2>
+            </div>
+            <div className={styles.spanMetadata}>
+              <span>
+                <Clock3 size={12} />
+                {formatCompactDuration(selected.durationMs)}
+              </span>
+              <span>{readModel(selected.attributes) ?? selected.kind}</span>
+            </div>
+            {selectedUsage.length > 0 && (
+              <dl className={styles.usage}>
+                {selectedUsage.map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            <PayloadSection
+              label="Input"
+              key={`${trace.id}-${selected.id}-input`}
+            >
+              <StructuredValueViewer
+                label="Example span input"
+                value={selected.input}
+              />
+            </PayloadSection>
+            <PayloadSection
+              label="Output"
+              key={`${trace.id}-${selected.id}-output`}
+            >
+              <StructuredValueViewer
+                label="Example span output"
+                value={selected.output}
+              />
+            </PayloadSection>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+
   return (
     <figure
       id="platform-preview"
       aria-label="Interactive Datool platform preview"
       className={styles.preview}
+      data-areas={areas}
     >
       <div className={styles.stage}>
         <PreviewBackdrop />
-        <div ref={setPreviewContainer} className={styles.window}>
-          <aside
-            className={styles.sidebar}
-            aria-label="Explore Datool features"
-          >
-            <div className={styles.workspace}>
-              <Image
-                src={datoolLogo}
-                alt=""
-                width={20}
-                height={20}
-                unoptimized
-              />
-              <span>Acme</span>
-              <ChevronsUpDown size={13} aria-hidden="true" />
-            </div>
-            <div className={styles.project}>
-              <span className={styles.projectIcon}>A</span>
-              <span>AI workflows</span>
-              <ChevronDown size={13} aria-hidden="true" />
-            </div>
-            <SidebarMenu className="gap-0.5 px-2">
-              {navigation.map(({ name, icon: Icon, href }, index) => (
-                <SidebarMenuItem key={name}>
-                  <SidebarMenuButton
-                    className="h-7 text-xs"
-                    isActive={index === 0}
-                    render={<Link href={href} prefetch={false} />}
-                  >
-                    <Icon />
-                    <span>{name}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-            <div className={styles.sidebarFooter}>
-              <SidebarMenuButton
-                className="h-7 text-xs"
-                render={<Link href="/docs" prefetch={false} />}
-              >
-                <productIcons.documentation />
-                <span>Documentation</span>
-              </SidebarMenuButton>
-              <div className={styles.account}>
-                <span>A</span>
+        <Tabs
+          asChild
+          value={area}
+          onValueChange={(value) =>
+            setPage(value === "build" ? "build" : "observe")
+          }
+        >
+          <div ref={setPreviewContainer} className={styles.window}>
+            <aside
+              className={styles.sidebar}
+              aria-label="Explore Datool features"
+            >
+              <div className={styles.workspace}>
+                <Image
+                  src={datoolLogo}
+                  alt=""
+                  width={20}
+                  height={20}
+                  unoptimized
+                />
                 <span>Acme</span>
-                <ChevronsUpDown size={13} />
+                <ChevronsUpDown size={13} aria-hidden="true" />
               </div>
-            </div>
-          </aside>
-
-          <div className={styles.application}>
-            <header className={styles.pageHeader}>
-              <PanelLeft size={16} aria-hidden="true" />
-              <span className={styles.headerDivider} />
-              <span>Traces</span>
-              <span className={styles.exampleLabel}>Example workspace</span>
-            </header>
-            <div className={styles.panels} data-mobile-open={mobileOpen}>
-              <div className={styles.traceList}>
-                <CollectionPanel label="Example traces" displayIconOnly>
-                  <TableViewControls>
-                    <HeaderSlot name="filter">
-                      <CollectionSearch
-                        label="Search example traces"
-                        value={query}
-                        onChange={setQuery}
-                      />
-                    </HeaderSlot>
-                    <TraceListTable
-                      settings={tableSettings}
-                      onSettingsChange={setTableSettings}
-                      columns={[
-                        "name",
-                        "input",
-                        "output",
-                        "duration",
-                        "inputTokens",
-                        "outputTokens",
-                        "cost",
-                      ]}
-                      enableCardView={false}
-                      emptyMessage="No matching example traces."
-                      rowLabel={(item) => `Inspect example: ${item.name}`}
-                      onOpenTrace={(id, trigger) => {
-                        returnFocusRef.current = trigger
-                        setSelectedTraceId(id)
-                        const opened = traces.find((item) => item.id === id)!
-                        setSelectedSpanId(
-                          opened.spans.find((span) => span.kind === "llm")
-                            ?.id ?? opened.spans[0].id
-                        )
-                        setNavigatorOpen(false)
-                        setMobileOpen(true)
-                      }}
-                      selectedTraceId={trace.id}
-                      traces={filtered}
-                    />
-                  </TableViewControls>
-                </CollectionPanel>
-              </div>
-
-              <section
-                className={styles.inspector}
-                aria-label="Example trace inspector"
-                onKeyDown={(event) => {
-                  if (
-                    event.key === "Escape" &&
-                    !event.defaultPrevented &&
-                    !navigatorOpen &&
-                    !document.querySelector(
-                      '[role="dialog"], [role="menu"], [role="listbox"]'
-                    )
-                  ) {
-                    event.preventDefault()
-                    closeTrace()
-                  }
-                }}
-              >
-                <div className={styles.inspectorHeader}>
-                  <SpanKindIcon kind={getTraceIconKind(trace)} />
-                  <strong>{trace.name}</strong>
-                  <span className={styles.inspectorMetadata}>
-                    <Clock3 size={12} /> {formatTraceDuration(trace)}
-                  </span>
-                  <span
-                    className={`${styles.inspectorMetadata} ${trace.status === "errored" ? styles.errored : styles.completed}`}
-                  >
-                    {trace.status === "errored" ? (
-                      <CircleAlert size={12} />
-                    ) : (
-                      <Check size={12} />
-                    )}
-                    {statusLabel(trace.status)}
-                  </span>
-                  <Button
-                    ref={closeButtonRef}
-                    className={styles.mobileClose}
-                    variant="ghost-muted"
-                    size="icon-sm"
-                    aria-label="Close trace inspector"
-                    onClick={closeTrace}
-                  >
-                    <X aria-hidden="true" />
-                  </Button>
-                </div>
-                <div
-                  className={styles.tabs}
-                  role="group"
-                  aria-label="Example trace view"
-                >
-                  <Button
-                    variant={tab === "trace" ? "secondary" : "ghost-muted"}
-                    size="sm"
-                    aria-pressed={tab === "trace"}
-                    onClick={() => setTab("trace")}
-                  >
-                    <ListTree />
-                    Trace
-                  </Button>
-                  <Button
-                    variant={tab === "timeline" ? "secondary" : "ghost-muted"}
-                    size="sm"
-                    aria-pressed={tab === "timeline"}
-                    onClick={() => setTab("timeline")}
-                  >
-                    <productIcons.traces />
-                    Timeline
-                  </Button>
-                  <span>
-                    {trace.spans.length}{" "}
-                    {trace.spans.length === 1 ? "span" : "spans"}
-                  </span>
-                </div>
-                <Dialog
-                  modal={false}
-                  open={navigatorOpen}
-                  onOpenChange={setNavigatorOpen}
-                >
-                  <div className={styles.mobileNavigation}>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost-muted" size="sm">
-                        <ListTree aria-hidden="true" />
-                        {tab === "timeline"
-                          ? "Browse timeline"
-                          : "Browse traces"}
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-                  <DialogContent
+              {areas ? (
+                <div className={styles.areas}>
+                  <TabsList
+                    aria-label="Workspace area"
                     variant="sidebar"
-                    container={previewContainer}
-                    className={`${styles.navigatorDrawer} gap-0 p-0`}
+                    className="grid grid-cols-2"
                   >
-                    <div className="shrink-0 border-b border-border p-3">
-                      <DialogTitle>
-                        {tab === "timeline" ? "Timeline" : "Trace navigator"}
-                      </DialogTitle>
-                      <DialogDescription className="sr-only">
-                        Select a trace or span to view its details.
-                      </DialogDescription>
-                    </div>
-                    <div className="scrollbar-hidden min-h-0 flex-1 overflow-hidden px-1 pt-2">
-                      {tab === "trace" ? (
-                        <SpanNavigator
-                          key={trace.id}
-                          scrollRef={mobileScrollRef}
-                          trace={trace}
-                          selectedSpanId={selected.id}
-                          onSelectSpan={selectMobileSpan}
-                        />
-                      ) : (
-                        <TraceTimeline
-                          trace={trace}
-                          selectedSpanId={selected.id}
-                          onSelectSpan={selectMobileSpan}
-                        />
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                <div className={styles.traceWorkspace}>
-                  <div className={styles.spanNavigation}>
-                    {tab === "trace" ? (
-                      <SpanNavigator
-                        key={trace.id}
-                        scrollRef={scrollRef}
-                        trace={trace}
-                        selectedSpanId={selected.id}
-                        onSelectSpan={setSelectedSpanId}
-                      />
-                    ) : (
-                      <TraceTimeline
-                        trace={trace}
-                        selectedSpanId={selected.id}
-                        onSelectSpan={setSelectedSpanId}
-                      />
-                    )}
-                  </div>
-                  <div
-                    className={styles.details}
-                    aria-label="Example span details"
-                    aria-live="polite"
-                    tabIndex={0}
-                  >
-                    <div className={styles.spanHeading}>
-                      <SpanKindIcon kind={selected.kind} />
-                      <h2>{selected.name}</h2>
-                    </div>
-                    <div className={styles.spanMetadata}>
-                      <span>
-                        <Clock3 size={12} />
-                        {formatCompactDuration(selected.durationMs)}
-                      </span>
-                      <span>
-                        {readModel(selected.attributes) ?? selected.kind}
-                      </span>
-                    </div>
-                    {selectedUsage.length > 0 && (
-                      <dl className={styles.usage}>
-                        {selectedUsage.map(([label, value]) => (
-                          <div key={label}>
-                            <dt>{label}</dt>
-                            <dd>{value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    )}
-                    <PayloadSection
-                      label="Input"
-                      key={`${trace.id}-${selected.id}-input`}
-                    >
-                      <StructuredValueViewer
-                        label="Example span input"
-                        value={selected.input}
-                      />
-                    </PayloadSection>
-                    <PayloadSection
-                      label="Output"
-                      key={`${trace.id}-${selected.id}-output`}
-                    >
-                      <StructuredValueViewer
-                        label="Example span output"
-                        value={selected.output}
-                      />
-                    </PayloadSection>
-                  </div>
+                    <TabsTrigger value="observe">Observe</TabsTrigger>
+                    <TabsTrigger value="build">Build</TabsTrigger>
+                  </TabsList>
                 </div>
-              </section>
+              ) : (
+                <div className={styles.project}>
+                  <span className={styles.projectIcon}>A</span>
+                  <span>AI workflows</span>
+                  <ChevronDown size={13} aria-hidden="true" />
+                </div>
+              )}
+              {areas ? (
+                <div className={styles.areaNavigation}>
+                  {areaNavigation[area].map((group, index) => (
+                    <SidebarGroup key={group.label ?? index} className="py-1">
+                      {group.label && (
+                        <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                      )}
+                      <SidebarMenu className="gap-0.5">
+                        {group.routes.map((route) => (
+                          <SidebarMenuItem key={route.name}>
+                            <SidebarMenuButton
+                              className="h-7 text-xs"
+                              isActive={"page" in route && route.page === page}
+                              onClick={(event) => {
+                                if (!("page" in route)) return
+                                event.preventDefault()
+                                setPage(route.page)
+                              }}
+                              render={
+                                <Link href={route.href} prefetch={false} />
+                              }
+                            >
+                              <route.icon />
+                              <span>{route.name}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenu>
+                    </SidebarGroup>
+                  ))}
+                </div>
+              ) : (
+                <SidebarMenu className="gap-0.5 px-2">
+                  {navigation.map(({ name, icon: Icon, href }, index) => (
+                    <SidebarMenuItem key={name}>
+                      <SidebarMenuButton
+                        className="h-7 text-xs"
+                        isActive={index === 0}
+                        render={<Link href={href} prefetch={false} />}
+                      >
+                        <Icon />
+                        <span>{name}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              )}
+              <div className={styles.sidebarFooter}>
+                <SidebarMenuButton
+                  className="h-7 text-xs"
+                  render={<Link href="/docs" prefetch={false} />}
+                >
+                  <productIcons.documentation />
+                  <span>Documentation</span>
+                </SidebarMenuButton>
+                <div className={styles.account}>
+                  <span>A</span>
+                  <span>Acme</span>
+                  <ChevronsUpDown size={13} />
+                </div>
+              </div>
+            </aside>
+
+            <div className={styles.application}>
+              <header className={styles.pageHeader}>
+                <PanelLeft size={16} aria-hidden="true" />
+                <span className={styles.headerDivider} />
+                <span>
+                  {!areas || page === "observe"
+                    ? "Traces"
+                    : page === "build"
+                      ? pageTitles.buildConversations
+                      : pageTitles.evals}
+                </span>
+                {areas && (
+                  <div className={styles.headerAreas}>
+                    <TabsList aria-label="Workspace area" variant="sidebar">
+                      <TabsTrigger value="observe">Observe</TabsTrigger>
+                      <TabsTrigger value="build">Build</TabsTrigger>
+                    </TabsList>
+                  </div>
+                )}
+                <span className={styles.exampleLabel}>Example workspace</span>
+              </header>
+              {areas ? (
+                <>
+                  <TabsContent value="observe" className={styles.areaContent}>
+                    {page === "improve" ? <ImprovePreview /> : observePanels}
+                  </TabsContent>
+                  <TabsContent value="build" className={styles.areaContent}>
+                    <BuildPreview />
+                  </TabsContent>
+                </>
+              ) : (
+                observePanels
+              )}
             </div>
           </div>
-        </div>
+        </Tabs>
       </div>
       <figcaption className="sr-only">
         Follow a sample request through Datool’s trace log and span inspector.

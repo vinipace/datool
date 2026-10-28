@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { productIcons } from "@/components/product-icons"
+import { agentPages } from "./agent-pages"
 import { productPillars } from "@/lib/marketing/product"
 
 // GitHub Octicons mark-github (MIT); see THIRD_PARTY_NOTICES.md.
@@ -54,6 +55,25 @@ function ProductLinks() {
       </DropdownMenuItem>
     )
   })
+}
+
+function AgentLinks() {
+  return agentPages.map(({ href, name, summary, Icon }) => (
+    <DropdownMenuItem key={href} asChild className="items-start gap-3 p-4">
+      <Link href={href}>
+        <Icon
+          className="mt-0.5 size-5 text-marketing-primary"
+          aria-hidden="true"
+        />
+        <span>
+          <span className="block font-medium">{name}</span>
+          <span className="mt-1 block text-xs leading-relaxed text-foreground-muted">
+            {summary}
+          </span>
+        </span>
+      </Link>
+    </DropdownMenuItem>
+  ))
 }
 
 const links = [
@@ -131,6 +151,22 @@ export function MarketingNavigation() {
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              Agents <ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={12}
+            className="w-[min(40rem,calc(100vw-2rem))] p-3"
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <AgentLinks />
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {links.map((link) => (
           <Button key={link.href} asChild variant="ghost" size="sm">
             <Link href={link.href}>{link.label}</Link>
@@ -168,6 +204,8 @@ export function MarketingNavigation() {
             className="w-[min(24rem,calc(100vw-2rem))] p-3"
           >
             <ProductLinks />
+            <DropdownMenuSeparator />
+            <AgentLinks />
             <DropdownMenuSeparator />
             {links.map((link) => (
               <DropdownMenuItem key={link.href} asChild>
