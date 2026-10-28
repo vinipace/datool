@@ -25,29 +25,42 @@ let mediaBase64 = "",
   mediaMime = "image/png"
 let transcriptions = 0,
   transcriptionMode = "ok"
+let gatewayReportedCost: number | undefined
 const realFetch = globalThis.fetch
-// Exercise the production multipart transport and credit ledger without a paid call.
+// Exercise the documented Gateway REST contract and real credit ledger without a paid call.
 globalThis.fetch = (async (input, init) => {
-  if (String(input) !== "https://api.openai.com/v1/audio/transcriptions")
+  if (String(input).startsWith("https://api.openai.com/"))
+    throw new Error(
+      "Direct OpenAI calls are forbidden for managed transcription"
+    )
+  if (
+    String(input) !== "https://ai-gateway.vercel.sh/v4/ai/transcription-model"
+  )
     return realFetch(input, init)
   transcriptions++
   assert.equal(
     new Headers(init?.headers).get("authorization"),
-    "Bearer synthetic-transcription"
+    "Bearer synthetic-project-gateway"
   )
-  const form = init?.body as FormData
-  assert.equal(form.get("model"), "gpt-transcribe")
-  const file = form.get("file") as Blob
-  const bytes = Buffer.from(await file.arrayBuffer())
+  const headers = new Headers(init?.headers)
+  assert.equal(headers.get("ai-model-id"), "openai/gpt-transcribe")
+  assert.equal(headers.get("ai-gateway-protocol-version"), "0.0.1")
+  assert.equal(headers.get("ai-transcription-model-specification-version"), "4")
+  assert.equal(headers.get("content-type"), "application/json")
+  const body = JSON.parse(String(init?.body))
+  assert.equal(body.mediaType, "audio/wav")
+  const bytes = Buffer.from(body.audio, "base64")
   assert.equal(bytes.toString("ascii", 0, 4), "RIFF")
   if (transcriptionMode === "timeout")
     throw new Error("synthetic lost response")
-  if (transcriptionMode === "rejected")
-    return Response.json({}, { status: 429 })
+  if (transcriptionMode.startsWith("rejected-"))
+    return Response.json({}, { status: Number(transcriptionMode.slice(9)) })
   return Response.json(
     {
       text: "Quero ver três produtos",
-      usage: { type: "duration", seconds: 1 },
+      providerMetadata: { gateway: { cost: gatewayReportedCost } },
+      durationInSeconds:
+        transcriptionMode === "missing-duration" ? undefined : 1.25,
     },
     { headers: { "x-request-id": "transcription-test" } }
   )
@@ -561,30 +574,35 @@ try {
   )
   failSend = false
   Object.assign(process.env, {
-    DATOOL_BILLING_ENABLED: "true",
-    DATOOL_MANAGED_EXECUTION_ENABLED: "true",
-    DATOOL_TRANSCRIPTION_OPENAI_API_KEY: "synthetic-transcription",
+    DATOOL_BILLING_ENABLED: "false",
+    DATOOL_MANAGED_EXECUTION_ENABLED: "false",
+    DATOOL_AI_GATEWAY_API_KEY: "must-not-use-server-key",
+    AI_GATEWAY_API_KEY: "wrong-fallback-key",
+    DATOOL_TRANSCRIPTION_OPENAI_API_KEY: "must-not-use-openai",
+    DATOOL_SCORER_OPENAI_API_KEY: "must-not-use-scorer",
   })
   const { executionCredits } =
     await import("../src/server/execution-credits/ledger")
   const { prepareEvolutionMedia } =
     await import("../src/server/build/channels/media")
-  await database.execute(
-    sql`INSERT INTO organization_billing(organization_id,subscription_id,price_id,status,access_until,checkout_attempt_id) VALUES(${target.organizationId},'sub','price_core','active',now()+interval '30 days','attempt')`
+  const { saveProjectProviderKey, removeProjectProviderKey } =
+    await import("../src/server/model-providers/store")
+  const { encryptProviderKey } =
+    await import("../src/server/model-providers/secrets")
+  await saveProjectProviderKey(
+    target.projectId,
+    "vercel-ai-gateway",
+    "synthetic-project-gateway"
   )
-  await executionCredits.grant({
-    organizationId: target.organizationId,
-    subscriptionId: "sub",
-    invoiceId: "invoice",
-    start: new Date(Date.now() - 1000),
-    end: new Date(Date.now() + 86400000),
-    plan: "core",
-  })
   // Drain unrelated jobs without executing additional synthetic turns.
   await database.execute(
     sql`UPDATE build_channel_job SET status='succeeded',lock_token=NULL,locked_at=NULL WHERE project_id=${target.projectId}`
   )
-  async function admitMedia(id: string, type: "image" | "audio", caption = true) {
+  async function admitMedia(
+    id: string,
+    type: "image" | "audio",
+    caption = true
+  ) {
     const base = incoming(id)
     base.data.key.remoteJid = "5511999990007@s.whatsapp.net"
     const payload = {
@@ -729,16 +747,20 @@ try {
     "A retry reuses the transcript and never dispatches another paid request"
   )
   const usage = await executionCredits.usage(target.organizationId)
-  assert.equal(usage.used, 0.000075)
+  assert.equal(usage.used, 0)
+  assert.equal(usage.allowance, 0)
   assert.equal(usage.reserved, 0)
   const attributed = (
     await database.execute<Record<string, unknown>>(
-      sql`SELECT * FROM build_usage_event WHERE project_id=${target.projectId} AND model='gpt-transcribe'`
+      sql`SELECT * FROM build_usage_event WHERE project_id=${target.projectId} AND model='openai/gpt-transcribe'`
     )
   ).rows
   assert.equal(attributed.length, 1)
+  assert.equal(attributed[0].provider, "vercel-ai-gateway")
+  assert.equal(attributed[0].credit_operation_id, null)
+  assert.equal(attributed[0].cost_source, "configured")
   assert.equal(attributed[0].conversation_id, audioJob.message.conversation_id)
-  assert.equal(Number(attributed[0].cost_nano_usd), 75000)
+  assert.equal(Number(attributed[0].cost_nano_usd), 93750)
   const cancelled = await admitMedia("audio-cancelled", "audio")
   let admissionChecks = 0
   await assert.rejects(
@@ -759,22 +781,53 @@ try {
     ),
     0
   )
-  transcriptionMode = "rejected"
-  const rejectedAudio = await admitMedia("audio-rejected", "audio")
+  // A project without its own key cannot use the configured server/scorer keys.
+  await removeProjectProviderKey(target.projectId, "vercel-ai-gateway")
+  const unconfigured = await admitMedia("audio-no-project-key", "audio")
   assert.equal(
-    await runMedia(rejectedAudio.job, () =>
-      assert.fail("Rejected audio must not invoke AI")
+    await runMedia(unconfigured.job, () =>
+      assert.fail("Missing project key must block AI")
     ),
     0
   )
+  assert.equal(transcriptions, 1)
+  // A copied encrypted credential from another project must not authorize a call.
+  const foreignKey = encryptProviderKey(
+    "foreign-key",
+    "another-project",
+    "vercel-ai-gateway"
+  )
+  await database.execute(
+    sql`INSERT INTO project_model_provider(project_id,provider,encrypted_api_key) VALUES(${target.projectId},'vercel-ai-gateway',${foreignKey})`
+  )
+  const foreign = await admitMedia("audio-foreign-key", "audio")
   assert.equal(
-    (await executionCredits.usage(target.organizationId)).reserved,
+    await runMedia(foreign.job, () =>
+      assert.fail("Foreign project key must block AI")
+    ),
     0
   )
-  assert.equal(
-    (await executionCredits.usage(target.organizationId)).used,
-    0.000075
+  assert.equal(transcriptions, 1)
+  await saveProjectProviderKey(
+    target.projectId,
+    "vercel-ai-gateway",
+    "synthetic-project-gateway"
   )
+  for (const status of [401, 402, 429]) {
+    transcriptionMode = `rejected-${status}`
+    const rejectedAudio = await admitMedia(`audio-rejected-${status}`, "audio")
+    assert.equal(
+      await runMedia(rejectedAudio.job, () =>
+        assert.fail("Rejected audio must not invoke AI")
+      ),
+      0
+    )
+    assert.equal(
+      (await executionCredits.usage(target.organizationId)).reserved,
+      0
+    )
+    assert.equal((await executionCredits.usage(target.organizationId)).used, 0)
+  }
   transcriptionMode = "timeout"
   const uncertainAudio = await admitMedia("audio-uncertain", "audio")
   assert.equal(
@@ -794,22 +847,60 @@ try {
   assert.equal(transcriptions, attempts)
   assert.equal(
     (await executionCredits.usage(target.organizationId)).reserved,
-    0.0225
+    0
   )
-  await database.execute(
-    sql`UPDATE execution_credit_period SET allowance=spent+reserved WHERE organization_id=${target.organizationId}`
-  )
-  const unfunded = await admitMedia("audio-no-credits", "audio")
+  transcriptionMode = "missing-duration"
+  const unmeasured = await admitMedia("audio-unmeasured", "audio")
   assert.equal(
-    await runMedia(unfunded.job, () =>
-      assert.fail("Unfunded audio must not invoke AI")
+    await runMedia(unmeasured.job, () =>
+      assert.fail("Unmeasured audio must not reach AI")
     ),
     0
   )
+  await assert.rejects(
+    prepareEvolutionMedia(ctx, String(unmeasured.message.id), async () => {})
+  )
   assert.equal(
     transcriptions,
-    attempts,
-    "No paid request when credits are exhausted"
+    attempts + 1,
+    "Missing duration cannot trigger a second paid attempt"
+  )
+  assert.equal((await executionCredits.usage(target.organizationId)).used, 0)
+  assert.equal(
+    (await executionCredits.usage(target.organizationId)).reserved,
+    0
+  )
+  transcriptionMode = "ok"
+  for (const cost of [0, 0.0001]) {
+    gatewayReportedCost = cost
+    const priced = await admitMedia(`audio-priced-${cost}`, "audio")
+    assert.equal(await runMedia(priced.job, () => {}), 1)
+    await prepareEvolutionMedia(ctx, String(priced.message.id), async () => {})
+    const pricedUsage = (
+      await database.execute<Record<string, unknown>>(sql`
+      SELECT cost_source,cost_nano_usd,credit_operation_id FROM build_usage_event
+      WHERE project_id=${target.projectId} AND event_key=${`transcription:${priced.message.id}`}
+    `)
+    ).rows[0]
+    assert.equal(pricedUsage.cost_source, "provider")
+    assert.equal(Number(pricedUsage.cost_nano_usd), cost * 1_000_000_000)
+    assert.equal(pricedUsage.credit_operation_id, null)
+  }
+  assert.equal(
+    transcriptions,
+    attempts + 3,
+    "Cost readback retries never retranscribe"
+  )
+  gatewayReportedCost = undefined
+  const finalAttempts = transcriptions
+  assert.equal(
+    (
+      await database.execute(
+        sql`SELECT 1 FROM execution_credit_operation WHERE project_id=${target.projectId}`
+      )
+    ).rows.length,
+    0,
+    "Project-funded audio never creates organization credit operations"
   )
   assert(
     (
@@ -817,6 +908,53 @@ try {
         sql`SELECT 1 FROM build_channel_message WHERE project_id=${target.projectId} AND direction='outbound' AND content_json->>'text' LIKE '%envie sua mensagem por texto%'`
       )
     ).rows.length >= 3
+  )
+  // Recover a completed pre-upgrade managed attempt without losing its reservation
+  // or making a second paid request. New attempts above created no credit rows.
+  await database.execute(
+    sql`INSERT INTO organization_billing(organization_id,subscription_id,price_id,status,access_until,checkout_attempt_id) VALUES(${target.organizationId},'sub','price_core','active',now()+interval '30 days','attempt')`
+  )
+  await executionCredits.grant({
+    organizationId: target.organizationId,
+    subscriptionId: "sub",
+    invoiceId: "invoice",
+    start: new Date(Date.now() - 1000),
+    end: new Date(Date.now() + 86400000),
+    plan: "core",
+  })
+  const legacy = await admitMedia("audio-legacy-completed", "audio")
+  const legacyOperation = await executionCredits.reserve(
+    target.projectId,
+    "model",
+    22500000,
+    "gpt-transcribe-2026-10-27"
+  )
+  await database.execute(sql`
+    INSERT INTO build_channel_transcription(message_id,project_id,operation_id,state,transcript,seconds,provider_id)
+    VALUES(${String(legacy.message.id)},${target.projectId},${legacyOperation}::uuid,'completed','Previously transcribed',1,'legacy-request')
+  `)
+  await database.execute(sql`
+    INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,model,status,cost_source,credit_operation_id)
+    VALUES(${randomUUID()}::uuid,${target.organizationId},${target.projectId},${agent.id},${String(legacy.message.conversation_id)},'legacy',${`transcription:${legacy.message.id}`},'model','openai','gpt-transcribe','pending','unknown',${legacyOperation}::uuid)
+  `)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert.equal(
+      (
+        await prepareEvolutionMedia(
+          ctx,
+          String(legacy.message.id),
+          async () => {}
+        )
+      ).text,
+      "Previously transcribed"
+    )
+  }
+  assert.equal(transcriptions, finalAttempts)
+  const legacyCredits = await executionCredits.usage(target.organizationId)
+  assert.equal(legacyCredits.used, 0.000075)
+  assert.equal(legacyCredits.reserved, 0)
+  console.log(
+    "PASS completed legacy transcription settles once without a new provider call"
   )
   // Wrong-conversation provider records and malformed images never reach AI.
   lookupFailure = "wrong-phone"
@@ -837,9 +975,9 @@ try {
     ),
     0
   )
-  assert.equal(transcriptions, attempts)
+  assert.equal(transcriptions, finalAttempts)
   console.log(
-    "PASS image bytes and caption, audio transcript, measured credits, retry reuse, rejected/uncertain/unfunded outcomes and customer feedback"
+    "PASS image bytes and caption, audio transcript, project usage without credit charges, retry reuse, rejected/uncertain outcomes and customer feedback"
   )
   process.env.DATOOL_EVOLUTION_ENABLED = "false"
   await assert.rejects(
