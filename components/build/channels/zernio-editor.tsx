@@ -196,7 +196,13 @@ export function ZernioEditor({
               WhatsApp is not configured on this installation yet.
             </Notice>
           )}
-          {connected ? (
+          {saved && !info.data ? (
+            info.isLoading ? (
+              <p className="text-sm text-foreground-muted">
+                Checking connection…
+              </p>
+            ) : null
+          ) : connected ? (
             <div className="space-y-4">
               <div>
                 <p className="font-medium">
@@ -284,7 +290,11 @@ export function ZernioEditor({
                   New template
                 </Button>
               </div>
-              {templates.error ? (
+              {templates.isLoading ? (
+                <p className="text-sm text-foreground-muted">
+                  Loading templates…
+                </p>
+              ) : templates.error ? (
                 <Notice variant="error">
                   Could not load templates.{" "}
                   <Button
