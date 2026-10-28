@@ -1,3 +1,4 @@
+import { disconnectZernio, sendZernioEnvelope, zernioAccount } from "./zernio"
 import { prepareEvolutionMedia, ChannelMediaError } from "./media"
 import { prepareWhatsAppText } from "./links"
 import { evolutionEnabled } from "./evolution-api"
@@ -605,7 +606,13 @@ export async function updateChannelStatus(
     await setEvolutionStatus(context, connectionId, status)
     return (await getChannelConnection(context, connectionId)).connection
   }
-  if (loaded.connection.channel === "whatsapp") {
+  if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider === "zernio") {
+    if (status === "disconnected") {
+      await disconnectZernio(context, connectionId)
+      return (await getChannelConnection(context, connectionId)).connection
+    }
+    if (status === "connected") await zernioAccount(context, connectionId)
+  } else if (loaded.connection.channel === "whatsapp") {
     if (status === "disconnected") {
       await disconnectWhatsApp(context, connectionId)
       return (await getChannelConnection(context, connectionId)).connection
@@ -2214,7 +2221,7 @@ export async function processChannelJob(
         )
       )
     } else if (loaded.connection.channel === "whatsapp") {
-      ids = await (loaded.connection.config.provider === "evolution" ? sendEvolutionEnvelope : sendWhatsAppEnvelope)(
+      ids = await (loaded.connection.config.provider === "evolution" ? sendEvolutionEnvelope : loaded.connection.config.provider === "zernio" ? sendZernioEnvelope : sendWhatsAppEnvelope)(
         context,
         {
           connectionId: job.connectionId,
@@ -2364,7 +2371,7 @@ export async function processChannelJob(
     let images: import("@/src/lib/build/channels").ChannelImage[] = []
     let mediaFailure: string | undefined
     if (
-      loaded.connection.config.provider === "evolution" &&
+      ["evolution", "zernio"].includes(String(loaded.connection.config.provider)) &&
       currentContent.attachments.some(
         (a) => a.type === "image" || a.type === "audio"
       )
@@ -2374,7 +2381,7 @@ export async function processChannelJob(
           await assertChannelJobReady(database, job, { agentId: String(message.agent_id), channel: loaded.connection.channel })
           const current = await database.execute(sql`SELECT 1 FROM build_conversations WHERE project_id=${job.projectId} AND id=${String(message.conversation_id)} AND owner_type='ai' AND owner_fence=${ownerFence} AND status='active'`)
           if (!current.rows.length) throw new ChannelLeaseLostError()
-        })
+        }, loaded.connection.config.provider === "zernio" ? "zernio" : "evolution")
         images = prepared.images
         if (prepared.text !== undefined) currentContent.text = prepared.text
       } catch (error) {
