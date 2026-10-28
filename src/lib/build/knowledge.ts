@@ -201,6 +201,20 @@ export type KnowledgeSourceDetail = KnowledgeSource & {
   config?: WebsiteSourceConfig
 }
 
+export function knowledgeSourceStatusLabel(source: KnowledgeSource) {
+  if (source.status === "pending") return "Queued"
+  if (source.status === "indexing" && source.statusMessage?.startsWith("Crawling:"))
+    return "Crawling"
+  return source.status.charAt(0).toUpperCase() + source.status.slice(1)
+}
+
+export function knowledgeSourceStatusMessage(source: KnowledgeSource) {
+  if (source.statusMessage) return source.statusMessage
+  if (source.status === "pending") return "Queued. Waiting for a worker to start."
+  if (source.status === "indexing") return "Starting indexing…"
+  return null
+}
+
 export type KnowledgePage = {
   url: string
   title: string | null
