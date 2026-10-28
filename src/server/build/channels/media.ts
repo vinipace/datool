@@ -8,17 +8,17 @@ import { sql } from "drizzle-orm"
 import sharp from "sharp"
 import type { ChannelImage } from "@/src/lib/build/channels"
 import { executionCredits } from "@/src/server/execution-credits/ledger"
-import { managedExecutionEnabled } from "@/src/server/execution-credits/config"
+import { GATEWAY_PROVIDER } from "@/src/lib/model-providers"
+import { getProjectProviderKey } from "@/src/server/model-providers/store"
 import type { BuildContext } from "../context"
 import { downloadEvolutionMedia } from "./evolution"
 
 const run = promisify(execFile)
 const MODEL = "openai/gpt-transcribe"
 // Gateway /v1/models: transcription_duration_cost_per_second = $0.000075.
-// Verified 2026-10-27; the organization rate stays versioned and bounded.
+// Verified 2026-10-27; used only when the provider does not report a cost.
 const NANO_PER_SECOND = 75_000
 const MAX_SECONDS = 300
-const RATE = "gateway-gpt-transcribe-2026-10-27"
 export class ChannelMediaError extends Error {
   constructor(readonly code: string) {
     super("This media message could not be processed.")
@@ -83,28 +83,38 @@ async function audioFile(bytes: Buffer) {
   }
 }
 
-async function settleTranscript(
+async function completeTranscript(
   context: BuildContext,
   messageId: string,
   row: Record<string, unknown>
 ) {
-  const seconds = Number(row.seconds)
-  const amount = Math.ceil(seconds * NANO_PER_SECOND)
-  await executionCredits.settle(
-    String(row.operation_id),
-    amount,
-    row.provider_id == null ? null : String(row.provider_id),
-    {
-      model: MODEL,
-      seconds,
-      channelMessageId: messageId,
-      purpose: "audio_transcription",
-    }
-  )
-  await context.database.execute(sql`
-    UPDATE build_usage_event SET status='completed',cost_nano_usd=${amount},cost_source='provider',provider_log_id=${row.provider_id == null ? null : String(row.provider_id)}
-    WHERE project_id=${context.projectId} AND credit_operation_id=${String(row.operation_id)}::uuid
+  // Finish only pre-upgrade managed-credit operations. New project-funded
+  // transcriptions never reserve or settle organization credits.
+  const usage = await context.database.execute<{
+    credit_operation_id: string | null
+  }>(sql`
+    SELECT credit_operation_id FROM build_usage_event
+    WHERE project_id=${context.projectId} AND event_key=${`transcription:${messageId}`}
   `)
+  if (usage.rows[0]?.credit_operation_id) {
+    const seconds = Number(row.seconds)
+    const amount = Math.ceil(seconds * NANO_PER_SECOND)
+    await executionCredits.settle(
+      usage.rows[0].credit_operation_id,
+      amount,
+      row.provider_id == null ? null : String(row.provider_id),
+      {
+        model: "gpt-transcribe",
+        seconds,
+        channelMessageId: messageId,
+        purpose: "audio_transcription",
+      }
+    )
+    await context.database.execute(sql`
+      UPDATE build_usage_event SET status='completed',cost_nano_usd=${amount},cost_source='provider',provider_log_id=${row.provider_id == null ? null : String(row.provider_id)}
+      WHERE project_id=${context.projectId} AND credit_operation_id=${usage.rows[0].credit_operation_id}::uuid
+    `)
+  }
   await context.database.execute(sql`
     UPDATE build_channel_message SET content_json=jsonb_set(content_json,'{text}',${JSON.stringify(String(row.transcript))}::jsonb)
     WHERE project_id=${context.projectId} AND id=${messageId}
@@ -124,7 +134,7 @@ export async function prepareEvolutionMedia(
   `)
   if (previous.rows[0]) {
     if (previous.rows[0].state === "completed")
-      return settleTranscript(context, messageId, previous.rows[0])
+      return completeTranscript(context, messageId, previous.rows[0])
     throw new ChannelMediaError(
       String(previous.rows[0].error_code ?? "TRANSCRIPTION_UNCERTAIN")
     )
@@ -155,56 +165,47 @@ export async function prepareEvolutionMedia(
       throw new ChannelMediaError("IMAGE_INVALID")
     }
   }
-  // Server-owned credentials only: never bill credits against a project BYOK key.
-  const apiKey =
-    process.env.DATOOL_AI_GATEWAY_API_KEY || process.env.AI_GATEWAY_API_KEY
-  if (!managedExecutionEnabled() || !apiKey)
+  // Match agent replies: the project supplies its Gateway credential and pays
+  // the provider directly. Missing project credentials never use server keys.
+  let apiKey: string
+  try {
+    apiKey = await getProjectProviderKey(
+      context.projectId,
+      GATEWAY_PROVIDER,
+      context.database
+    )
+  } catch {
     throw new ChannelMediaError("TRANSCRIPTION_NOT_CONFIGURED")
+  }
   const audio = await audioFile(media.bytes)
   await assertReady()
   const operationId = randomUUID()
+  // Atomically claim the paid attempt and its usage event. operation_id is also
+  // the usage ID for new attempts; legacy rows retain their original credit ID.
   const claimed = await context.database.execute(sql`
-    INSERT INTO build_channel_transcription(message_id,project_id,operation_id,state)
-    VALUES(${messageId},${context.projectId},${operationId}::uuid,'requested') ON CONFLICT DO NOTHING RETURNING message_id
+    WITH attempt AS (
+      INSERT INTO build_channel_transcription(message_id,project_id,operation_id,state)
+      VALUES(${messageId},${context.projectId},${operationId}::uuid,'requested')
+      ON CONFLICT DO NOTHING RETURNING operation_id
+    )
+    INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,model,status,cost_source)
+    SELECT attempt.operation_id,p.organization_id,m.project_id,c.agent_id,c.id,${`channel-transcription:${messageId}`},${`transcription:${messageId}`},'model',${GATEWAY_PROVIDER},${MODEL},'pending','unknown'
+    FROM attempt,build_channel_message m JOIN project p ON p.id=m.project_id JOIN build_conversations c ON c.id=m.conversation_id AND c.project_id=m.project_id
+    WHERE m.project_id=${context.projectId} AND m.id=${messageId}
+    RETURNING id
   `)
   if (!claimed.rows.length)
     throw new ChannelMediaError("TRANSCRIPTION_IN_PROGRESS")
-  try {
-    // Reserve the bounded maximum before any paid request. The result is settled
-    // using provider-measured seconds; a retry uses the persisted result above.
-    await executionCredits.reserve(
-      context.projectId,
-      "model",
-      MAX_SECONDS * NANO_PER_SECOND,
-      RATE,
-      operationId
-    )
-  } catch {
-    await context.database.execute(
-      sql`UPDATE build_channel_transcription SET state='failed',error_code='INSUFFICIENT_CREDITS' WHERE project_id=${context.projectId} AND message_id=${messageId}`
-    )
-    throw new ChannelMediaError("INSUFFICIENT_CREDITS")
-  }
-  await context.database.execute(sql`
-    INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,model,status,cost_source,credit_operation_id)
-    SELECT ${randomUUID()}::uuid,p.organization_id,m.project_id,c.agent_id,c.id,${`channel-transcription:${messageId}`},${`transcription:${messageId}`},'model','vercel-ai-gateway',${MODEL},'pending','unknown',${operationId}::uuid
-    FROM build_channel_message m JOIN project p ON p.id=m.project_id JOIN build_conversations c ON c.id=m.conversation_id AND c.project_id=m.project_id
-    WHERE m.project_id=${context.projectId} AND m.id=${messageId}
-    ON CONFLICT(project_id,event_key) DO NOTHING
-  `)
   let resultPersisted = false
   try {
     try {
       await assertReady()
     } catch {
-      await executionCredits.settle(operationId, 0, null, {
-        cancelledBeforeDispatch: true,
-      })
       await context.database.execute(
         sql`UPDATE build_channel_transcription SET state='failed',error_code='MEDIA_CANCELLED' WHERE project_id=${context.projectId} AND message_id=${messageId}`
       )
       await context.database.execute(
-        sql`UPDATE build_usage_event SET status='blocked',cost_nano_usd=0,cost_source='provider' WHERE project_id=${context.projectId} AND credit_operation_id=${operationId}::uuid`
+        sql`UPDATE build_usage_event SET status='blocked',cost_nano_usd=0,cost_source='provider' WHERE project_id=${context.projectId} AND id=${operationId}::uuid`
       )
       throw new ChannelMediaError("MEDIA_CANCELLED")
     }
@@ -228,23 +229,18 @@ export async function prepareEvolutionMedia(
       }
     )
     const providerId = response.headers.get("x-request-id")
-    await executionCredits.recordEvidence(operationId, providerId, {
-      httpStatus: response.status,
-      purpose: "audio_transcription",
-      channelMessageId: messageId,
-    })
+    await context.database.execute(sql`
+      UPDATE build_usage_event SET provider_log_id=${providerId}
+      WHERE project_id=${context.projectId} AND id=${operationId}::uuid
+    `)
     if (
       [400, 401, 402, 403, 404, 413, 415, 422, 429].includes(response.status)
     ) {
-      await executionCredits.settle(operationId, 0, providerId, {
-        rejected: true,
-        httpStatus: response.status,
-      })
       await context.database.execute(
         sql`UPDATE build_channel_transcription SET state='failed',error_code='TRANSCRIPTION_REJECTED' WHERE project_id=${context.projectId} AND message_id=${messageId}`
       )
       await context.database.execute(
-        sql`UPDATE build_usage_event SET status='failed',cost_nano_usd=0,cost_source='provider',provider_log_id=${providerId} WHERE project_id=${context.projectId} AND credit_operation_id=${operationId}::uuid`
+        sql`UPDATE build_usage_event SET status='failed',cost_nano_usd=0,cost_source='provider',provider_log_id=${providerId} WHERE project_id=${context.projectId} AND id=${operationId}::uuid`
       )
       throw new ChannelMediaError("TRANSCRIPTION_REJECTED")
     }
@@ -277,14 +273,27 @@ export async function prepareEvolutionMedia(
       throw new Error("Invalid measured usage")
     const transcript =
       result.text.trim() || "[Audio message without intelligible speech]"
-    // Save the result before settlement. Crash recovery can finish billing without
-    // paying the transcription provider again or retaining audio bytes in the DB.
+    const reportedCost = result.providerMetadata?.gateway?.cost
+    const hasReportedCost =
+      typeof reportedCost === "number" &&
+      Number.isFinite(reportedCost) &&
+      reportedCost >= 0 &&
+      reportedCost * 1_000_000_000 <= Number.MAX_SAFE_INTEGER
+    const amount = hasReportedCost
+      ? Math.ceil(reportedCost * 1_000_000_000)
+      : Math.ceil(seconds * NANO_PER_SECOND)
+    // Persist the transcript and its cost together. Recovery can then reuse both
+    // without another provider call or a debit against organization credits.
     await context.database.execute(sql`
-      UPDATE build_channel_transcription SET state='completed',transcript=${transcript},seconds=${seconds},provider_id=${providerId}
-      WHERE project_id=${context.projectId} AND message_id=${messageId}
+      WITH completed AS (
+        UPDATE build_channel_transcription SET state='completed',transcript=${transcript},seconds=${seconds},provider_id=${providerId}
+        WHERE project_id=${context.projectId} AND message_id=${messageId} RETURNING operation_id
+      )
+      UPDATE build_usage_event SET status='completed',cost_nano_usd=${amount},cost_source=${hasReportedCost ? "provider" : "configured"},provider_log_id=${providerId}
+      FROM completed WHERE project_id=${context.projectId} AND id=completed.operation_id
     `)
     resultPersisted = true
-    return await settleTranscript(context, messageId, {
+    return await completeTranscript(context, messageId, {
       operation_id: operationId,
       seconds,
       provider_id: providerId,
@@ -296,7 +305,7 @@ export async function prepareEvolutionMedia(
       sql`UPDATE build_channel_transcription SET state='uncertain',error_code='TRANSCRIPTION_UNCERTAIN' WHERE project_id=${context.projectId} AND message_id=${messageId} AND state='requested'`
     )
     await context.database.execute(
-      sql`UPDATE build_usage_event SET status='uncertain' WHERE project_id=${context.projectId} AND credit_operation_id=${operationId}::uuid AND status='pending'`
+      sql`UPDATE build_usage_event SET status='uncertain' WHERE project_id=${context.projectId} AND id=${operationId}::uuid AND status='pending'`
     )
     if (error instanceof ChannelMediaError) throw error
     throw new ChannelMediaError("TRANSCRIPTION_UNCERTAIN")

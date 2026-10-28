@@ -314,7 +314,7 @@ export function EvolutionEditor({
                   ? "Replies are disabled while this project is outside the pilot."
                   : paused
                     ? "The number stays connected. Resume when you are ready to reply."
-                    : "Your agent can read text, images and voice messages from customers. Audio transcription uses execution credits."}
+                    : "Your agent can read text, images and voice messages from customers. Audio transcription uses your project’s AI Gateway account."}
               </p>
             </div>
             <Button

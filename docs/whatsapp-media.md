@@ -15,29 +15,39 @@ The model must support vision. Raw images are not saved in conversation history
 or traces; later turns retain the caption and the agent's textual interpretation.
 
 Audio is decoded locally to bounded mono PCM using FFmpeg, including WhatsApp
-OGG/Opus voice notes. It is sent through the Datool-funded Vercel AI Gateway using
+OGG/Opus voice notes. It is sent through the project-configured Vercel AI Gateway using
 `openai/gpt-transcribe`; the resulting
 text becomes the user message for the agent and appears in the channel ledger.
 Temporary audio files are removed after decoding, and audio bytes are not stored
 in PostgreSQL. The transcript follows conversation retention/deletion.
 
-## Credits and retries
+## Provider billing, usage and retries
 
-Transcription uses the existing organization execution-credit ledger, attributed
-to the project, agent and conversation as a model operation. It requires managed
-execution, an active paid allowance and sufficient available credits. The worker
-reserves $0.0225 (the five-minute maximum) before the paid request, then settles
-at $0.0045/minute using the Gateway's `durationInSeconds`. The rest is released.
-The rate is pinned in code with a version and must be reviewed when pricing
-changes. This is separate from the agent's model inference cost and daily budget.
+Transcription uses the same funding model as Build agent replies: the Gateway key
+saved in the project's provider settings pays Vercel directly. Datool records the
+cost in Build usage, attributed to the project, agent and conversation. It does
+not reserve or deduct organization execution credits, and it does not require
+managed execution or an execution-credit allowance. Server-wide Gateway,
+OpenAI and scorer keys are not fallbacks for missing project credentials.
 
-A duplicate webhook or worker retry reuses the durable transcript and settlement;
-it does not call the paid provider again. A definite provider rejection releases
-the reservation. A timeout or missing usage leaves it reserved for operator
-reconciliation, with no automatic paid retry. This favors no duplicate spending
-over silently replaying an uncertain request. A crash after the reservation but
-before dispatch may also require reconciliation. Completed results are stored
-before settlement so a database recovery can finish billing without retranscribing.
+When Gateway reports `providerMetadata.gateway.cost`, that amount is recorded as
+provider cost. Otherwise Datool records a configured estimate of $0.0045/minute
+using `durationInSeconds`, with `cost_source=configured`. The rate comes from the
+Gateway model catalog and must be reviewed when pricing changes. This cost is
+separate from the agent's reply generation cost; the agent's daily reply budget
+does not include transcription. Each audio request is bounded to five minutes.
+
+A duplicate webhook or worker retry reuses the durable transcript and usage
+record; it does not call the paid provider again. A definite provider rejection
+records a failed attempt with zero cost. A timeout or missing duration records an
+uncertain attempt with unknown cost and no automatic paid retry. The transcript
+and successful usage cost are persisted atomically before delivery to the agent.
+
+Existing checkpoints from the older managed-credit implementation are retained.
+A retry of an already completed legacy transcription finishes its original
+credit settlement without retranscribing. Uncertain legacy reservations still
+require operator reconciliation; new project-funded attempts create no credit
+operations.
 
 Media failure sends a text request to continue by typing. The inbound ledger
 retains a safe error code; no provider error body or secret is shown to customers.
@@ -47,31 +57,25 @@ worker lease are checked again before paid dispatch and before running the agent
 ## Deployment and verification
 
 Migration `0075_channel_media.sql` adds the transcription checkpoint table. The
-production image includes FFmpeg. Configure the server-owned
-`DATOOL_AI_GATEWAY_API_KEY`, or reuse the existing server `AI_GATEWAY_API_KEY`.
-The dedicated Datool key takes precedence. Both require
-`DATOOL_BILLING_ENABLED=true` and `DATOOL_MANAGED_EXECUTION_ENABLED=true`.
-Project-owned provider keys and OpenAI/scorer keys are never used for paid
-transcription. Existing OpenAI transcription configuration no longer enables it.
-No WhatsApp reconnection is required.
+production image includes FFmpeg. Configure Vercel AI Gateway in the project's
+provider settings, exactly as for agent replies. No additional server key,
+billing flag, credit grant or WhatsApp reconnection is required. The previous
+OpenAI transcription key and managed Gateway setup scripts are not needed.
 
 The worker calls the documented Gateway REST transcription endpoint with bounded
 WAV audio encoded as base64 JSON. It does not use SDK retries or fall back to
 another provider after an uncertain attempt. Transcription is in Gateway beta;
-verify model access on the Datool account before enabling production traffic.
-The public Gateway model catalog currently reports $0.000075 per audio second
-for `openai/gpt-transcribe`. Usage events identify `vercel-ai-gateway` and the
-fully qualified model. The existing transcript checkpoints and credit records
-are retained; this change requires no new migration.
+verify model access on the project's account. Usage identifies
+`vercel-ai-gateway` and `openai/gpt-transcribe`. This change needs no new migration.
 
 The Evolution integration test uses real PostgreSQL, FFmpeg and the worker, with
 simulated Evolution/transcription HTTP responses. It covers image/caption
-admission, OGG decoding, transcript delivery, measured billing, retries, refunds,
-uncertainty, insufficient credits and tenant/sender isolation. The runtime test
-checks actual AI SDK image input and trace redaction. Neither test establishes
-real provider availability or device-level delivery. After deployment, send a new
-image and voice note from another number, verify replies, and check the usage
-entry and credit delta. Do not replay historical customer media automatically.
+admission, OGG decoding, transcript delivery, project credential isolation,
+usage attribution without credit charges, retries and provider failures. The
+runtime test checks actual AI SDK image input and trace redaction. Neither test
+establishes real provider availability or device-level delivery. After deployment,
+send a new image and voice note from another number, verify replies and the usage
+entry. Do not replay historical customer media automatically.
 
 Provider contracts:
 
