@@ -25,7 +25,7 @@ export const bubbleCopy = {
     message: "Message",
     placeholder: "Message your assistant",
     send: "Send message",
-    branding: "Powered by Datool",
+    branding: "Powered by",
     helpful: "Helpful",
     notHelpful: "Not helpful",
     justNow: "Just now",
@@ -48,7 +48,7 @@ export const bubbleCopy = {
     message: "Mensagem",
     placeholder: "Envie uma mensagem",
     send: "Enviar mensagem",
-    branding: "Desenvolvido com Datool",
+    branding: "Desenvolvido com",
     helpful: "Útil",
     notHelpful: "Não foi útil",
     justNow: "Agora mesmo",
@@ -71,7 +71,7 @@ export const bubbleCopy = {
     message: "Mensaje",
     placeholder: "Escribe un mensaje",
     send: "Enviar mensaje",
-    branding: "Desarrollado con Datool",
+    branding: "Desarrollado con",
     helpful: "Útil",
     notHelpful: "No fue útil",
     justNow: "Ahora mismo",
@@ -81,10 +81,52 @@ export const bubbleCopy = {
 
 export function resolveBubbleLanguage(
   settings: ChatBubbleSettings,
-  browserLanguages = "en"
+  browserLanguages = "en",
+  visitorCountry?: string | null
 ): BubbleLanguage {
   const config = settings.localization
-  if (config.source === "browser") {
+  if (config.source === "country") {
+    // Deliberately leave multilingual/unmapped countries to browser preference.
+    const country = visitorCountry?.trim().toUpperCase() ?? ""
+    const language: BubbleLanguage | undefined = [
+      "BR",
+      "PT",
+      "AO",
+      "MZ",
+      "CV",
+      "GW",
+      "ST",
+    ].includes(country)
+      ? "pt-BR"
+      : [
+            "ES",
+            "MX",
+            "AR",
+            "BO",
+            "CL",
+            "CO",
+            "CR",
+            "CU",
+            "DO",
+            "EC",
+            "GT",
+            "HN",
+            "NI",
+            "PA",
+            "PE",
+            "PR",
+            "PY",
+            "SV",
+            "UY",
+            "VE",
+          ].includes(country)
+        ? "es"
+        : ["US", "GB", "AU", "NZ", "IE"].includes(country)
+          ? "en"
+          : undefined
+    if (language && config.languages.includes(language)) return language
+  }
+  if (config.source === "browser" || config.source === "country") {
     for (const candidate of browserLanguages.split(",")) {
       const language = candidate.split(";")[0]!.trim().toLowerCase()
       const matched = bubbleLanguages.find(
@@ -101,9 +143,14 @@ export function resolveBubbleLanguage(
 
 export function localizeBubble(
   settings: ChatBubbleSettings,
-  browserLanguages?: string
+  browserLanguages?: string,
+  visitorCountry?: string | null
 ) {
-  const language = resolveBubbleLanguage(settings, browserLanguages)
+  const language = resolveBubbleLanguage(
+    settings,
+    browserLanguages,
+    visitorCountry
+  )
   const copy = bubbleCopy[language]
   const translated = settings.localization.translations[language] ?? {}
   return {
@@ -134,9 +181,14 @@ export const bubbleIconPaths = {
 
 export function resolveBubbleLauncher(
   settings: ChatBubbleSettings,
-  browserLanguages?: string
+  browserLanguages?: string,
+  visitorCountry?: string | null
 ) {
-  const { appearance, copy } = localizeBubble(settings, browserLanguages)
+  const { appearance, copy } = localizeBubble(
+    settings,
+    browserLanguages,
+    visitorCountry
+  )
   return {
     iconPath:
       bubbleIconPaths[

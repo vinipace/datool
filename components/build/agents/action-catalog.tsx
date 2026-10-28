@@ -41,7 +41,7 @@ const identities: Record<
     tone: "text-action-form",
   },
   form: { label: "Form", icon: FileInput, tone: "text-action-form" },
-  widget: { label: "Widget", icon: PanelsTopLeft, tone: "text-action-widget" },
+  widget: { label: "Show Widget", icon: PanelsTopLeft, tone: "text-action-widget" },
 }
 
 const catalog: {
@@ -62,10 +62,11 @@ const catalog: {
     id: "http",
     title: "Custom actions",
     description:
-      "Connect your API or trigger events on your website to help customers get things done.",
+      "Call your API, run client-side code, or show an interactive widget in the conversation.",
     actions: [
       { preset: "http", label: "Call API" },
       { preset: "client", label: "Run client-side code" },
+      { preset: "widget", label: "Show Widget" },
     ],
   },
   {
@@ -88,13 +89,6 @@ const catalog: {
     description:
       "Build a form with your own fields, required answers and a follow-up action.",
     actions: [{ preset: "form", label: "Create form" }],
-  },
-  {
-    id: "widget",
-    title: "Interactive widgets",
-    description:
-      "Show one of your agent’s widgets inside the conversation and respond to customer interactions.",
-    actions: [{ preset: "widget", label: "Show widget" }],
   },
 ]
 
@@ -132,15 +126,22 @@ export function ActionTypeLabel({ type }: { type: ActionDefinition["type"] }) {
 
 export function ActionCatalog({
   onCreate,
+  search = "",
 }: {
   onCreate: (preset: ActionPreset) => void
+  search?: string
 }) {
+  const matches = catalog.filter(category =>
+    `${category.title} ${category.description} ${category.actions.map(action => action.label).join(" ")}`
+      .toLowerCase().includes(search.trim().toLowerCase())
+  )
   return (
     <section
       aria-label="Add an action"
       className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3"
     >
-      {catalog.map((category) => (
+      {!matches.length && <p className="col-span-full py-16 text-center text-sm text-foreground-muted">No matching action templates.</p>}
+      {matches.map((category) => (
         <Card key={category.id} className="flex min-w-0 flex-col">
           <CardHeader className="gap-3">
             <ActionIcon type={category.id} />

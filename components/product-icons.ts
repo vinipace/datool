@@ -20,7 +20,6 @@ import {
   Users,
   Ticket,
   Megaphone,
-  Lightbulb,
   House,
 } from "lucide-react"
 import { ScorerIcon } from "@/components/tracer/scorer-icon"
@@ -60,7 +59,6 @@ export const productIcons = {
   buildContacts: Users,
   buildCampaigns: Megaphone,
   buildIntegrations: Plug,
-  buildSuggestions: Lightbulb,
   buildTests: FlaskConical,
 } as const
 

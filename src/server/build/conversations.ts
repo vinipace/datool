@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto"
 
 import { sql } from "drizzle-orm"
+import { z } from "zod"
+import { TracerError } from "@/src/server/tracer/errors"
 
-import type { BuildChannel } from "@/src/lib/build/contracts"
+import {
+  agentAppearanceSchema,
+  type BuildChannel,
+} from "@/src/lib/build/contracts"
 import type { TracerDatabase } from "@/src/server/tracer/db"
 import { getTracerProjectId } from "@/src/server/tracer/db"
 import type { BuildContext } from "./context"
@@ -35,6 +40,11 @@ import {
 export type ConversationContext = BuildContext
 
 const TURN_LOCK_MS = 2 * 60 * 1000
+const agentAvatarSchema = agentAppearanceSchema.pick({
+  avatarUrl: true,
+  avatarStyle: true,
+  avatarColor: true,
+})
 
 function now() {
   return new Date().toISOString()
@@ -313,11 +323,29 @@ export class ConversationService {
 
   async list(value: unknown = {}) {
     const input = listConversationsInputSchema.parse(value)
+    let cursor: [string, string] | undefined
+    if (input.cursor) {
+      try {
+        cursor = z
+          .tuple([z.string().min(1), z.string().min(1)])
+          .parse(JSON.parse(Buffer.from(input.cursor, "base64url").toString()))
+        if (!Number.isFinite(Date.parse(cursor[0])))
+          throw new Error("Invalid date")
+      } catch {
+        throw new TracerError(
+          "VALIDATION_ERROR",
+          "Invalid conversations cursor."
+        )
+      }
+    }
     const result = await this.database.execute<Record<string, unknown>>(sql`
-      select c.*,contact.display_name as contact_name,contact.id as contact_id,
+      select c.*,c.updated_at::text as cursor_updated_at,a.name as agent_name,
+        a.current_config_json->'appearance' as agent_appearance,
+        contact.display_name as contact_name,contact.id as contact_id,
         t.id as ticket_id,t.version as ticket_version,t.status as ticket_status,
         coalesce(nullif(t.subject,''),preview.subject,'') as subject
       from build_conversations c
+      left join build_agents a on a.project_id=c.project_id and a.id=c.agent_id
       left join build_inbox_tickets t on t.project_id=c.project_id and t.conversation_id=c.id
       left join build_contacts contact on contact.project_id=c.project_id
         and contact.id=coalesce(t.contact_id,c.metadata_json->>'contactId')
@@ -333,7 +361,8 @@ export class ConversationService {
         ) as subject
       ) preview on true
       where c.project_id=${this.projectId}
-        ${input.cursor ? sql`and c.id>${input.cursor}` : sql``}
+        ${input.agentId ? sql`and c.agent_id=${input.agentId}` : sql``}
+        ${cursor ? sql`and (c.updated_at,c.id)<(${cursor[0]}::timestamptz,${cursor[1]})` : sql``}
         ${input.status ? sql`and c.status=${input.status}` : sql``}
         ${input.channel ? sql`and c.channel=${input.channel}` : sql``}
         ${
@@ -346,12 +375,14 @@ export class ConversationService {
         )`
             : sql``
         }
-      order by c.id asc limit ${input.limit + 1}
+      order by c.updated_at desc,c.id desc limit ${input.limit + 1}
     `)
     const rows = result.rows.slice(0, input.limit)
     return {
       items: rows.map((row) => ({
         ...toConversation(row),
+        agentName: row.agent_name as string | null,
+        agentAvatar: agentAvatarSchema.parse(row.agent_appearance ?? {}),
         subject: String(row.subject ?? "").slice(0, 500),
         contactId: row.contact_id as string | null,
         contactName: row.contact_name as string | null,
@@ -360,7 +391,11 @@ export class ConversationService {
         ticketStatus: row.ticket_status as string | null,
       })),
       nextCursor:
-        result.rows.length > input.limit ? String(rows.at(-1)!.id) : null,
+        result.rows.length > input.limit
+          ? Buffer.from(
+              JSON.stringify([rows.at(-1)!.cursor_updated_at, rows.at(-1)!.id])
+            ).toString("base64url")
+          : null,
     }
   }
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { postgresAdapter } from "@payloadcms/db-postgres"
 import { lexicalEditor, LinkFeature } from "@payloadcms/richtext-lexical"
 import { buildConfig } from "payload"
+import { AgentLandings } from "./cms/agent-landings"
 import { FAQPage, FAQs, LandingPage, Pages, Users } from "./cms/models"
 import { internalDocToHref } from "./cms/rich-text-links"
 
@@ -42,7 +43,7 @@ export default buildConfig({
       },
     },
     livePreview: {
-      collections: ["pages", "faqs"],
+      collections: ["pages", "faqs", "agent-landings"],
       globals: ["landing-page", "faq-page"],
       breakpoints: [
         { name: "mobile", label: "Mobile", width: 390, height: 844 },
@@ -52,7 +53,7 @@ export default buildConfig({
         `${origin}/cms-preview?type=${collectionConfig?.slug ?? globalConfig?.slug}`,
     },
   },
-  collections: [Users, Pages, FAQs],
+  collections: [Users, Pages, FAQs, AgentLandings],
   globals: [LandingPage, FAQPage],
   db: postgresAdapter({
     pool: {

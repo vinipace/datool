@@ -1,10 +1,12 @@
 import type {
+  EvalRunDetail,
   JsonObject,
   JsonValue,
   Span,
   TraceDetail,
 } from "@/src/lib/tracer/contracts"
 import { aggregateLlmUsage } from "@/src/lib/tracer/usage"
+import type { InspectorMessage } from "@/src/lib/tracer/value-messages"
 import { productExampleTrace } from "./product-trace-fixture"
 
 // Entirely synthetic usage and costs for the preview, not current model pricing.
@@ -632,3 +634,257 @@ export const platformPreviewTraces: TraceDetail[] = [
   }),
   ...examples.map(exampleTrace),
 ]
+
+export type PreviewConversation = {
+  id: string
+  subject: string
+  customer: string
+  agent: string
+  channel: "whatsapp" | "web"
+  status: "active" | "handed_off" | "closed"
+  updated: string
+  messages: InspectorMessage[]
+}
+
+const customer = (id: string, content: string): InspectorMessage => ({
+  id,
+  role: "user",
+  content,
+  toolCalls: [],
+})
+const agent = (
+  id: string,
+  name: string,
+  content: string
+): InspectorMessage => ({
+  id,
+  role: "assistant",
+  content,
+  toolCalls: [],
+  author: {
+    name,
+    image: null,
+    agentAvatar: {
+      avatarUrl: null,
+      avatarStyle: "friendly",
+      avatarColor: "green",
+    },
+  },
+})
+
+// Synthetic conversations for the Build preview; names and orders are invented.
+export const platformPreviewConversations: PreviewConversation[] = [
+  {
+    id: "conv-ana",
+    subject: "Running shoes for a half marathon",
+    customer: "Ana Souza",
+    agent: "Stride Sales",
+    channel: "whatsapp",
+    status: "closed",
+    updated: "Oct 28, 09:41",
+    messages: [
+      customer(
+        "m1",
+        "Hi! Running shoes for a half marathon? Wide feet, around R$ 600."
+      ),
+      agent(
+        "m2",
+        "Stride Sales",
+        "Great goal! For wide feet I'd pick the Tempo Glide or the Aurora Wide. Both have a roomy toe box and are under R$ 600."
+      ),
+      customer("m3", "Do you have the Tempo Glide in size 39?"),
+      agent(
+        "m4",
+        "Stride Sales",
+        "Yes, 3 left in 39. Pay with Pix or card here: stride.com.br/checkout/48213"
+      ),
+    ],
+  },
+  {
+    id: "conv-lucas",
+    subject: "Order says delivered but nothing arrived",
+    customer: "Lucas Prado",
+    agent: "Stride Support",
+    channel: "whatsapp",
+    status: "handed_off",
+    updated: "Oct 28, 09:12",
+    messages: [
+      customer("m1", "My order 48170 says delivered but nothing arrived."),
+      agent(
+        "m2",
+        "Stride Support",
+        "Sorry about that. The carrier scanned it at 14:02 at the building entrance. I've asked our team to open a claim and they'll take it from here."
+      ),
+    ],
+  },
+  {
+    id: "conv-maria",
+    subject: "Which size fits the Aurora Wide?",
+    customer: "Maria Lima",
+    agent: "Stride Sales",
+    channel: "web",
+    status: "active",
+    updated: "Oct 28, 08:57",
+    messages: [
+      customer("m1", "Does the Aurora Wide run small?"),
+      agent(
+        "m2",
+        "Stride Sales",
+        "It runs true to size. Most customers with wide feet keep their usual size."
+      ),
+    ],
+  },
+  {
+    id: "conv-joao",
+    subject: "Exchange for a bigger size",
+    customer: "João Costa",
+    agent: "Stride Support",
+    channel: "web",
+    status: "closed",
+    updated: "Oct 27, 19:30",
+    messages: [
+      customer("m1", "Can I exchange my shoes for one size up?"),
+      agent(
+        "m2",
+        "Stride Support",
+        "Of course. I've created a free exchange label, it's in your email now."
+      ),
+    ],
+  },
+  {
+    id: "conv-bia",
+    subject: "Is Pix available at checkout?",
+    customer: "Beatriz Alves",
+    agent: "Stride Sales",
+    channel: "whatsapp",
+    status: "closed",
+    updated: "Oct 27, 18:04",
+    messages: [
+      customer("m1", "Can I pay with Pix?"),
+      agent(
+        "m2",
+        "Stride Sales",
+        "Yes! Pix and card are both available at checkout."
+      ),
+    ],
+  },
+]
+
+export type PreviewEvalCase = {
+  id: string
+  input: string
+  baseline: number
+  candidate: number
+  reasoning: string
+}
+
+// Synthetic eval results for the Improve preview: a new instruction version
+// compared against the last one on the same saved conversations.
+export const platformPreviewEvalCases: PreviewEvalCase[] = [
+  {
+    id: "case-wide-feet",
+    input: "Running shoes for wide feet under R$ 600",
+    baseline: 0.62,
+    candidate: 0.94,
+    reasoning:
+      "Recommends two wide-fit models within budget and offers checkout.",
+  },
+  {
+    id: "case-not-delivered",
+    input: "Order says delivered but nothing arrived",
+    baseline: 0.48,
+    candidate: 0.91,
+    reasoning:
+      "Checks the carrier scan and hands off to the team with the claim.",
+  },
+  {
+    id: "case-cancel-shipped",
+    input: "Cancel an order that already shipped",
+    baseline: 0.35,
+    candidate: 0.83,
+    reasoning:
+      "Explains the return option instead of promising a cancellation.",
+  },
+  {
+    id: "case-exchange",
+    input: "Exchange for a bigger size",
+    baseline: 0.74,
+    candidate: 0.95,
+    reasoning:
+      "Creates the free exchange label and confirms where it was sent.",
+  },
+  {
+    id: "case-aurora-size",
+    input: "Does the Aurora Wide run small?",
+    baseline: 0.81,
+    candidate: 0.88,
+    reasoning: "Answers from the size guide and suggests the usual size.",
+  },
+  {
+    id: "case-pix",
+    input: "Is Pix available at checkout?",
+    baseline: 0.9,
+    candidate: 0.97,
+    reasoning: "Confirms Pix and card in one short answer.",
+  },
+]
+
+const average = (key: "baseline" | "candidate") =>
+  platformPreviewEvalCases.reduce((sum, item) => sum + item[key], 0) /
+  platformPreviewEvalCases.length
+
+function evalRun(
+  id: string,
+  name: string,
+  helpful: number,
+  grounded: number
+): EvalRunDetail {
+  const total = platformPreviewEvalCases.length
+  return {
+    id,
+    name,
+    metadata: {},
+    completedAt: "2026-10-27T18:12:00.000Z",
+    createdAt: "2026-10-27T18:10:00.000Z",
+    datasetId: "dataset-stride-support",
+    evaluatorIds: ["evaluator-helpful", "evaluator-grounded"],
+    resultCount: total * 2,
+    results: [],
+    score: helpful,
+    scores: [
+      { name: "Helpful answer", value: helpful },
+      { name: "Grounded in policies", value: grounded },
+    ],
+    status: "completed",
+    targetCount: total,
+    traceCount: total,
+    scorerProgress: [
+      ["evaluator-helpful", "Helpful answer", helpful],
+      ["evaluator-grounded", "Grounded in policies", grounded],
+    ].map(([evaluatorId, scorer, score]) => ({
+      evaluatorId: evaluatorId as string,
+      name: scorer as string,
+      version: 1,
+      total,
+      score: score as number,
+      completed: total,
+      error: 0,
+      skipped: 0,
+      running: 0,
+      queued: 0,
+    })),
+  }
+}
+
+export const platformPreviewBaselineRun = evalRun(
+  "eval-stride-v1",
+  "Stride Support · v1 instructions",
+  average("baseline"),
+  0.71
+)
+export const platformPreviewCandidateRun = evalRun(
+  "eval-stride-v2",
+  "Stride Support · v2 instructions",
+  average("candidate"),
+  0.93
+)

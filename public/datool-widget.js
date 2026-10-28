@@ -24,6 +24,7 @@
     ? sourceUrl.origin
     : window.location.origin;
   var baseUrl = safeHttpUrl(dataset.baseUrl || sourceOrigin) || window.location.origin;
+  var frameOrigin = new URL(baseUrl).origin;
   var disposed = false;
   var settings = {};
   var launcher = {};
@@ -33,11 +34,13 @@
 
   var frame = document.createElement("iframe");
   frame.title = dataset.title || "Customer support chat";
-  frame.loading = "lazy";
+  // Download and hydrate before the first click. The frame waits for an open
+  // message before creating a visitor session or polling the conversation.
+  frame.loading = "eager";
   frame.allow = "clipboard-write";
   frame.setAttribute("aria-hidden", "true");
   var context = dataset.context;
-  var chatUrl = baseUrl + "/chat/" + encodeURIComponent(channelId) + "?embed=1";
+  var chatUrl = baseUrl + "/chat/" + encodeURIComponent(channelId) + "?embed=1&preload=1";
   if (context) chatUrl += "&context=" + encodeURIComponent(context);
   if (window.location.origin) chatUrl += "&origin=" + encodeURIComponent(window.location.origin);
   frame.src = chatUrl;
@@ -49,16 +52,27 @@
   button.setAttribute("aria-label", dataset.buttonLabel || "Open chat");
   button.style.cssText = "display:block;margin-left:auto;border:1px solid ButtonBorder;border-radius:999px;background:ButtonFace;color:ButtonText;padding:10px 16px;font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer;box-shadow:0 4px 16px color-mix(in srgb, CanvasText 18%, transparent);";
 
+  function notifyVisibility() {
+    if (frame.contentWindow) frame.contentWindow.postMessage({
+      type: "datool:chat:visibility",
+      visible: frame.style.display !== "none"
+    }, frameOrigin);
+  }
+
   function open() {
+    if (disposed) return;
     frame.style.display = "block";
     frame.setAttribute("aria-hidden", "false");
     renderLauncher(true);
+    notifyVisibility();
   }
 
   function close() {
+    if (disposed) return;
     frame.style.display = "none";
     frame.setAttribute("aria-hidden", "true");
     renderLauncher(false);
+    notifyVisibility();
   }
 
   function toggle() {
@@ -74,8 +88,10 @@
   }
 
   function onMessage(event) {
-    if (event.source !== frame.contentWindow || event.origin !== new URL(baseUrl).origin) return;
+    if (event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
     if (event.data && event.data.type === "datool:chat:close") close();
+    // Replay the current state if the visitor clicked before hydration finished.
+    if (event.data && event.data.type === "datool:chat:ready") notifyVisibility();
   }
 
   button.addEventListener("click", toggle);

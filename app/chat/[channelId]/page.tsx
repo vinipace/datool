@@ -1,5 +1,6 @@
 import { cache } from "react"
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import { pageMetadata } from "@/lib/page-metadata"
 import { PublicChat } from "@/components/build/chat/public-chat"
 import {
@@ -51,15 +52,26 @@ export default async function PublicChatRoute({
   searchParams,
 }: {
   params: Promise<{ channelId: string }>
-  searchParams: Promise<{ embed?: string; context?: string; origin?: string }>
+  searchParams: Promise<{
+    embed?: string
+    preload?: string
+    context?: string
+    origin?: string
+  }>
 }) {
   const [{ channelId }, query] = await Promise.all([params, searchParams])
   const initialAppearance = await readAppearance(channelId)
+  const requestHeaders = await headers()
   return (
     <PublicChat
       channelId={channelId}
       initialAppearance={initialAppearance}
+      visitorCountry={requestHeaders.get("cf-ipcountry")}
+      initialBrowserLanguages={requestHeaders.get("accept-language") ?? "en"}
       embedded={query.embed === "1"}
+      deferSessionUntilOpen={
+        query.embed === "1" && query.preload === "1" && !!query.origin
+      }
       context={parseContext(query.context)}
       embedOrigin={query.origin}
     />

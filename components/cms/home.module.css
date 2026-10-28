@@ -1,0 +1,496 @@
+.home {
+  --home-mono: var(--font-geist-mono, ui-monospace), monospace;
+  --home-band: var(--background);
+  --home-ink: var(--foreground);
+  --home-ink-muted: var(--foreground-muted);
+  --home-accent: var(--marketing-primary);
+}
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-block: 6rem 4rem;
+  text-align: center;
+}
+.headline {
+  max-width: 1120px;
+  font-size: clamp(2.6rem, 5.4vw, 4.6rem);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.headline em {
+  display: block;
+  color: var(--marketing-primary);
+  font-family: var(--font-landing-accent), ui-sans-serif, sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: -0.055em;
+}
+.description {
+  max-width: 640px;
+  margin-top: 1.75rem;
+  color: var(--foreground-muted);
+  font-size: 1.15rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2.25rem;
+}
+/* Three tabs sit on top of the screen; the active one carries the timer line. */
+.tourTabs {
+  --progress-color: var(--marketing-primary);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1.25rem;
+}
+.tourTab {
+  position: relative;
+  display: flex;
+  height: auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  padding: 1.1rem 1.25rem 1.2rem;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--foreground-muted);
+  text-align: left;
+  white-space: normal;
+}
+.tourTab:hover {
+  background: transparent;
+  color: var(--foreground);
+}
+.tourTab::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: transparent;
+  transition: background-color 0.2s;
+}
+.tourTab[aria-pressed="true"] {
+  color: var(--foreground);
+}
+.tourTab[aria-pressed="true"]::before {
+  background: var(--border-strong);
+}
+.tourTabs[data-autoplay="false"] .tourTab[aria-pressed="true"]::before {
+  background: var(--marketing-primary);
+}
+/* The shared progress fill becomes a line drawn over the top border. */
+.tourTab > span[aria-hidden="true"] {
+  inset: 0 0 auto;
+  z-index: 1;
+  height: 2px;
+  opacity: 1;
+}
+.tourLabel {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 500;
+}
+.tourLabel svg {
+  width: 1rem;
+  height: 1rem;
+}
+.tourTab[aria-pressed="true"] .tourLabel svg {
+  color: var(--marketing-primary);
+}
+.tourCaption {
+  color: var(--foreground-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.showcase {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 3.5rem;
+}
+/* The forest band starts a third of the way down the screen. */
+.showcaseBand {
+  position: absolute;
+  inset: 34% 0 0;
+  z-index: -1;
+  background: var(--marketing-forest);
+  box-shadow: 0 0 0 100vmax var(--marketing-forest);
+  clip-path: inset(0 -100vmax);
+}
+.screen {
+  padding: 0.5rem;
+  color: var(--foreground);
+  border: 1px solid color-mix(in srgb, var(--marketing-ink) 14%, transparent);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--marketing-paper) 70%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--marketing-paper) 60%, transparent) inset,
+    0 40px 80px -40px var(--marketing-ink);
+  backdrop-filter: blur(12px);
+}
+.showcaseCaption {
+  margin-top: 1.5rem;
+  color: color-mix(in srgb, var(--marketing-paper) 72%, transparent);
+  font-size: 0.9rem;
+  text-align: center;
+}
+/* Colored sections run edge to edge without widening the page. */
+.band {
+  position: relative;
+  padding-block: 4.5rem;
+  background: var(--home-band);
+  box-shadow: 0 0 0 100vmax var(--home-band);
+  clip-path: inset(0 -100vmax);
+  color: var(--home-ink);
+}
+.band[data-tone="forest"] {
+  --home-band: var(--marketing-forest);
+  --home-ink: var(--marketing-paper);
+  --home-ink-muted: color-mix(in srgb, var(--marketing-paper) 72%, transparent);
+  --home-accent: var(--marketing-leaf);
+}
+.band[data-tone="lilac"] {
+  --home-band: var(--marketing-lilac);
+  --home-ink: var(--marketing-ink);
+  --home-ink-muted: color-mix(
+    in srgb,
+    var(--marketing-ink) 82%,
+    var(--home-band)
+  );
+  --home-accent: var(--marketing-ink);
+}
+.band[data-tone="leaf"] {
+  --home-band: var(--marketing-leaf);
+  --home-ink: var(--marketing-ink);
+  --home-ink-muted: color-mix(
+    in srgb,
+    var(--marketing-ink) 82%,
+    var(--home-band)
+  );
+  --home-accent: var(--marketing-forest);
+}
+.section {
+  padding-block: 4.5rem;
+}
+.eyebrow {
+  margin-bottom: 1rem;
+  color: var(--home-accent);
+  font: 500 0.72rem var(--home-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.heading {
+  max-width: 680px;
+  margin-bottom: 2.5rem;
+  font-size: clamp(1.9rem, 3.6vw, 2.9rem);
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.platform {
+  display: grid;
+  gap: 1rem;
+  align-items: stretch;
+}
+.paths {
+  display: grid;
+  gap: 1rem;
+}
+.connector {
+  display: grid;
+  place-items: center;
+  color: var(--marketing-ink);
+}
+.connector svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  transform: rotate(90deg);
+}
+/* Stacked on small screens, one arrow is enough. */
+.connector svg + svg {
+  display: none;
+}
+.workspaceChart {
+  flex: 1;
+  min-height: 12rem;
+}
+.pillar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: var(--background);
+  color: var(--foreground);
+}
+.pillar[data-step="2"] {
+  padding: 1.75rem;
+}
+.step {
+  color: var(--foreground-muted);
+  font: 500 0.7rem var(--home-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.pillar h3 {
+  margin-top: 0.75rem;
+  font-size: 1.3rem;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.pillar[data-step="2"] h3 {
+  font-size: 1.6rem;
+}
+.pillar h3 a {
+  border-radius: 0.25rem;
+  outline: none;
+}
+.pillar h3 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.pillar h3 a:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.pillar h3 svg {
+  display: inline;
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.35rem;
+  vertical-align: -0.1em;
+  color: var(--foreground-muted);
+}
+.pillar > p:not(.step) {
+  max-width: 460px;
+  margin-block: 0.5rem 1.25rem;
+  color: var(--foreground-muted);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+.snippet {
+  margin-top: auto;
+  overflow-x: auto;
+  padding: 0.9rem 1rem;
+  border-radius: 0.6rem;
+  background: var(--muted);
+  font: 0.72rem/1.7 var(--home-mono);
+  white-space: pre;
+}
+.capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+}
+.capabilities li {
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: var(--marketing-lilac);
+  color: var(--marketing-ink);
+  font-size: 0.75rem;
+}
+.channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-content: flex-start;
+  margin-top: auto;
+}
+.channels span {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+.channels svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--marketing-primary);
+}
+.channels span[data-inbox] {
+  border-style: dashed;
+  color: var(--foreground-muted);
+}
+.agents {
+  scroll-margin-top: 5rem;
+}
+.agentGrid {
+  display: grid;
+  gap: 0.75rem;
+}
+.agentGrid h3 {
+  font-size: 1rem;
+  font-weight: 500;
+}
+.loop {
+  display: grid;
+  gap: 2rem;
+}
+.loop li {
+  padding-top: 1.25rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--marketing-ink) 25%, transparent);
+}
+.loop span {
+  font: 500 0.75rem var(--home-mono);
+}
+.loop h3 {
+  margin-top: 2.5rem;
+  font-size: 1.6rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+.loop p {
+  max-width: 340px;
+  margin-top: 0.6rem;
+  color: var(--home-ink-muted);
+  line-height: 1.7;
+}
+.questions {
+  --faq-accent: var(--marketing-primary);
+  --faq-title-size: clamp(1.9rem, 3.6vw, 2.9rem);
+  --faq-title-weight: 500;
+  --faq-title-leading: 1.12;
+  --faq-title-tracking: -0.04em;
+  padding-block: 6rem;
+}
+/* The page closes on paper with a skyline that rises into the footer. */
+.closing {
+  margin-bottom: -4rem;
+  padding-top: 6rem;
+  background: var(--marketing-paper);
+  box-shadow: 0 0 0 100vmax var(--marketing-paper);
+  clip-path: inset(0 -100vmax);
+  color: var(--marketing-ink);
+  text-align: center;
+}
+.cta {
+  max-width: 720px;
+  margin-inline: auto;
+}
+.cta h2 {
+  font-size: clamp(2.1rem, 4.5vw, 3.6rem);
+  font-weight: 500;
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.cta p {
+  margin-block: 1.25rem 2rem;
+  color: color-mix(in srgb, var(--marketing-ink) 82%, var(--marketing-paper));
+  font-size: 1.05rem;
+}
+/* Blurred columns, edge to edge; the shell is the inline-size container. */
+.skyline {
+  height: clamp(14rem, 34vw, 26rem);
+  margin-top: 1rem;
+  margin-inline: calc(50% - 50cqw);
+  overflow: hidden;
+}
+/* The blur layer runs past the clipped edges so they stay solid. */
+.skyline > div {
+  display: flex;
+  height: calc(100% + 3rem);
+  align-items: flex-end;
+  margin-inline: -2rem;
+  filter: blur(10px);
+}
+.skyline span {
+  flex: 1;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--marketing-leaf) 45%, transparent) 14%,
+    var(--marketing-leaf) 32%,
+    var(--marketing-primary) 62%,
+    var(--marketing-forest) 88%
+  );
+  transform-origin: bottom;
+  animation: rise 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* Where supported, the columns grow as the section scrolls into view. */
+@supports (animation-timeline: view()) {
+  .skyline span {
+    animation-timeline: view();
+    animation-range: entry 10% cover 45%;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0.4;
+    transform: scaleY(0.35);
+  }
+}
+/* Narrow columns keep their steps with a lighter blur. */
+@media (max-width: 639px) {
+  .skyline > div {
+    margin-inline: -1rem;
+    filter: blur(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skyline span {
+    animation: none;
+  }
+}
+@media (min-width: 640px) {
+  .agentGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 900px) {
+  .platform {
+    grid-template-columns: minmax(0, 1fr) 2.5rem minmax(0, 1.15fr);
+  }
+  .connector {
+    grid-template-rows: repeat(2, 1fr);
+  }
+  .connector svg {
+    transform: none;
+  }
+  .connector svg:first-child {
+    transform: rotate(20deg);
+  }
+  .connector svg + svg {
+    display: block;
+    transform: rotate(-20deg);
+  }
+  .agentGrid,
+  .loop {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 599px) {
+  .tourTab {
+    align-items: center;
+    padding-inline: 0.5rem;
+  }
+  .tourCaption {
+    display: none;
+  }
+  .hero {
+    padding-block: 3.5rem 2.5rem;
+  }
+  .screen {
+    padding: 0.3rem;
+    border-radius: 1rem;
+  }
+  .band,
+  .section {
+    padding-block: 3.25rem;
+  }
+}

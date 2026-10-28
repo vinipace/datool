@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef } from "react"
+import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,13 +12,18 @@ export function TextSearchInput({
   placeholder,
   value,
   onChange,
+  focusRequest = 0,
 }: {
   label: string
   placeholder?: string
   value: string
   onChange: (value: string) => void
+  focusRequest?: number
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (focusRequest) inputRef.current?.focus()
+  }, [focusRequest])
   return (
     <SearchBarSurface onFocusInput={() => inputRef.current?.focus()}>
       <Input

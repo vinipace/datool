@@ -43,7 +43,11 @@ import { collectionSqlFilter, collectionSqlPage } from "./collection-sql"
 import { invocationGroupSchema } from "@/src/lib/tracer/groups"
 import { createResourceService } from "./resources"
 import { scorerEvidence } from "./scorer-execution"
+import { latestDatasetResults } from "./dataset-results"
+import { evaluationInspectorSpans } from "./eval-inspector"
+import { agentEvaluationPrefix, resolveAgentEvaluation } from "../build/evaluation"
 import {
+  type ResolvedApp,
   beginInvocation,
   resolveApp,
   validateAppInput,
@@ -162,6 +166,7 @@ type EvaluatorVersionRow = typeof evaluatorVersions.$inferSelect
 type SavedViewDbRow = typeof savedViews.$inferSelect
 
 type ListOptions = {
+  agentId?: string
   includeTotal?: boolean
   filter?: string | null
   cursor?: string | null
@@ -343,6 +348,7 @@ function toSpan(row: SpanRow): Span {
 
 function toDataset(row: DatasetRow, itemCount: number): Dataset {
   return {
+    agentId: row.agentId,
     versionId: row.versionId,
     revision: row.revision,
     metadata: fromObjectJson(row.metadataJson),
@@ -548,7 +554,7 @@ export class TracerService {
 
   private readonly projectId: string
   private execution() {
-    return evalExecution(this.database, this, { resolveApp: this.options.resolveApp ?? resolveApp, persist: (...args) => this.persistEvaluatorResult(...args) })
+    return evalExecution(this.database, this, { resolveApp: (id) => this.resolveEvaluationApp(id), persist: (...args) => this.persistEvaluatorResult(...args) })
   }
 
   cancelEvalRun(id: string) { return tracerEffect(() => this.execution().cancel(id)) }
@@ -572,7 +578,7 @@ export class TracerService {
 
   constructor(
     private readonly database: TracerDatabase,
-    private readonly options: { resolveApp?: typeof resolveApp; promptCache?: PromptCache } = {}
+    private readonly options: { resolveApp?: (id: string) => Promise<ResolvedApp>; promptCache?: PromptCache } = {}
   ) {
     this.agent = createAgentFoundations(database, (db) => new TracerService(db, this.options))
     this.resources = createResourceService(database)
@@ -911,7 +917,7 @@ export class TracerService {
     )
   }
 
-  listDatasetItems(id: string, options: ListOptions & { preview?: boolean } = {}) {
+  listDatasetItems(id: string, options: ListOptions & { preview?: boolean; includeResults?: boolean } = {}) {
     return tracerEffect(() =>
       this.read((service) => service.listDatasetItemsUnsafe(id, options))
     )
@@ -1924,9 +1930,9 @@ export class TracerService {
   private async listDatasetsUnsafe(options: ListOptions) {
     return collectionSqlPage<Dataset>(
       this.database,
-      sql`select id,name,description,metadata_json::jsonb as metadata,field_schemas_json::jsonb as "fieldSchemas",version_id as "versionId",revision,created_at as "createdAt",updated_at as "updatedAt",
+      sql`select id,agent_id as "agentId",name,description,metadata_json::jsonb as metadata,field_schemas_json::jsonb as "fieldSchemas",version_id as "versionId",revision,created_at as "createdAt",updated_at as "updatedAt",
       (select count(*)::integer from dataset_items i where i.project_id = ${this.projectId} and i.dataset_id = datasets.id) as "itemCount"
-      from datasets where project_id = ${this.projectId} ${options.filter ? sql`and strpos(lower(name || ' ' || coalesce(description,'')),lower(${options.filter})) > 0` : sql``}`,
+      from datasets where project_id = ${this.projectId} ${options.agentId ? sql`and agent_id=${options.agentId}` : sql``} ${options.filter ? sql`and strpos(lower(name || ' ' || coalesce(description,'')),lower(${options.filter})) > 0` : sql``}`,
       options,
       "updatedAt"
     )
@@ -1981,9 +1987,9 @@ export class TracerService {
     return { ...toDataset(row, items.length), items: items.map(toDatasetItem) }
   }
 
-  private async listDatasetItemsUnsafe(id: string, options: ListOptions & { preview?: boolean }) {
+  private async listDatasetItemsUnsafe(id: string, options: ListOptions & { preview?: boolean; includeResults?: boolean }) {
     const [dataset] = await this.database
-      .select({ id: datasets.id })
+      .select({ id: datasets.id, agentId: datasets.agentId })
       .from(datasets)
       .where(and(eq(datasets.projectId, this.projectId), eq(datasets.id, id)))
       .limit(1)
@@ -2005,7 +2011,8 @@ export class TracerService {
       "createdAt",
       true
     ))
-    return { ...page, items: page.items.map(row => ({ ...toDatasetItem(row), ...(row.omittedFields && Object.keys(row.omittedFields).length ? { omittedFields: row.omittedFields } : {}) })) }
+    const results = options.includeResults ? await latestDatasetResults(this.database, id, dataset.agentId, page.items.map(row => row.id)) : null
+    return { ...page, ...(results ? { evaluationSummary: results.summary } : {}), items: page.items.map(row => ({ ...toDatasetItem(row), ...(results ? { latestEvaluation: results.items.get(row.id) ?? null } : {}), ...(row.omittedFields && Object.keys(row.omittedFields).length ? { omittedFields: row.omittedFields } : {}) })) }
   }
 
   private async patchDatasetUnsafe(
@@ -2243,11 +2250,33 @@ export class TracerService {
     return this.getEvaluatorUnsafe(id)
   }
 
+  private resolveEvaluationApp(id: string): Promise<ResolvedApp> {
+    return id.startsWith(agentEvaluationPrefix)
+      ? resolveAgentEvaluation(this.database, id.slice(agentEvaluationPrefix.length))
+      : (this.options.resolveApp ?? resolveApp)(id)
+  }
+
   private async createEvalRunUnsafe(
     input: CreateEvalRunInput
   ): Promise<EvalRunDetail> {
     const iteration = await resolveRunIteration(this.database, input)
     input = iteration.input
+    if (input.appId?.startsWith(agentEvaluationPrefix)) {
+      const selectedAgent = input.appId.slice(agentEvaluationPrefix.length)
+      if (input.agentId && input.agentId !== selectedAgent) throw validation("The selected agent does not match the evaluation target.")
+      input.agentId = selectedAgent
+    }
+    if (input.agentId && !input.sourceRunId) {
+      if (input.appId && input.appId !== `${agentEvaluationPrefix}${input.agentId}`) throw validation("Agent evaluations cannot target another app.")
+      if (input.traceIds?.length || input.input !== undefined) throw validation("Agent evaluations require a linked dataset.")
+      if (input.promptOverrides) throw validation("Agent evaluations use the agent's applied instructions and model.")
+      input.mode = "connected"
+      input.appId = `${agentEvaluationPrefix}${input.agentId}`
+    }
+    if (input.agentId && input.datasetId && !input.parentRunId && !input.sourceRunId) {
+      const linked = await this.getDatasetUnsafe(input.datasetId, false)
+      if (linked.agentId !== input.agentId) throw validation("Select a dataset linked to this agent.")
+    }
     let inputOverrides: JsonObject | undefined
     try { inputOverrides = validateInputOverrides(input) } catch (error) {
       throw validation((error as Error).message)
@@ -2274,7 +2303,7 @@ export class TracerService {
       )
     const app =
       input.mode === "connected"
-        ? await (this.options.resolveApp ?? resolveApp)(input.appId ?? "")
+        ? await this.resolveEvaluationApp(input.appId ?? "")
         : null
     if (app && !singleInvocation && !input.parentRunId && (!input.datasetId || traceIds.length))
       throw validation("Connected runs require a dataset and no traceIds")
@@ -2282,7 +2311,7 @@ export class TracerService {
       throw validation("datasetVersionId requires datasetId and cannot accompany sourceRunId")
     if (input.evaluatorVersionIds && Object.keys(input.evaluatorVersionIds).some((id) => !evaluatorIds.includes(id)))
       throw validation("Version pins must refer to selected evaluators")
-    let promptConfig = app ? input.useRecordedVersions && iteration.parent?.prompts && !Object.keys(input.promptOverrides ?? {}).length ? iteration.parent.prompts : await runTracerEffect(this.prompts.freeze(promptOverrides)) : undefined
+    let promptConfig = app && !app.buildAgent ? input.useRecordedVersions && iteration.parent?.prompts && !Object.keys(input.promptOverrides ?? {}).length ? iteration.parent.prompts : await runTracerEffect(this.prompts.freeze(promptOverrides)) : undefined
     if (input.useRecordedVersions && iteration.parent?.prompts && promptConfig) {
       for (const [slug, previous] of Object.entries(iteration.parent.prompts.prompts)) if (promptConfig.prompts[slug]?.id !== previous.id) throw validation(`Recorded prompt ${slug} no longer has the same identity. Select latest explicitly to use its replacement.`)
       const slugs = new Set([...Object.keys(iteration.parent.prompts.prompts), ...Object.keys(input.promptOverrides ?? {})])
@@ -2418,6 +2447,7 @@ export class TracerService {
     }
     await this.database.transaction(async (transaction) => {
       await transaction.insert(evalRuns).values({
+        agentId: input.agentId ?? null,
         metadataJson: JSON.stringify({
           ...input.metadata,
           parentRunId: input.parentRunId ?? input.sourceRunId ?? null,
@@ -2429,6 +2459,8 @@ export class TracerService {
           app: app?.definition ?? null,
           sourceApp,
           mode: app ? "connected" : "evidence",
+          agentId: input.agentId ?? null,
+          ...(app?.buildAgent ? { agentRevision: app.definition.revision, externalActions: "disabled" } : {}),
           // Reserved provenance: caller metadata cannot replace the actual overrides.
           inputOverrides: inputOverrides ?? {},
           concurrency: input.concurrency ?? 4,
@@ -2517,7 +2549,7 @@ export class TracerService {
     // Project before the SQL byte guard so frozen spans never enter a table read.
     const snapshotColumn = includeEvidence
       ? sql`snapshot_json`
-      : sql`(snapshot_json::jsonb #- '{trace,spans}' #- '{trace,scores}' #- '{datasetItem,sourceSpanEvidence}' #- '{datasetItem,input}' #- '{datasetItem,metadata}')::text`
+      : sql`(snapshot_json::jsonb #- '{trace,spans}' #- '{trace,scores}' #- '{trace,linkedTraces}' #- '{datasetItem,sourceSpanEvidence}' #- '{datasetItem,input}' #- '{datasetItem,metadata}')::text`
     const targetPage = await collectionSqlPage<
       typeof evalRunTargets.$inferSelect
     >(
@@ -2603,7 +2635,7 @@ export class TracerService {
             ...snapshot.trace,
             durationMs: durationMs(snapshot.trace.startedAt, snapshot.trace.endedAt),
             spans: [
-              ...snapshot.trace.spans,
+              ...evaluationInspectorSpans(snapshot.trace),
               ...scorerSpans.filter(span => JSON.parse(span.attributesJson)["eval.target_id"] === target.id).map(toSpan),
             ],
             scores: targetResults.map((result): TraceScore => ({
@@ -2624,9 +2656,10 @@ export class TracerService {
           }
         : undefined
       // TraceSummary never includes spans/scores; those belong to scoringTrace.
-      const frozenSummary: Partial<TraceDetail> = { ...snapshot?.trace }
+      const frozenSummary: Partial<TraceDetail & Pick<TraceForEvaluation, "linkedTraces">> = { ...snapshot?.trace }
       delete frozenSummary.spans
       delete frozenSummary.scores
+      delete frozenSummary.linkedTraces
       return [
         {
           id: target.id,

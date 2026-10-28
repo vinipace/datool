@@ -1,12 +1,15 @@
 "use client"
 import { useLivePreview } from "@payloadcms/live-preview-react"
-import type { Page, FaqPage, Faq } from "@/payload-types"
+import type { AgentLanding, Page, FaqPage, Faq } from "@/payload-types"
 import { MarketingShell } from "./marketing-shell"
+import { HomePage } from "./home-page"
 import { PageBlocks } from "./page-blocks"
 import { FAQAnswer } from "./faq-content"
 import { ProductPillarPage } from "./product-page"
 import { getProductPillar } from "@/lib/marketing/product"
 import { richText } from "@/cms/seed-content"
+import { agentLandingContent } from "@/cms/agent-landing-content"
+import { AgentLandingPage } from "./agent-landing"
 
 const placeholder: Page = {
   id: 0,
@@ -29,16 +32,25 @@ export function LivePreview({
   type,
   serverURL,
 }: {
-  type: "pages" | "landing-page" | "faq-page" | "faqs"
+  type: "pages" | "landing-page" | "faq-page" | "faqs" | "agent-landings"
   serverURL: string
 }) {
-  const { data } = useLivePreview<Page | FaqPage | Faq>({
+  const { data } = useLivePreview<Page | FaqPage | Faq | AgentLanding>({
     initialData:
-      type === "faqs"
-        ? answerPlaceholder
-        : type === "faq-page"
-          ? faqPlaceholder
-          : placeholder,
+      type === "agent-landings"
+        ? {
+            ...agentLandingContent["whatsapp-sales"],
+            // Live preview replaces these with the edited document's questions.
+            faq: { ...agentLandingContent["whatsapp-sales"].faq, items: [] },
+            id: 0,
+            createdAt: "",
+            updatedAt: "",
+          }
+        : type === "faqs"
+          ? answerPlaceholder
+          : type === "faq-page"
+            ? faqPlaceholder
+            : placeholder,
     serverURL,
     depth: 2,
     apiRoute: "/cms/api",
@@ -49,20 +61,20 @@ export function LivePreview({
       : undefined
   return (
     <MarketingShell>
-      {"question" in data ? (
+      {"hero" in data ? (
+        <AgentLandingPage page={data} />
+      ) : "question" in data ? (
         <FAQAnswer faq={data} />
       ) : "layout" in data && pillar ? (
-        <ProductPillarPage page={data} pillar={pillar} />
+        <ProductPillarPage page={data} pillar={pillar} preview />
+      ) : "layout" in data && type === "landing-page" ? (
+        <HomePage blocks={data.layout ?? []} preview />
       ) : "layout" in data ? (
         <>
           {data.layout?.[0]?.blockType !== "hero" && (
             <h1 className="pt-16 text-4xl font-semibold">{data.title}</h1>
           )}
-          <PageBlocks
-            blocks={data.layout ?? []}
-            preview
-            landing={type === "landing-page"}
-          />
+          <PageBlocks blocks={data.layout ?? []} preview />
         </>
       ) : (
         <div className="py-24">

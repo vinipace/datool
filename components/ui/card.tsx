@@ -65,13 +65,20 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardAction({ className, ...props }: React.ComponentProps<"button">) {
+function CardAction({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"button"> & { variant?: "default" | "preview" }) {
   return (
     <button
       type="button"
       data-slot="card-action"
       className={cn(
-        "group grid w-full min-w-0 cursor-pointer gap-5 rounded-xl p-5 text-left transition-colors outline-none hover:bg-surface-row-hover focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+        "group grid w-full min-w-0 cursor-pointer rounded-xl text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+        variant === "preview"
+          ? "gap-3 p-0 hover:bg-transparent"
+          : "gap-5 p-5 hover:bg-surface-row-hover",
         className
       )}
       {...props}

@@ -168,8 +168,18 @@ scrolling, waiting feedback and Enter/Shift + Enter behavior.
 The inbox uses the shared chat's `operator` perspective: customer messages sit
 on the left, and AI or teammate replies sit on the right. This changes presentation
 and sender labels without changing message roles, history, or widget behavior.
-Human replies show the sender's profile avatar and display name; AI replies show
-the agent's configured avatar and name. The authenticated transcript operation
+The inbox opts into the shared `inbox` chat variant: neutral incoming bubbles,
+green outgoing bubbles, sender names inside replies, date separators, inline times
+and a rounded, single-row message field with a separate send button. Its compact customer header keeps status visible and includes icon tabs with
+tooltips for Conversation, Notes and Details;
+refresh and AI hand-back live in the conversation actions menu. Feedback sits beside the
+latest reply. The reading column starts below the header and uses narrower
+bubbles with tighter spacing; the composer aligns to the same column. Other operator transcripts retain profile/agent avatars.
+`components/ui/inbox-conversation.tsx` owns contact avatars, conversation rows,
+queue chips and the list skeleton. The inbox keeps server-side queue/search filters
+and the shared collection loading, retry, export and pagination controls. Its
+resizable desktop split gives the conversation 68% by default; narrow screens
+reuse the existing conversation sheet and restore focus to the selected row. The authenticated transcript operation
 resolves identities from stored sender IDs, scoped to the project organization.
 Sending a human reply automatically assigns the ticket to that authenticated
 sender. Reply persistence, assignment and delivery admission are atomic; retries
@@ -695,6 +705,13 @@ credentials stay with the action editor. Saves use the same versioned Build/MCP
 operations; the agent editor automatically applies saved definition changes for
 customer use.
 
+Create Actions includes **Show Widget** under Custom actions. Its editor uses
+`action-widget-picker.tsx` to search this agent’s widgets by name; disabled
+widgets remain visible but cannot be selected. A widget must be chosen before
+the action can be saved. The Actions collection uses the same `px-3 py-1`
+content spacing as the Widgets collection. The Create Actions catalog adds
+`pt-3` below its tabs, giving the cards a total top inset of 16px.
+
 `components/ui/chat-rich-content.tsx` owns widget rendering in both chats and the
 editor preview. Default state data is merged with named preview state and pinned
 action inputs; template values are rendered as escaped text, never executed.
@@ -705,10 +722,21 @@ action. Theme controls reuse the scoped `datool-chat-surface` tokens.
 
 ## Agent editing
 
-Settings combines identity and appearance in the shared, single-column form
-layout, using `InspectorSection` and `FormRow`. Revision history and the setup
-checklist stay in disclosures below the appearance fields.
+Settings uses one flat, single-column form with `FormRow` fields for display name,
+slug, description and avatar, without Identity or Appearance sections. The
+display name edits the agent name and its legacy appearance name together.
+The form uses the standard left gutter and a single bounded column, with its
+heading aligned to the field labels. Revision history and the setup checklist
+are omitted from Settings.
+Welcome message, input placeholder and suggested replies are configured in the
+chat widget's channel editor, outside agent Settings.
 The former `section=appearance` URL opens Settings for existing bookmarks.
+
+Guardrails uses four always-visible groups: Content & access, Conversation limits,
+Traffic & spam, and Daily limits. Shared `FormRow` descriptions explain units,
+optional values and scope; labels remain distinct from accessible descriptions.
+Daily limits describe the existing UTC reset. The editor retains multiline drafts
+while normalizing blocked terms and country codes for autosave.
 
 `components/build/agents/agent-editor.tsx` omits the separate revision/save toolbar.
 Existing agents automatically save and apply valid identity, instruction,
@@ -718,3 +746,37 @@ revision, retains edits made during an in-flight save, and applies definition
 changes after their editors save them. Invalid changes remain local; failed
 writes preserve the draft and expose Retry. A compact header status announces
 saving and saved states. New agents still require the explicit Create agent action.
+
+
+### Agent and Inbox navigation
+
+The workspace sidebar switches to the agent's navigation while its editor or a
+channel opened from that agent owns `AgentSidebarTarget`. The agent avatar/name
+returns to the agent list. Analytics comes first, Build and Activity are
+collapsible groups. Settings is the final item inside Build; Activity contains
+Conversations, Leads and Collected data.
+Conversations opens inside the agent editor at `section=conversations`, retaining
+the agent sidebar. It reuses the shared all-chats collection with a fixed agent
+scope applied before pagination; URL filters cannot override or remove it. The
+current agent's Integrations page remains reachable from this navigation.
+The project-wide Conversations table includes an Agent column with the current
+agent name and configured avatar, including archived agents, using the shared
+column visibility and ordering controls. Agent-scoped conversations omit this
+redundant column from both the table and Display controls.
+Contacts opens at `section=contacts` in the same agent navigation. It reuses the
+contact directory and inspector with a fixed agent scope, applied before
+pagination and CSV export. A contact belongs in this view when linked to one of
+the agent's conversations through conversation metadata, a ticket, a lead or
+collected data. Repeated associations produce one row; contacts can appear for
+more than one agent. Creation and imports remain in the project-wide directory.
+Home and the other workspace groups are hidden while agent navigation is active.
+
+Inbox has a dedicated sidebar with New Ticket, Search, My Inbox, Mentions, All,
+Unassigned, Solved, and recent ticket conversations. The collection uses a compact
+search toolbar without a duplicate title. Refresh,
+additional status filters and settings use the collection menu; an active additional
+status is shown as a removable chip.
+Queue and agent filters are applied before pagination on the server; My Inbox
+uses the authenticated actor, and Mentions matches explicit @email mentions in
+internal notes. Selection and filters are reflected in the URL for browser Back
+and deep links. Conversations remains the separate collection of all chats.

@@ -5,6 +5,17 @@ PostgreSQL, and Redis. Docker Compose persists the database, Redis queue, and up
 The application image runs as a non-root user. The CMS, Cloud billing, and
 Datool-funded execution are off by default.
 
+PostgreSQL must have [pgvector](https://github.com/pgvector/pgvector) installed
+before migration `0058_build_knowledge_embeddings.sql`; the migration enables
+the extension in `public`. Fresh Compose installations use the pgvector
+PostgreSQL 17 image. For an existing database, install pgvector for its existing
+PostgreSQL version/distribution before migrating. Do not directly reuse an
+Alpine database volume with the Debian-based pgvector image: preserve a backup
+and use a tested dump/restore migration when changing distributions or versions.
+Verify `SELECT extversion FROM pg_extension WHERE extname = 'vector'` after
+migration. Agent knowledge uses project-owned AI Gateway or OpenAI credentials;
+see [knowledge retrieval and backfill](build.md).
+
 Observe, Test, and the SDKs are Apache 2.0. Build is covered by Elastic License
 2.0, including its hosted-service restriction; self-hosting does not remove that
 restriction. See [Licensing](../LICENSING.md) for allowed use and the commercial

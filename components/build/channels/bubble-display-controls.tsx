@@ -166,14 +166,23 @@ export function BubbleLocalization({
           onChange={(event) =>
             onChange({
               ...config,
-              source: event.target.value as "browser" | "fixed",
+              source: event.target
+                .value as ChatBubbleSettings["localization"]["source"],
             })
           }
         >
           <option value="browser">Visitor’s browser</option>
+          <option value="country">Visitor’s country</option>
           <option value="fixed">Default language</option>
         </Select>
       </FormLabel>
+      {config.source === "country" ? (
+        <p className="text-xs leading-5 text-foreground-muted">
+          Use the country detected by your hosting provider. When unavailable or
+          its language is not enabled, use the visitor’s browser language, then
+          the default. Preview countries using the selector above the chat.
+        </p>
+      ) : null}
       <FormLabel label="Default language">
         <Select
           value={config.defaultLanguage}

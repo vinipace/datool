@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm"
+import { drainInboxPush } from "../src/server/build/mobile/push"
 import { createTracerDatabase } from "../src/server/tracer/db"
 import { createBuildContext } from "../src/server/build/context"
 import {
@@ -333,6 +334,10 @@ await Promise.all([
   loop("simulation queue failed", simulationTask, 2000),
   loop("campaign queue failed", campaignTask, 2000),
   loop("conversation wait scheduler failed", waitTask, 1000),
+  loop("inbox push queue failed", async () => {
+    await drainInboxPush(workerDatabase)
+    return false
+  }, 5000),
 ])
 const { db, analyticsDb } = await import("../lib/db")
 await Promise.all([db.end(), analyticsDb.end()])

@@ -1,7 +1,7 @@
 # Development databases only; intentionally separate from the production stack.
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: datool
       POSTGRES_USER: datool

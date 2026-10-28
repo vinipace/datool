@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { widgetTranslationsSchema } from "./widget-i18n"
 
 import type { JsonValue } from "@/src/lib/tracer/contracts"
 import { safeHttpUrlSchema } from "@/src/lib/build/urls"
@@ -237,6 +238,7 @@ export const actionDefinitionSchema = z.discriminatedUnion("type", [
     type: z.literal("form"),
     captureLead: z.boolean().default(false),
     submitLabel: z.string().min(1).max(120).default("Submit"),
+    translations: widgetTranslationsSchema.optional(),
     fields: z
       .array(
         z.object({
@@ -249,6 +251,7 @@ export const actionDefinitionSchema = z.discriminatedUnion("type", [
             "number",
             "select",
             "textarea",
+            "checkbox",
           ]),
           required: z.boolean().default(false),
           options: z.array(z.string().max(300)).max(100).default([]),
@@ -319,8 +322,9 @@ export const procedureDefinitionSchema = z.object({
   description: z.string().max(2_000).default(""),
   enabled: z.boolean().default(true),
   trigger: procedureTriggerSchema,
+  instructions: z.string().max(32_000).optional(),
   variables: z.record(z.string().max(120), z.json()).default({}),
-  steps: z.array(procedureStepSchema).min(1).max(15),
+  steps: z.array(procedureStepSchema).max(15).default([]),
   branches: z
     .array(
       z.object({
@@ -332,6 +336,12 @@ export const procedureDefinitionSchema = z.object({
     .max(5)
     .default([]),
   actionRefs: z.array(z.string().min(1).max(120)).max(100).default([]),
+}).superRefine((definition, context) => {
+  const hasInstructions = Boolean(definition.instructions?.trim())
+  if (!hasInstructions && !definition.steps.length)
+    context.addIssue({ code: "custom", path: ["instructions"], message: "Add skill instructions or at least one structured step." })
+  if (hasInstructions && (definition.steps.length || definition.branches.length))
+    context.addIssue({ code: "custom", path: ["steps"], message: "Use skill instructions or structured steps, not both." })
 })
 export type ProcedureDefinition = z.infer<typeof procedureDefinitionSchema>
 
@@ -374,6 +384,7 @@ export type WidgetComponent = z.infer<typeof widgetComponentSchema>
 
 export const widgetDefinitionSchema = z
   .object({
+    translations: widgetTranslationsSchema.optional(),
     name: z.string().min(1).max(160),
     description: z.string().max(2_000).default(""),
     enabled: z.boolean().default(true),

@@ -2,6 +2,7 @@ import { api, readJson } from "@/src/server/tracer/http"
 import {
   parseCreateDataset,
   parseListLimit,
+  parseId,
 } from "@/src/server/tracer/validation"
 
 export const dynamic = "force-dynamic"
@@ -11,6 +12,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   return api(request, (service) =>
     service.listDatasets({
+      agentId: url.searchParams.has("agentId") ? parseId(url.searchParams.get("agentId")!, "agent id") : undefined,
       filter: url.searchParams.get("filter"),
       cursor: url.searchParams.get("cursor"),
       includeTotal: url.searchParams.get("includeTotal") === "true",

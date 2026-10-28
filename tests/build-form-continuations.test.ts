@@ -123,6 +123,34 @@ describe("Build customer form continuations", () => {
     if (databaseEnabled) test(name, fn)
   }
 
+  dbTest("keeps a saved form complete when its model follow-up fails", async () => {
+    const { context, service } = await makeContext()
+    const form = await saveAction(context, "agent-a", { id: "failure-form", definition: {
+      id: "failure-form", name: "Demo request", type: "form", channels: ["web"], captureLead: true,
+      fields: [{ name: "email", label: "Email", type: "email", required: true }],
+      translations: { "pt-BR": { "Demo request": "Solicitar demonstração", Email: "E-mail" } },
+    } })
+    await applyCatalog(context)
+    const opened = await runAgentTurn(context, { agentId: "agent-a", channel: "web", externalConversationId: "failed-followup", requestKey: "open-failed-followup", message: "Quero uma demonstração", metadata: {} }, {
+      conversationService: service, dependencies: { generateText: modelTool(form.id, "open-failed-followup") },
+    })
+    expect(opened.continuations[0]?.translations?.["pt-BR"]?.["Demo request"]).toBe("Solicitar demonstração")
+    const continuationId = opened.continuations[0]!.continuationId!
+    await rejects(runAgentTurn(context, {
+      agentId: "agent-a", channel: "web", conversationId: opened.conversation.id, requestKey: "submit-failed-followup", message: "Enviar",
+      metadata: { widgetInteraction: { actionId: form.id, continuationId, input: { email: "synthetic@example.test" } } },
+    }, { conversationService: service, dependencies: { generateText: (async () => { throw new Error("Provider unavailable") }) as never } }),
+      error => errorCode(error) === "MODEL_REQUEST_FAILED")
+    const messages = await service.getMessagesForModel(opened.conversation.id)
+    expect(messages.some(message => message.metadata.internalFormReceipt === true && message.metadata.completedContinuationId === continuationId)).toBe(true)
+    const leads = await context.database.execute(sql`SELECT id FROM build_leads WHERE project_id=${context.projectId} AND conversation_id=${opened.conversation.id}`)
+    expect(leads.rows).toHaveLength(1)
+    await rejects(runAgentTurn(context, {
+      agentId: "agent-a", channel: "web", conversationId: opened.conversation.id, requestKey: "duplicate-after-failure", message: "Enviar",
+      metadata: { widgetInteraction: { actionId: form.id, continuationId, input: { email: "synthetic@example.test" } } },
+    }, { conversationService: service }), error => errorCode(error) === "CONTINUATION_NOT_AVAILABLE")
+  })
+
   dbTest(
     "executes the persisted form submit target once and rejects a forged target",
     async () => {
@@ -223,6 +251,7 @@ describe("Build customer form continuations", () => {
         {
           conversationService: service,
           dependencies: {
+            generateText: (async () => ({ text: "Your order was accepted.", usage: {} })) as never,
             executeAction: async ({
               action,
               input,
@@ -416,6 +445,8 @@ describe("Build customer form continuations", () => {
               type: "email",
               required: true,
             },
+            { name: "isAgency", label: "Agency", type: "checkbox" },
+            { name: "consent", label: "Contact consent", type: "checkbox", required: true },
           ],
         },
       })
@@ -480,6 +511,15 @@ describe("Build customer form continuations", () => {
       const continuationId = pending.continuations[0]?.continuationId
       expect(continuationId).toBeTruthy()
 
+      let followupCalls = 0
+      const reply = "Thanks! Your demo request is saved and the team can follow up."
+      const followup = (async (options: { system: string; messages: Array<{ content: string }> }) => {
+        followupCalls++
+        expect(options.system).toContain("processing has finished")
+        expect(options.system).toContain('"saved":true')
+        expect(options.messages.some(message => message.content.includes("customer@example.test"))).toBe(true)
+        return { text: reply, usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 } }
+      }) as never
       const resumed = await runAgentTurn(
         context,
         {
@@ -492,11 +532,11 @@ describe("Build customer form continuations", () => {
             widgetInteraction: {
               actionId: form.id,
               continuationId,
-              input: { email: "customer@example.test" },
+              input: { email: "customer@example.test", isAgency: false, consent: true },
             },
           } as never,
         },
-        { conversationService: service }
+        { conversationService: service, dependencies: { generateText: followup } }
       )
 
       expect(resumed.status).toBe("completed")
@@ -512,12 +552,15 @@ describe("Build customer form continuations", () => {
             widgetInteraction: {
               actionId: form.id,
               continuationId,
-              input: { email: "customer@example.test" },
+              input: { email: "customer@example.test", isAgency: false, consent: true },
             },
           } as never,
         },
         { conversationService: service }
       )
+      expect(resumed.text).toBe(reply)
+      expect(resumed.usage.totalTokens).toBe(8)
+      expect(followupCalls).toBe(1)
       expect(replay.status).toBe("replayed")
       expect(resumed.message?.metadata.completedContinuationId).toBe(
         continuationId
@@ -532,12 +575,14 @@ describe("Build customer form continuations", () => {
       WHERE project_id = ${context.projectId}
         AND conversation_id = ${pending.conversation.id}
     `)
-      expect(rows.rows).toEqual([
+      expect(rows.rows.sort((a, b) => a.field_key.localeCompare(b.field_key))).toEqual([
+        { field_key: "consent", value_json: true, source: "form" },
         {
           field_key: "email",
           value_json: "customer@example.test",
           source: "form",
         },
+        { field_key: "isAgency", value_json: false, source: "form" },
       ])
       const leads = await context.database.execute<{ data_json: unknown }>(sql`
       SELECT data_json FROM build_leads
@@ -545,7 +590,7 @@ describe("Build customer form continuations", () => {
         AND conversation_id = ${pending.conversation.id}
     `)
       expect(leads.rows).toEqual([
-        { data_json: { email: "customer@example.test" } },
+        { data_json: { email: "customer@example.test", isAgency: false, consent: true } },
       ])
     }
   )

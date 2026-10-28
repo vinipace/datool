@@ -1,3 +1,4 @@
+import { getAgent } from "../build/agents"
 import { validateDatasetSchemas } from "./dataset-fields"
 import { randomUUID } from "node:crypto"
 import { and, eq, inArray, sql } from "drizzle-orm"
@@ -129,6 +130,7 @@ async function insertDatasetInLibrary(
   folderId: string | null = null
 ) {
   const tx = database
+  if (input.agentId) await getAgent({ database, projectId: getTracerProjectId(database) }, input.agentId)
   const parent = await folderName(tx, folderId)
   const name = await ensureDatasetParents(
     tx,
@@ -139,6 +141,7 @@ async function insertDatasetInLibrary(
   const [row] = await tx
     .insert(datasets)
     .values({
+      agentId: input.agentId ?? null,
       id: input.id ?? `dset_${randomUUID()}`,
       projectId: getTracerProjectId(tx),
       name,
@@ -149,6 +152,7 @@ async function insertDatasetInLibrary(
     .returning()
   return {
     id: row.id,
+    agentId: row.agentId,
     versionId: row.versionId,
     revision: row.revision,
     name: row.name,
@@ -398,6 +402,7 @@ export async function patchDatasetInLibrary(
     )
     return {
       id: row.id,
+      agentId: row.agentId,
       versionId: row.versionId,
       revision: row.revision,
       name: row.name,

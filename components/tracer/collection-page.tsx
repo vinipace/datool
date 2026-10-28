@@ -27,6 +27,7 @@ type CollectionPageProps = React.PropsWithChildren<{
     refresh: () => void
   }
   loadingLabel: string
+  loadingContent?: React.ReactNode
   header?: Omit<
     React.ComponentProps<typeof CollectionHeaderControls>,
     "onRefresh" | "isRefreshing"
@@ -45,6 +46,7 @@ type CollectionPageProps = React.PropsWithChildren<{
 export function CollectionPage({
   state,
   loadingLabel,
+  loadingContent,
   header,
   pagination,
   pageRows,
@@ -98,7 +100,7 @@ export function CollectionPage({
           </div>
         )}
         {state.isLoading && !hasData && (
-          <>
+          loadingContent ?? <>
             <HeaderSlot name="display">
               <CollectionDisplaySkeleton iconOnly={displayIconOnly} />
             </HeaderSlot>
@@ -124,10 +126,12 @@ export function CollectionSearch({
   label,
   value,
   onChange,
+  focusRequest,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
+  focusRequest?: number
 }) {
   return (
     <TextSearchInput
@@ -135,6 +139,7 @@ export function CollectionSearch({
       placeholder={`${label}…`}
       value={value}
       onChange={onChange}
+      focusRequest={focusRequest}
     />
   )
 }

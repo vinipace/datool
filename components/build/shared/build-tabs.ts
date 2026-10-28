@@ -1,8 +1,29 @@
+import {
+  BookOpen,
+  FlaskConical,
+  ChartNoAxesCombined,
+  ContactRound,
+  FileText,
+  Database,
+  UserRoundCheck,
+  ListChecks,
+  MessagesSquare,
+  PanelsTopLeft,
+  Play,
+  Plug,
+  Radio,
+  Settings,
+  ShieldCheck,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react"
+
 export type BuildTab = {
   id: string
   label: string
+  icon: LucideIcon
   description: string
-  group: "Setup" | "Build" | "Release"
+  group: "Build" | "Activity" | "Manage" | "Hidden"
 }
 
 /**
@@ -10,78 +31,110 @@ export type BuildTab = {
  * in a smaller, task-oriented hierarchy.
  */
 export const agentBuildTabs: BuildTab[] = [
+  { id: "test", label: "Test", icon: FlaskConical, description: "Datasets and evaluations for this agent", group: "Manage" },
   {
     id: "overview",
-    label: "Overview",
+    label: "Analytics",
+    icon: ChartNoAxesCombined,
     description: "Activity and customer experience",
-    group: "Setup",
+    group: "Manage",
   },
   {
     id: "instructions",
     label: "Instructions",
+    icon: FileText,
     description: "Behavior and model",
-    group: "Setup",
+    group: "Build",
   },
   {
     id: "guardrails",
     label: "Guardrails",
+    icon: ShieldCheck,
     description: "Safety, usage and abuse limits",
-    group: "Setup",
-  },
-  {
-    id: "copilot",
-    label: "Copilot",
-    description: "Draft with an assistant",
-    group: "Setup",
+    group: "Build",
   },
   {
     id: "knowledge",
-    label: "Knowledge",
+    label: "Data sources",
+    icon: BookOpen,
     description: "Sources your agent can use",
     group: "Build",
   },
   {
     id: "integrations",
     label: "Integrations",
+    icon: Plug,
     description: "Connect apps your agent can use",
     group: "Build",
   },
   {
     id: "actions",
     label: "Actions",
+    icon: Wrench,
     description: "Things the agent can do",
     group: "Build",
   },
   {
     id: "procedures",
-    label: "Procedures",
-    description: "Repeatable workflows",
+    label: "Skills",
+    icon: ListChecks,
+    description: "Reusable instructions for specific tasks",
     group: "Build",
   },
   {
     id: "widgets",
     label: "Widgets",
+    icon: PanelsTopLeft,
     description: "Interactive responses",
     group: "Build",
   },
   {
+    id: "conversations",
+    label: "Conversations",
+    icon: MessagesSquare,
+    description: "Conversations with this agent",
+    group: "Activity",
+  },
+  {
+    id: "leads",
+    label: "Leads",
+    icon: UserRoundCheck,
+    description: "Leads captured by this agent",
+    group: "Activity",
+  },
+  {
+    id: "collected-data",
+    label: "Collected data",
+    icon: Database,
+    description: "Fields collected in this agent’s conversations",
+    group: "Activity",
+  },
+  {
+    id: "contacts",
+    label: "Contacts",
+    icon: ContactRound,
+    description: "Contacts from this agent’s conversations",
+    group: "Manage",
+  },
+  {
     id: "channels",
     label: "Channels",
+    icon: Radio,
     description: "Where customers reach you",
-    group: "Release",
+    group: "Manage",
   },
   {
     id: "playground",
     label: "Playground",
-    description: "Try the applied agent",
-    group: "Release",
+    icon: Play,
+    description: "Preview and try your website chat widget",
+    group: "Manage",
   },
   {
     id: "settings",
     label: "Settings",
-    description: "Identity, appearance and revision history",
-    group: "Setup",
+    icon: Settings,
+    description: "Identity and appearance",
+    group: "Build",
   },
 ]
-
-export const agentBuildTabGroups = ["Setup", "Build", "Release"] as const

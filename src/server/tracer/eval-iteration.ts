@@ -36,7 +36,7 @@ export async function resolveRunIteration(
   const project = getTracerProjectId(database)
   const row = (
     await database.execute(
-      sql`select status,dataset_id,metadata_json::jsonb as metadata from eval_runs where project_id=${project} and id=${id}`
+      sql`select status,agent_id,dataset_id,metadata_json::jsonb as metadata from eval_runs where project_id=${project} and id=${id}`
     )
   ).rows[0]
   if (!row) throw notFound("Eval run", id)
@@ -44,6 +44,7 @@ export async function resolveRunIteration(
     throw validation(
       "Wait for the source run to finish or cancel it before iterating."
     )
+  if (raw.agentId && raw.agentId !== row.agent_id) throw validation("The source run belongs to another agent.")
   const metadata = row.metadata as JsonObject
   const versions = (
     await database.execute(
@@ -59,6 +60,7 @@ export async function resolveRunIteration(
   )
   const input: CreateEvalRunInput = {
     ...raw,
+    agentId: typeof row.agent_id === "string" ? row.agent_id : undefined,
     evaluatorIds,
     ...(raw.useRecordedVersions
       ? { evaluatorVersionIds: { ...recorded, ...raw.evaluatorVersionIds } }

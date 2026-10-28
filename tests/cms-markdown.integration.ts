@@ -6,7 +6,11 @@ import {
 } from "@payloadcms/richtext-lexical"
 import configPromise from "../payload.config"
 import { createCMSMarkdownRenderer } from "../lib/cms/markdown"
-import { landingBlocks, richText } from "../cms/seed-content"
+import {
+  landingBlocks,
+  observeStoryBlocks,
+  richText,
+} from "../cms/seed-content"
 import type { Faq } from "../payload-types"
 
 const config = await configPromise
@@ -29,7 +33,13 @@ const faq: Faq = {
 }
 
 test("renders every page block and the full published FAQ answer", () => {
-  const layout = landingBlocks([]).map((block) =>
+  // The home page plus the Observe story's rich text covers every block type.
+  const layout = [
+    ...landingBlocks([1]),
+    ...observeStoryBlocks().filter(
+      (block) => block.blockType === "richContent"
+    ),
+  ].map((block) =>
     block.blockType === "faq"
       ? {
           ...block,
@@ -47,11 +57,14 @@ test("renders every page block and the full published FAQ answer", () => {
       : block
   )
   const markdown = renderer.page({ title: "Landing title", layout })
-  assert.ok(markdown.includes("# See what your AI is doing. Make it better."))
-  assert.ok(markdown.includes("### Follow every trace"))
+  assert.ok(
+    markdown.includes("# Build AI agents. See every decision they make.")
+  )
+  assert.ok(markdown.includes("### Observe everything"))
+  assert.ok(markdown.includes("[Learn more](/product/observe)"))
   assert.ok(markdown.includes("Start with the evidence you already have."))
   assert.ok(markdown.includes("### Question?\n\nThe complete answer."))
-  assert.ok(markdown.includes("[Open Datool](/sign-in)"))
+  assert.ok(markdown.includes("[Get started](/sign-up)"))
   assert.ok(!markdown.includes("Private answer"))
   assert.ok(!markdown.includes("Only a summary"))
   assert.ok(!markdown.includes("# Landing title"))

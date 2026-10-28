@@ -3,7 +3,14 @@
 import * as React from "react"
 import Link from "next/link"
 import { Popover } from "radix-ui"
-import { Check, ChevronDown, ChevronRight, Plus, Search } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  Plus,
+  Search,
+} from "lucide-react"
 import { Button, buttonVariants } from "./button"
 import { Input } from "./input"
 import { cn } from "@/lib/utils"
@@ -26,6 +33,7 @@ export function ResourceSwitcher({
   moreHref,
   triggerRef,
   leadingIcon,
+  triggerClassName,
 }: {
   label: "organization" | "project"
   value: string
@@ -43,6 +51,7 @@ export function ResourceSwitcher({
   moreHref?: string
   triggerRef?: React.Ref<HTMLButtonElement>
   leadingIcon?: React.ReactNode
+  triggerClassName?: string
 }) {
   const input = React.useRef<HTMLInputElement>(null)
   const content = React.useRef<HTMLDivElement>(null)
@@ -73,13 +82,18 @@ export function ResourceSwitcher({
           aria-label={`Switch ${label}: ${value}`}
           title={value}
           className={cn(
-            "min-w-0 justify-between gap-2 px-2 text-sm data-[state=open]:bg-muted has-[>svg]:px-2",
-            label === "project" ? "w-full" : "max-w-full"
+            "min-w-0 justify-between gap-2 px-2 text-sm has-[>svg]:px-2 data-[state=open]:bg-muted",
+            label === "project" ? "w-full" : "max-w-full",
+            triggerClassName
           )}
         >
           {leadingIcon}
           <span className="min-w-0 flex-1 truncate text-left">{value}</span>
-          <ChevronDown className="size-3.5 text-foreground-muted" />
+          {label === "project" ? (
+            <ChevronsUpDown className="size-3.5 text-foreground-muted" />
+          ) : (
+            <ChevronDown className="size-3.5 text-foreground-muted" />
+          )}
         </Button>
       </Popover.Trigger>
       <Popover.Portal>

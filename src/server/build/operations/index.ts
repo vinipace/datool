@@ -68,6 +68,8 @@ import { buildChannelSchema, macroActionSchema, teamInputSchema } from "@/src/li
 import { safeDeliveryRetryCodes } from "@/src/lib/build/operations"
 import {
   collectData,
+  contactExportSchema,
+  contactPageSchema,
   createContact,
   exportContacts,
   getContact,
@@ -103,6 +105,7 @@ import {
   listTicketEvents,
   listTicketNotes,
   listTickets,
+  listTicketSchema,
   requestCsat,
   resumeConversation,
   sendHumanReply,
@@ -556,9 +559,9 @@ register(
 )
 register(
   "build_list_contacts",
-  "List contacts with bounded pagination and optional status/search filters.",
+  "List contacts with bounded pagination and optional agent, status and search filters.",
   ["build:read"],
-  page.extend({ status: z.enum(["active", "blocked", "archived"]).optional(), search: z.string().max(300).optional() }),
+  contactPageSchema,
   (context, input) => listContacts(context, input)
 )
 register(
@@ -571,9 +574,9 @@ register(
 )
 register(
   "build_export_contacts",
-  "Request or read a bounded contact export.",
+  "Export contacts with bounded pagination and optional agent, status and search filters.",
   ["build:read"],
-  z.object({ format: z.enum(["csv", "json"]).optional(), filter: z.record(z.string().max(120), z.json()).optional(), limit: z.number().int().min(1).max(10_000).optional() }),
+  contactExportSchema,
   (context, input) => exportContacts(context, input)
 )
 register(
@@ -626,7 +629,7 @@ register(
   "build_list_collected_data",
   "List collected fields using bounded pagination.",
   ["build:read"],
-  page.extend({ contactId: id.optional(), conversationId: id.optional(), fieldKey: z.string().max(120).optional() }),
+  page.extend({ agentId: id.optional(), contactId: id.optional(), conversationId: id.optional(), fieldKey: z.string().max(120).optional() }),
   (context, input) => listCollectedData(context, input)
 )
 register(
@@ -641,7 +644,7 @@ register(
   "build_list_leads",
   "List leads using bounded pagination and optional filters.",
   ["build:read"],
-  page.extend({ status: z.string().max(80).optional(), contactId: id.optional() }),
+  page.extend({ agentId: id.optional(), status: z.string().max(80).optional(), contactId: id.optional() }),
   (context, input) => listLeads(context, input)
 )
 
@@ -658,7 +661,7 @@ register(
   "build_list_tickets",
   "Search the inbox queue by subject or customer, with bounded status, priority, team, assignee and channel filters.",
   ["build:read"],
-  page.extend({ search: z.string().max(300).optional(), status: z.enum(["open", "pending", "snoozed", "solved", "closed"]).optional(), priority: z.enum(["low", "normal", "high", "urgent"]).optional(), teamId: id.optional(), assigneeUserId: id.optional(), channel: buildChannelSchema.optional() }),
+  listTicketSchema,
   (context, input) => listTickets(context, input)
 )
 register(

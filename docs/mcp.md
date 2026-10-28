@@ -83,6 +83,25 @@ The MCP SDK's default draft-07 export represents tuples as `items: [...]`. Codex
 
 When a tool is missing, compare the authenticated `tools/list` response with the client's callable inventory. `describe_agent_operations` is an informational catalog of all operations, not proof that the current token grants them. After deploying a schema change, refresh the client's MCP inventory before checking availability again.
 
+### Build template discovery and authoring
+
+Build authoring tools require `build:read`, including for callers with write permissions. They are read-only, project-authorized tools: they do not save drafts, connect actions, call external services or apply an agent revision. The gallery is shared with the editor, so MCP clients receive the same starters as the UI.
+
+| Tool | Input | Result |
+| --- | --- | --- |
+| `build_list_widget_templates` | Optional `search`, `category` | IDs, categories, names, descriptions, preview images and locales |
+| `build_get_widget_template` | `id` from discovery | Complete disabled widget definition, example states, code, schema, functions and translation dictionaries |
+| `build_list_skill_templates` | Optional `search`, `category` | Skill IDs, categories, names and descriptions |
+| `build_get_skill_template` | `id` from discovery | Disabled procedure definition and suggested actions to connect |
+| `build_get_authoring_guide` | `topic`: `agent`, `action`, `skill` or `widget` | Input JSON Schema 2020-12, valid example, semantic constraints and authoring workflow |
+| `build_get_widget_components` | `{}` | Sandbox imports, component props, helpers, theme tokens, bundled assets and localization contract |
+
+Search is case-insensitive across ID, name, description and category. Category filters match a complete category, case-insensitively. Unknown template IDs return `NOT_FOUND`; unmatched lists return `[]`. These bounded built-in galleries do not contain customer resources.
+
+Discover the deployed save contracts with `build_describe_operations`. Customize a retrieved `definition` and save it using `build_save_widget` or `build_save_procedure`; agent guide examples instead go under `configuration`. Function and action suggestions are unconnected starters. Preserve canonical input names and values while translating display text. The component guide documents differences between JSX Form and native form actions.
+
+The guide's schemas are generated from the server's input contracts, but do not encode every semantic refinement. Save-time validation and browser preview remain necessary. Read back saved drafts, test synthetic interactions, and apply the agent revision only after review. A valid template does not prove external action delivery or a live deployment. These operations also use the shared Build REST/CLI registry; availability on a running server requires deployment and refreshing the client's tool inventory.
+
 ## Query semantic metrics
 
 Call `get_metrics_metadata` with `{}` first. It returns the source-owned catalog of models, measures, dimensions, and supported filters. Then call `query_metrics`:

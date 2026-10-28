@@ -33,10 +33,28 @@ const config = {
   code: "function evaluate({ trace, datasetItem }) { return { score: trace.output.value === datasetItem.expectedOutput.value ? 1 : 0 }; }",
 }
 
-test("connected datasets create traces without SDK, isolate app failures, and freeze references and scorer versions", async () => {
+test("connected datasets preserve linked trace evidence, isolate failures, and freeze references and scorer versions", async () => {
+  let linkedTraceId = ""
+  let linkedSpanId = ""
   const server = await serveWebhook(async (request) => {
     const { input } = await request.json()
     if (input.value === 3) return new Response("failed", { status: 500 })
+    if (input.value === 1) {
+      const linked = await run(f.service.createTrace({
+        name: "Knowledge worker", status: "completed",
+        attributes: { "datool.call.id": request.headers.get("x-datool-call-id")! },
+        input, output: input,
+      }))
+      const parent = await run(f.service.createSpan(linked.id, {
+        name: "Knowledge retrieval", kind: "function", status: "completed",
+        output: { chunks: [{ content: "Original evidence", source: "https://example.test/policy" }] },
+      }))
+      await run(f.service.createSpan(linked.id, {
+        name: "Rank candidates", kind: "function", parentId: parent.id, status: "completed",
+      }))
+      linkedTraceId = linked.id
+      linkedSpanId = parent.id
+    }
     return Response.json(input)
   })
   const app: ResolvedApp = {
@@ -115,8 +133,22 @@ test("connected datasets create traces without SDK, isolate app failures, and fr
       result.results.every((r) => r.evaluatorVersion === scorer.revision)
     ).toBe(true)
     expect(firstRow.trace.attributes["datool.trace.coverage"]).toBe(
-      "invocation-only"
+      "unknown"
     )
+    const evidence = firstRow.scoringTrace!.spans
+    const worker = evidence.find(span => span.name === "Knowledge worker")!
+    const retrieval = evidence.find(span => span.name === "Knowledge retrieval")!
+    const ranking = evidence.find(span => span.name === "Rank candidates")!
+    expect(worker?.parentId).toBeNull()
+    expect(retrieval?.parentId).toBe(worker.id)
+    expect(ranking?.parentId).toBe(retrieval.id)
+    expect(retrieval.output).toMatchObject({ chunks: [{ content: "Original evidence" }] })
+    await run(f.service.patchSpan(linkedSpanId, { output: { chunks: [] } }))
+    await run(f.service.patchTrace(linkedTraceId, { name: "Changed after scoring" }))
+    const frozen = await run(f.service.getEvalRunTarget(started.id, firstRow.id))
+    expect(frozen.scoringTrace?.spans.find(span => span.name === "Knowledge retrieval")?.output)
+      .toMatchObject({ chunks: [{ content: "Original evidence" }] })
+    expect(frozen.scoringTrace?.spans.some(span => span.name === "Changed after scoring")).toBe(false)
     await run(
       f.service.patchTrace(firstRow.trace.id, { output: { value: "changed" } })
     )

@@ -760,6 +760,14 @@ describe("durable Build channel delivery", () => {
       completedContinuationId: "submitted-address-form",
     })
     expect(messages.some((message) => message.pendingReply)).toBe(false)
+    await new ConversationService(context).appendMessage(session.conversationId, {
+      role: "assistant", content: "private form result: synthetic@example.test", status: "completed",
+      metadata: { internalFormReceipt: true, completedContinuationId: "saved-before-model-failure" },
+    })
+    const afterReceipt = await readPublicConversation(context, web.id, session.conversationId, session.visitorToken, "https://example.test")
+    expect(afterReceipt[0]?.metadata.completedContinuationIds).toEqual(["saved-before-model-failure"])
+    expect(afterReceipt.map(message => message.text)).toEqual(messages.map(message => message.text))
+    expect(JSON.stringify(afterReceipt)).not.toContain("synthetic@example.test")
     const replyId = messages[1]!.id
     const rating = await recordPublicFeedback(
       context,

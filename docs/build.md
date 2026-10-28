@@ -121,6 +121,22 @@ runtime and trace feedback. `config.bubble.layout = "help_page"` selects the
 full-page presentation, with page-specific settings in `config.bubble.helpPage`.
 Existing connections default to the bubble layout.
 
+In **Localization**, choose **Visitor’s country** to select the welcome message,
+suggested replies, input placeholder and launcher labels by country. Enable each
+language and supply its translated content. Supported country defaults select
+Portuguese, Spanish or English; unmapped countries, missing country information,
+or a disabled language fall back to the browser’s enabled language and then the
+configured default. Browser and fixed-language modes retain their existing behavior.
+The preview country selector simulates a visitor without changing real traffic.
+
+Country mode reads Cloudflare’s `CF-IPCountry` header on both the hosted chat
+and the launcher appearance request. Enable [Cloudflare IP geolocation](https://developers.cloudflare.com/network/ip-geolocation/)
+and forward that header through the origin proxy. Without it, browser fallback
+applies; no location permission or third-party geolocation lookup is used.
+This header selects display text only and is not an authorization signal for
+country restrictions. Agent replies continue to follow the agent’s instructions
+and the visitor’s message language.
+
 The widget uses a signed visitor session. A conversation ID alone is not an
 access credential. Visitor-provided context is untrusted customer data and must
 not be used as verified customer identity or authorization for a privileged
@@ -128,6 +144,10 @@ action. Use server-authorized customer records in tools that access private
 customer systems.
 
 ## Authoring and operations
+
+Campaigns and the project-wide Conversation tests page are unavailable in the
+product. Their old page URLs redirect to the current project’s Agents page.
+Agent testing is available from each agent’s Test section.
 
 When an agent is open, the main sidebar shows **Agents / agent name**, with
 Overview, Instructions, Appearance, Guardrails and the other agent sections
@@ -137,10 +157,24 @@ unsaved draft. Actions, procedures, and widgets are selected from a list before
 editing. Advanced identifiers and JSON configuration stay in expandable sections.
 On narrow screens, customer details open in a sheet.
 
+Actions, Widgets and Skills share a collection header with their resource tab,
+Templates, search and collection controls. Actions offers a searchable catalog
+of existing action starters. Widgets offers an image gallery of twelve templates
+across Sales, Support, E-commerce, Booking and Insights: Book a demo, Buy products,
+Get cart, Usage chart, Gym class booking, Hotel booking, Collect leads, Fetch
+weather, Support request, Quick choices, Order lookup and Order summary. Each
+image is captured from the actual template. Open a live sandbox preview with
+example data, then use it as an editable, disabled draft. Connect its Functions
+to your agent's actions before enabling interactive widgets. The sample products,
+classes, hotel and weather are examples; templates do not connect to live services
+automatically.
+
 Widgets are authored as JSX in Code, with an editable Zod Schema and JSON
 example data under Default data. Export a default React component receiving
-`{ data }`; built-ins include Box, Col, Row, Text, Card, Button, Form, List,
-and Image. React hooks and imports from `react` or `@datool/widgets` are supported.
+`{ data, locale, t }`; built-ins include Box, Col, Row, Text, Card, Button, Form, List,
+and Image. Image accepts HTTPS sources or the bundled example photos under
+`/widget-template-assets/`. React hooks and imports from `react` or
+`@datool/widgets` are supported.
 The schema exports a Zod schema (imports from `zod`) and validates and parses
 state data before preview or customer rendering. Code and schema run only in
 an isolated iframe. Syntax is also checked when saving; server code never
@@ -149,6 +183,30 @@ one with `<Button onClickAction="requestDemo">Request a demo</Button>`.
 The runtime admits only actions from the widget revision pinned to that
 conversation. Existing component definitions open as JSX and convert when
 saved; previously issued conversations retain their original definition.
+
+Forms and widgets have a **Translations** editor for language-specific titles,
+labels, options and buttons. The public chat uses its selected visitor language;
+missing translations fall back to the original text. Field names and submitted
+option values remain unchanged. Custom JSX receives `{ data, locale, t }`: use
+`t("Request demo")` for visible text and add that key in Translations. The built-in
+Form translates its labels and options automatically. Preview language lets
+authors check each version before applying the agent revision.
+Gallery templates and the blank starter include Portuguese and Spanish
+dictionaries with English fallback. Their JSX translates display copy and uses
+the visitor locale for number and currency formatting without changing amounts,
+currencies, field names or action inputs. Custom Form buttons use
+`submitLabel={t("Request a demo")}`. Dictionaries translate known text; arbitrary
+action-result descriptions still need localized upstream values or added entries.
+Skill starters instruct the agent to follow the visitor's language and explicit
+preference, treating country only as an initial hint. These defaults apply to
+new drafts; existing saved widgets and skills are not rewritten.
+
+Successful standalone form submissions save their result and then ask the agent
+to respond using that result and the conversation. The customer transcript hides
+the completed form and internal submission messages. It does not add a fixed
+“Form submitted” response. Saved completion survives a model failure, preventing
+the same form from capturing a second lead on retry. Forms inside structured
+skills continue through their configured steps.
 
 | Area                      | Purpose                                                                                            |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -162,7 +220,6 @@ saved; previously issued conversations retain their original definition.
 | Contacts                  | Identities, custom attributes, collected data, imports/exports, and leads                          |
 | Campaigns                 | Audience snapshots, suppression, scheduled admission, and channel delivery receipts                |
 | Dashboards                | Customer experience template with conversation activity, inbox, handoffs, and satisfaction metrics |
-| Suggestions               | Feedback and knowledge gaps                                                                        |
 | Simulations               | Frozen configurations, customer scenarios, mocked actions, transcripts, and explicit verdicts      |
 | Copilot                   | Proposed changes, review, approval, application, and audit history                                 |
 
@@ -195,8 +252,79 @@ metrics catalog for custom queries and widgets.
 Knowledge supports text-based PDF and DOCX plus plain text, Markdown, CSV, JSON,
 XML, and HTML. Scanned PDFs require text extraction/OCR before upload. Indexing
 publishes a new source revision atomically and retains the previous index when
-a refresh fails. Source deletion revokes retrieval. Retrieval reports source
-provenance; it must not be described as a vector index.
+a refresh fails. Source deletion revokes retrieval.
+
+Knowledge retrieval combines PostgreSQL keyword search with semantic search
+over pgvector embeddings. Indexing uses `openai/text-embedding-3-small` (1,536
+dimensions), through the project's AI Gateway credential, or its OpenAI
+credential when no Gateway credential is configured. These are provider-billed
+requests using the project's own key. Content and query embeddings use the same
+model and input version; changing the chat model does not invalidate the index.
+Unchanged chunks reuse their embeddings on refresh.
+
+The runtime combines up to 20 keyword and 20 semantic candidates with reciprocal
+rank fusion. It removes identical passages (including whitespace-only
+differences), prefers the existing HTML URL over an identical `.md` alternative,
+and keeps distinct passages from the same page.
+
+With a project AI Gateway credential, `cohere/rerank-v4-fast` reranks these
+deduplicated candidates against the question before selecting up to eight
+chunks with their original source URLs and revisions. This adds a provider-billed
+request containing the question and candidate passages. Reranking requests have
+a three-second deadline and no retries. Missing credentials, provider errors,
+timeouts, or malformed rankings retain the deduplicated hybrid order. Projects
+using only a direct OpenAI credential still get embeddings and deduplication.
+
+Semantic search computes exact cosine similarity inside the agent's active,
+project-scoped index and excludes similarities below 0.3. Query embedding
+requests have a five-second deadline and fall back to keyword search on failure.
+Projects without either credential remain on keyword search. A configured
+provider's indexing failure retains the previous source revision for retry.
+
+Apply migration `0058_build_knowledge_embeddings.sql` on PostgreSQL with pgvector
+installed (see [self-hosting](self-hosting.md)). New or refreshed sources embed
+automatically. To add embeddings to an existing agent without recrawling or
+changing its indexed content, run:
+
+```sh
+bun run scripts/backfill-knowledge-embeddings.ts --project <project-id> --agent <agent-id>
+```
+
+Backfill writes bounded batches and is safe to rerun after interruption; it skips
+chunks already embedded with the current model/input version. It only updates
+the specified agent's active revisions. Indexing and backfill send extracted
+content to the configured embedding provider; retrieval sends the current
+question. Sources and citations remain the original indexed text.
+
+## Test an agent
+
+Open **Test** in an agent’s sidebar to create or select a dataset linked to that
+agent. The page reuses the dataset editor: inputs, expected outputs, and the
+latest evaluation result stay in one table. Click a result to open its trace
+inspector with the frozen evidence from that evaluation.
+The inspector includes linked agent traces and their model/tool calls. New agent
+runs also record a **Knowledge retrieval** span with the query, duration, selected
+chunk text, source URLs, rank/score, and the context injected into the model.
+These are captured for the run; opening an old evaluation does not retrieve
+today's chunks or rewrite its evidence.
+
+The success rate uses the latest result for every current dataset case, including
+cases outside the visible page or filter: passed / (passed + failed). All selected
+scorers must pass, using their configured thresholds or explicit verdicts.
+Execution and scoring errors count as failures; pending, cancelled, unscored and
+unrun cases are shown separately and excluded from the rate.
+
+**Run dataset** invokes the applied agent for each case using its current
+knowledge and the selected scorers. Inputs can be a message string or an object
+with `message` and an optional `channel` (defaults to `web`). Each case starts a
+separate conversation. External actions are disabled during these runs.
+Apply configuration changes before testing them; an unapplied draft is not used.
+
+Agent datasets and runs also appear in the existing project **Datasets** and
+**Evals** pages. The APIs accept an `agentId` filter, and creating an evaluation
+with `agentId` requires a dataset linked to that agent. Re-runs retain the
+association and frozen cases. Apply migration `0060_agent_evaluations.sql` before
+using agent tests.
 
 ## Connected apps and usage
 

@@ -1,3 +1,5 @@
+import type { AppDefinition } from "@/src/lib/playground/contracts"
+import { executeAgentEvaluation, type resolveAgentEvaluation } from "../build/evaluation"
 import type { PromptRunScope } from "@/src/lib/tracer/prompt-overrides"
 import { randomUUID, createHash } from "node:crypto"
 import type {
@@ -99,11 +101,13 @@ export function resolveRegisteredApp(state: State, appId: string) {
   }
   return undefined
 }
-export type ResolvedApp = Awaited<ReturnType<typeof resolveApp>>
+export type ResolvedApp =
+  | { definition: AppDefinition; connection: Connection; buildAgent?: never }
+  | Awaited<ReturnType<typeof resolveAgentEvaluation>>
 export function validateAppInput(app: ResolvedApp, input: unknown) {
   validateSchema(app.definition.inputSchema, input)
   if (
-    app.connection.mode === "agent" &&
+    !app.buildAgent && app.definition.mode === "agent" &&
     (!input ||
       typeof input !== "object" ||
       !Array.isArray((input as { messages?: unknown }).messages))
@@ -122,7 +126,7 @@ export async function beginInvocation(
       name: app.definition.name,
       operation: "app.invoke",
       group: {
-        type: app.connection.mode === "agent" ? "agent" : "workflow",
+        type: app.buildAgent || app.definition.mode === "agent" ? "agent" : "workflow",
         name: app.definition.name,
         version: String(app.definition.revision),
       },
@@ -134,7 +138,7 @@ export async function beginInvocation(
         "datool.connection.id": app.definition.id,
         "datool.invocation": true,
         "datool.span.kind":
-          app.connection.mode === "agent" ? "agent" : "workflow",
+          app.buildAgent || app.definition.mode === "agent" ? "agent" : "workflow",
         "datool.app.revision": app.definition.revision,
         "datool.trace.coverage": "invocation-only",
       },
@@ -150,9 +154,18 @@ export async function executeInvocation(
   try {
     validateAppInput(app, trace.input)
     let flushed = false
-    const output = await invokeConnection(
-      app.connection,
-      app.connection.mode === "agent" ? trace.input : { input: trace.input },
+    const agentResult = app.buildAgent
+      ? await executeAgentEvaluation(app.buildAgent, trace.input, String(trace.attributes["datool.call.id"]), promptScope)
+      : null
+    if (agentResult) flushed = true
+    if (agentResult?.traceId) {
+      const linked = await runTracerEffect(service.getTraceArtifact(agentResult.traceId))
+      await runTracerEffect(service.patchTrace(linked.id, { attributes: { ...linked.attributes, "datool.call.id": trace.attributes["datool.call.id"], "datool.eval.run.id": promptScope?.runId ?? null } }))
+      flushed = true
+    }
+    const output = agentResult ? agentResult.text : await invokeConnection(
+      (app as { connection: Connection }).connection,
+      app.definition.mode === "agent" ? trace.input : { input: trace.input },
       String(trace.attributes["datool.call.id"]),
       {
         traceId: trace.id,

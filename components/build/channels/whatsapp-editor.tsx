@@ -5,25 +5,36 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
+  ArrowUpRight,
+  Smartphone,
+  Cloud,
   ExternalLink,
-  Pause,
-  Play,
+  PanelLeftClose,
+  PanelLeftOpen,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Unplug,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { RadioCard } from "@/components/ui/radio-card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
 import { Notice } from "@/components/ui/notice"
+import { Card } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card"
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import { Skeleton } from "@/components/ui/skeleton"
+import { SettingsSection } from "@/components/ui/settings-section"
+import { WhatsAppPreview } from "./whatsapp-preview"
+import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -142,6 +153,8 @@ export function WhatsAppEditor({
   const router = useRouter(),
     params = useSearchParams(),
     href = useWorkspaceHref()
+  const [settingsOpen, setSettingsOpen] = React.useState(true)
+  const settingsId = React.useId()
   const [saved, setSaved] = React.useState(connection)
   const [label, setLabel] = React.useState(connection?.label ?? "WhatsApp")
   const [mode, setMode] = React.useState<WhatsAppMode>("coexistence")
@@ -205,6 +218,12 @@ export function WhatsAppEditor({
   const backHref = fromAgent
     ? `${agentHref}?section=channels`
     : href(`/build/integrations?agentId=${agent.id}`)
+  const isLoading = setup.isLoading || (!!saved && info.isLoading)
+  const loadError = setup.error ?? info.error
+  const status = info.data?.status ?? saved?.status
+  const businessPhone = info.data?.account?.displayPhoneNumber
+  const testNumber = businessPhone?.replace(/\D/g, "")
+  const businessName = info.data?.account?.verifiedName || agent.name
   async function run(action: () => Promise<void>) {
     if (busy.current) return
     busy.current = true
@@ -328,6 +347,15 @@ export function WhatsAppEditor({
   }, [])
   async function prepare() {
     await run(async () => {
+      const readiness = await buildApi.call<WhatsAppSetup>(
+        "build_get_whatsapp_setup",
+        {}
+      )
+      if (!readiness.configured) {
+        throw new Error(
+          "WhatsApp isn’t configured on this Datool installation. Add the Meta credentials and public webhook URL, then try again."
+        )
+      }
       const target =
         saved ??
         (await buildApi.call<ChannelConnection>(
@@ -429,6 +457,8 @@ export function WhatsAppEditor({
           active="channels"
           canConfigure
           agentHref={agentHref}
+          agentId={agent.id}
+          appearance={agent.configuration.appearance}
           onChange={(section) => router.push(`${agentHref}?section=${section}`)}
         />
       )}
@@ -440,371 +470,543 @@ export function WhatsAppEditor({
           </h1>
         </div>
       </HeaderSlot>
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={backHref}>
-            <ArrowLeft />
-            Channels
-          </Link>
-        </Button>
-        {saved && <BuildStatus status={info.data?.status ?? saved.status} />}
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
-        <div className="mx-auto max-w-3xl space-y-6">
-          {error && (
-            <Notice variant="error" role="alert">
-              {error}
-            </Notice>
-          )}
-          {notice && (
-            <Notice variant="success" role="status">
-              {notice}
-            </Notice>
-          )}
-          <BuildState
-            isLoading={setup.isLoading || (!!saved && info.isLoading)}
-            error={setup.error ?? info.error}
-            onRetry={() => {
-              setup.refresh()
-              info.refresh()
-            }}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link href={backHref}>
+              <ArrowLeft />
+              Channels
+            </Link>
+          </Button>
+          <Button
+            variant="ghost-muted"
+            size="sm"
+            aria-expanded={settingsOpen}
+            aria-controls={settingsId}
+            onClick={() => setSettingsOpen((open) => !open)}
           >
-            {!setup.data?.configured && (
-              <Notice title="WhatsApp setup required">
-                An administrator needs to configure Meta before you can connect
-                a number.{" "}
-                <Link className="underline" href="/docs/guides/whatsapp">
-                  View setup instructions
-                </Link>
-              </Notice>
-            )}
-            {!connected || signup ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Connect your business number</CardTitle>
-                  <CardDescription>
-                    Choose how you use WhatsApp. Meta will ask you to authorize
-                    your business and verify your number.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {!saved && (
-                    <FormRow
-                      label="Channel name"
-                      htmlFor="whatsapp-label"
-                      layout="vertical"
-                    >
-                      <Input
-                        id="whatsapp-label"
-                        value={label}
-                        onChange={(event) => setLabel(event.target.value)}
-                        maxLength={200}
-                      />
-                    </FormRow>
-                  )}
-                  <FormRow
-                    label="Connection type"
-                    htmlFor="whatsapp-mode"
-                    layout="vertical"
-                  >
-                    <Select
-                      id="whatsapp-mode"
-                      value={mode}
-                      disabled={pending || signup?.state === "authorized"}
-                      onChange={(event) => {
-                        setMode(event.target.value as WhatsAppMode)
-                        setSignup(null)
-                        setSdkReady(false)
-                      }}
-                    >
-                      <option value="coexistence">
-                        Keep using the WhatsApp Business App
-                      </option>
-                      <option value="cloud">
-                        Connect a number for the Cloud API
-                      </option>
-                    </Select>
-                  </FormRow>
-                  <p className="text-sm text-foreground-muted">
-                    {mode === "coexistence"
-                      ? "Keep your Business App and connect the agent to the same number. When your team replies from the app, the conversation moves to human control in Datool. Meta determines number eligibility."
-                      : "Connect a dedicated business number. Meta may ask you to verify it by SMS or a phone call."}
-                  </p>
-                  {signup?.state === "authorized" ? (
-                    <>
-                      <FormRow
-                        label="Business number"
-                        htmlFor="whatsapp-phone"
-                        layout="vertical"
+            {settingsOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+            Configuration
+          </Button>
+        </div>
+        {saved &&
+          (info.error ? (
+            <span className="text-xs text-foreground-muted">
+              Status unavailable
+            </span>
+          ) : info.isLoading ? (
+            <span role="status" className="text-xs text-foreground-muted">
+              Checking connection…
+            </span>
+          ) : (
+            <BuildStatus status={status ?? saved.status} />
+          ))}
+      </div>
+      <div
+        className={cn(
+          "grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:overflow-hidden",
+          settingsOpen && "lg:grid-cols-[24rem_minmax(0,1fr)]"
+        )}
+      >
+        <aside
+          id={settingsId}
+          hidden={!settingsOpen}
+          aria-label="WhatsApp configuration"
+          className="min-w-0 [scrollbar-width:thin] border-b border-border bg-background lg:overflow-y-auto lg:border-r lg:border-b-0"
+        >
+          <div className="flex items-center gap-3 px-5 py-5">
+            <ChannelIcon channel="whatsapp" className="size-9" />
+            <div>
+              <h2 className="text-sm font-semibold">WhatsApp</h2>
+              <p className="mt-0.5 text-xs text-foreground-muted">
+                Business channel
+              </p>
+            </div>
+          </div>
+          {(error || notice) && (
+            <div className="space-y-3 px-4 pb-4">
+              {error && (
+                <Notice variant="error" role="alert">
+                  {error}
+                </Notice>
+              )}
+              {notice && (
+                <Notice variant="success" role="status">
+                  {notice}
+                </Notice>
+              )}
+            </div>
+          )}
+          <div className="px-5 pb-6">
+            {isLoading ? (
+              <div
+                role="status"
+                aria-label="Loading WhatsApp configuration"
+                className="space-y-6 py-4"
+              >
+                <Skeleton className="h-4 w-24" />
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-56 max-w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+                <Skeleton className="h-28 w-full" />
+              </div>
+            ) : (
+              <BuildState
+                isLoading={false}
+                error={loadError}
+                onRetry={() => {
+                  setup.refresh()
+                  info.refresh()
+                }}
+              >
+                {!connected || signup ? (
+                  <section aria-labelledby="whatsapp-setup-heading">
+                    <div className="mb-6 space-y-1.5">
+                      <h3
+                        id="whatsapp-setup-heading"
+                        className="text-base font-semibold"
                       >
-                        <Select
-                          id="whatsapp-phone"
-                          value={phone}
-                          onChange={(event) => setPhone(event.target.value)}
-                        >
-                          {signup.phones.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.display_phone_number} —{" "}
-                              {item.verified_name || "Business number"}
-                            </option>
-                          ))}
-                        </Select>
-                      </FormRow>
-                      {mode === "cloud" && (
+                        Connect WhatsApp
+                      </h3>
+                      <p className="text-xs leading-5 text-foreground-muted">
+                        Let your agent respond on your business number.
+                      </p>
+                    </div>
+                    <div className="space-y-6">
+                      {!saved && (
                         <FormRow
-                          label="Existing two-step verification PIN (optional)"
-                          htmlFor="whatsapp-pin"
+                          label="Channel name"
+                          htmlFor="whatsapp-label"
                           layout="vertical"
+                          variant="plain"
                         >
                           <Input
-                            id="whatsapp-pin"
-                            type="password"
-                            autoComplete="off"
-                            inputMode="numeric"
-                            maxLength={6}
-                            value={pin}
-                            onChange={(event) =>
-                              setPin(event.target.value.replace(/\D/g, ""))
-                            }
+                            id="whatsapp-label"
+                            value={label}
+                            onChange={(event) => setLabel(event.target.value)}
+                            maxLength={200}
                           />
                         </FormRow>
                       )}
-                      <Button
-                        loading={pending}
-                        disabled={!phone || (!!pin && pin.length !== 6)}
-                        onClick={() => void activate()}
+                      <fieldset
+                        className="min-w-0 space-y-2"
+                        disabled={pending || signup?.state === "authorized"}
                       >
-                        Connect number
-                      </Button>
-                    </>
-                  ) : signup?.state === "pending" && sdkReady ? (
-                    <div className="flex flex-wrap gap-2">
-                      <Button loading={pending} onClick={openMeta}>
-                        Continue with Meta
-                        <ExternalLink />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        disabled={pending}
-                        onClick={() => void prepare()}
-                      >
-                        Start again
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      loading={pending}
-                      disabled={!setup.data?.configured || !label.trim()}
-                      onClick={() => void prepare()}
-                    >
-                      {saved ? "Reconnect WhatsApp" : "Set up connection"}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      {info.data?.account?.displayPhoneNumber}
-                    </CardTitle>
-                    <CardDescription>
-                      {info.data?.account?.verifiedName} ·{" "}
-                      {info.data?.account?.mode === "coexistence"
-                        ? "Business App + Datool"
-                        : "Cloud API"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      loading={pending}
-                      onClick={() =>
-                        void run(async () => {
-                          await buildApi.call(
-                            "build_refresh_whatsapp_connection",
-                            { connectionId: saved!.id }
-                          )
-                          setNotice("Meta authorization is working.")
-                          info.refresh()
-                        })
-                      }
-                    >
-                      <RefreshCw />
-                      Check connection
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pending}
-                      onClick={() =>
-                        void changeStatus(
-                          info.data?.status === "paused"
-                            ? "connected"
-                            : "paused"
-                        )
-                      }
-                    >
-                      {info.data?.status === "paused" ? <Play /> : <Pause />}
-                      {info.data?.status === "paused" ? "Resume" : "Pause"}
-                    </Button>
-                    <Button variant="outline" size="sm" asChild>
-                      <a
-                        href={`https://wa.me/${info.data?.account?.displayPhoneNumber.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Send a test message
-                        <ExternalLink />
-                      </a>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={pending}
-                      onClick={() => setDisconnectOpen(true)}
-                    >
-                      <Unplug />
-                      Disconnect
-                    </Button>
-                  </CardContent>
-                </Card>
-                {info.data?.account?.mode === "coexistence" && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Business App history</CardTitle>
-                      <CardDescription>
-                        Import conversations or contacts you agreed to share
-                        during Meta signup. Imported messages won’t trigger
-                        agent replies. Meta allows initial sync within 24 hours
-                        of connecting.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          ["history", "Import shared history"],
-                          ["smb_app_state_sync", "Import shared contacts"],
-                        ] as const
-                      ).map(([type, title]) => (
-                        <Button
-                          key={type}
-                          variant="outline"
-                          size="sm"
-                          loading={pending}
-                          disabled={!!info.data?.account?.sync[type]}
-                          onClick={() =>
-                            void run(async () => {
-                              await buildApi.call("build_sync_whatsapp_app", {
-                                connectionId: saved!.id,
-                                type,
-                                consent: true,
-                              })
-                              info.refresh()
-                              setNotice(
-                                "Import requested. Updates will appear as Meta sends them."
-                              )
-                            })
-                          }
-                        >
-                          {info.data?.account?.sync[type]
-                            ? `${type === "history" ? "History" : "Contacts"} import requested`
-                            : title}
-                        </Button>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <CardTitle>Message templates</CardTitle>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTemplateOpen(true)}
-                      >
-                        <Plus />
-                        New template
-                      </Button>
-                    </div>
-                    <CardDescription>
-                      Use approved templates to contact customers outside the
-                      24-hour reply window. Record their permission before
-                      sending.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <BuildState
-                      isLoading={templates.isLoading}
-                      error={templates.error}
-                      onRetry={templates.refresh}
-                    >
-                      {[...(templates.data?.items ?? []), ...extraTemplates]
-                        .length ? (
-                        <div className="divide-y divide-border">
-                          {[
-                            ...(templates.data?.items ?? []),
-                            ...extraTemplates,
-                          ].map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex flex-wrap items-center justify-between gap-2 py-3"
-                            >
-                              <div>
-                                <p className="text-sm font-medium">
-                                  {item.name}
-                                </p>
-                                <p className="text-xs text-foreground-muted">
-                                  {item.language} · {item.category}
-                                </p>
-                              </div>
-                              <BuildStatus status={item.status.toLowerCase()} />
+                        <legend className="mb-3 text-sm font-medium">
+                          How will you use WhatsApp?
+                        </legend>
+                        {(
+                          [
+                            {
+                              value: "coexistence",
+                              title: "Keep my Business App",
+                              description:
+                                "Use your existing number with the app and your agent.",
+                              icon: Smartphone,
+                            },
+                            {
+                              value: "cloud",
+                              title: "Use a dedicated number",
+                              description:
+                                "Connect a number directly to your agent through Meta.",
+                              icon: Cloud,
+                            },
+                          ] as const
+                        ).map((option) => (
+                          <RadioCard
+                            key={option.value}
+                            name="whatsapp-mode"
+                            value={option.value}
+                            checked={mode === option.value}
+                            onChange={() => {
+                              setMode(option.value)
+                              setSignup(null)
+                              setSdkReady(false)
+                            }}
+                            aria-label={option.title}
+                          >
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              <option.icon
+                                className="size-4 shrink-0"
+                                aria-hidden="true"
+                              />
+                              {option.title}
                             </div>
+                            <p className="mt-1.5 text-xs leading-5 text-foreground-muted">
+                              {option.description}
+                            </p>
+                          </RadioCard>
+                        ))}
+                        <p className="pt-1 text-xs leading-5 text-foreground-muted">
+                          {mode === "coexistence"
+                            ? "Your team can still reply in the app. Those conversations switch to human control in Datool."
+                            : "Have access to this number for Meta’s SMS or phone verification."}
+                        </p>
+                      </fieldset>
+                      <div className="space-y-3">
+                        <p className="text-xs leading-5 text-foreground-muted">
+                          Next, authorize your business with Meta and verify
+                          your number. Meta determines eligibility.
+                        </p>
+                        {signup?.state === "authorized" ? (
+                          <>
+                            <FormRow
+                              label="Business number"
+                              htmlFor="whatsapp-phone"
+                              layout="vertical"
+                            >
+                              <Select
+                                id="whatsapp-phone"
+                                value={phone}
+                                onChange={(event) =>
+                                  setPhone(event.target.value)
+                                }
+                              >
+                                {signup.phones.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.display_phone_number} —{" "}
+                                    {item.verified_name || "Business number"}
+                                  </option>
+                                ))}
+                              </Select>
+                            </FormRow>
+                            {mode === "cloud" && (
+                              <FormRow
+                                label="Existing two-step verification PIN (optional)"
+                                htmlFor="whatsapp-pin"
+                                layout="vertical"
+                              >
+                                <Input
+                                  id="whatsapp-pin"
+                                  type="password"
+                                  autoComplete="off"
+                                  inputMode="numeric"
+                                  maxLength={6}
+                                  value={pin}
+                                  onChange={(event) =>
+                                    setPin(
+                                      event.target.value.replace(/\D/g, "")
+                                    )
+                                  }
+                                />
+                              </FormRow>
+                            )}
+                            <Button
+                              loading={pending}
+                              disabled={!phone || (!!pin && pin.length !== 6)}
+                              onClick={() => void activate()}
+                            >
+                              Connect number
+                            </Button>
+                          </>
+                        ) : signup?.state === "pending" && sdkReady ? (
+                          <div className="flex flex-wrap gap-2">
+                            <Button loading={pending} onClick={openMeta}>
+                              Continue with Meta
+                              <ExternalLink />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              disabled={pending}
+                              onClick={() => void prepare()}
+                            >
+                              Start again
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            loading={pending}
+                            disabled={!label.trim()}
+                            className="w-full"
+                            onClick={() => void prepare()}
+                          >
+                            {saved ? "Reconnect WhatsApp" : "Connect with Meta"}
+                            <ArrowUpRight />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                ) : (
+                  <>
+                    <Card className="overflow-hidden rounded-lg">
+                      <div className="flex items-start justify-between gap-3 p-4">
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-xs text-foreground-muted">
+                            Business number
+                          </p>
+                          <p className="text-sm font-medium break-words tabular-nums">
+                            {businessPhone || "Number unavailable"}
+                          </p>
+                          <p
+                            className="truncate text-xs text-foreground-muted"
+                            title={businessName}
+                          >
+                            {businessName}
+                          </p>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost-muted"
+                              size="icon-sm"
+                              aria-label="Connection actions"
+                              disabled={pending}
+                            >
+                              <MoreHorizontal />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                void run(async () => {
+                                  await buildApi.call(
+                                    "build_refresh_whatsapp_connection",
+                                    { connectionId: saved!.id }
+                                  )
+                                  setNotice("Meta authorization is working.")
+                                  info.refresh()
+                                })
+                              }
+                            >
+                              <RefreshCw /> Check connection
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => setDisconnectOpen(true)}
+                            >
+                              <Unplug /> Disconnect
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5 text-xs">
+                        <span className="text-foreground-muted">
+                          Connection
+                        </span>
+                        <span>
+                          {info.data?.account?.mode === "coexistence"
+                            ? "Business App + Datool"
+                            : "Cloud API"}
+                        </span>
+                      </div>
+                    </Card>
+                    <div className="flex items-start justify-between gap-4 py-5">
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="whatsapp-agent-replies"
+                          className="text-sm font-medium"
+                        >
+                          Agent replies
+                        </label>
+                        <p
+                          id="whatsapp-agent-replies-description"
+                          className="text-xs leading-5 text-foreground-muted"
+                        >
+                          {status === "paused"
+                            ? "Paused. Turn on to resume automatic replies."
+                            : `Automatically reply with ${agent.name}.`}
+                        </p>
+                      </div>
+                      <Switch
+                        id="whatsapp-agent-replies"
+                        aria-describedby="whatsapp-agent-replies-description"
+                        checked={status === "connected"}
+                        disabled={pending || info.isRefreshing}
+                        onCheckedChange={(enabled) =>
+                          void changeStatus(enabled ? "connected" : "paused")
+                        }
+                      />
+                    </div>
+                    {info.data?.account?.mode === "coexistence" && (
+                      <SettingsSection
+                        title="Business App history"
+                        density="compact"
+                        defaultOpen={false}
+                      >
+                        <p className="mb-4 text-xs leading-5 text-foreground-muted">
+                          Import conversations or contacts you agreed to share
+                          during Meta signup. Imported messages won’t trigger
+                          agent replies. Meta allows initial sync within 24
+                          hours of connecting.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {(
+                            [
+                              ["history", "Import shared history"],
+                              ["smb_app_state_sync", "Import shared contacts"],
+                            ] as const
+                          ).map(([type, title]) => (
+                            <Button
+                              key={type}
+                              variant="outline"
+                              size="sm"
+                              loading={pending}
+                              disabled={!!info.data?.account?.sync[type]}
+                              onClick={() =>
+                                void run(async () => {
+                                  await buildApi.call(
+                                    "build_sync_whatsapp_app",
+                                    {
+                                      connectionId: saved!.id,
+                                      type,
+                                      consent: true,
+                                    }
+                                  )
+                                  info.refresh()
+                                  setNotice(
+                                    "Import requested. Updates will appear as Meta sends them."
+                                  )
+                                })
+                              }
+                            >
+                              {info.data?.account?.sync[type]
+                                ? `${type === "history" ? "History" : "Contacts"} import requested`
+                                : title}
+                            </Button>
                           ))}
                         </div>
-                      ) : (
-                        <p className="py-4 text-sm text-foreground-muted">
-                          No templates yet. Create one to submit it to Meta for
-                          approval.
-                        </p>
-                      )}
-                      {(cursor === undefined
-                        ? templates.data?.nextCursor
-                        : cursor) && (
+                      </SettingsSection>
+                    )}
+                    <section
+                      aria-label="Message templates"
+                      className="border-t border-border pt-5"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium">
+                          Message templates
+                        </h3>
                         <Button
-                          variant="outline"
                           size="sm"
-                          loading={pending}
-                          onClick={() =>
-                            void run(async () => {
-                              const next = await buildApi.call<{
-                                items: Template[]
-                                nextCursor: string | null
-                              }>("build_list_whatsapp_templates", {
-                                connectionId: saved!.id,
-                                after: cursor ?? templates.data?.nextCursor,
-                              })
-                              setExtraTemplates((current) => [
-                                ...current,
-                                ...next.items,
-                              ])
-                              setCursor(next.nextCursor)
-                            })
-                          }
+                          variant="ghost-muted"
+                          aria-label="New template"
+                          onClick={() => setTemplateOpen(true)}
                         >
-                          Load more
+                          <Plus /> New
                         </Button>
-                      )}
-                    </BuildState>
-                  </CardContent>
-                </Card>
-              </>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-foreground-muted">
+                        Approved messages for contacting customers after 24
+                        hours. Customer permission required.
+                      </p>
+                      <div className="mt-3">
+                        <BuildState
+                          isLoading={templates.isLoading}
+                          error={templates.error}
+                          onRetry={templates.refresh}
+                        >
+                          {[...(templates.data?.items ?? []), ...extraTemplates]
+                            .length ? (
+                            <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-muted/40">
+                              {[
+                                ...(templates.data?.items ?? []),
+                                ...extraTemplates,
+                              ].map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex items-center justify-between gap-3 px-3 py-3"
+                                >
+                                  <div className="min-w-0">
+                                    <p
+                                      className="truncate text-xs font-medium"
+                                      title={item.name}
+                                    >
+                                      {item.name}
+                                    </p>
+                                    <p className="text-xs text-foreground-muted">
+                                      {item.language.replace("_", "-")} ·{" "}
+                                      {item.category.charAt(0) +
+                                        item.category.slice(1).toLowerCase()}
+                                    </p>
+                                  </div>
+                                  <BuildStatus
+                                    status={item.status.toLowerCase()}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-border bg-muted/40 px-3 py-4">
+                              <p className="text-xs font-medium">
+                                No templates yet
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-foreground-muted">
+                                Create your first template and submit it to Meta
+                                for review.
+                              </p>
+                            </div>
+                          )}
+                          {(cursor === undefined
+                            ? templates.data?.nextCursor
+                            : cursor) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              loading={pending}
+                              onClick={() =>
+                                void run(async () => {
+                                  const next = await buildApi.call<{
+                                    items: Template[]
+                                    nextCursor: string | null
+                                  }>("build_list_whatsapp_templates", {
+                                    connectionId: saved!.id,
+                                    after: cursor ?? templates.data?.nextCursor,
+                                  })
+                                  setExtraTemplates((current) => [
+                                    ...current,
+                                    ...next.items,
+                                  ])
+                                  setCursor(next.nextCursor)
+                                })
+                              }
+                            >
+                              Load more
+                            </Button>
+                          )}
+                        </BuildState>
+                      </div>
+                    </section>
+                  </>
+                )}
+              </BuildState>
             )}
-          </BuildState>
-        </div>
+          </div>
+        </aside>
+        <section
+          aria-label="WhatsApp preview"
+          className="flex min-w-0 flex-col bg-muted/30 lg:overflow-y-auto"
+        >
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-6 py-4">
+            <div>
+              <h2 className="text-sm font-medium">Customer preview</h2>
+              <p className="mt-1 text-xs text-foreground-muted">
+                Test your agent in a WhatsApp-style conversation
+              </p>
+            </div>
+            {connected && testNumber && (
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href={`https://wa.me/${testNumber}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in WhatsApp <ExternalLink />
+                </a>
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-1 items-center justify-center px-4 py-8 sm:px-8">
+            <WhatsAppPreview
+              name={businessName}
+              phoneNumber={businessPhone}
+              agentId={agent.id}
+              channelId={saved?.id ?? `whatsapp-preview:${agent.id}`}
+            />
+          </div>
+        </section>
       </div>
       <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
         <DialogContent>

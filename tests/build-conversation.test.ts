@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
+import { sql } from "drizzle-orm"
 
 import {
   closeTracerDatabase,
@@ -11,7 +12,7 @@ import {
   ConversationHumanOwnedError,
   ConversationService,
 } from "@/src/server/build/conversations"
-import { createAgent } from "@/src/server/build/agents"
+import { archiveAgent, createAgent } from "@/src/server/build/agents"
 import {
   createIsolatedPostgres,
   migrateIsolatedPostgres,
@@ -19,7 +20,8 @@ import {
   type IsolatedPostgres,
 } from "@/tests/helpers/postgres"
 
-const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> = []
+const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> =
+  []
 
 afterEach(async () => {
   for (const { database, target } of resources.splice(0)) {
@@ -44,6 +46,7 @@ async function makeService() {
   return {
     service: new ConversationService({ database, projectId: target.projectId }),
     projectId: target.projectId,
+    database,
   }
 }
 
@@ -75,12 +78,14 @@ describe("Build conversation ledger", () => {
       expect(message.content).toEqual(content)
     }
     expect(
-      (await service.listMessages(conversation.id)).items.map((item) => item.content)
+      (await service.listMessages(conversation.id)).items.map(
+        (item) => item.content
+      )
     ).toEqual(contents)
   }, 30_000)
 
-  test("lists all chats with independent conversation status, search and cursor pagination", async () => {
-    const { service } = await makeService()
+  test("lists all chats with agent, status and search filters before cursor pagination", async () => {
+    const { service, database, projectId } = await makeService()
     const ordinary = await service.getOrCreate({
       agentId: "agent-a",
       channel: "web",
@@ -108,10 +113,27 @@ describe("Build conversation ledger", () => {
       id: "support",
       reason: "Investigate refund",
     })
+    // Updated order must win over the random conversation IDs, down to
+    // PostgreSQL microseconds (which a JavaScript Date would truncate).
+    const [olderId, newerId] = [ordinary.id, escalated.id].sort()
+    await database.execute(sql`
+      update build_conversations set updated_at = case
+        when id = ${newerId} then '2026-10-27 12:00:00.123456+00'::timestamptz
+        else '2026-10-27 12:00:00.123455+00'::timestamptz end
+      where project_id = ${projectId}
+    `)
     const all = await service.list()
+    expect(all.items.map((item) => item.id)).toEqual([newerId, olderId])
     expect(all.items).toHaveLength(2)
     expect(all.items.find((item) => item.id === ordinary.id)).toMatchObject({
       subject: "Opening hours",
+      agentId: "agent-a",
+      agentName: "Test agent",
+      agentAvatar: {
+        avatarUrl: null,
+        avatarStyle: "friendly",
+        avatarColor: "orange",
+      },
       status: "active",
       ticketId: null,
     })
@@ -137,9 +159,97 @@ describe("Build conversation ledger", () => {
     )
     expect(second.nextCursor).toBeNull()
 
+    await createAgent(
+      { database, projectId },
+      {
+        id: "agent-b",
+        name: "Other agent",
+        slug: "other-agent",
+        configuration: {
+          appearance: {
+            avatarUrl: "https://example.test/agent.png",
+            avatarStyle: "wink",
+            avatarColor: "violet",
+          },
+        },
+      }
+    )
+    const otherConversation = await service.getOrCreate({
+      agentId: "agent-b",
+      channel: "web",
+      metadata: {},
+    })
+    await archiveAgent({ database, projectId }, "agent-b", 1)
+    const agentFirst = await service.list({ agentId: "agent-a", limit: 1 })
+    const agentSecond = await service.list({
+      agentId: "agent-a",
+      limit: 1,
+      cursor: agentFirst.nextCursor,
+    })
+    expect(
+      [...agentFirst.items, ...agentSecond.items].map((item) => item.id)
+    ).toEqual(all.items.map((item) => item.id))
+    expect(agentSecond.nextCursor).toBeNull()
+    expect(
+      (await service.list({ agentId: "agent-b" })).items.map((item) => item.id)
+    ).toEqual([otherConversation.id])
+    expect(
+      (await service.list()).items.find(
+        (item) => item.id === otherConversation.id
+      )
+    ).toMatchObject({
+      agentId: "agent-b",
+      agentName: "Other agent",
+      agentAvatar: {
+        avatarUrl: "https://example.test/agent.png",
+        avatarStyle: "wink",
+        avatarColor: "violet",
+      },
+    })
+    expect((await service.list({ agentId: "missing-agent" })).items).toEqual([])
+    expect(
+      (
+        await service.list({
+          agentId: "agent-a",
+          search: "Refund",
+          status: "handed_off",
+        })
+      ).items.map((item) => item.id)
+    ).toEqual([escalated.id])
+
+    // Equal timestamps use the descending ID as a stable page boundary.
+    await database.execute(sql`
+      update build_conversations set updated_at = '2026-10-27 12:00:00.123456+00'
+      where project_id = ${projectId} and agent_id = 'agent-a'
+    `)
+    const tiedFirst = await service.list({ agentId: "agent-a", limit: 1 })
+    const tiedSecond = await service.list({
+      agentId: "agent-a",
+      limit: 1,
+      cursor: tiedFirst.nextCursor,
+    })
+    expect(tiedFirst.items.map((item) => item.id)).toEqual([newerId])
+    expect(tiedSecond.items.map((item) => item.id)).toEqual([olderId])
+    expect(tiedSecond.nextCursor).toBeNull()
+
+    // A later message brings the older conversation back to the top.
+    await service.appendMessage(olderId, {
+      role: "user",
+      content: "Following up",
+      status: "completed",
+      metadata: {},
+    })
+    expect((await service.list({ agentId: "agent-a" })).items[0]?.id).toBe(
+      olderId
+    )
+    await rejects(
+      service.list({ cursor: "invalid-cursor" }),
+      /Invalid conversations cursor/
+    )
+
     const { service: otherProject } = await makeService()
     expect((await otherProject.list({ search: "Refund" })).items).toEqual([])
-  })
+  }, 30_000)
 
   test("deduplicates external conversations and replays completed request keys", async () => {
     const { service } = await makeService()
@@ -316,8 +426,12 @@ describe("Build conversation ledger", () => {
         dailyLimitUsd: 1,
       }),
     ])
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
-    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1)
+    expect(
+      results.filter((result) => result.status === "fulfilled")
+    ).toHaveLength(1)
+    expect(
+      results.filter((result) => result.status === "rejected")
+    ).toHaveLength(1)
     const rejected = results.find((result) => result.status === "rejected")
     expect(rejected?.status === "rejected" && rejected.reason).toBeInstanceOf(
       ConversationBudgetExceededError

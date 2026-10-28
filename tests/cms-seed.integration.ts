@@ -64,7 +64,7 @@ try {
   const pages = await cms.find({ collection: "pages", pagination: false })
   assert.deepEqual(
     pages.docs.map((page) => page.slug).sort(),
-    ["how-it-works", ...productSeedPages.map((page) => page.slug)].sort()
+    ["how-it-works", ...productSeedPages().map((page) => page.slug)].sort()
   )
   assert.equal(
     (await cms.findGlobal({ slug: "landing-page" }))._status,

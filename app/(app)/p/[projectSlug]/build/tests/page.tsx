@@ -1,9 +1,11 @@
-import { pageMetadata } from "@/lib/page-metadata"
-import { TestsPage } from "@/components/build/operations/tests-page"
+import { redirect } from "next/navigation"
 
-export const metadata = pageMetadata("buildTests")
-
-export default async function BuildTestsRoute({ params }: { params: Promise<{ projectSlug: string }> }) {
-  await params
-  return <TestsPage />
+/** The project-wide Conversation tests page has been retired. */
+export default async function BuildTestsRoute({
+  params,
+}: {
+  params: Promise<{ projectSlug: string }>
+}) {
+  const { projectSlug } = await params
+  redirect(`/p/${encodeURIComponent(projectSlug)}/build/agents`)
 }

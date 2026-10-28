@@ -31,6 +31,8 @@ type WorkspaceSelectorsProps = {
   organization: WorkspaceOrganization
   project?: Pick<WorkspaceProject, "id" | "name" | "slug">
   organizationDestination?: string
+  /** Render only one switcher when the shell places them in different regions. */
+  only?: "organization" | "project"
 }
 
 export function WorkspaceSelectors(props: WorkspaceSelectorsProps) {
@@ -46,6 +48,7 @@ function WorkspaceSelectorControls({
   organization,
   project,
   organizationDestination = "/projects",
+  only,
 }: WorkspaceSelectorsProps) {
   const queryClient = useQueryClient()
   const [organizationOpen, setOrganizationOpen] = React.useState(false)
@@ -85,64 +88,99 @@ function WorkspaceSelectorControls({
 
   return (
     <>
-      <div className="min-w-0">
+      {only !== "project" ? (
+        <div className="min-w-0">
+          <ResourceSwitcher
+            label="organization"
+            leadingIcon={
+              <Image
+                src="/icon.svg"
+                alt=""
+                width={20}
+                height={20}
+                unoptimized
+                className="size-5 shrink-0"
+              />
+            }
+            triggerRef={organizationTrigger}
+            value={organization.name}
+            selectedId={organization.id}
+            open={organizationOpen}
+            onOpenChange={(value) => {
+              setOrganizationOpen(value)
+              if (!value) setOrganizationSearch("")
+            }}
+            search={organizationSearch}
+            onSearchChange={setOrganizationSearch}
+            items={(organizations.data ?? [])
+              .filter((item) =>
+                item.name
+                  .toLowerCase()
+                  .includes(organizationSearch.toLowerCase())
+              )
+              .map((item) => ({
+                ...item,
+                href:
+                  item.id === organization.id && project
+                    ? projectHref(organization, project)
+                    : organizationDestination,
+              }))}
+            loading={organizations.isLoading}
+            error={organizations.error}
+            onRetry={() => void organizations.refetch()}
+            onItemSelect={(item) => {
+              if (item.id === organization.id) return
+              void selectOrganization(item.id)
+                .then(() => navigateWorkspace(organizationDestination))
+                .catch((cause) => {
+                  setOrganizationSelectionError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "Unable to select organization."
+                  )
+                })
+            }}
+            onCreate={() => navigateWorkspace("/organizations/new")}
+          />
+          {organizationSelectionError ? (
+            <p role="alert" className="px-2 pt-1 text-xs text-destructive">
+              {organizationSelectionError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {project && only === "project" ? (
         <ResourceSwitcher
-          label="organization"
+          label="project"
           leadingIcon={
-            <Image
-              src="/icon.svg"
-              alt=""
-              width={20}
-              height={20}
-              unoptimized
-              className="size-5 shrink-0"
+            <span
+              aria-hidden="true"
+              className="size-3 shrink-0 rounded-full bg-avatar-blue"
             />
           }
-          triggerRef={organizationTrigger}
-          value={organization.name}
-          selectedId={organization.id}
-          open={organizationOpen}
+          triggerRef={projectTrigger}
+          triggerClassName="h-8 w-auto max-w-56"
+          value={project.name}
+          selectedId={project.id}
+          open={projectOpen}
           onOpenChange={(value) => {
-            setOrganizationOpen(value)
-            if (!value) setOrganizationSearch("")
+            setProjectOpen(value)
+            if (!value) setProjectSearch("")
           }}
-          search={organizationSearch}
-          onSearchChange={setOrganizationSearch}
-          items={(organizations.data ?? [])
-            .filter((item) =>
-              item.name.toLowerCase().includes(organizationSearch.toLowerCase())
-            )
-            .map((item) => ({
-              ...item,
-              href:
-                item.id === organization.id && project
-                  ? projectHref(organization, project)
-                  : organizationDestination,
-            }))}
-          loading={organizations.isLoading}
-          error={organizations.error}
-          onRetry={() => void organizations.refetch()}
-          onItemSelect={(item) => {
-            if (item.id === organization.id) return
-            void selectOrganization(item.id)
-              .then(() => navigateWorkspace(organizationDestination))
-              .catch((cause) => {
-                setOrganizationSelectionError(
-                  cause instanceof Error
-                    ? cause.message
-                    : "Unable to select organization."
-                )
-              })
-          }}
-          onCreate={() => navigateWorkspace("/organizations/new")}
+          search={projectSearch}
+          onSearchChange={setProjectSearch}
+          items={(projects.data?.projects ?? []).map((item) => ({
+            ...item,
+            href: projectHref(organization, item),
+          }))}
+          loading={projects.isLoading}
+          error={projects.error}
+          onRetry={() => void projects.refetch()}
+          onCreate={() => setCreatingProject(true)}
+          moreHref={projectHref(organization, project, "projects")}
         />
-        {organizationSelectionError ? (
-          <p role="alert" className="px-2 pt-1 text-xs text-destructive">
-            {organizationSelectionError}
-          </p>
-        ) : null}
-      </div>
-      {project ? (
+      ) : null}
+      {project && !only ? (
         <div className="min-w-0">
           <div className="flex items-center justify-between px-2">
             <span className="text-xs text-foreground-muted">Project</span>

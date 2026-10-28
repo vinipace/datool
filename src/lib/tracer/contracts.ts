@@ -148,6 +148,7 @@ export type SessionDetail = Session & {
 }
 
 export type Dataset = {
+  agentId?: string | null
   versionId?: string
   revision?: number
   metadata?: JsonObject
@@ -191,8 +192,36 @@ export type DatasetDetail = Dataset & {
 
 export type DatasetItemField = DatasetField | "sourceSpanEvidence"
 
+export type DatasetEvaluation = {
+  targetId: string
+  traceId: string
+  runId: string
+  createdAt: string
+  status: string
+  outcome: "passed" | "failed" | "pending" | "unscored" | "cancelled"
+  score: number | null
+  output: string | null
+  error: string | null
+}
+
+export type DatasetEvaluationSummary = {
+  total: number
+  passed: number
+  failed: number
+  pending: number
+  unscored: number
+  cancelled: number
+  notRun: number
+  successRate: number | null
+}
+
+export type DatasetItemPage = ApiList<DatasetItemPreview> & {
+  evaluationSummary?: DatasetEvaluationSummary
+}
+
 /** Omitted values are placeholders only. Load a field before editing it. */
 export type DatasetItemPreview = DatasetItem & {
+  latestEvaluation?: DatasetEvaluation | null
   omittedFields?: Partial<Record<DatasetItemField, { bytes: number; preview: string }>>
 }
 
@@ -253,6 +282,7 @@ export type EvalResult = {
 }
 
 export type EvalRun = {
+  agentId?: string | null
   groups?: InvocationGroup[]
   groupsResolvedAt?: string | null
   metadata: JsonObject
@@ -449,6 +479,7 @@ export type PatchSpanInput = {
 }
 
 export type CreateDatasetInput = {
+  agentId?: string
   description?: string
   id?: string
   name: string
@@ -494,6 +525,7 @@ export type PatchEvaluatorInput = {
 }
 
 export type CreateEvalRunInput = {
+  agentId?: string
   /** Fresh application execution using the existing run's frozen cases and settings. */
   parentRunId?: string
   /** Resolve recorded prompt and scorer revisions instead of latest. */

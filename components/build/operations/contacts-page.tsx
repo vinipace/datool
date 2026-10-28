@@ -133,6 +133,7 @@ function listContacts({
   const filters = JSON.parse(filter ?? "{}") as {
     search: string
     status: string
+    agentId?: string
   }
   return buildApi
     .call<unknown>(
@@ -142,13 +143,14 @@ function listContacts({
         limit,
         search: filters.search || undefined,
         status: filters.status || undefined,
+        agentId: filters.agentId,
       },
       signal
     )
     .then(listResult)
 }
 
-export function ContactsPage() {
+export function ContactsPage({ fixedAgentId }: { fixedAgentId?: string }) {
   const scope = useWorkspaceStorageScope()
   const tableView = useTableView({
     settingsStorageKey: `datool:build-contacts:${scope}:settings`,
@@ -176,7 +178,7 @@ export function ContactsPage() {
   })
   const contacts = useCollectionPages(
     listContacts,
-    JSON.stringify({ search, status }),
+    JSON.stringify({ search, status, agentId: fixedAgentId }),
     0,
     { refreshLoadedPages: true }
   )
@@ -244,6 +246,9 @@ export function ContactsPage() {
       buildApi.call<unknown>("build_export_contacts", {
         format: "csv",
         limit: 1000,
+        agentId: fixedAgentId,
+        search: search || undefined,
+        status: status || undefined,
       })
     )
     const payload = asRecord(result).items
@@ -278,6 +283,9 @@ export function ContactsPage() {
             showExport: false,
             children: (
               <div className="flex min-w-0 flex-1 items-center gap-2">
+                {fixedAgentId ? (
+                  <span className="shrink-0 text-sm font-medium">Contacts</span>
+                ) : null}
                 <CollectionSearch
                   label="Search contacts"
                   value={search}
@@ -296,18 +304,20 @@ export function ContactsPage() {
                 </Select>
               </div>
             ),
-            actions: (
+            actions: !fixedAgentId ? (
               <Button size="sm" onClick={openCreate} aria-label="New contact">
                 <Plus className="size-4" />
                 <PanelActionLabel>New contact</PanelActionLabel>
               </Button>
-            ),
+            ) : undefined,
             menuActions: (
               <>
-                <DropdownMenuItem onSelect={() => setShowImport(true)}>
-                  <Upload className="size-3.5" />
-                  Import contacts
-                </DropdownMenuItem>
+                {!fixedAgentId ? (
+                  <DropdownMenuItem onSelect={() => setShowImport(true)}>
+                    <Upload className="size-3.5" />
+                    Import contacts
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem
                   disabled={exportMutation.isPending}
                   onSelect={() => void exportContacts().catch(() => undefined)}
@@ -325,7 +335,9 @@ export function ContactsPage() {
               description={
                 hasFilters
                   ? "Try another name, email, phone or status."
-                  : "Create a contact or import a CSV to start your customer directory."
+                  : fixedAgentId
+                    ? "Contacts from this agent’s conversations, tickets and lead forms will appear here."
+                    : "Create a contact or import a CSV to start your customer directory."
               }
               action={
                 hasFilters ? (
@@ -338,12 +350,12 @@ export function ContactsPage() {
                   >
                     Clear filters
                   </Button>
-                ) : (
+                ) : !fixedAgentId ? (
                   <Button onClick={openCreate}>
                     <Plus className="size-4" />
                     New contact
                   </Button>
-                )
+                ) : undefined
               }
             />
           }
@@ -465,8 +477,7 @@ export function ContactsPage() {
           <DialogHeader>
             <DialogTitle>Create contact</DialogTitle>
             <DialogDescription>
-              Add a customer identity that can be reused across conversations
-              and campaigns.
+              Add a customer identity that can be reused across conversations.
             </DialogDescription>
           </DialogHeader>
           <form

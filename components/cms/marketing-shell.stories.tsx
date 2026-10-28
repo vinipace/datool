@@ -2,14 +2,15 @@ import { useState } from "react"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { delay, http, HttpResponse } from "msw"
 import { expect, userEvent, waitFor, within } from "storybook/test"
-import type { Faq } from "@/payload-types"
-import { faqContent, landingBlocks, richText } from "@/cms/seed-content"
+import type { Faq, Page } from "@/payload-types"
+import { faqContent, observeStoryBlocks, richText } from "@/cms/seed-content"
 import { ContentDisclosure } from "@/components/ui/content-disclosure"
 import { AdminLogin } from "./admin-login"
 import { AdminLogout } from "./admin-logout"
 import { FAQAccordion } from "./faq-accordion"
 import { FAQAnswer, FAQAnswerContent } from "./faq-content"
 import { LivePreview } from "./live-preview"
+import { footerColumns } from "./footer-links"
 import { MarketingShell } from "./marketing-shell"
 import { RequestStory } from "./landing-visuals"
 import { PageBlocks } from "./page-blocks"
@@ -25,9 +26,22 @@ const faqs: Faq[] = faqContent.map((item, index) => ({
   createdAt: "2026-09-17T00:00:00Z",
   updatedAt: "2026-09-17T00:00:00Z",
 }))
-const blocks = landingBlocks(faqs.map((faq) => faq.id)).map((block) =>
-  block.blockType === "faq" ? { ...block, items: faqs } : block
-)
+// The landing-style story that opens the Observe page, plus every block type.
+const blocks: Page["layout"] = [
+  ...observeStoryBlocks(),
+  {
+    blockType: "faq",
+    title: "A few things you might be wondering.",
+    items: faqs,
+  },
+  {
+    blockType: "callToAction",
+    title: "Your next improvement starts with a trace.",
+    description: "Connect your application and take a closer look.",
+    label: "Open Datool",
+    href: "/sign-in",
+  },
+]
 const relatedPages = [
   {
     title: "How it works",
@@ -64,7 +78,7 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const LandingPage: Story = {
+export const ObserveLanding: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole("button", { name: "02 Evaluate" }))
@@ -90,7 +104,7 @@ export const LandingPage: Story = {
   },
 }
 
-export const NarrowLanding: Story = {
+export const NarrowObserveLanding: Story = {
   decorators: [
     (Story) => (
       <div className="max-w-sm">
@@ -119,13 +133,23 @@ export const ProductNavigation: Story = {
     await expect(menu.getAllByRole("menuitem")).toHaveLength(4)
     await userEvent.keyboard("{Escape}")
     await expect(trigger).toHaveFocus()
-    await expect(canvas.getByRole("link", { name: "Pricing" })).toHaveAttribute(
+    const header = within(
+      canvas.getByRole("navigation", { name: "Main navigation" })
+    )
+    await expect(header.getByRole("link", { name: "Pricing" })).toHaveAttribute(
       "href",
       "/pricing"
     )
-    await expect(canvas.getByRole("link", { name: "Docs" })).toHaveAttribute(
+    await expect(header.getByRole("link", { name: "Docs" })).toHaveAttribute(
       "href",
       "/docs"
+    )
+    // The footer links every public page for visitors and crawlers.
+    const footerLinks = within(
+      canvas.getByRole("navigation", { name: "Footer" })
+    ).getAllByRole("link")
+    await expect(footerLinks.map((link) => link.getAttribute("href"))).toEqual(
+      footerColumns.flatMap((column) => column.links.map((link) => link.href))
     )
   },
 }

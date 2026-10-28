@@ -29,6 +29,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { workspacePrefix } from "@/lib/workspace-routing"
 import { pageTitles } from "@/lib/page-metadata"
@@ -56,7 +57,12 @@ import {
   AgentSidebarTarget,
 } from "@/components/build/shared/agent-sidebar"
 
-const routeGroups = [
+import {
+  InboxSidebar,
+  InboxSidebarProvider,
+} from "@/components/build/shared/inbox-sidebar"
+
+const buildRouteGroups = [
   {
     label: "Build",
     routes: [
@@ -82,18 +88,11 @@ const routeGroups = [
         icon: productIcons.buildContacts,
         label: pageTitles.buildContacts,
       },
-      {
-        href: "/build/campaigns",
-        icon: productIcons.buildCampaigns,
-        label: pageTitles.buildCampaigns,
-      },
-      {
-        href: "/build/suggestions",
-        icon: productIcons.buildSuggestions,
-        label: pageTitles.buildSuggestions,
-      },
     ],
   },
+] as const
+
+const observeRouteGroups = [
   {
     label: "Observe",
     routes: [
@@ -118,7 +117,11 @@ const routeGroups = [
         icon: productIcons.sessions,
         label: pageTitles.sessions,
       },
-      { href: "/reports", icon: productIcons.reports, label: pageTitles.reports },
+      {
+        href: "/reports",
+        icon: productIcons.reports,
+        label: pageTitles.reports,
+      },
       { href: "/alerts", icon: productIcons.alerts, label: pageTitles.alerts },
     ],
   },
@@ -129,11 +132,6 @@ const routeGroups = [
         href: "/playground",
         icon: productIcons.playground,
         label: pageTitles.playground,
-      },
-      {
-        href: "/build/tests",
-        icon: productIcons.buildTests,
-        label: pageTitles.buildTests,
       },
       { href: "/evals", icon: productIcons.evals, label: pageTitles.evals },
       {
@@ -269,79 +267,126 @@ function AppSidebar({ organization, project, user }: WorkspaceShellProps) {
     if (isMobile) setOpenMobile(false)
   }
   const prefix = projectWorkspaceHref(organization, project)
+  const inInbox = pathname === `${prefix}/build/inbox`
   const inSettings =
     pathname === `${prefix}/settings` ||
     pathname.startsWith(`${prefix}/settings/`)
+  const mode =
+    pathname === `${prefix}/build` || pathname.startsWith(`${prefix}/build/`)
+      ? "build"
+      : "observe"
+  const routeGroups = inSettings
+    ? [{ label: "Project settings", routes: settingsRoutes }]
+    : mode === "build"
+      ? buildRouteGroups
+      : observeRouteGroups
 
   return (
     <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="p-2">
-        <WorkspaceSelectors organization={organization} project={project} />
+      <SidebarHeader
+        className={cn("p-2", !inSettings && "border-b border-sidebar-border")}
+      >
+        <WorkspaceSelectors
+          organization={organization}
+          project={project}
+          only="organization"
+        />
+        {!inSettings && (
+          <Tabs value={mode} activationMode="manual">
+            <TabsList
+              aria-label="Workspace area"
+              variant="sidebar"
+              className="grid grid-cols-2"
+            >
+              <TabsTrigger value="observe" asChild>
+                <Link
+                  href={prefix || "/"}
+                  prefetch={true}
+                  onClick={closeMobileNavigation}
+                >
+                  Observe
+                </Link>
+              </TabsTrigger>
+              <TabsTrigger value="build" asChild>
+                <Link
+                  href={`${prefix}/build/agents`}
+                  prefetch={true}
+                  onClick={closeMobileNavigation}
+                >
+                  Build
+                </Link>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
-        {!inSettings && (
-          <SidebarGroup>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="h-7 text-xs"
-                  isActive={pathname === prefix || pathname === `${prefix}/`}
-                  aria-current={pathname === prefix || pathname === `${prefix}/` ? "page" : undefined}
-                  onClick={closeMobileNavigation}
-                  render={<Link href={prefix || "/"} prefetch={true} />}
-                >
-                  <productIcons.home />
-                  <span>Home</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
-        {(inSettings
-          ? [{ label: "Project settings", routes: settingsRoutes }]
-          : routeGroups
-        ).map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarMenu>
-              {group.routes.map((route) => {
-                const href = `${prefix}${route.href}`
-                const active =
-                  pathname === href ||
-                  (route.href !== "/settings" &&
-                    pathname.startsWith(`${href}/`)) ||
-                  (route.href === "/playground" &&
-                    pathname.startsWith(`${prefix}/apps/`))
-                const Icon =
-                  active && "activeIcon" in route && route.activeIcon
-                    ? route.activeIcon
-                    : route.icon
-                const link = (
+        <AgentSidebarTarget>
+          {mode === "observe" && !inSettings && (
+            <SidebarGroup>
+              <SidebarMenu>
+                <SidebarMenuItem>
                   <SidebarMenuButton
-                    className="h-7 text-xs group-data-[collapsible=icon]/sidebar:size-7"
-                    isActive={active}
+                    className="h-7 text-xs"
+                    isActive={pathname === prefix || pathname === `${prefix}/`}
+                    aria-current={
+                      pathname === prefix || pathname === `${prefix}/`
+                        ? "page"
+                        : undefined
+                    }
                     onClick={closeMobileNavigation}
-                    aria-current={active ? "page" : undefined}
-                    render={<Link href={href} prefetch={true} />}
+                    render={<Link href={prefix || "/"} prefetch={true} />}
                   >
-                    <Icon />
-                    <span>{route.label}</span>
+                    <productIcons.home />
+                    <span>Home</span>
                   </SidebarMenuButton>
-                )
-                return (
-                  <SidebarMenuItem key={route.href}>
-                    {route.href === "/build/agents" ? (
-                      <AgentSidebarTarget>{link}</AgentSidebarTarget>
-                    ) : (
-                      link
-                    )}
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
-        ))}
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
+          {inInbox ? (
+            <InboxSidebar />
+          ) : (
+            routeGroups.map((group) => (
+              <SidebarGroup key={group.label}>
+                {mode === "observe" || inSettings ? (
+                  <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                ) : null}
+                <SidebarMenu>
+                  {group.routes.map((route) => {
+                    const href = `${prefix}${route.href}`
+                    const active =
+                      pathname === href ||
+                      (route.href !== "/settings" &&
+                        pathname.startsWith(`${href}/`)) ||
+                      (route.href === "/playground" &&
+                        pathname.startsWith(`${prefix}/apps/`))
+                    const Icon =
+                      active && "activeIcon" in route && route.activeIcon
+                        ? route.activeIcon
+                        : route.icon
+                    const link = (
+                      <SidebarMenuButton
+                        className="h-7 text-xs group-data-[collapsible=icon]/sidebar:size-7"
+                        isActive={active}
+                        onClick={closeMobileNavigation}
+                        aria-current={active ? "page" : undefined}
+                        render={<Link href={href} prefetch={true} />}
+                      >
+                        <Icon />
+                        <span>{route.label}</span>
+                      </SidebarMenuButton>
+                    )
+                    return (
+                      <SidebarMenuItem key={route.href}>{link}</SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroup>
+            ))
+          )}
+        </AgentSidebarTarget>
       </SidebarContent>
 
       <SidebarFooter className="p-2">
@@ -403,14 +448,33 @@ function TracerAppShellContent({
   return (
     <SidebarProvider>
       <AgentSidebarProvider key={project.id}>
-        <AppSidebar organization={organization} project={project} user={user} />
-        <SidebarInset>
-          <WorkspacePageLayout
-            leading={<SidebarTrigger className="-ml-0.5 shrink-0" />}
-          >
-            <InspectorPanels>{children}</InspectorPanels>
-          </WorkspacePageLayout>
-        </SidebarInset>
+        <InboxSidebarProvider>
+          <AppSidebar
+            organization={organization}
+            project={project}
+            user={user}
+          />
+          <SidebarInset>
+            <WorkspacePageLayout
+              leading={
+                <div className="flex items-center gap-2">
+                  <SidebarTrigger className="-ml-0.5 shrink-0" />
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-px shrink-0 bg-border"
+                  />
+                  <WorkspaceSelectors
+                    organization={organization}
+                    project={project}
+                    only="project"
+                  />
+                </div>
+              }
+            >
+              <InspectorPanels>{children}</InspectorPanels>
+            </WorkspacePageLayout>
+          </SidebarInset>
+        </InboxSidebarProvider>
       </AgentSidebarProvider>
     </SidebarProvider>
   )

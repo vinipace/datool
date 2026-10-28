@@ -1647,9 +1647,14 @@ function publicMessageMetadata(metadata: Record<string, unknown>) {
     "continuations",
     "completedContinuationId",
   ])
-  return Object.fromEntries(
-    Object.entries(metadata).filter(([key]) => allowed.has(key))
-  )
+  return {
+    ...Object.fromEntries(
+      Object.entries(metadata).filter(([key]) => allowed.has(key))
+    ),
+    ...(metadata.widgetInteraction && typeof metadata.widgetInteraction === "object"
+      ? { customerInteraction: true }
+      : {}),
+  }
 }
 
 async function reconcileCampaignReply(
@@ -2866,6 +2871,18 @@ export async function readPublicConversation(
   `)
   if (!rows.rows.length)
     throw new Error("Conversation is not available for this visitor.")
+  // A saved form stays complete even if the follow-up model call failed.
+  // Return only its opaque completion IDs, never submitted values or receipts.
+  const receipts = await database(context).execute<Row>(sql`
+    SELECT metadata_json->>'completedContinuationId' AS continuation_id
+    FROM build_conversation_messages
+    WHERE project_id=${context.projectId} AND conversation_id=${conversationId}
+      AND metadata_json->>'internalFormReceipt'='true'
+    ORDER BY created_at DESC LIMIT 200
+  `)
+  const completedContinuationIds = receipts.rows
+    .map((row) => row.continuation_id)
+    .filter((id): id is string => typeof id === "string")
   return rows.rows
     .filter((row) => row.id !== null)
     .map((row) => {
@@ -2877,7 +2894,12 @@ export async function readPublicConversation(
         pendingReply: row.pending_reply === true,
         text: content.text,
         attachments: content.attachments,
-        metadata: publicMessageMetadata(content.metadata),
+        metadata: {
+          ...publicMessageMetadata(content.metadata),
+          ...(completedContinuationIds.length
+            ? { completedContinuationIds }
+            : {}),
+        },
         providerMessageId:
           row.provider_message_id == null
             ? null

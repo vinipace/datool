@@ -5,18 +5,14 @@ import {
   ReadonlyURLSearchParams,
 } from "@storybook/nextjs-vite/navigation.mock"
 import { expect, userEvent, within } from "storybook/test"
+import { http, HttpResponse } from "msw"
+import { TracerAppShell } from "@/components/tracer/app-shell"
+import { ProjectScopeProvider } from "@/components/tracer/project-scope"
+import { storybookOrganization } from "@/.storybook/scenarios/auth-workspace/fixtures"
 import {
-  SidebarProvider,
-  Sidebar,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import {
-  AgentSidebarProvider,
-  AgentSidebarTarget,
-} from "@/components/build/shared/agent-sidebar"
-import { StorybookProjectFrame } from "@/.storybook/component-frame"
+  storybookAuthHandlers,
+  workspaceProjectHandlers,
+} from "@/.storybook/scenarios/auth-workspace/handlers"
 import { subscribeBrowserNavigation } from "@/components/navigation/navigation"
 import { appIntegrationScenario } from "@/.storybook/scenarios/app-integrations"
 import {
@@ -47,28 +43,39 @@ const meta = {
   parameters: {
     layout: "fullscreen",
     nextjs: { navigation: { pathname: "/p/demo/build/agents/calendar-agent" } },
-    msw: { handlers: scenario.handlers },
+    msw: {
+      handlers: [
+        http.get(
+          "https://logos.composio.dev/api/:app",
+          () => new HttpResponse(null, { status: 404 })
+        ),
+        ...scenario.handlers,
+        ...storybookAuthHandlers,
+        ...workspaceProjectHandlers(),
+      ],
+    },
   },
   decorators: [
     (Story) => (
-      <SidebarProvider defaultOpen>
-        <AgentSidebarProvider>
-          <Sidebar>
-            <SidebarContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <AgentSidebarTarget>Agents</AgentSidebarTarget>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarContent>
-          </Sidebar>
-          <div className="min-w-0 flex-1">
-            <StorybookProjectFrame title="Calendar assistant">
-              <Story />
-            </StorybookProjectFrame>
-          </div>
-        </AgentSidebarProvider>
-      </SidebarProvider>
+      <ProjectScopeProvider
+        projectId="storybook-project"
+        organizationId={storybookOrganization.id}
+        prefix="/p/demo"
+      >
+        <div className="h-[900px]">
+          <TracerAppShell
+            organization={storybookOrganization}
+            project={{ id: "storybook-project", name: "Demo", slug: "demo" }}
+            user={{
+              name: "Ana Martins",
+              email: "ana@example.com",
+              image: null,
+            }}
+          >
+            <Story />
+          </TracerAppShell>
+        </div>
+      </ProjectScopeProvider>
     ),
   ],
   beforeEach: () => {
@@ -104,6 +111,20 @@ export const Integrations: Story = {}
 export const ManageFromAction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    const toggle = within(
+      canvas.getByRole("banner", { name: "Page controls" })
+    ).getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    await expect(
+      canvas.findByRole("link", { name: "Calendar assistant — back to agents" })
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.queryByRole("link", { name: "Home" })
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("link", { name: "Traces" })
+    ).not.toBeInTheDocument()
     await expect(
       canvas.findByRole("heading", { name: "Integrations" })
     ).resolves.toBeVisible()

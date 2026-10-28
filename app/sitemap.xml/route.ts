@@ -3,6 +3,10 @@ import { docsOrigin } from "@/lib/docs-origin"
 import { getPublishedPages } from "@/lib/cms/content"
 import { getPagePath } from "@/lib/cms/page-path"
 import { cmsEnabled } from "@/lib/cms/config"
+import {
+  agentLandingPath,
+  agentLandingSlugs,
+} from "@/cms/agent-landing-content"
 
 // Deployment origins are runtime configuration, including in the Docker image.
 export const dynamic = "force-dynamic"
@@ -20,7 +24,9 @@ export async function GET(request: Request) {
   const origin = docsOrigin(request)
   const pages = await getPublishedPages()
   const urls = [
-    ...(cmsEnabled() ? ["/", "/pricing"] : []),
+    ...(cmsEnabled()
+      ? ["/", "/pricing", ...agentLandingSlugs.map(agentLandingPath)]
+      : []),
     ...pages
       .filter((page) => !page.seo?.noIndex)
       .map((page) => getPagePath(page.slug))

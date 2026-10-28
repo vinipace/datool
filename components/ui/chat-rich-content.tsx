@@ -12,6 +12,7 @@ import type { InspectorMessage } from "@/src/lib/tracer/value-messages"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
 import { CodeWidgetFrame } from "./code-widget-frame"
+import { widgetText, widgetTranslationsSchema, type WidgetTranslations } from "@/src/lib/build/widget-i18n"
 
 type ChatMessage = InspectorMessage
 export type ChatInteractionHandler = (
@@ -36,6 +37,7 @@ type FormField = {
 }
 
 type ChatWidget = {
+  translations?: WidgetTranslations
   id?: string
   name?: string
   continuationId?: string
@@ -100,6 +102,7 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
           : typeof continuation.submitLabel === "string"
             ? continuation.submitLabel
             : "Form",
+      translations: widgetTranslationsSchema.safeParse(continuation.translations).data,
       components: [
         {
           type: "form",
@@ -192,6 +195,7 @@ function widgetFromMessage(message: ChatMessage): ChatWidget | null {
           ? record(states?.[metadata.widgetState])
           : null
       return {
+        translations: widgetTranslationsSchema.safeParse(value.translations).data,
         code: typeof value.code === "string" ? value.code : undefined,
         schemaCode:
           typeof value.schemaCode === "string" ? value.schemaCode : undefined,
@@ -262,9 +266,11 @@ export function ChatRichContent({
   onInteraction,
   completedContinuationIds,
   variant = "message",
+  locale = "en",
   onCodeStatus,
 }: {
   message: InspectorMessage
+  locale?: string
   onInteraction?: ChatInteractionHandler
   completedContinuationIds?: ReadonlySet<string>
   variant?: "message" | "standalone" | "customer"
@@ -293,6 +299,7 @@ export function ChatRichContent({
       {message.role !== "user" && widget ? (
         <ChatWidgetView
           widget={widget}
+          locale={locale}
           message={message}
           completed={Boolean(
             widget.continuationId &&
@@ -314,6 +321,7 @@ export function ChatRichContent({
 
 function ChatWidgetView({
   widget,
+  locale,
   message,
   onInteraction,
   variant,
@@ -321,12 +329,14 @@ function ChatWidgetView({
   onCodeStatus,
 }: {
   widget: ChatWidget
+  locale: string
   message: ChatMessage
   onInteraction?: (interaction: Record<string, unknown>, label: string) => void
   variant: "message" | "standalone" | "customer"
   completed?: boolean
   onCodeStatus?: (error: string | null) => void
 }) {
+  const t = (text: string) => widgetText(text, locale, widget.translations)
   const metadata = widget.data ?? {
     ...record(message.content),
     ...record(message.metadata),
@@ -344,6 +354,7 @@ function ChatWidgetView({
   const hasForm = widget.components.some(
     (component) => component.type === "form"
   )
+  if (completed && hasForm && variant === "customer") return null
   const primaryActionIndex = widget.components.findIndex(
     (component) =>
       component.type === "button" ||
@@ -365,11 +376,13 @@ function ChatWidgetView({
             hasForm ? "text-base leading-6" : "text-xs text-foreground-muted"
           )}
         >
-          {widget.name}
+          {t(widget.name)}
         </p>
       ) : null}
       {widget.code ? (
         <CodeWidgetFrame
+          locale={locale}
+          translations={widget.translations}
           code={widget.code}
           schemaCode={widget.schemaCode}
           data={metadata}
@@ -390,17 +403,17 @@ function ChatWidgetView({
                 key={`${message.id}-widget-${index}`}
                 className="text-sm leading-5 whitespace-pre-wrap text-foreground-muted"
               >
-                {renderTemplate(component.text, metadata)}
+                {renderTemplate(t(component.text), metadata)}
               </p>
             )
           if (component.type === "card")
             return (
               <div key={`${message.id}-widget-${index}`} className="space-y-2">
                 <p className="text-base leading-6 font-semibold">
-                  {renderTemplate(component.title, metadata)}
+                  {renderTemplate(t(component.title), metadata)}
                 </p>
                 <p className="text-sm leading-5 whitespace-pre-wrap text-foreground-muted">
-                  {renderTemplate(component.body, metadata)}
+                  {renderTemplate(t(component.body), metadata)}
                 </p>
                 {component.actionId ? (
                   <Button
@@ -413,11 +426,11 @@ function ChatWidgetView({
                     onClick={() =>
                       onInteraction?.(
                         interaction(component.actionId!, {}),
-                        renderTemplate(component.title, metadata)
+                        renderTemplate(t(component.title), metadata)
                       )
                     }
                   >
-                    Continue
+                    {t("Continue")}
                   </Button>
                 ) : null}
               </div>
@@ -433,11 +446,11 @@ function ChatWidgetView({
                 onClick={() =>
                   onInteraction?.(
                     interaction(component.actionId, {}),
-                    renderTemplate(component.label, metadata)
+                    renderTemplate(t(component.label), metadata)
                   )
                 }
               >
-                {renderTemplate(component.label, metadata)}
+                {renderTemplate(t(component.label), metadata)}
               </Button>
             )
           if (component.type === "list") {
@@ -450,12 +463,12 @@ function ChatWidgetView({
                       key={`${message.id}-widget-${index}-item-${itemIndex}`}
                       className="rounded border border-border px-2.5 py-2 text-xs"
                     >
-                      {renderTemplate(component.itemTemplate, item)}
+                      {renderTemplate(t(component.itemTemplate), item)}
                     </div>
                   ))
                 ) : (
                   <p className="text-xs text-foreground-muted">
-                    No items available.
+                    {t("No items available.")}
                   </p>
                 )}
               </div>
@@ -469,7 +482,7 @@ function ChatWidgetView({
                 className="flex items-center gap-2 text-sm text-foreground-muted"
               >
                 <Check aria-hidden="true" className="size-4 text-success" />
-                Submitted
+                {t("Submitted")}
               </p>
             )
           return (
@@ -478,6 +491,7 @@ function ChatWidgetView({
               messageId={message.id}
               widget={widget}
               component={component}
+              t={t}
               onInteraction={onInteraction}
             />
           )
@@ -491,14 +505,16 @@ function ChatWidgetForm({
   messageId,
   widget,
   component,
+  t,
   onInteraction,
 }: {
   messageId?: string
   widget: ChatWidget
+  t: (text: string) => string
   component: Extract<WidgetComponent, { type: "form" }>
   onInteraction?: (interaction: Record<string, unknown>, label: string) => void
 }) {
-  const [values, setValues] = React.useState<Record<string, string>>({})
+  const [values, setValues] = React.useState<Record<string, string | boolean>>({})
   // Keep widget validation separate from a surrounding chat composer form.
   const formScope = React.useId()
   const fieldsRef = React.useRef<HTMLFieldSetElement>(null)
@@ -516,9 +532,14 @@ function ChatWidgetForm({
           ? { continuationId: widget.continuationId }
           : {}),
         actionId: component.submitActionId,
-        input: values,
+        input: {
+          ...Object.fromEntries(component.fields
+            .filter((field): field is FormField => typeof field !== "string" && field.type === "checkbox")
+            .map(field => [field.name, false])),
+          ...values,
+        },
       },
-      widget.submitLabel ?? "Submit form"
+      t(widget.submitLabel ?? "Submit form")
     )
   }
   return (
@@ -526,7 +547,7 @@ function ChatWidgetForm({
       ref={fieldsRef}
       disabled={!onInteraction}
       className="min-w-0 space-y-3"
-      aria-label={widget.name ?? "Customer form"}
+      aria-label={t(widget.name ?? "Customer form")}
       onKeyDown={(event) => {
         if (
           event.key === "Enter" &&
@@ -555,6 +576,21 @@ function ChatWidgetForm({
                 required: field.required ?? false,
                 options: field.options ?? [],
               }
+        if (config.type === "checkbox") {
+          return (
+            <label key={`${messageId}-${config.name}`} className="flex cursor-pointer items-start gap-2.5 text-xs leading-5">
+              <Checkbox
+                form={formScope}
+                name={config.name}
+                required={config.required}
+                checked={values[config.name] === true}
+                className="mt-0.5"
+                onChange={event => setValues(current => ({ ...current, [config.name]: event.target.checked }))}
+              />
+              <span>{t(config.label)}{config.required ? " *" : ""}</span>
+            </label>
+          )
+        }
         // A single selectable value is an opt-in, not a menu of choices.
         // Keep its exact configured string as the submitted value.
         if (config.type === "select" && config.options.length === 1) {
@@ -565,7 +601,7 @@ function ChatWidgetForm({
               className="min-w-0 space-y-2"
             >
               <legend className="text-xs leading-4 font-medium">
-                {config.label}
+                {t(config.label)}
                 {config.required ? " *" : ""}
               </legend>
               <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs leading-5">
@@ -583,7 +619,7 @@ function ChatWidgetForm({
                     }))
                   }
                 />
-                <span>{option}</span>
+                <span>{t(option)}</span>
               </label>
             </fieldset>
           )
@@ -594,7 +630,7 @@ function ChatWidgetForm({
             className="block text-xs leading-4"
           >
             <span className="mb-1.5 block font-medium">
-              {config.label}
+              {t(config.label)}
               {config.required ? " *" : ""}
             </span>
             {config.type === "textarea" ? (
@@ -602,7 +638,7 @@ function ChatWidgetForm({
                 form={formScope}
                 name={config.name}
                 required={config.required}
-                value={values[config.name] ?? ""}
+                value={String(values[config.name] ?? "")}
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
@@ -619,7 +655,7 @@ function ChatWidgetForm({
                 name={config.name}
                 className="h-10 rounded-lg bg-muted/40"
                 required={config.required}
-                value={values[config.name] ?? ""}
+                value={String(values[config.name] ?? "")}
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
@@ -627,10 +663,10 @@ function ChatWidgetForm({
                   }))
                 }
               >
-                <option value="">Select…</option>
+                <option value="">{t("Select…")}</option>
                 {config.options.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {t(option)}
                   </option>
                 ))}
               </Select>
@@ -649,7 +685,7 @@ function ChatWidgetForm({
                     : "text"
                 }
                 required={config.required}
-                value={values[config.name] ?? ""}
+                value={String(values[config.name] ?? "")}
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
@@ -666,7 +702,7 @@ function ChatWidgetForm({
         className="h-auto min-h-10 w-full rounded-lg whitespace-normal"
         onClick={submit}
       >
-        {widget.submitLabel ?? "Submit"}
+        {t(widget.submitLabel ?? "Submit")}
       </Button>
     </fieldset>
   )

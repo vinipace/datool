@@ -23,7 +23,9 @@ const prefix = `/p/${storybookProject.slug}`
 
 function AppShellExample({
   user = { name: "Ana Martins", email: "ana@example.com", image: null },
-}: { user?: AccountMenuUser }) {
+}: {
+  user?: AccountMenuUser
+}) {
   return (
     <ProjectScopeProvider
       organizationId={storybookOrganization.id}
@@ -99,6 +101,35 @@ export const WorkspaceShell: Story = {
   },
 }
 
+export const InboxSidebar: Story = {
+  parameters: {
+    nextjs: { navigation: { pathname: `${prefix}/build/inbox`, query: {} } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const header = within(canvas.getByRole("banner", { name: "Page controls" }))
+    const toggle = header.getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    await expect(
+      canvas.getByRole("button", { name: "New Ticket" })
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole("button", { name: "Search inbox" })
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole("link", { name: "My Inbox" })
+    ).toHaveAttribute("href", `${prefix}/build/inbox?view=mine`)
+    await expect(canvas.getByRole("link", { name: "Mentions" })).toBeVisible()
+    await expect(
+      canvas.queryByRole("link", { name: "Home" })
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("link", { name: "Traces" })
+    ).not.toBeInTheDocument()
+  },
+}
+
 export const ScorerDetailRoute: Story = {
   parameters: {
     nextjs: { navigation: { pathname: `${prefix}/scorers/scorer_123` } },
@@ -130,6 +161,37 @@ export const NewScorerRoute: Story = {
       "href",
       `${prefix}/scorers`
     )
+  },
+}
+
+export const BuildNavigation: Story = {
+  parameters: {
+    nextjs: { navigation: { pathname: `${prefix}/build/agents`, query: {} } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const header = within(canvas.getByRole("banner", { name: "Page controls" }))
+    const toggle = header.getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    await expect(
+      header.getByRole("button", { name: /Switch project/ })
+    ).toBeVisible()
+    await expect(canvas.getByRole("tab", { name: "Build" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+    await expect(canvas.getByRole("tab", { name: "Observe" })).toHaveAttribute(
+      "href",
+      prefix
+    )
+    await expect(canvas.getByRole("link", { name: "Agents" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    )
+    await expect(
+      canvas.queryByRole("link", { name: "Traces" })
+    ).not.toBeInTheDocument()
   },
 }
 
@@ -184,15 +246,19 @@ export const SettingsChildNavigation: Story = {
 
 async function openAccountMenu(canvasElement: HTMLElement) {
   const canvas = within(canvasElement)
-  const toggle = within(canvas.getByRole("banner", { name: "Page controls" }))
-    .getByRole("button", { name: "Toggle sidebar" })
+  const toggle = within(
+    canvas.getByRole("banner", { name: "Page controls" })
+  ).getByRole("button", { name: "Toggle sidebar" })
   if (toggle.getAttribute("aria-expanded") !== "true")
     await userEvent.click(toggle)
   const trigger = within(canvasElement.ownerDocument.body).getByRole("button", {
     name: /Account menu for/,
   })
   await userEvent.click(trigger)
-  return { trigger, menu: within(canvasElement.ownerDocument.body).getByRole("menu") }
+  return {
+    trigger,
+    menu: within(canvasElement.ownerDocument.body).getByRole("menu"),
+  }
 }
 
 export const AccountIdentity: Story = {
@@ -206,7 +272,9 @@ export const AccountIdentity: Story = {
     await expect(trigger).toHaveFocus()
     await userEvent.keyboard("{Enter}")
     await expect(
-      within(canvasElement.ownerDocument.body).getByRole("menuitem", { name: "Sign out" })
+      within(canvasElement.ownerDocument.body).getByRole("menuitem", {
+        name: "Sign out",
+      })
     ).toHaveFocus()
     await userEvent.keyboard("{Escape}")
   },
@@ -230,11 +298,18 @@ export const AccountSignOut: Story = {
     router.replace.mockClear()
     router.refresh.mockClear()
     const { trigger, menu } = await openAccountMenu(canvasElement)
-    await userEvent.click(within(menu).getByRole("menuitem", { name: "Sign out" }))
-    await expect(within(menu).getByRole("menuitem", { name: "Signing out…" })).toHaveAttribute("aria-disabled", "true")
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Sign out" })
+    )
+    await expect(
+      within(menu).getByRole("menuitem", { name: "Signing out…" })
+    ).toHaveAttribute("aria-disabled", "true")
     await expect(trigger).toHaveAttribute("aria-busy", "true")
     await expect(router.replace).not.toHaveBeenCalled()
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/sign-in"), { timeout: 3000 })
+    await waitFor(
+      () => expect(router.replace).toHaveBeenCalledWith("/sign-in"),
+      { timeout: 3000 }
+    )
     await expect(router.refresh).toHaveBeenCalledTimes(1)
     await userEvent.keyboard("{Escape}")
   },
@@ -243,7 +318,9 @@ export const AccountSignOut: Story = {
 let signOutAttempts = 0
 
 export const AccountSignOutRetry: Story = {
-  beforeEach: () => { signOutAttempts = 0 },
+  beforeEach: () => {
+    signOutAttempts = 0
+  },
   parameters: {
     msw: {
       handlers: [
@@ -262,11 +339,17 @@ export const AccountSignOutRetry: Story = {
     const router = getRouter()
     router.replace.mockClear()
     const { trigger, menu } = await openAccountMenu(canvasElement)
-    await userEvent.click(within(menu).getByRole("menuitem", { name: "Sign out" }))
-    await expect(within(menu).findByRole("alert")).resolves.toHaveTextContent("Unable to sign out. Try again.")
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Sign out" })
+    )
+    await expect(within(menu).findByRole("alert")).resolves.toHaveTextContent(
+      "Unable to sign out. Try again."
+    )
     await expect(router.replace).not.toHaveBeenCalled()
     await expect(trigger).toHaveAttribute("aria-busy", "false")
-    await userEvent.click(within(menu).getByRole("menuitem", { name: "Sign out" }))
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Sign out" })
+    )
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/sign-in"))
     await expect(signOutAttempts).toBe(2)
     await expect(within(menu).queryByRole("alert")).not.toBeInTheDocument()
@@ -275,10 +358,20 @@ export const AccountSignOutRetry: Story = {
 }
 
 export const AccountWithoutName: Story = {
-  render: () => <AppShellExample user={{ name: "", email: "long.email.address.for.workspace.testing@example.com", image: null }} />,
+  render: () => (
+    <AppShellExample
+      user={{
+        name: "",
+        email: "long.email.address.for.workspace.testing@example.com",
+        image: null,
+      }}
+    />
+  ),
   play: async ({ canvasElement }) => {
     const { trigger, menu } = await openAccountMenu(canvasElement)
-    await expect(trigger).toHaveTextContent("long.email.address.for.workspace.testing@example.com")
+    await expect(trigger).toHaveTextContent(
+      "long.email.address.for.workspace.testing@example.com"
+    )
     await expect(within(menu).getByText("Signed in as")).toBeVisible()
     await userEvent.keyboard("{Escape}")
   },

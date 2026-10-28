@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
+import datoolLogo from "@/app/icon.svg"
 import { MessageCircle, MessageCircleWarning, RefreshCw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -19,14 +21,22 @@ import {
 import { bubbleStyle } from "./bubble-style"
 import { localizeBubble } from "@/src/lib/build/bubble-localization"
 import { buildApi } from "@/components/build/operations/build-api"
-import { MessageTranscript } from "@/components/ui/message-transcript"
 import {
   isPublicReplyPending,
   type PublicChatThread,
 } from "@/src/lib/build/public-chat"
-import { ChatComposer, ChatTypingIndicator } from "@/components/ui/chat"
+import {
+  ChatComposer,
+  ChatTypingIndicator,
+} from "@/components/ui/chat-composer"
 import { ChatFeedback } from "@/components/ui/chat-feedback"
 import { formatRelative } from "@/components/tracer/format"
+
+const MessageTranscript = React.lazy(() =>
+  import("@/components/ui/message-transcript").then((module) => ({
+    default: module.MessageTranscript,
+  }))
+)
 
 type Appearance = ChatBubbleSettings
 
@@ -57,6 +67,15 @@ type ChatMessage = {
 const defaultAppearance = chatBubbleSettingsSchema.parse({})
 const defaultContext: Record<string, unknown> = {}
 
+function subscribeBrowserLanguage(onChange: () => void) {
+  window.addEventListener("languagechange", onChange)
+  return () => window.removeEventListener("languagechange", onChange)
+}
+
+function readBrowserLanguages() {
+  return navigator.languages.join(",")
+}
+
 function mergeAppearance(value?: Partial<Appearance>): Appearance {
   return chatBubbleSettingsSchema.parse({ ...defaultAppearance, ...value })
 }
@@ -85,31 +104,53 @@ function sessionKey(channelId: string, origin?: string) {
 export function PublicChat({
   channelId,
   embedded = false,
+  deferSessionUntilOpen = false,
   context = defaultContext,
   embedOrigin,
   previewAgentId,
   appearanceOverride,
   initialAppearance,
+  visitorCountry,
+  initialBrowserLanguages = "en",
   onBeforeSend,
   onClose,
+  variant = "default",
+  renderHeader,
 }: {
   channelId: string
   embedded?: boolean
+  deferSessionUntilOpen?: boolean
   context?: Record<string, unknown>
   embedOrigin?: string
   previewAgentId?: string
   appearanceOverride?: Appearance
   initialAppearance?: Appearance
+  visitorCountry?: string | null
+  initialBrowserLanguages?: string
   onBeforeSend?: () => Promise<void>
   onClose?: () => void
+  variant?: "default" | "whatsapp"
+  renderHeader?: (controls: {
+    onNewChat: () => void
+    disabled: boolean
+  }) => React.ReactNode
 }) {
+  const managedEmbed = embedded && deferSessionUntilOpen && !previewAgentId
+  const [hasOpened, setHasOpened] = React.useState(!managedEmbed)
+  const [frameVisible, setFrameVisible] = React.useState(!managedEmbed)
   const [session, setSession] = React.useState<Session | null>(null)
   const [storedAppearance, setAppearance] = React.useState(
     initialAppearance ?? defaultAppearance
   )
+  const browserLanguages = React.useSyncExternalStore(
+    subscribeBrowserLanguage,
+    readBrowserLanguages,
+    () => initialBrowserLanguages
+  )
   const { appearance, copy, language } = localizeBubble(
     appearanceOverride ?? storedAppearance,
-    typeof navigator === "undefined" ? "en" : navigator.languages.join(",")
+    browserLanguages,
+    visitorCountry
   )
   const helpPage = appearance.layout === "help_page"
   const [visitorTheme, setVisitorTheme] = React.useState<
@@ -335,8 +376,10 @@ export function PublicChat({
             stored = null
           }
         }
+        const reuseStored = !reset && !threadId && stored !== null
+        const newConversation = !reuseStored && !threadId
         const active =
-          !reset && !threadId && stored
+          reuseStored && stored
             ? stored
             : await requestJson<Session>(
                 `/api/build-public/${encodeURIComponent(channelId)}/session`,
@@ -361,12 +404,23 @@ export function PublicChat({
         activeConversationId.current = active.conversationId
         sessionRef.current = active
         setSession(active)
-        const display = await requestJson<{ appearance: Appearance }>(
-          `/api/build-public/${encodeURIComponent(channelId)}/appearance`
-        )
-        setAppearance(mergeAppearance(display.appearance))
-        await loadConversation(active)
-        if (helpPage) await loadHistory(active)
+        // Session creation already returns the current appearance and an empty
+        // conversation. Restore existing messages before allowing another send.
+        const display = reuseStored ? initialAppearance : active.appearance
+        if (display) setAppearance(mergeAppearance(display))
+        if (newConversation) setMessages([])
+        await Promise.all([
+          display
+            ? Promise.resolve()
+            : requestJson<{ appearance: Appearance }>(
+                `/api/build-public/${encodeURIComponent(channelId)}/appearance`
+              ).then((result) =>
+                setAppearance(mergeAppearance(result.appearance))
+              ),
+          newConversation ? Promise.resolve() : loadConversation(active),
+        ])
+        // The sidebar is independent of the active conversation's readiness.
+        if (helpPage) void loadHistory(active)
       } catch (reason) {
         setError(
           reason instanceof Error
@@ -382,6 +436,7 @@ export function PublicChat({
       context,
       embedOrigin,
       helpPage,
+      initialAppearance,
       loadConversation,
       loadHistory,
       previewAgentId,
@@ -401,16 +456,47 @@ export function PublicChat({
   }, [channelId, embedOrigin, previewAgentId, session, threads])
 
   React.useEffect(() => {
-    // Loading the signed session is the external side effect this effect owns.
-    void startSession()
-  }, [startSession])
+    if (!managedEmbed || !embedOrigin || window.parent === window) return
+    let parentOrigin: string
+    try {
+      parentOrigin = new URL(embedOrigin).origin
+    } catch {
+      return
+    }
+    const onVisibility = (event: MessageEvent) => {
+      if (event.source !== window.parent || event.origin !== parentOrigin)
+        return
+      if (
+        event.data?.type !== "datool:chat:visibility" ||
+        typeof event.data.visible !== "boolean"
+      )
+        return
+      setFrameVisible(event.data.visible)
+      if (event.data.visible) setHasOpened(true)
+    }
+    window.addEventListener("message", onVisibility)
+    window.parent.postMessage({ type: "datool:chat:ready" }, parentOrigin)
+    return () => window.removeEventListener("message", onVisibility)
+  }, [managedEmbed, embedOrigin])
 
   React.useEffect(() => {
-    if (!session || previewAgentId) return
+    // Loading the signed session is the external side effect this effect owns.
+    if (managedEmbed && !hasOpened && window.parent !== window) return
+    void startSession()
+  }, [startSession, managedEmbed, hasOpened])
+
+  React.useEffect(() => {
+    if (!session || previewAgentId || loading) return
+    if (managedEmbed && !frameVisible && window.parent !== window) return
     const controller = new AbortController()
     let polling = false
     const timer = window.setInterval(() => {
-      if (polling || sendingRef.current) return
+      if (
+        polling ||
+        sendingRef.current ||
+        document.visibilityState === "hidden"
+      )
+        return
       polling = true
       void loadConversation(session, controller.signal)
         .catch((reason) => {
@@ -429,10 +515,16 @@ export function PublicChat({
       controller.abort()
       window.clearInterval(timer)
     }
-  }, [loadConversation, session, previewAgentId])
+  }, [
+    loadConversation,
+    session,
+    previewAgentId,
+    loading,
+    managedEmbed,
+    frameVisible,
+  ])
 
-  const lastMessage = messages.at(-1)
-  React.useEffect(() => {
+  const scrollToLatest = React.useCallback(() => {
     const log = messageLogRef.current
     if (!log) return
     const latestMessage = Array.from(
@@ -452,7 +544,20 @@ export function PublicChat({
           : 0,
       behavior: "smooth",
     })
-  }, [messages.length, lastMessage?.id, lastMessage?.text, sending])
+  }, [messages.length])
+  const onTranscriptMount = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) scrollToLatest()
+    },
+    [scrollToLatest]
+  )
+  const lastMessage = messages.at(-1)
+  React.useEffect(scrollToLatest, [
+    scrollToLatest,
+    lastMessage?.id,
+    lastMessage?.text,
+    sending,
+  ])
 
   async function submit(
     event?: React.FormEvent,
@@ -693,7 +798,8 @@ export function PublicChat({
       className={cn(
         "shrink-0 bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
         helpPage && "mx-auto w-full max-w-3xl bg-transparent",
-        helpPage && !messages.length && "p-0 pb-0"
+        helpPage && !messages.length && "p-0 pb-0",
+        variant === "whatsapp" && "p-2 pb-2"
       )}
     >
       {error && messages.length ? (
@@ -750,8 +856,24 @@ export function PublicChat({
       ) : null}
       {appearance.showBranding &&
       !messages.some((message) => message.direction === "inbound") ? (
-        <p className="mb-3 text-center text-xs text-foreground-muted">
-          {copy.branding}
+        <p className="mb-3 flex items-center justify-center gap-1 text-xs text-foreground-muted">
+          <span>{copy.branding} </span>
+          <a
+            href="https://trydatool.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-sm px-0.5 py-1 font-medium text-foreground transition-colors outline-none hover:text-foreground-muted focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Image
+              src={datoolLogo}
+              alt=""
+              width={16}
+              height={16}
+              unoptimized
+              className="size-4 shrink-0"
+            />
+            Datool
+          </a>
         </p>
       ) : null}
       <form
@@ -767,7 +889,7 @@ export function PublicChat({
           text={draft}
           onTextChange={setDraft}
           running={waitingReply}
-          disabled={loading || !session || unavailable}
+          disabled={unavailable}
           canSubmit={!!draft.trim() && !waitingReply && !loading && !!session}
           placeholder={appearance.inputPlaceholder}
           messageLabel={copy.message}
@@ -779,8 +901,9 @@ export function PublicChat({
     </footer>
   )
 
+  const ChatSurface = previewAgentId || embedded ? "div" : "main"
   return (
-    <main
+    <ChatSurface
       className={cn(
         "datool-chat-surface flex min-h-0 w-full justify-center bg-background text-foreground",
         previewAgentId ? "h-full" : "h-dvh",
@@ -788,7 +911,8 @@ export function PublicChat({
       )}
       lang={language}
       data-theme={theme}
-      style={bubbleStyle(appearance)}
+      data-chat-variant={variant}
+      style={variant === "whatsapp" ? undefined : bubbleStyle(appearance)}
     >
       {helpPage ? <HelpPageSidebar {...navigation} /> : null}
       <section
@@ -800,7 +924,12 @@ export function PublicChat({
           !helpPage && !previewAgentId && "border-x border-border shadow-sm"
         )}
       >
-        {helpPage ? (
+        {renderHeader ? (
+          renderHeader({
+            onNewChat: () => void resetConversation(),
+            disabled: loading || sending || !session,
+          })
+        ) : helpPage ? (
           <HelpPageToolbar {...navigation} />
         ) : (
           <header
@@ -920,78 +1049,90 @@ export function PublicChat({
               <HelpPageLinks settings={appearance} />
             </div>
           ) : null}
-          <div className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}>
-            <MessageTranscript
-              key={session?.conversationId}
-              pendingReply={
-                waitingReply ? (
-                  <ChatTypingIndicator label={copy.thinking} />
-                ) : undefined
-              }
-              variant="customer"
-              messages={messages.map((message) => ({
-                ...message,
-                role: message.direction === "inbound" ? "user" : "assistant",
-                content: message.text ?? "",
-                toolCalls: [],
-              }))}
-              onWidgetInteraction={
-                sending || loading || !session
-                  ? undefined
-                  : (message, interaction, label) =>
-                      void submit(undefined, label, {
-                        ...interaction,
-                        sourceMessageId: message.id,
-                      })
-              }
-              renderMessageFooter={(message) => {
-                if (message.role !== "assistant" || !message.id) return null
-                const messageId = message.id
-                return (
-                  <div className="mt-1 max-w-[85%] px-2 text-xs text-foreground-muted">
-                    <div className="flex items-center gap-2">
-                      {message.createdAt ? (
-                        <time
-                          dateTime={message.createdAt}
-                          title={new Date(message.createdAt).toLocaleString(
-                            language
-                          )}
-                        >
-                          {Math.abs(
-                            Date.now() - new Date(message.createdAt).getTime()
-                          ) < 60_000
-                            ? copy.justNow
-                            : formatRelative(message.createdAt, language)}
-                        </time>
-                      ) : null}
-                      {appearance.showFeedback ? (
-                        <ChatFeedback
-                          value={feedback[messageId]}
-                          onChange={(value) =>
-                            void sendFeedback(messageId, value)
-                          }
-                          disabled={!session || feedbackPending[messageId]}
-                          label={copy.feedback}
-                          positiveLabel={copy.helpful}
-                          negativeLabel={copy.notHelpful}
-                          hideLabel
-                        />
-                      ) : null}
-                    </div>
-                    {feedbackError[messageId] ? (
-                      <p className="mt-1 text-destructive" role="alert">
-                        {feedbackError[messageId]}
-                      </p>
-                    ) : null}
-                  </div>
-                )
-              }}
-            />
-          </div>
+          {messages.length > 0 || waitingReply ? (
+            <React.Suspense
+              fallback={<LoadingState compact label={copy.loading} />}
+            >
+              <div
+                ref={onTranscriptMount}
+                className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}
+              >
+                <MessageTranscript
+                  key={session?.conversationId}
+                  pendingReply={
+                    waitingReply ? (
+                      <ChatTypingIndicator label={copy.thinking} />
+                    ) : undefined
+                  }
+                  variant="customer"
+                  locale={language}
+                  messages={messages.map((message) => ({
+                    ...message,
+                    role:
+                      message.direction === "inbound" ? "user" : "assistant",
+                    content: message.text ?? "",
+                    toolCalls: [],
+                  }))}
+                  onWidgetInteraction={
+                    sending || loading || !session
+                      ? undefined
+                      : (message, interaction, label) =>
+                          void submit(undefined, label, {
+                            ...interaction,
+                            sourceMessageId: message.id,
+                          })
+                  }
+                  renderMessageFooter={(message) => {
+                    if (message.role !== "assistant" || !message.id) return null
+                    const messageId = message.id
+                    return (
+                      <div className="mt-1 max-w-[85%] px-2 text-xs text-foreground-muted">
+                        <div className="flex items-center gap-2">
+                          {message.createdAt ? (
+                            <time
+                              dateTime={message.createdAt}
+                              title={new Date(message.createdAt).toLocaleString(
+                                language
+                              )}
+                            >
+                              {Math.abs(
+                                Date.now() -
+                                  new Date(message.createdAt).getTime()
+                              ) < 60_000
+                                ? copy.justNow
+                                : formatRelative(message.createdAt, language)}
+                            </time>
+                          ) : null}
+                          {appearance.showFeedback ? (
+                            <ChatFeedback
+                              value={feedback[messageId]}
+                              onChange={(value) =>
+                                void sendFeedback(messageId, value)
+                              }
+                              disabled={!session || feedbackPending[messageId]}
+                              label={copy.feedback}
+                              positiveLabel={copy.helpful}
+                              negativeLabel={copy.notHelpful}
+                              hideLabel
+                            />
+                          ) : null}
+                        </div>
+                        {feedbackError[messageId] ? (
+                          <p className="mt-1 text-destructive" role="alert">
+                            {feedbackError[messageId]}
+                          </p>
+                        ) : null}
+                      </div>
+                    )
+                  }}
+                />
+              </div>
+            </React.Suspense>
+          ) : null}
           <div className="min-h-1" aria-hidden />
         </div>
         {!helpPage || messages.length > 0 ? composer : null}
       </section>
-    </main>
+    </ChatSurface>
   )
 }
