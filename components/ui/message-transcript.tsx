@@ -198,6 +198,7 @@ export function MessageTranscript({
   onCodeStatus,
   renderMessageFooter,
   pendingReply,
+  locale = "en",
   getMessageKey,
 }: {
   messages: InspectorMessage[]
@@ -210,6 +211,7 @@ export function MessageTranscript({
   onCodeStatus?: (error: string | null) => void
   renderMessageFooter?: (message: InspectorMessage) => ReactNode
   pendingReply?: ReactNode
+  locale?: string
 }) {
   const transcript = useMemo(() => groupToolResults(messages), [messages])
   const completedContinuationIds = useMemo(
@@ -220,7 +222,14 @@ export function MessageTranscript({
             message.role === "assistant"
               ? message.metadata?.completedContinuationId
               : undefined
-          return typeof id === "string" ? [id] : []
+          return [
+            ...(typeof id === "string" ? [id] : []),
+            ...(Array.isArray(message.metadata?.completedContinuationIds)
+              ? message.metadata.completedContinuationIds.filter(
+                  (value): value is string => typeof value === "string"
+                )
+              : []),
+          ]
         })
       ),
     [messages]
@@ -236,6 +245,14 @@ export function MessageTranscript({
     >
       <AnimatePresence initial={false} mode="popLayout">
         {transcript.map(({ message, toolResults }, index) => {
+          if (message.metadata?.internalFormReceipt === true) return null
+          if (
+            variant === "customer" &&
+            message.role === "user" &&
+            (isRecord(message.metadata?.widgetInteraction) ||
+              message.metadata?.customerInteraction === true)
+          )
+            return null
           const text = messageText(message.content)
           const isUser = message.role.toLowerCase() === "user"
           const isAssistant = message.role.toLowerCase() === "assistant"
@@ -484,6 +501,7 @@ export function MessageTranscript({
                   )}
                   {!customer && (
                     <ChatRichContent
+                      locale={locale}
                       message={message}
                       completedContinuationIds={completedContinuationIds}
                       onInteraction={onWidgetInteraction}
@@ -507,6 +525,7 @@ export function MessageTranscript({
               {inbox && renderMessageFooter?.(message)}
               {customer && (
                 <ChatRichContent
+                  locale={locale}
                   message={message}
                   variant="customer"
                   completedContinuationIds={completedContinuationIds}

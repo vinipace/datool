@@ -1,5 +1,7 @@
 "use client"
 
+import { WidgetTranslationsEditor } from "./widget-translations-editor"
+
 import { useEffect, useMemo, useState } from "react"
 import {
   ArrowLeft,
@@ -8,6 +10,7 @@ import {
   Copy,
   Eye,
   Layers,
+  Languages,
   MoreHorizontal,
   PanelsTopLeft,
   Plus,
@@ -26,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { InspectorSection } from "@/components/ui/inspector-section"
 import { Label } from "@/components/ui/label"
 import { Notice } from "@/components/ui/notice"
 import {
@@ -81,6 +85,20 @@ const starter: WidgetDefinition = {
     default: {
       title: "Hello world",
       description: "How can we help you today?",
+    },
+  },
+  code: `export default function Widget({ data, t }) {
+  return <Card title={t(data.title)} body={t(data.description)} />
+}
+`,
+  translations: {
+    "pt-BR": {
+      "Hello world": "Olá, mundo",
+      "How can we help you today?": "Como podemos ajudar você hoje?",
+    },
+    es: {
+      "Hello world": "Hola, mundo",
+      "How can we help you today?": "¿Cómo podemos ayudarte hoy?",
     },
   },
   functions: [],
@@ -296,6 +314,10 @@ export function WidgetEditor({
           <Layers className="size-4" />
           States
         </TabsTrigger>
+        <TabsTrigger value="translations">
+          <Languages className="size-4" />
+          Translations
+        </TabsTrigger>
         <TabsTrigger value="settings">
           <Settings2 className="size-4" />
           Settings
@@ -407,6 +429,27 @@ export function WidgetEditor({
           Define data with Zod in Schema, then use {"{data.title}"} in JSX.
           Connect named actions in Functions.
         </p>
+      </TabsContent>
+      <TabsContent
+        value="translations"
+        className="min-h-0 flex-1 overflow-auto p-5"
+      >
+        <fieldset disabled={pending} className="mx-auto min-w-0 max-w-4xl space-y-5">
+          <WidgetTranslationsEditor
+            translations={draft.translations}
+            textKeys={[draft.name]}
+            onChange={(translations) =>
+              setDraft((current) => ({ ...current, translations }))
+            }
+          />
+          <InspectorSection label="Using translations in code" defaultOpen={false} icon={<Code2 className="size-4" />}>
+            <div className="space-y-2 text-xs text-foreground-muted">
+              <p>Use the original text as the key. The chat selects the visitor’s language.</p>
+              <pre className="overflow-x-auto rounded-md border border-border bg-muted p-3 text-foreground"><code>{'export default function Widget({ t }) {\n  return <Text>{t("Request demo")}</Text>\n}'}</code></pre>
+              <p>Form labels and options translate automatically. For a custom submit button, pass <code>{'submitLabel={t("Request demo")}'}</code>.</p>
+            </div>
+          </InspectorSection>
+        </fieldset>
       </TabsContent>
       <TabsContent value="functions" className="min-h-0 flex-1">
         <fieldset disabled={pending} className="h-full min-w-0">

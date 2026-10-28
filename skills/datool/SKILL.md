@@ -27,6 +27,8 @@ For evidence review, criteria changes or a review's starting trace view, read [A
 
 For published prompt fetching, rendering, invocation-scoped overrides and connected prompt experiments, read [managed prompts](references/prompts.md). Confirm installed SDK and deployed server support before using the native API.
 
+For customer-facing Build widgets, forms and agent skills, read [localized widgets and skills](references/widgets.md). Discover available Build operations with `build_describe_operations`. When available, use `build_list_widget_templates` / `build_list_skill_templates` and their `build_get_*_template` tools, then `build_get_authoring_guide` and `build_get_widget_components` before authoring. Translate visible text through the widget's locale dictionary and preserve canonical action inputs. Verify deployed translation support before saving through MCP or CLI.
+
 ## Workflow ownership
 
 Read the focused skill matching the work; follow its handoff links when the task reaches another workflow:

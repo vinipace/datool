@@ -161,6 +161,22 @@ runtime and trace feedback. `config.bubble.layout = "help_page"` selects the
 full-page presentation, with page-specific settings in `config.bubble.helpPage`.
 Existing connections default to the bubble layout.
 
+In **Localization**, choose **Visitor’s country** to select the welcome message,
+suggested replies, input placeholder and launcher labels by country. Enable each
+language and supply its translated content. Supported country defaults select
+Portuguese, Spanish or English; unmapped countries, missing country information,
+or a disabled language fall back to the browser’s enabled language and then the
+configured default. Browser and fixed-language modes retain their existing behavior.
+The preview country selector simulates a visitor without changing real traffic.
+
+Country mode reads Cloudflare’s `CF-IPCountry` header on both the hosted chat
+and the launcher appearance request. Enable [Cloudflare IP geolocation](https://developers.cloudflare.com/network/ip-geolocation/)
+and forward that header through the origin proxy. Without it, browser fallback
+applies; no location permission or third-party geolocation lookup is used.
+This header selects display text only and is not an authorization signal for
+country restrictions. Agent replies continue to follow the agent’s instructions
+and the visitor’s message language.
+
 The widget uses a signed visitor session. A conversation ID alone is not an
 access credential. Visitor-provided context is untrusted customer data and must
 not be used as verified customer identity or authorization for a privileged
@@ -195,7 +211,7 @@ automatically.
 
 Widgets are authored as JSX in Code, with an editable Zod Schema and JSON
 example data under Default data. Export a default React component receiving
-`{ data }`; built-ins include Box, Col, Row, Text, Card, Button, Form, List,
+`{ data, locale, t }`; built-ins include Box, Col, Row, Text, Card, Button, Form, List,
 and Image. Image accepts HTTPS sources or the bundled example photos under
 `/widget-template-assets/`. React hooks and imports from `react` or
 `@datool/widgets` are supported.
@@ -208,6 +224,29 @@ The runtime admits only actions from the widget revision pinned to that
 conversation. Existing component definitions open as JSX and convert when
 saved; previously issued conversations retain their original definition.
 
+Forms and widgets have a **Translations** editor for language-specific titles,
+labels, options and buttons. The public chat uses its selected visitor language;
+missing translations fall back to the original text. Field names and submitted
+option values remain unchanged. Custom JSX receives `{ data, locale, t }`: use
+`t("Request demo")` for visible text and add that key in Translations. The built-in
+Form translates its labels and options automatically. Preview language lets
+authors check each version before applying the agent revision.
+Gallery templates and the blank starter include Portuguese and Spanish
+dictionaries with English fallback. Their JSX translates display copy and uses
+the visitor locale for number and currency formatting without changing amounts,
+currencies, field names or action inputs. Custom Form buttons use
+`submitLabel={t("Request a demo")}`. Dictionaries translate known text; arbitrary
+action-result descriptions still need localized upstream values or added entries.
+Skill starters instruct the agent to follow the visitor's language and explicit
+preference, treating country only as an initial hint. These defaults apply to
+new drafts; existing saved widgets and skills are not rewritten.
+
+Successful standalone form submissions save their result and then ask the agent
+to respond using that result and the conversation. The customer transcript hides
+the completed form and internal submission messages. It does not add a fixed
+“Form submitted” response. Saved completion survives a model failure, preventing
+the same form from capturing a second lead on retry. Forms inside structured
+skills continue through their configured steps.
 Widget authoring discovery is shared across the editor, MCP and the generic CLI:
 `build_list_widget_templates`, `build_get_widget_template` and
 `build_get_widget_components` return the maintained starters and component props.

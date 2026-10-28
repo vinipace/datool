@@ -1,5 +1,7 @@
 "use client"
 
+import { WidgetTranslationsEditor } from "./widget-translations-editor"
+
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -2549,6 +2551,17 @@ function FormActionFields({
         <p className="mt-1 text-xs text-foreground-muted">
           Use this for field options or schemas that need a custom shape.
         </p>
+      </InspectorSection>
+      <InspectorSection label="Translations" variant="form" defaultOpen={false}>
+        <WidgetTranslationsEditor
+          translations={draft.translations}
+          textKeys={[
+            draft.name,
+            draft.submitLabel,
+            ...draft.fields.flatMap((field) => [field.label, ...field.options]),
+          ]}
+          onChange={(value) => update("translations", value)}
+        />
       </InspectorSection>
       <FormRow
         label="Submit action ID"

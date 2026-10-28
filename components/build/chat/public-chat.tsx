@@ -92,6 +92,15 @@ type ChatMessage = {
 const defaultAppearance = chatBubbleSettingsSchema.parse({})
 const defaultContext: Record<string, unknown> = {}
 
+function subscribeBrowserLanguage(onChange: () => void) {
+  window.addEventListener("languagechange", onChange)
+  return () => window.removeEventListener("languagechange", onChange)
+}
+
+function readBrowserLanguages() {
+  return navigator.languages.join(",")
+}
+
 function mergeAppearance(value?: Partial<Appearance>): Appearance {
   return chatBubbleSettingsSchema.parse({ ...defaultAppearance, ...value })
 }
@@ -208,6 +217,8 @@ export function PublicChat({
   previewAgentId,
   appearanceOverride,
   initialAppearance,
+  visitorCountry,
+  initialBrowserLanguages = "en",
   onBeforeSend,
   onClose,
   variant = "default",
@@ -222,6 +233,8 @@ export function PublicChat({
   previewAgentId?: string
   appearanceOverride?: Appearance
   initialAppearance?: Appearance
+  visitorCountry?: string | null
+  initialBrowserLanguages?: string
   onBeforeSend?: () => Promise<void>
   onClose?: () => void
   variant?: "default" | "whatsapp"
@@ -239,9 +252,15 @@ export function PublicChat({
   const [storedAppearance, setAppearance] = React.useState(
     initialAppearance ?? defaultAppearance
   )
+  const browserLanguages = React.useSyncExternalStore(
+    subscribeBrowserLanguage,
+    readBrowserLanguages,
+    () => initialBrowserLanguages
+  )
   const { appearance, copy, language } = localizeBubble(
     appearanceOverride ?? storedAppearance,
-    typeof navigator === "undefined" ? "en" : navigator.languages.join(",")
+    browserLanguages,
+    visitorCountry
   )
   const helpPage = appearance.layout === "help_page"
   const [visitorTheme, setVisitorTheme] = React.useState<
@@ -1661,6 +1680,7 @@ export function PublicChat({
                       ) : undefined
                     }
                     variant="customer"
+                    locale={language}
                     messages={messages
                       .filter(
                         (message) =>

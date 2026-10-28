@@ -1,3 +1,4 @@
+import { BubblePreview } from "./bubble-preview"
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
@@ -976,5 +977,111 @@ export const ShopifyPageNavigation: Story = {
     await expect(
       await canvas.findByText(appearance.welcomeMessage)
     ).toBeVisible()
+  },
+}
+
+export const CountryWelcome: Story = {
+  args: {
+    visitorCountry: "BR",
+    initialBrowserLanguages: "en-US",
+    initialAppearance: chatBubbleSettingsSchema.parse({
+      ...appearance,
+      displayName: "Datool",
+      welcomeMessage:
+        "Hi! I’m Datool’s AI assistant. What would you like to improve: customer conversations or your AI app?",
+      suggestedReplies: ["See pricing", "Request a demo"],
+      localization: {
+        source: "country",
+        defaultLanguage: "en",
+        languages: ["en", "pt-BR"],
+        translations: {
+          "pt-BR": {
+            welcomeMessage:
+              "Olá! Sou o assistente de IA da Datool. O que você quer melhorar: o atendimento aos clientes ou seu aplicativo de IA?",
+            inputPlaceholder: "Pergunte sobre a Datool…",
+            suggestedReplies: [
+              "Quero vender pelo meu site",
+              "Melhorar meu aplicativo de IA",
+              "Ver preços",
+              "Solicitar uma demonstração",
+            ],
+          },
+        },
+      },
+    }),
+  },
+  beforeEach: ({ args }) => {
+    sessionAppearance = args.initialAppearance!
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // Controls localize before the session finishes, then welcome/suggestions
+    // remain localized when the returned appearance replaces the initial one.
+    await expect(
+      canvas.getByPlaceholderText("Pergunte sobre a Datool…")
+    ).toBeVisible()
+    await expect(
+      canvas.queryByRole("button", { name: "See pricing" })
+    ).not.toBeInTheDocument()
+    releaseSession()
+    releaseHistory()
+    await expect(
+      await canvas.findByText(/^Olá! Sou o assistente/)
+    ).toBeVisible()
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Ver preços" })
+    )
+    await waitFor(() => expect(submitted).toHaveLength(1))
+    await expect(submitted[0]).toMatchObject({ text: "Ver preços" })
+  },
+}
+
+export const CountryPreview: Story = {
+  args: CountryWelcome.args,
+  parameters: {
+    msw: {
+      handlers: [
+        http.post("/api/build/build_create_conversation", () =>
+          HttpResponse.json({ data: { id: "country-preview" } })
+        ),
+        http.post("/api/build/build_list_conversation_messages", () =>
+          HttpResponse.json({ data: { items: [] } })
+        ),
+      ],
+    },
+  },
+  render: (args) => (
+    <div className="h-dvh">
+      <BubblePreview
+        settings={args.initialAppearance!}
+        channelId="country-preview"
+        agentId="country-preview"
+        onBeforeSend={async () => {}}
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const country = canvas.getByRole("combobox", {
+      name: "Preview visitor country",
+    })
+    await expect(
+      await canvas.findByRole("button", { name: "Ver preços" })
+    ).toBeVisible()
+    await userEvent.selectOptions(country, "US")
+    await expect(
+      canvas.getByRole("button", { name: "See pricing" })
+    ).toBeVisible()
+    await expect(
+      canvas.queryByText(/^Olá! Sou o assistente/)
+    ).not.toBeInTheDocument()
+    await userEvent.selectOptions(country, "BR")
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Mobile preview" })
+    )
+    await expect(
+      canvas.getByRole("button", { name: "Ver preços" })
+    ).toBeVisible()
+    await expect(canvas.getByText(/^Olá! Sou o assistente/)).toBeVisible()
   },
 }

@@ -28,7 +28,8 @@ export async function GET(
           appearance,
           launcher: resolveBubbleLauncher(
             appearance,
-            request.headers.get("accept-language") ?? "en"
+            request.headers.get("accept-language") ?? "en",
+            request.headers.get("cf-ipcountry")
           ),
         },
       },

@@ -1,6 +1,6 @@
 import { trustedAuthWebOrigins } from "@/lib/auth-origins"
-import { expo } from "@better-auth/expo"
 import { google } from "better-auth/social-providers"
+import { expo } from "@better-auth/expo"
 import { isAllowedEmail, isAllowedGoogleUser } from "./launch-access"
 import {
   authEmailConfigured,

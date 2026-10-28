@@ -8,6 +8,7 @@ import {
 } from "@/src/lib/build/widget-compiler"
 import { widgetAsCode } from "@/src/lib/build/widget-code"
 import { widgetDefinitionSchema } from "@/src/lib/build/contracts"
+import { widgetText } from "@/src/lib/build/widget-i18n"
 
 describe("widget code authoring", () => {
   test("compiles JSX modules with hooks, conditional content, and mapped state data", () => {
@@ -68,13 +69,23 @@ describe("widget code authoring", () => {
         default: { title: "Ready", items: [{ name: "Report", count: 1 }] },
       },
       components: [
-        { type: "button", label: "{{title}}", actionId: "confirm-order" },
+        {
+          type: "button",
+          label: "Confirm {{title}}",
+          actionId: "confirm-order",
+        },
       ],
+      translations: { "pt-BR": { "Confirm {{title}}": "Confirmar {{title}}" } },
       functions: [{ name: "confirm", actionId: "confirm-order" }],
     })
     const migrated = widgetAsCode(legacy)
     const calls: Array<Record<string, unknown>> = []
-    const exports: { default?: React.ComponentType<{ data: unknown }> } = {}
+    const exports: {
+      default?: React.ComponentType<{
+        data: unknown
+        t: (text: string) => string
+      }>
+    } = {}
     new Function(
       "React",
       "exports",
@@ -90,13 +101,17 @@ describe("widget code authoring", () => {
         calls.push({ action: props.onClickAction })
         return <button>{props.children}</button>
       },
-      (_: string, data: { title: string }) => data.title
+      (template: string, data: { title: string }) =>
+        template.replace("{{title}}", data.title)
     )
     expect(
       renderToStaticMarkup(
-        React.createElement(exports.default!, { data: { title: "Ready" } })
+        React.createElement(exports.default!, {
+          data: { title: "Report" },
+          t: (text) => widgetText(text, "pt-BR", migrated.translations),
+        })
       )
-    ).toContain("<button>Ready</button>")
+    ).toContain("<button>Confirmar Report</button>")
     expect(calls).toEqual([{ action: "confirm" }])
     expect(
       migrated.functions.find((fn) => fn.name === "confirm")?.actionId

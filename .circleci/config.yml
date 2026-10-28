@@ -210,6 +210,9 @@ jobs:
           command: bun audit --audit-level high
       - start-services
       - run:
+          name: Verify ingestion retries, retention, and safe diagnostics
+          command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-inspection.test.ts tests/ingestion-sequence.test.ts tests/inbox-diagnostics.test.ts
+      - run:
           name: Restore encrypted backups with disposable databases
           command: bash ops/dokku-backup/test.sh
       - run:

@@ -63,7 +63,7 @@ export const chatBubbleSettingsSchema = agentAppearanceSchema.extend({
     .default(null),
   localization: z
     .object({
-      source: z.enum(["browser", "fixed"]).default("browser"),
+      source: z.enum(["browser", "country", "fixed"]).default("browser"),
       defaultLanguage: bubbleLanguageSchema.default("en"),
       languages: z.array(bubbleLanguageSchema).min(1).max(3).default(["en"]),
       translations: z

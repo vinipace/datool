@@ -1,6 +1,7 @@
 // Importing this module loads every domain operation into the shared registry.
 // Keep this as the only side-effectful Build import used by transports.
 import "./operations"
+import "./operations/authoring"
 import "./operations/widgets"
 import "./integrations/operations"
 

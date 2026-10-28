@@ -709,7 +709,8 @@ Create Actions includes **Show Widget** under Custom actions. Its editor uses
 `action-widget-picker.tsx` to search this agent’s widgets by name; disabled
 widgets remain visible but cannot be selected. A widget must be chosen before
 the action can be saved. The Actions collection uses the same `px-3 py-1`
-content spacing as the Widgets collection.
+content spacing as the Widgets collection. The Create Actions catalog adds
+`pt-3` below its tabs, giving the cards a total top inset of 16px.
 
 `components/ui/chat-rich-content.tsx` owns widget rendering in both chats and the
 editor preview. Default state data is merged with named preview state and pinned

@@ -56,6 +56,7 @@ public/mcp-apps/
 # Generated reports, screenshots, recordings, traces, and npm release artifacts.
 # Keep real execution evidence outside the public source repository.
 /artifacts/
+/.vitest-attachments/
 
 # Private implementation plans and local planning records.
 /plans/

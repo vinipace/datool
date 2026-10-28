@@ -85,6 +85,13 @@
       )
   }
 
+  function notifyVisibility() {
+    if (frame.contentWindow) frame.contentWindow.postMessage({
+      type: "datool:chat:visibility",
+      visible: frame.style.display !== "none"
+    }, frameOrigin);
+  }
+
   function open() {
     if (disposed) return
     saveOpen(true)

@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Monitor, Smartphone, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { PublicChat } from "./public-chat"
 import { BubbleLauncherIcon } from "./bubble-launcher-icon"
 import { localizeBubble } from "@/src/lib/build/bubble-localization"
@@ -21,9 +22,13 @@ export function BubblePreview({
   channelId: string
   onBeforeSend: () => Promise<void>
 }) {
+  const [previewCountry, setPreviewCountry] = React.useState("BR")
+  const visitorCountry =
+    settings.localization.source === "country" ? previewCountry : undefined
   const localized = localizeBubble(
     settings,
-    typeof navigator === "undefined" ? "en" : navigator.languages.join(",")
+    typeof navigator === "undefined" ? "en" : navigator.languages.join(","),
+    visitorCountry
   )
   const [device, setDevice] = React.useState<"desktop" | "mobile">("desktop")
   const helpPage = settings.layout === "help_page"
@@ -35,6 +40,20 @@ export function BubblePreview({
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-5 py-3">
         <span className="text-sm font-medium">Preview</span>
+        {settings.localization.source === "country" ? (
+          <Select
+            className="min-w-0 max-w-52"
+            aria-label="Preview visitor country"
+            value={previewCountry}
+            onChange={(event) => setPreviewCountry(event.target.value)}
+          >
+            <option value="BR">Brazil</option>
+            <option value="US">United States</option>
+            <option value="MX">Mexico</option>
+            <option value="ES">Spain</option>
+            <option value="">Country unavailable</option>
+          </Select>
+        ) : null}
         <div
           role="group"
           aria-label="Preview device"
@@ -86,6 +105,7 @@ export function BubblePreview({
                 channelId={channelId}
                 previewAgentId={agentId}
                 appearanceOverride={settings}
+                visitorCountry={visitorCountry}
                 onBeforeSend={onBeforeSend}
               />
             </div>
@@ -122,6 +142,7 @@ export function BubblePreview({
                   channelId={channelId}
                   previewAgentId={agentId}
                   appearanceOverride={settings}
+                  visitorCountry={visitorCountry}
                   embedded
                   onBeforeSend={onBeforeSend}
                   onClose={() => setOpen(false)}

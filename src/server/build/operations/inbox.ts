@@ -557,7 +557,7 @@ export async function sendHumanReply(context: BuildContext, value: unknown) {
     `)
     const row = ensureRows(conversation.rows, "Conversation", input.conversationId)
     if (row.owner_type !== "human" || row.owner_id !== ctx.actorId)
-      throw new TracerError("CONFLICT", "Take over this conversation before replying. Another teammate may have claimed it.")
+      throw new TracerError("CONFLICT", "Take over this conversation before replying. Another teammate may have claimed it.", { details: { reason: "OWNERSHIP_CHANGED" } })
 
     // The canonical conversation owner is necessary but not sufficient: an
     // expired lease must stop a stale inbox tab from appending more replies.
@@ -578,7 +578,7 @@ export async function sendHumanReply(context: BuildContext, value: unknown) {
         (lease.lease_expires_at !== null &&
           new Date(String(lease.lease_expires_at)).getTime() <= Date.now()))
     ) {
-      throw new TracerError("CONFLICT", "Your conversation lease expired. Take over the conversation again before replying.")
+      throw new TracerError("CONFLICT", "Your conversation lease expired. Take over the conversation again before replying.", { details: { reason: "LEASE_EXPIRED" } })
     }
     await assertTicketAssignment(tx, ctx.projectId, { assigneeUserId: actorId, teamId: null })
 

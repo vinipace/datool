@@ -14,6 +14,7 @@ import { ChatFeedback, type ChatFeedbackProps } from "./chat-feedback"
 export function Chat({
   messages,
   perspective = "customer",
+  locale = "en",
   variant = "default",
   text,
   onTextChange,
@@ -31,6 +32,7 @@ export function Chat({
   onCodeStatus,
   onSubmit,
 }: {
+  locale?: string
   variant?: "default" | "inbox"
   messages: InspectorMessage[]
   perspective?: React.ComponentProps<typeof MessageTranscript>["perspective"]
@@ -96,6 +98,7 @@ export function Chat({
             }
           >
             <MessageTranscript
+              locale={locale}
               messages={messages}
               variant={variant === "inbox" ? "inbox" : "chat"}
               perspective={perspective}

@@ -112,7 +112,7 @@ export const skillTemplates: SkillTemplate[] = [
       "The visitor wants a demo, a sales conversation or a meeting with your team.",
     steps: [
       "Ask what the visitor wants to achieve. Collect their name, work email and any company details required by your connected lead action, explaining how your team will use them.",
-      "Use the connected form, widget or lead action. Do not ask again for details already provided in the conversation.",
+      "Use the connected form, widget or lead action. Do not ask again for details already provided in the conversation. After a successful submission result, acknowledge it naturally in the visitor's language and explain the next step. Do not send a fixed Form submitted message or create the lead again. A captured request is not a confirmed calendar booking.",
       "If a calendar action is connected, ask for the visitor's time zone and preferred times, then check actual availability. Offer only slots returned by that action.",
       "Ask the visitor to confirm a slot and use the connected booking action. Confirm the date, time zone and meeting link only after the action succeeds.",
       "If scheduling is not connected or the booking fails, offer an approved scheduling link or confirm a follow-up only after the lead action succeeds. Never invent a calendar booking.",
@@ -133,7 +133,11 @@ export function skillFromTemplate(
     description: template.description,
     enabled: false,
     trigger: { type: "intent", value: template.trigger },
-    instructions: template.steps
+    instructions: [
+      "Use the visitor's current conversation language and honor an explicit language preference. Treat country as an initial hint only; do not assume every visitor in a country speaks the same language.",
+      "Use the connected widget's translations for customer-facing labels and buttons. Never show bilingual slash-separated labels or translate field names, option values, action names or IDs sent to tools.",
+      ...template.steps,
+    ]
       .map((step, index) => `${index + 1}. ${step}`)
       .join("\n\n"),
     steps: [],

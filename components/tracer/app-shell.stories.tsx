@@ -148,6 +148,9 @@ export const InboxSidebar: Story = {
 }
 
 export const BuildEnabled: Story = {
+  parameters: {
+    nextjs: { navigation: { pathname: `${prefix}/build/agents` } },
+  },
   render: () => <AppShellExample buildEnabled />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -156,7 +159,11 @@ export const BuildEnabled: Story = {
     ).getByRole("button", { name: "Toggle sidebar" })
     if (toggle.getAttribute("aria-expanded") !== "true")
       await userEvent.click(toggle)
-    await expect(canvas.getByText("Build", { exact: true })).toBeVisible()
+    await expect(
+      within(
+        canvas.getByRole("navigation", { name: "Workspace area" })
+      ).getByRole("link", { name: "Build" })
+    ).toBeVisible()
     for (const [label, route] of [
       ["Agents", "agents"],
       ["Conversations", "conversations"],
@@ -202,6 +209,40 @@ export const NewScorerRoute: Story = {
       "href",
       `${prefix}/scorers`
     )
+  },
+}
+
+export const BuildNavigation: Story = {
+  render: () => <AppShellExample buildEnabled />,
+  parameters: {
+    nextjs: { navigation: { pathname: `${prefix}/build/agents`, query: {} } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const header = within(canvas.getByRole("banner", { name: "Page controls" }))
+    const toggle = header.getByRole("button", { name: "Toggle sidebar" })
+    if (toggle.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(toggle)
+    await expect(
+      header.getByRole("button", { name: /Switch project/ })
+    ).toBeVisible()
+    await expect(
+      within(
+        canvas.getByRole("navigation", { name: "Workspace area" })
+      ).getByRole("link", { name: "Build" })
+    ).toHaveAttribute("aria-current", "page")
+    await expect(
+      within(
+        canvas.getByRole("navigation", { name: "Workspace area" })
+      ).getByRole("link", { name: "Observe" })
+    ).toHaveAttribute("href", prefix)
+    await expect(canvas.getByRole("link", { name: "Agents" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    )
+    await expect(
+      canvas.queryByRole("link", { name: "Traces" })
+    ).not.toBeInTheDocument()
   },
 }
 
@@ -445,7 +486,9 @@ export const EditProfile: Story = {
       expect(dialog.getByRole("button", { name: "Remove photo" })).toBeVisible()
     )
     await waitFor(() => {
-      const preview = body.getByRole("dialog", { name: "Profile" }).querySelector("img")
+      const preview = body
+        .getByRole("dialog", { name: "Profile" })
+        .querySelector("img")
       expect(preview?.naturalWidth).toBe(256)
     })
     await userEvent.click(dialog.getByRole("button", { name: "Save changes" }))
@@ -462,15 +505,13 @@ export const EditProfile: Story = {
     await userEvent.click(dialog.getByRole("button", { name: "Done" }))
     await waitFor(() => expect(trigger).toHaveFocus())
     await userEvent.click(trigger)
-    await userEvent.click(
-      body.getByRole("menuitem", { name: "Profile" })
-    )
+    await userEvent.click(body.getByRole("menuitem", { name: "Profile" }))
     const reopened = within(
       await body.findByRole("dialog", { name: "Profile" })
     )
-    await expect(
-      reopened.getByRole("textbox", { name: "Name" })
-    ).toHaveValue("Ana Support")
+    await expect(reopened.getByRole("textbox", { name: "Name" })).toHaveValue(
+      "Ana Support"
+    )
     await userEvent.click(
       reopened.getByRole("button", { name: "Remove photo" })
     )

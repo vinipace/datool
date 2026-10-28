@@ -1779,7 +1779,7 @@ function messageContent(row: Row) {
   }
 }
 
-function publicMessageMetadata(metadata: Record<string, unknown>) {
+function publicMessageMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   const allowed = new Set([
     "widget",
     "widgetDefinition",
@@ -1792,9 +1792,14 @@ function publicMessageMetadata(metadata: Record<string, unknown>) {
     "shopifyProducts",
     "shopifyCartCleanup",
   ])
-  return Object.fromEntries(
-    Object.entries(metadata).filter(([key]) => allowed.has(key))
-  )
+  return {
+    ...Object.fromEntries(
+      Object.entries(metadata).filter(([key]) => allowed.has(key))
+    ),
+    ...(metadata.widgetInteraction && typeof metadata.widgetInteraction === "object"
+      ? { customerInteraction: true }
+      : {}),
+  }
 }
 
 async function reconcileCampaignReply(
@@ -3125,12 +3130,25 @@ export async function readPublicConversation(
   `)
   if (!rows.rows.length)
     throw new Error("Conversation is not available for this visitor.")
+  // A saved form stays complete even if the follow-up model call failed.
+  // Return only its opaque completion IDs, never submitted values or receipts.
+  const receipts = await database(context).execute<Row>(sql`
+    SELECT metadata_json->>'completedContinuationId' AS continuation_id
+    FROM build_conversation_messages
+    WHERE project_id=${context.projectId} AND conversation_id=${conversationId}
+      AND metadata_json->>'internalFormReceipt'='true'
+    ORDER BY created_at DESC LIMIT 200
+  `)
+  const completedContinuationIds = receipts.rows
+    .map((row) => row.continuation_id)
+    .filter((id): id is string => typeof id === "string")
   securityAudit({ action: "visitor.conversation.read", identity: { actorType: "visitor", actorId: visitor.visitorId, organizationId: context.organizationId, projectId: context.projectId }, connectionId, conversationId })
   return rows.rows
     .filter((row) => row.id !== null)
     .map((row) => {
       const content = messageContent(row)
       const metadata = publicMessageMetadata(content.metadata)
+      if (completedContinuationIds.length) metadata.completedContinuationIds = completedContinuationIds
       if (row.human_reply === true) metadata.source = "human"
       return {
         id: String(row.id),

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { widgetTranslationsSchema } from "./widget-i18n"
 import { shopifyActionSettingsSchema } from "./shopify"
 
 import type { JsonValue } from "@/src/lib/tracer/contracts"
@@ -242,6 +243,7 @@ export const actionDefinitionSchema = z.discriminatedUnion("type", [
     type: z.literal("form"),
     captureLead: z.boolean().default(false),
     submitLabel: z.string().min(1).max(120).default("Submit"),
+    translations: widgetTranslationsSchema.optional(),
     fields: z
       .array(
         z.object({
@@ -401,6 +403,7 @@ export type WidgetComponent = z.infer<typeof widgetComponentSchema>
 
 export const widgetDefinitionSchema = z
   .object({
+    translations: widgetTranslationsSchema.optional(),
     name: z.string().min(1).max(160),
     description: z.string().max(2_000).default(""),
     enabled: z.boolean().default(true),
