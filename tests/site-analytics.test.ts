@@ -66,6 +66,24 @@ describe("consented website analytics transport", () => {
     expect(sent).toEqual([])
     expect(cookie).toBe("datool_signup=google")
   })
+  test("the Google tag receives Arguments commands when no tag already exists", () => {
+    storage.set(analyticsConsentKey, "granted")
+    Reflect.deleteProperty(window, "gtag")
+    initializeAnalytics("G-TEST")
+    trackPageView("/docs")
+    const queue = (window as unknown as { dataLayer: IArguments[] }).dataLayer
+    expect(queue).toHaveLength(3)
+    for (const command of queue) {
+      expect(Object.prototype.toString.call(command)).toBe("[object Arguments]")
+      expect(Array.isArray(command)).toBe(false)
+    }
+    expect(Array.from(queue[1]).slice(0, 2)).toEqual(["config", "G-TEST"])
+    expect(queue[1][2]).toMatchObject({ send_page_view: false })
+    expect(Array.from(queue[2]).slice(0, 2)).toEqual(["event", "page_view"])
+    expect(queue[2][2]).toMatchObject({
+      page_location: "https://www.trydatool.com/docs",
+    })
+  })
   test("only public paths are measured and query strings, fragments and referrer queries stay private", () => {
     storage.set(analyticsConsentKey, "granted")
     for (const path of [
