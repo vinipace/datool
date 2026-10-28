@@ -758,13 +758,16 @@ export async function runKnowledgeJob(
   }
   const sourceId = claimed[0].sourceId
   try {
-    const heartbeat = async (progress?: CrawlProgress) => {
+    const heartbeat = async (progress?: CrawlProgress | string) => {
       await heartbeatKnowledgeJob(ctx, {
         jobId: claimed[0].jobId,
         leaseToken: claimed[0].leaseToken,
       })
       if (progress) {
-        const message = `Crawling: ${progress.indexedPages} pages read, ${progress.discoveredPages} discovered${progress.failedPages ? `, ${progress.failedPages} failed` : ""}.`
+        const message =
+          typeof progress === "string"
+            ? progress
+            : `Crawling: ${progress.indexedPages} pages read, ${progress.discoveredPages} discovered${progress.failedPages ? `, ${progress.failedPages} failed` : ""}.`
         await ctx.database.execute(sql`
           update build_knowledge_sources set status_message=${message}
           where project_id=${ctx.projectId} and id=${sourceId}
@@ -869,11 +872,16 @@ export async function runKnowledgeJob(
       throw new KnowledgeServiceError(
         `The source exceeds the ${chunkLimit} chunk limit.`
       )
+    await heartbeat(
+      website
+        ? `Indexing ${payload.pages.length} pages. Preparing content for your agent.`
+        : "Indexing content for your agent."
+    )
     const embeddings = await embedKnowledgeChunks(ctx, chunks, {
       sourceId,
       heartbeat,
     })
-    await heartbeat()
+    await heartbeat("Saving index. Almost ready.")
     // Source revisions fence edits. Index revisions are separate so a resync
     // can stage a fresh chunk set while the previous active revision remains
     // queryable until the replacement commits.
