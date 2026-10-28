@@ -12,11 +12,14 @@ stamp=$(date -u +%Y%m%dT%H%M%SZ)
 cat <<'SQL' | dokku postgres:connect evolution-db >/dev/null
 DELETE FROM "Message" WHERE "messageTimestamp" < EXTRACT(EPOCH FROM now() - INTERVAL '3 days')::bigint;
 SQL
-# A transactionally consistent PostgreSQL dump includes the authoritative Session table.
+# PostgreSQL stores the login credentials; Redis also stores Signal session keys.
 dokku postgres:export evolution-db > "$root/$stamp.dump.partial"
 test -s "$root/$stamp.dump.partial"
 mv "$root/$stamp.dump.partial" "$root/$stamp.dump"
-# CACHE_REDIS_SAVE_INSTANCES=false: Redis is a cache, not the session authority.
+# SAVE_INSTANCES=false does not move Signal keys out of Redis in Evolution 2.3.7.
+dokku redis:export evolution-redis > "$root/$stamp-redis.rdb.partial"
+test -s "$root/$stamp-redis.rdb.partial"
+mv "$root/$stamp-redis.rdb.partial" "$root/$stamp-redis.rdb"
 tar -czf "$root/$stamp-storage.tgz" -C /var/lib/dokku/data/storage/datool-evolution instances
-find "$root" -maxdepth 1 -type f \( -name '*.dump' -o -name '*-storage.tgz' -o -name '*.partial' \) -mtime +7 -delete
+find "$root" -maxdepth 1 -type f \( -name '*.dump' -o -name '*-storage.tgz' -o -name '*-redis.rdb' -o -name '*.partial' \) -mtime +7 -delete
 logger -t datool-evolution 'maintenance completed: retention and local backup'

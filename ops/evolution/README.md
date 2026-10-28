@@ -92,13 +92,15 @@ for 48 hours before adding customer numbers.
 
 ## Persistence, retention and recovery
 
-PostgreSQL's Session table is authoritative; `CACHE_REDIS_SAVE_INSTANCES=false`.
-The dedicated instances volume is retained too. Provider messages are deleted
+PostgreSQL's Session table stores login credentials. In Evolution 2.3.7, Signal
+session keys still use Redis when `CACHE_REDIS_ENABLED=true`, even with
+`CACHE_REDIS_SAVE_INSTANCES=false`. Keep Redis persistence enabled, use
+`noeviction`, and preserve PostgreSQL, Redis and the instances volume together. Provider messages are deleted
 after three days; older delivery receipt updates are no longer available there.
 Datool Inbox history follows Datool's existing retention. Credentials, QR codes
 and raw webhook payloads are excluded from Datool operation receipts and audit logs.
 
-`maintenance.sh` creates daily root-only database dumps and a session-volume copy,
+`maintenance.sh` creates daily root-only PostgreSQL and Redis dumps plus a session-volume copy,
 retained for seven days locally. Local copies do not cover host loss. Before a
 customer rollout, include these paths plus root-protected Dokku configuration in
 the operator's encrypted off-host backups and prove a restore. Never put backups
@@ -126,3 +128,42 @@ Meta integration. Both require a disposable `DATOOL_TEST_DATABASE_URL`.
 The pinned Evolution image was also exercised locally for create, per-instance
 credentials, webhook configuration, QR generation and removal. Actual WhatsApp
 send/receipt events and restart recovery require the operator's paired test phone.
+
+## Baileys runtime compatibility candidate
+
+`runtime/` builds a controlled derivative of the same Evolution 2.3.7 AMD64 image,
+replacing only Baileys and its isolated dependency tree with official `7.0.0-rc14`.
+The lockfile pins all dependencies and their registry integrity hashes. The
+Evolution schema and application bundle remain unchanged. Do not change the
+bootstrap default until the paired pilot has passed delivery and a 48-hour soak.
+
+The update includes upstream session continuity, identity handling, and connection
+race fixes absent from rc.9:
+- https://github.com/WhiskeySockets/Baileys/pull/2294
+- https://github.com/WhiskeySockets/Baileys/pull/2264
+- https://github.com/WhiskeySockets/Baileys/pull/2307
+- https://github.com/WhiskeySockets/Baileys/pull/2182
+
+These are relevant mitigations, not proof that every `401/device_removed` event
+has the same cause. A revoked companion session requires fresh pairing. Never
+retry logout/re-pair automatically or promise an indefinite unofficial session.
+
+Build off the server and test without production data:
+
+```sh
+docker build --platform linux/amd64 -t datool-evolution:baileys-rc14-candidate ops/evolution/runtime
+EVOLUTION_TEST_IMAGE=datool-evolution:baileys-rc14-candidate python3 ops/evolution/test-runtime.py
+```
+
+The test creates disposable PostgreSQL/Redis resources and an unpaired instance,
+verifies authenticated HTTP, obtains a real QR handshake without displaying or
+scanning it, then removes all test resources. It does not prove recipient delivery,
+image/audio compatibility, or long-running session stability. Complete those in
+the restricted pilot before broader rollout.
+
+For a revoked pilot, `upgrade-revoked.py` accepts a reviewed image manifest and
+archive. It requires exactly the expected revoked instance, takes recovery copies
+of all three state stores with Evolution stopped, and uses stop-before-start
+Dokku deployment so only one process owns the session. It does not restart Datool
+or modify its configuration. The manifest contains `archive`, `sha256`, `image`,
+`imageId`, and `instance`; generate installation-specific manifests outside Git.
