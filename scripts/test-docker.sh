@@ -64,7 +64,7 @@ done
 [ "$ready" = 1 ]
 # Check rendered content: streamed Next errors can still have HTTP status 200.
 docker exec "$prefix-web" node -e '
- for (const [path,text] of [["/","See what your AI is doing."],["/faq","What is Datool?"],["/faq/what-is-datool","What is Datool?"],["/landing-page.md","See what your AI is doing."],["/cms/login","<title>Login"]]) {
+ for (const [path,text] of [["/","Build AI agents."],["/faq","What is Datool?"],["/faq/what-is-datool","What is Datool?"],["/landing-page.md","Build AI agents."],["/cms/login","<title>Login"]]) {
    const response=await fetch("http://127.0.0.1:3000"+path);
    const body=await response.text();
    if(!response.ok || !body.includes(text) || /[0-9a-f]+:E\{/.test(body)) throw new Error("CMS rendering failed: "+path);

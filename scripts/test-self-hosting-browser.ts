@@ -317,9 +317,9 @@ try {
     // Public reads must use an anonymous context, even though our operator has a session.
     const anonymous = await browser.newContext({ ignoreHTTPSErrors: true })
     for (const [path, text] of [
-      ["/", "See what your AI is doing."],
+      ["/", "Build AI agents."],
       ["/faq", "What is Datool?"],
-      ["/landing-page.md", "See what your AI is doing."],
+      ["/landing-page.md", "Build AI agents."],
     ]) {
       const response = await anonymous.request.get(`${origin}${path}`)
       assert(response.ok(), `Enabled CMS: ${path}`)
