@@ -171,3 +171,14 @@ or modify its configuration. The manifest contains `archive`, `sha256`, `image`,
 
 Redis snapshots use authenticated `redis-cli --rdb` and `redis-check-rdb` directly,
 so they work with Alpine services whose Dokku exporter incorrectly assumes bash.
+
+### Credential persistence race candidate
+
+The 2.3.7 bundle processes a combined credential/connection event without
+awaiting the credential write and starts reconnect first. The runtime patch
+serializes the credential write before initiating the connection update, while
+leaving connection handling itself non-blocking. The patch is guarded against
+unexpected upstream bundles. A delayed-write test reproduces the old ordering
+and verifies the candidate; it does not establish that this caused a real
+`device_removed` event. A fresh pairing, delivery tests and sustained observation
+are required before claiming improved stability.
