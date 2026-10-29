@@ -19,6 +19,7 @@ import {
   SHOPIFY_TOOLKIT,
 } from "./shopify-provider"
 import { composioUserId } from "./provider"
+import { SHOPIFY_PRIVACY_VERSION } from "@/src/lib/shopify-privacy"
 
 const digest = (s: string) => createHash("sha256").update(s).digest("hex")
 const secret = () => randomBytes(32).toString("base64url")
@@ -235,8 +236,14 @@ export async function claimShopifyInstall(
   request: Request,
   userId: string,
   organizationId: string,
-  projectId?: string
+  projectId?: string,
+  privacyPolicyVersion?: string
 ) {
+  if (privacyPolicyVersion !== SHOPIFY_PRIVACY_VERSION)
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Accept the current privacy policy before connecting your store."
+    )
   const intent = await getShopifyInstall(pool, request)
   const membership = await pool.query(
     'SELECT role FROM member WHERE "organizationId"=$1 AND "userId"=$2',
@@ -369,6 +376,18 @@ export async function claimShopifyInstall(
           [current.id, target]
         )
       }
+      await client.query(
+        `UPDATE build_shopify_connections
+         SET privacy_policy_version=$4,privacy_accepted_at=now(),privacy_accepted_by=$5
+         WHERE project_id=$1 AND client_id=$2 AND shop=$3`,
+        [
+          target,
+          current.client_id,
+          current.shop,
+          SHOPIFY_PRIVACY_VERSION,
+          userId,
+        ]
+      )
       await client.query("COMMIT")
       return {
         projectId: target,

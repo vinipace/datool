@@ -264,7 +264,11 @@ try {
   )
   const browser = await install("new-store.myshopify.com"),
     cookie = `${authCookie}; ${browser}`
-  const body = { organizationId: org, projectId: project }
+  const body = {
+    organizationId: org,
+    projectId: project,
+    privacyPolicyVersion: "2026-10-29",
+  }
   assert.equal(
     (await claim(request("/api/shopify/claim", browser, body))).status,
     401
@@ -277,6 +281,25 @@ try {
     ).status,
     403
   )
+  for (const privacyPolicyVersion of [undefined, "2020-01-01"]) {
+    const rejected = await claim(
+      request("/api/shopify/claim", cookie, { ...body, privacyPolicyVersion })
+    )
+    assert.equal(
+      rejected.status,
+      400,
+      "Connecting requires the current privacy acknowledgement"
+    )
+    assert.equal(
+      (
+        await db.query(
+          "SELECT 1 FROM build_shopify_connections WHERE project_id=$1",
+          [project]
+        )
+      ).rowCount,
+      0
+    )
+  }
   assert.equal(
     (
       await claim(
@@ -291,6 +314,15 @@ try {
   const response = await claim(request("/api/shopify/claim", cookie, body))
   assert.equal(response.status, 200, await response.clone().text())
   assert.equal((await response.json()).provider, "shopify")
+  const acceptance = (
+    await db.query(
+      "SELECT privacy_policy_version,privacy_accepted_by,privacy_accepted_at FROM build_shopify_connections WHERE project_id=$1",
+      [project]
+    )
+  ).rows[0]
+  assert.equal(acceptance.privacy_policy_version, "2026-10-29")
+  assert.equal(acceptance.privacy_accepted_by, owner)
+  assert(acceptance.privacy_accepted_at instanceof Date)
   assert.equal(
     (await claim(request("/api/shopify/claim", cookie, body))).status,
     200
@@ -440,6 +472,7 @@ try {
   const reconnectCookie = await install("new-store.myshopify.com")
   const reconnect = await claim(
     request("/api/shopify/claim", `${authCookie}; ${reconnectCookie}`, {
+      privacyPolicyVersion: "2026-10-29",
       organizationId: org,
     })
   )
@@ -477,6 +510,7 @@ try {
   const externalBrowser = await install("existing.myshopify.com")
   const linked = await claim(
     request("/api/shopify/claim", `${authCookie}; ${externalBrowser}`, {
+      privacyPolicyVersion: "2026-10-29",
       organizationId: external,
       projectId: externalProject,
     })
@@ -520,6 +554,7 @@ try {
     )
     const result = await claim(
       request("/api/shopify/claim", `${authCookie}; ${directCookie}`, {
+        privacyPolicyVersion: "2026-10-29",
         organizationId: external,
         projectId: externalProject,
       })

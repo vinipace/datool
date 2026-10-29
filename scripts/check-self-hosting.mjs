@@ -5,6 +5,17 @@ for (const key of ["BETTER_AUTH_SECRET"]) {
   if ((env[key]?.length ?? 0) < 32)
     errors.push(`${key} must contain at least 32 characters.`)
 }
+if (
+  env.DATOOL_PROVIDER_ENCRYPTION_KEY &&
+  env.DATOOL_PROVIDER_ENCRYPTION_KEY.length < 32
+)
+  errors.push(
+    "DATOOL_PROVIDER_ENCRYPTION_KEY must contain at least 32 characters when set."
+  )
+if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0")
+  errors.push(
+    "NODE_TLS_REJECT_UNAUTHORIZED must not disable TLS certificate verification."
+  )
 try {
   const url = new URL(env.BETTER_AUTH_URL)
   if (

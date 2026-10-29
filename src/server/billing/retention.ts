@@ -4,6 +4,7 @@ import {
   redisConnection,
 } from "@/src/server/ingestion/queue"
 import { billingEnabled } from "./config"
+import { expireCloudCustomerData } from "./customer-retention"
 
 /** Bounded cleanup, shared by all workers. Curated evidence is deliberately
  * pinned: evaluations, reviews and dataset source traces survive this policy. */
@@ -80,6 +81,14 @@ export function startCloudRetentionWorker() {
       }
       if (deleted)
         console.info(JSON.stringify({ event: "cloud_retention", deleted }))
+      for (let batch = 0; batch < 20; batch++) {
+        const result = await expireCloudCustomerData()
+        if (result.conversations || result.contacts)
+          console.info(
+            JSON.stringify({ event: "cloud_customer_retention", ...result })
+          )
+        if (result.conversations < 100 && result.contacts < 100) break
+      }
     })()
       .catch(() =>
         console.error("Cloud retention sweep failed; retrying next sweep.")

@@ -8,6 +8,7 @@ import {
 } from "@/lib/api-response"
 import { TracerError } from "@/src/server/tracer/errors"
 import { claimShopifyInstall } from "@/src/server/build/integrations/shopify-install"
+import { SHOPIFY_PRIVACY_VERSION } from "@/src/lib/shopify-privacy"
 export const runtime = "nodejs"
 export async function POST(request: Request) {
   if (!hasTrustedMutationOrigin(request)) return accessError("forbidden")
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
       .object({
         organizationId: z.string().min(1).max(128),
         projectId: z.string().min(1).max(128).optional(),
+        privacyPolicyVersion: z.literal(SHOPIFY_PRIVACY_VERSION),
       })
       .strict()
       .parse(input.kind === "ok" ? input.value : null)
@@ -27,7 +29,8 @@ export async function POST(request: Request) {
       request,
       session.user.id,
       body.organizationId,
-      body.projectId
+      body.projectId,
+      body.privacyPolicyVersion
     )
     return Response.json(result, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {

@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Notice } from "@/components/ui/notice"
 import { RadioCard } from "@/components/ui/radio-card"
+import { Checkbox } from "@/components/ui/checkbox"
+import Link from "next/link"
+import { SHOPIFY_PRIVACY_VERSION } from "@/src/lib/shopify-privacy"
 import { authClient } from "@/lib/auth-client"
 import { workspaceRequest } from "@/lib/workspace-api"
 import {
@@ -38,9 +41,10 @@ export function ShopifyOnboarding({
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const selected = options.find((o) => o.id === organizationId)
   async function connect() {
-    if (busy) return
+    if (busy || !privacyAccepted) return
     setBusy(true)
     setError("")
     try {
@@ -67,6 +71,7 @@ export function ShopifyOnboarding({
           method: "POST",
           body: JSON.stringify({
             organizationId: id,
+            privacyPolicyVersion: SHOPIFY_PRIVACY_VERSION,
             ...(project ? { projectId: project } : {}),
           }),
         }
@@ -179,10 +184,47 @@ export function ShopifyOnboarding({
             </RadioCard>
           </fieldset>
         ) : null}
+        <Label
+          htmlFor="shopify-privacy-acceptance"
+          className="flex items-start gap-3 leading-relaxed"
+        >
+          <Checkbox
+            id="shopify-privacy-acceptance"
+            checked={privacyAccepted}
+            onChange={(event) => setPrivacyAccepted(event.target.checked)}
+            required
+            disabled={busy}
+          />
+          <span>
+            I am authorized to accept Datool's{" "}
+            <Link
+              href="/docs/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              privacy policy
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/docs/retention"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              retention schedule
+            </Link>{" "}
+            for this store.
+          </span>
+        </Label>
         <Button
           type="submit"
           loading={busy}
-          disabled={busy || (!organizationId && (!name.trim() || !!projectId))}
+          disabled={
+            busy ||
+            !privacyAccepted ||
+            (!organizationId && (!name.trim() || !!projectId))
+          }
         >
           Connect store
         </Button>

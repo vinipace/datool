@@ -42,6 +42,14 @@ separate `DATOOL_PROVIDER_ENCRYPTION_KEY`; changing it can make those credential
 unreadable. Changing the Postgres password in `.env` does not rotate an existing
 database user's password.
 
+For new installations, generate an independent `DATOOL_PROVIDER_ENCRYPTION_KEY`
+of at least 32 characters and keep it consistent across web and workers. Adding
+or changing the effective key after credentials have been saved requires a
+migration; changing only the environment value makes those credentials unreadable.
+Startup checks reject a short explicit key and `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+Use the [security operations checklist](security-operations.md) to verify storage
+encryption, backups, access and incident readiness separately.
+
 Set `BETTER_AUTH_URL` to the exact public HTTPS origin, such as
 `https://datool.example.com`. Configure your TLS reverse proxy to forward to
 `127.0.0.1:3030`, preserve the public `Host`, and set `X-Forwarded-Proto: https`.

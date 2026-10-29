@@ -19,6 +19,11 @@ There is no guaranteed response time or paid bounty program.
 
 ## Deployment boundaries
 
+Read the [customer security FAQ](content/docs/security.mdx) for Cloud and
+self-hosted responsibilities and the [operator checklist](docs/security-operations.md)
+for verification and evidence. These documents are not a certification or an
+attestation that a particular installation has completed every control.
+
 Read [self-hosting](docs/self-hosting.md) before exposing an installation. Use
 HTTPS, unique stable secrets, explicit signup policy, and a separate execution
 provider for untrusted scorers. Mounting the Docker socket grants the application
