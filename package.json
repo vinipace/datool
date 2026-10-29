@@ -220,6 +220,7 @@
     "url": "git+https://github.com/vinipace/datool.git"
   },
   "overrides": {
+    "graphql-scalars": "2.0.1",
     "image-size": "2.0.4",
     "esbuild": "0.28.2",
     "dompurify": "3.4.17",
