@@ -46,6 +46,8 @@
   --color-marketing-primary-foreground: var(--marketing-primary-foreground);
   --color-marketing-primary-hover: var(--marketing-primary-hover);
   --color-marketing-signal: var(--marketing-signal);
+  --color-commerce-whatsapp: var(--commerce-whatsapp);
+  --color-commerce-whatsapp-ink: var(--commerce-whatsapp-ink);
   --color-marketing-run: #ffffff;
   --color-marketing-run-foreground: #000000;
   --color-scorer-javascript: #f7df1e;
@@ -78,6 +80,17 @@
   --color-invocation-highlight: #ffffff;
   --color-invocation-session: #facc15;
   --color-invocation-session-foreground: #000000;
+  --color-inbox-avatar-amber: var(--inbox-avatar-amber, #f2c469);
+  --color-inbox-avatar-indigo: var(--inbox-avatar-indigo, #4b50a4);
+  --color-inbox-avatar-rose: var(--inbox-avatar-rose, #f0a2c9);
+  --color-inbox-avatar-stone: var(--inbox-avatar-stone, #d9cab7);
+  --color-inbox-avatar-ink: var(--inbox-avatar-ink, #19252b);
+  --color-inbox-avatar-light: var(--inbox-avatar-light, #ffffff);
+  --color-inbox-outgoing: var(--inbox-outgoing);
+  --color-inbox-outgoing-foreground: var(--inbox-outgoing-foreground);
+  --color-inbox-incoming: var(--inbox-incoming);
+  --color-inbox-selection: var(--inbox-selection);
+  --color-inbox-selection-foreground: var(--inbox-selection-text);
   --color-message-user: #ffffff;
   --color-message-user-foreground: #18181b;
   --color-resource-folder: oklch(55.3% 0.195 38.402);
@@ -207,6 +220,101 @@
   }
 }
 
+/* A dark product screen on a light page: re-resolve the Tailwind color aliases
+   above against the island's own tokens, which resolve once at the root. */
+.light .dark {
+  --color-marketing-primary: var(--marketing-primary);
+  --color-marketing-primary-foreground: var(--marketing-primary-foreground);
+  --color-marketing-primary-hover: var(--marketing-primary-hover);
+  --color-marketing-signal: var(--marketing-signal);
+  --color-commerce-whatsapp: var(--commerce-whatsapp);
+  --color-commerce-whatsapp-ink: var(--commerce-whatsapp-ink);
+  --color-inbox-outgoing: var(--inbox-outgoing);
+  --color-inbox-outgoing-foreground: var(--inbox-outgoing-foreground);
+  --color-inbox-incoming: var(--inbox-incoming);
+  --color-inbox-selection: var(--inbox-selection);
+  --color-inbox-selection-foreground: var(--inbox-selection-text);
+  --color-empty-foreground: var(--empty-foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-score-track: var(--score-track);
+  --color-score-fill: var(--score-fill);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-background: var(--info-background);
+  --color-info-border: var(--info-border);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-background: var(--warning-background);
+  --color-warning-border: var(--warning-border);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-background: var(--success-background);
+  --color-success-border: var(--success-border);
+  --color-status-info: var(--status-info);
+  --color-status-snoozed: var(--status-snoozed);
+  --color-status-info-background: var(--status-info-background);
+  --color-status-info-border: var(--status-info-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-foreground: var(--status-warning-foreground);
+  --color-status-success: var(--status-success);
+  --color-status-success-foreground: var(--status-success-foreground);
+  --color-status-error: var(--status-error);
+  --color-status-error-foreground: var(--status-error-foreground);
+  --color-selection: var(--selection);
+  --color-selection-foreground: var(--selection-foreground);
+  --color-selection-control: var(--selection-control);
+  --color-overlay: var(--overlay);
+  --color-surface-emphasis: var(--surface-emphasis);
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-row: var(--surface-row);
+  --color-surface-row-hover: var(--surface-row-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-b: var(--border-b);
+  --color-data-series-primary: var(--data-series-primary);
+  --color-comparison-1: var(--data-series-1);
+  --color-comparison-2: var(--data-series-2);
+  --color-comparison-3: var(--data-series-3);
+  --color-comparison-4: var(--data-series-4);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-filter-fulltext: var(--filter-fulltext);
+  --color-filter-date: var(--filter-date);
+  --color-filter-enum: var(--filter-enum);
+  --color-filter-json: var(--filter-json);
+  --color-filter-number: var(--filter-number);
+  --color-filter-text: var(--filter-text);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-background: var(--destructive-background);
+  --color-destructive-border: var(--destructive-border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
@@ -246,6 +354,26 @@
     --marketing-signal: var(--marketing-primary);
     --marketing-evaluate: #7646b8;
     --marketing-improve: #2869ad;
+    /* Agent landings: WhatsApp-style chat surfaces follow the page theme. */
+    --commerce-whatsapp: #25d366;
+    --commerce-whatsapp-ink: #03150a;
+    /* Brand green dark enough for text on light surfaces. */
+    --commerce-whatsapp-text: #008069;
+    --commerce-panel: #dcebd8;
+    --commerce-panel-line: rgb(18 61 41 / 9%);
+    --commerce-chat-canvas: #efeae2;
+    --commerce-chat-header: #f0f2f5;
+    --commerce-chat-incoming: #ffffff;
+    --commerce-chat-outgoing: #d9fdd3;
+    --commerce-chat-text: #111b21;
+    --commerce-chat-meta: #54656f;
+    --commerce-chat-link: #0069a1;
+    --commerce-device: #111b21;
+    /* The closing panel stays deep green in both themes. */
+    --commerce-cta: #123d29;
+    --commerce-cta-line: rgb(255 255 255 / 7%);
+    --commerce-cta-text: #e9edef;
+    --commerce-cta-meta: #a3c2b0;
     --empty-foreground: #a1a1aa;
     --foreground-secondary: #52525b;
     --foreground-muted: #71717a;
@@ -264,6 +392,12 @@
     --warning-foreground: #78350f;
     --warning-background: #fef3c7;
     --warning-border: #fcd34d;
+    /* Inbox conversation surfaces share the native app's semantic palette. */
+    --inbox-outgoing: #d9fdd3;
+    --inbox-outgoing-foreground: #123524;
+    --inbox-incoming: #f1f1f3;
+    --inbox-selection: #e4f4e9;
+    --inbox-selection-text: #14532d;
     --success: #15803d;
     --success-foreground: #14532d;
     --success-background: #dcfce7;
@@ -342,6 +476,17 @@
   }
 
   .dark {
+    --commerce-whatsapp-text: #25d366;
+    --commerce-panel: #123d29;
+    --commerce-panel-line: rgb(255 255 255 / 7%);
+    --commerce-chat-canvas: #0b141a;
+    --commerce-chat-header: #1f2c34;
+    --commerce-chat-incoming: #202c33;
+    --commerce-chat-outgoing: #005c4b;
+    --commerce-chat-text: #e9edef;
+    --commerce-chat-meta: #8696a0;
+    --commerce-chat-link: #7fd3f7;
+    --commerce-device: #050505;
     --marketing-signal: #6e9e7a;
     --marketing-evaluate: #c4a1ff;
     --marketing-improve: #84bfff;
@@ -405,6 +550,71 @@
     --destructive-border: rgb(248 113 113 / 0.3);
     --border: oklch(1 0 0 / 10%);
     --border-strong: #27272a;
+    /* Shared Inbox palette; also exported to the native app by sync-theme.mjs. */
+    --inbox-background: #000000;
+    --inbox-surface: #1c1c1e;
+    --inbox-control: #232325;
+    --inbox-foreground: #f5f5f5;
+    --inbox-muted: #9a9a9f;
+    --inbox-border: #2a2a2c;
+    --inbox-accent: #21c063;
+    --inbox-on-accent: #031b0c;
+    --inbox-selection: #103529;
+    --inbox-selection-text: #d9fdd3;
+    --inbox-outgoing: #144d37;
+    --inbox-outgoing-foreground: #f5f5f5;
+    --inbox-incoming: #262628;
+    --inbox-message-meta: #a7b8ae;
+    --inbox-header: #0b0b0c;
+    --inbox-wallpaper: #2a2e2c;
+    /* Contact artwork pairs: both tones retain readable monograms at small sizes. */
+    --inbox-avatar-cobalt: #244bcb;
+    --inbox-avatar-cobalt-shade: #19328d;
+    --inbox-avatar-amber: #f2c469;
+    --inbox-avatar-amber-shade: #d89838;
+    --inbox-avatar-coral: #f2a38b;
+    --inbox-avatar-coral-shade: #d8785b;
+    --inbox-avatar-teal: #136f70;
+    --inbox-avatar-teal-shade: #074d56;
+    --inbox-avatar-violet: #6a3ebb;
+    --inbox-avatar-violet-shade: #48247f;
+    --inbox-avatar-rose: #f0a2c9;
+    --inbox-avatar-rose-shade: #cd6eaa;
+    --inbox-avatar-sky: #7bd4e6;
+    --inbox-avatar-sky-shade: #32afc6;
+    --inbox-avatar-rust: #a33d33;
+    --inbox-avatar-rust-shade: #712b30;
+    --inbox-avatar-lime: #ccd781;
+    --inbox-avatar-lime-shade: #9daf52;
+    --inbox-avatar-indigo: #4b50a4;
+    --inbox-avatar-indigo-shade: #30346f;
+    --inbox-avatar-emerald: #2b7056;
+    --inbox-avatar-emerald-shade: #164b40;
+    --inbox-avatar-stone: #d9cab7;
+    --inbox-avatar-stone-shade: #a9947a;
+    --inbox-avatar-ink: #19252b;
+    --inbox-avatar-edge: #ffffff26;
+    --inbox-avatar-light: #ffffff;
+    --inbox-avatar-badge-foreground: #ffffff;
+    /* Native channel logos retain their brand colors instead of product tints. */
+    --inbox-brand-white: #ffffff;
+    --inbox-brand-telegram-top: #2aabee;
+    --inbox-brand-telegram-bottom: #229ed9;
+    --inbox-brand-messenger: #0866ff;
+    --inbox-brand-instagram-yellow: #ffd600;
+    --inbox-brand-instagram-orange: #ff7a00;
+    --inbox-brand-instagram-pink: #ff0069;
+    --inbox-brand-instagram-purple: #d300c5;
+    --inbox-brand-instagram-blue: #7638fa;
+    --inbox-brand-slack-red: #e01e5a;
+    --inbox-brand-slack-blue: #36c5f0;
+    --inbox-brand-slack-green: #2eb67d;
+    --inbox-brand-slack-yellow: #ecb22e;
+    --inbox-glass-edge: #ffffff26;
+    --inbox-glass-tint: #20262254;
+    --inbox-glass-selected: #ffffff14;
+    --inbox-auth-button: #ffffff;
+    --inbox-auth-on-button: #1f1f1f;
     --data-series-primary: #818cf8;
     --data-bar-lift: 25%;
     --data-bar-opacity: 0.35;
@@ -770,10 +980,10 @@
 }
 .collection-table-row[data-selected="true"] td,
 .collection-table-row[data-selected="true"] td a,
-.collection-table-row[data-selected="true"] td span:not(:has(svg)):not(.token),
+.collection-table-row[data-selected="true"] td span:not(:has(svg)):not(.token):not([data-slot="conversation-avatar"], [data-slot="conversation-avatar"] *),
 .collection-table-row[data-selected="true"] dd,
 .collection-table-row[data-selected="true"] dd a,
-.collection-table-row[data-selected="true"] dd span:not(:has(svg)):not(.token) {
+.collection-table-row[data-selected="true"] dd span:not(:has(svg)):not(.token):not([data-slot="conversation-avatar"], [data-slot="conversation-avatar"] *) {
   color: inherit;
 }
 
@@ -978,6 +1188,33 @@
   background: var(--bubble-accent);
   color: var(--bubble-accent-text);
 }
+/* WhatsApp agent tests reuse the shared customer chat and channel
+   palette. The phone follows the workspace theme rather than widget branding. */
+.datool-chat-surface[data-chat-variant="whatsapp"] {
+  color-scheme: inherit;
+  --background: var(--commerce-chat-canvas);
+  --surface-canvas: var(--commerce-chat-canvas);
+  --foreground: var(--commerce-chat-text);
+  --foreground-muted: var(--commerce-chat-meta);
+  --muted: var(--commerce-chat-incoming);
+  --input-background: var(--commerce-chat-incoming);
+  --border: var(--commerce-chat-header);
+  --primary: var(--commerce-whatsapp);
+  --primary-foreground: var(--commerce-whatsapp-ink);
+  --bubble-accent: var(--commerce-chat-outgoing);
+  --bubble-accent-text: var(--commerce-chat-text);
+  --bubble-radius: 12px;
+  --bubble-font: system-ui, sans-serif;
+  --bubble-font-size: 13px;
+  --color-ring: var(--commerce-whatsapp);
+}
+.datool-chat-surface[data-chat-variant="whatsapp"] [data-bubble-composer] {
+  border-radius: 24px;
+}
+.datool-chat-surface[data-chat-variant="whatsapp"] [data-bubble-send] {
+  background: var(--commerce-whatsapp);
+  color: var(--commerce-whatsapp-ink);
+}
 @keyframes bubble-typing {
   0%, 60%, 100% { opacity: .4; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-2px); }
@@ -1037,4 +1274,26 @@
   opacity: .2;
   filter: blur(16px);
   pointer-events: none;
+}
+
+/* WhatsApp preview colors, scoped through the shared product theme. */
+:root {
+  --commerce-whatsapp: #25d366;
+  --commerce-whatsapp-ink: #03150a;
+  --commerce-chat-canvas: #efeae2;
+  --commerce-chat-header: #f0f2f5;
+  --commerce-chat-incoming: #ffffff;
+  --commerce-chat-outgoing: #d9fdd3;
+  --commerce-chat-text: #111b21;
+  --commerce-chat-meta: #54656f;
+  --commerce-chat-link: #0069a1;
+}
+.dark {
+  --commerce-chat-canvas: #0b141a;
+  --commerce-chat-header: #1f2c34;
+  --commerce-chat-incoming: #202c33;
+  --commerce-chat-outgoing: #005c4b;
+  --commerce-chat-text: #e9edef;
+  --commerce-chat-meta: #8696a0;
+  --commerce-chat-link: #7fd3f7;
 }

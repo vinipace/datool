@@ -28,8 +28,10 @@ async function expectLanding(cookie = "") {
   const { response, body } = await request("/", cookie)
   assert.equal(response.status, 200)
   assert.equal(response.headers.get("location"), null)
-  assert.ok(body.includes("See what your AI is doing."))
-  assert.ok(body.includes("<title>Understand and improve your AI"))
+  assert.ok(body.includes("Build AI agents."))
+  assert.ok(body.includes("<title>AI agents you can see inside"))
+  // Signed-out visitors get the light marketing theme.
+  assert.match(body, /<html[^>]*class="light /)
   const canonical = new URL("/", base).href
   assert.ok(body.includes(`rel="canonical" href="${canonical}"`))
   assert.ok(body.includes(`property="og:url" content="${canonical}"`))
@@ -99,10 +101,7 @@ try {
   const memberCookie = await sessionCookie(organizationIDs[0])
   const active = await request("/", memberCookie)
   assert.equal(active.response.status, 307)
-  assert.equal(
-    active.response.headers.get("location"),
-    `/p/${projectSlug}`
-  )
+  assert.equal(active.response.headers.get("location"), `/p/${projectSlug}`)
   const empty = await request("/", await sessionCookie(organizationIDs[1]))
   assert.equal(empty.response.status, 307)
   assert.equal(empty.response.headers.get("location"), "/projects")
@@ -115,14 +114,14 @@ try {
     assert.equal(picker.response.headers.get("location"), null)
     assert.ok(picker.body.includes("Home fixture 0"))
     assert.ok(!picker.body.includes("Home fixture 2"))
-    assert.ok(!picker.body.includes("See what your AI is doing."))
+    assert.ok(!picker.body.includes("Build AI agents."))
   }
   const selection = await request("/?returnTo=%2Fprojects", memberCookie)
   assert.equal(selection.response.status, 200)
   assert.ok(selection.body.includes("Home fixture 0"))
   const publicAlias = await request("/landing-page", memberCookie)
   assert.equal(publicAlias.response.status, 200)
-  assert.ok(publicAlias.body.includes("See what your AI is doing."))
+  assert.ok(publicAlias.body.includes("Build AI agents."))
   // A subsequent anonymous request must not reuse the signed-in response.
   await expectLanding()
   console.log(

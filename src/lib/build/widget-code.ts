@@ -13,7 +13,8 @@ declare function format(template: string, data: unknown): string;
 /** Converts legacy components at the authoring boundary; persisted history is unchanged. */
 export function widgetComponentCode(
   component: WidgetComponent,
-  functions: WidgetFunction[]
+  functions: WidgetFunction[],
+  translate = false
 ) {
   function actionName(actionId: string) {
     let fn = functions.find((item) => item.actionId === actionId)
@@ -30,10 +31,12 @@ export function widgetComponentCode(
     }
     return JSON.stringify(fn.name)
   }
-  const template = (text: string, scope = "data") =>
-    text.includes("{{")
-      ? `format(${JSON.stringify(text)}, ${scope})`
+  const template = (text: string, scope = "data") => {
+    const value = translate
+      ? `t(${JSON.stringify(text)})`
       : JSON.stringify(text)
+    return text.includes("{{") ? `format(${value}, ${scope})` : value
+  }
   switch (component.type) {
     case "text":
       return `<Text>{${template(component.text)}}</Text>`
@@ -55,14 +58,16 @@ export function widgetAsCode(definition: WidgetDefinition): WidgetDefinition {
   if (definition.code) return { ...definition, schemaCode }
   const functions = definition.functions.map((fn) => ({ ...fn }))
   const children = definition.components
-    .map((component) => `      ${widgetComponentCode(component, functions)}`)
+    .map(
+      (component) => `      ${widgetComponentCode(component, functions, true)}`
+    )
     .join("\n")
   return {
     ...definition,
     schemaCode,
     functions,
     components: [],
-    code: `export default function Widget({ data }) {\n  return (\n    <Col gap={16}>\n${children}\n    </Col>\n  )\n}\n`,
+    code: `export default function Widget({ data, t }) {\n  return (\n    <Col gap={16}>\n${children}\n    </Col>\n  )\n}\n`,
   }
 }
 

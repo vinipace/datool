@@ -20,7 +20,11 @@ import {
 import { CollectionRow } from "@/components/tracer/collection-table"
 import { collectionTable } from "@/components/tracer/collection-table-styles"
 import { BuildStatus } from "../shared/build-layout"
-import type { KnowledgeSource } from "@/src/lib/build/knowledge"
+import {
+  knowledgeSourceStatusLabel,
+  knowledgeSourceStatusMessage,
+  type KnowledgeSource,
+} from "@/src/lib/build/knowledge"
 
 export function KnowledgeSourceRow({
   source,
@@ -45,7 +49,7 @@ export function KnowledgeSourceRow({
     source.uri?.replace(/^https?:\/\//, "").replace(/\/$/, "") ||
     source.fileName ||
     kindLabel
-  const statusMessage = source.statusMessage?.replace(
+  const statusMessage = knowledgeSourceStatusMessage(source)?.replace(
     /^\d+ pages indexed\.\s*/,
     ""
   )
@@ -104,7 +108,7 @@ export function KnowledgeSourceRow({
       <td className={collectionTable.cell}>
         <BuildStatus
           state={source.status}
-          label={source.status.charAt(0).toUpperCase() + source.status.slice(1)}
+          label={knowledgeSourceStatusLabel(source)}
         />
       </td>
       <td className={collectionTable.cell}>
@@ -115,7 +119,7 @@ export function KnowledgeSourceRow({
               }).format(indexedAt)
             : "Not indexed yet"}
         </p>
-        <p className="mt-1 text-xs text-foreground-subtle">
+        <p className="mt-1 text-xs text-foreground-muted">
           {hasIndexedAt
             ? `${new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(indexedAt)} · `
             : ""}

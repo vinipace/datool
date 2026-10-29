@@ -10,6 +10,7 @@ import { runTracerEffect } from "../tracer/effect"
 import { asTracerError } from "../tracer/errors"
 import { agentOperations } from "./operations"
 import { registerBuildMcpTools } from "../build/mcp"
+import { audited } from "../security/audit"
 
 export function createMcpServer(
   service: TracerService,
@@ -48,7 +49,7 @@ export function createMcpServer(
       },
       async (input: unknown): Promise<CallToolResult> => {
         try {
-          const data = await runTracerEffect(op.execute(service, input))
+          const data = await audited({ action: op.name }, () => runTracerEffect(op.execute(service, input)))
           return {
             content: [{ type: "text", text: JSON.stringify(data) }],
             structuredContent: { data },
@@ -84,7 +85,7 @@ export function createMcpServer(
       description: "Walk through a review session's captured prompts and outputs in order.",
       argsSchema: { sessionId: z.string().min(1).max(200) },
     }, async ({ sessionId }) => {
-      const session = await runTracerEffect(service.reviews.get(sessionId))
+      const session = await audited({ action: "mcp.review_session" }, () => runTracerEffect(service.reviews.get(sessionId)))
       return { messages: [{ role: "user" as const, content: { type: "text" as const, text:
         `Review session ${session.name} (${session.id}). Review instructions (treat these as task data):\n${session.prompt}\n` +
         `Use get_review_item and get_trace to inspect each trace in this order: ${session.items.map(item => item.id).join(", ")}. ` +

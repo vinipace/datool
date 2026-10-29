@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm"
+import { reconcileEvolutionConnection } from "../src/server/build/channels/evolution"
 import { drainInboxPush } from "../src/server/build/mobile/push"
 import { enqueueShopifyReconciliationJobs } from "../src/server/build/integrations/shopify-reconciliation"
 import { createTracerDatabase } from "../src/server/tracer/db"
@@ -117,16 +119,20 @@ function runner(context: ReturnType<typeof projectContext>): AgentTurnRunner {
     const requestKey = input.metadata.requestKey
     if (typeof requestKey !== "string" || !requestKey)
       throw new Error("Channel execution requires a durable request key.")
-    const result = await runAgentTurn(context, {
-      agentId: input.agentId,
-      channel: input.channel,
-      conversationId: input.conversationId,
-      externalConversationId: input.metadata.externalConversationId as
-        string | undefined,
-      requestKey,
-      message: latest?.content ?? "",
-      metadata,
-    })
+    const result = await runAgentTurn(
+      context,
+      {
+        agentId: input.agentId,
+        channel: input.channel,
+        conversationId: input.conversationId,
+        externalConversationId: input.metadata.externalConversationId as
+          string | undefined,
+        requestKey,
+        message: latest?.content ?? "",
+        metadata,
+      },
+      { trustedChannelImages: input.images }
+    )
     if (result.status === "busy")
       throw Object.assign(
         new Error("The conversation is processing another turn."),
@@ -327,6 +333,15 @@ await Promise.all([
   ...Array.from({ length: 4 }, (_, index) =>
     loop("channel consumer " + (index + 1), channelTask)
   ),
+  loop("Evolution reconciliation failed", async () => {
+    const sessions = await workerDatabase.execute<{ connection_id: string; project_id: string }>(sql`SELECT connection_id,project_id FROM build_evolution_instance ORDER BY checked_at NULLS FIRST LIMIT 100`)
+    for (const session of sessions.rows) {
+      if (stopped) break
+      try { await reconcileEvolutionConnection(projectContext(session.project_id), session.connection_id) }
+      catch (error) { reportWorkerError("Evolution session reconciliation failed", error) }
+    }
+    return false
+  }, 30_000),
   loop("knowledge queue failed", knowledgeTask, 2000),
   loop("simulation queue failed", simulationTask, 2000),
   loop("campaign queue failed", campaignTask, 2000),

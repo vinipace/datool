@@ -1,6 +1,7 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
 import { getTracerService } from "../tracer/service"
 import { withWorkspace } from "@/src/server/auth/context"
+import { audited, securityAudit } from "@/src/server/security/audit"
 import { createMcpServer } from "./server"
 import { agentRequestMaxBytes } from "@/src/lib/tracer/dataset-payload"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
@@ -88,6 +89,8 @@ export async function handleMcp(
       throw new McpAuthError("Invalid JSON body.", 400)
     }
     const message = parsedBody as { method?: unknown; params?: { name?: unknown } } | null
+    const methods = ["tools/call", "tools/list", "resources/read", "resources/list", "resources/templates/list", "prompts/get", "prompts/list", "initialize", "notifications/initialized", "ping"]
+    const auditMethod = typeof message?.method === "string" && methods.includes(message.method) ? message.method.replaceAll("/", ".") : "unknown"
     const maxBytes = message?.method === "tools/call" && typeof message.params?.name === "string" && message.params.name.startsWith("build_") ? MAX_MCP_REQUEST_BYTES : agentRequestMaxBytes(message?.method === "tools/call" ? message.params?.name : undefined)
     if (size > maxBytes) throw new McpAuthError(`Request exceeds ${maxBytes / (1024 * 1024)} MiB.`, 413)
     const respond = async () => {
@@ -133,11 +136,12 @@ export async function handleMcp(
             scopes: identity.scopes,
             kind: identity.kind ?? "oauth",
           },
-          respond
+          () => audited({ action: `mcp.${auditMethod}` }, respond)
         )
-      : await respond()
+      : await audited({ action: `mcp.${auditMethod}`, identity: { actorType: "unknown" } }, respond)
   } catch (error) {
     const response = authFailure(error, config)
+    securityAudit({ action: "mcp.request_failed", identity: { actorType: "unknown" } }, response.status)
     const origin = request.headers.get("origin")
     if (
       config &&

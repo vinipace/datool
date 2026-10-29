@@ -1,8 +1,11 @@
-import { BuildLandingPage } from "@/components/build/agents/agents-page"
-import { pageMetadata } from "@/lib/page-metadata"
+import { redirect } from "next/navigation"
 
-export const metadata = pageMetadata("build")
-
-export default function Page() {
-  return <BuildLandingPage />
+/** Agents is the Build home, so the area root keeps a single canonical URL. */
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ projectSlug: string }>
+}) {
+  const { projectSlug } = await params
+  redirect(`/p/${encodeURIComponent(projectSlug)}/build/agents`)
 }

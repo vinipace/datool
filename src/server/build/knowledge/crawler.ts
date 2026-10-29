@@ -65,7 +65,7 @@ type PublicFetchResult = {
 /**
  * Fetch one public response without allowing the DNS validation/fetch
  * time-of-check gap. Redirects are intentionally handled one hop at a time so
- * every target is validated and same-origin constrained through the shared
+ * every target is validated and site constrained through the shared
  * pinned request helper.
  */
 async function fetchPublic(
@@ -110,9 +110,9 @@ async function fetchPublic(
     const redirectTarget = await assertPublicUrl(
       new URL(location, url).toString()
     )
-    if (!sameOrigin(url, redirectTarget))
+    if (!sameCrawlSite(url, redirectTarget))
       throw new KnowledgeCrawlError(
-        "Source redirects must remain on the same public origin."
+        "The source redirects outside its website. Use the destination website URL instead."
       )
     return fetchPublic(redirectTarget.toString(), {
       ...options,
@@ -139,6 +139,19 @@ function sameOrigin(a: URL, b: URL) {
     a.hostname === b.hostname &&
     (a.port || (a.protocol === "https:" ? "443" : "80")) ===
       (b.port || (b.protocol === "https:" ? "443" : "80"))
+  )
+}
+
+/** Only permit the conventional www alias and HTTP-to-HTTPS upgrade. Every
+ * request still resolves and pins a public address in publicHttpRequest. */
+function sameCrawlSite(a: URL, b: URL) {
+  if (sameOrigin(a, b)) return true
+  return (
+    !a.port &&
+    !b.port &&
+    a.hostname.replace(/^www\./, "") === b.hostname.replace(/^www\./, "") &&
+    (a.protocol === b.protocol ||
+      (a.protocol === "http:" && b.protocol === "https:"))
   )
 }
 
@@ -189,7 +202,7 @@ export async function crawlKnowledgeSource(options: {
       const url = new URL(raw.replace(/&amp;/gi, "&"), base)
       url.hash = ""
       if (
-        !sameOrigin(root, url) ||
+        !sameCrawlSite(root, url) ||
         matchesExclude(url.href, config.excludePattern)
       )
         return null
@@ -406,7 +419,11 @@ export async function crawlKnowledgeSource(options: {
   if (cursor < urls.size) truncated = true
   pages.sort((a, b) => a.url.localeCompare(b.url))
   if (!pages.length)
-    throw new KnowledgeCrawlError("The crawl produced no extractable pages.")
+    throw new KnowledgeCrawlError(
+      failures.length
+        ? `Could not read any pages. ${failures[0].error}`
+        : "The crawl produced no extractable pages."
+    )
   return {
     pages,
     summary: {

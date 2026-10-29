@@ -2,6 +2,7 @@
 import * as React from "react"
 import { createRoot } from "react-dom/client"
 import { z } from "zod"
+import { widgetText } from "../lib/build/widget-i18n"
 import {
   compileWidgetCode,
   compileWidgetSchema,
@@ -14,12 +15,13 @@ type Action =
   string | { functionName: string; additionalInputs?: Record<string, unknown> }
 const Context = React.createContext<{
   enabled: boolean
+  t: (key: string) => string
   dispatch: (
     action: Action,
     input?: Record<string, unknown>,
     label?: string
   ) => void
-}>({ enabled: false, dispatch: () => {} })
+}>({ enabled: false, dispatch: () => {}, t: (key) => key })
 type LayoutProps = React.HTMLAttributes<HTMLDivElement> & {
   gap?: number
   padding?: number
@@ -207,16 +209,16 @@ function Form({
         return (
           <label key={config.name}>
             <span>
-              {config.label ?? config.name}
+              {context.t(config.label ?? config.name)}
               {config.required ? " *" : ""}
             </span>
             {config.type === "textarea" ? (
               <textarea {...common} rows={2} />
             ) : config.type === "select" ? (
               <select {...common}>
-                <option value="">Select…</option>
+                <option value="">{context.t("Select…")}</option>
                 {config.options?.map((option) => (
-                  <option key={option}>{option}</option>
+                  <option key={option} value={option}>{context.t(option)}</option>
                 ))}
               </select>
             ) : (
@@ -363,8 +365,9 @@ class Boundary extends React.Component<
     )
   }
 }
+type WidgetProps = { data: unknown; locale: string; t: (key: string) => string }
 let cached:
-  | { code: string; Component: React.ComponentType<{ data: unknown }> }
+  | { code: string; Component: React.ComponentType<WidgetProps> }
   | undefined
 let cachedSchema: { code: string; schema: z.ZodType } | undefined
 window.addEventListener("message", (event) => {
@@ -417,7 +420,7 @@ window.addEventListener("message", (event) => {
     }
     if (!cached || cached.code !== value.code) {
       const compiled = compileWidgetCode(value.code)
-      const exports: { default?: React.ComponentType<{ data: unknown }> } = {}
+      const exports: { default?: React.ComponentType<WidgetProps> } = {}
       new Function(
         "React",
         "exports",
@@ -466,8 +469,18 @@ window.addEventListener("message", (event) => {
       <Boundary
         key={`${value.code}:${value.schemaCode ?? ""}:${JSON.stringify(data)}`}
       >
-        <Context.Provider value={{ enabled: value.enabled, dispatch }}>
-          <Component data={data} />
+        <Context.Provider
+          value={{
+            enabled: value.enabled,
+            dispatch,
+            t: (key) => widgetText(key, value.locale, value.translations),
+          }}
+        >
+          <Component
+            data={data}
+            locale={value.locale ?? "en"}
+            t={(key) => widgetText(key, value.locale, value.translations)}
+          />
           <RenderCheck id={renderRequestId} preview={value.validatePreview} />
         </Context.Provider>
       </Boundary>

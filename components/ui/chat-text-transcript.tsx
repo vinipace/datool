@@ -1,0 +1,85 @@
+"use client"
+
+import type { ReactNode } from "react"
+import { ChatMessageAuthor } from "./chat-message-author"
+import { cn } from "@/lib/utils"
+import { sameChatMessageGroup } from "@/src/lib/build/chat-message-grouping"
+
+/** Real message text stays visible while the rich transcript bundle loads. */
+export function ChatTextTranscript({
+  messages,
+  pendingReply,
+  renderMessageFooter,
+}: {
+  messages: Array<{
+    id: string
+    text: string
+    outgoing: boolean
+    createdAt?: string
+    author?: { key?: string; name: string; image: string | null } | null
+  }>
+  renderMessageFooter?: (id: string) => ReactNode
+  pendingReply?: ReactNode
+}) {
+  const transcript = messages
+    .filter((message) => message.text)
+    .map((message) => ({
+      ...message,
+      role: message.outgoing ? "user" : "assistant",
+      metadata: {
+        source: !message.outgoing && message.author ? "human" : undefined,
+      },
+    }))
+  return (
+    <div>
+      {transcript.map((message, index) => (
+        <article
+          key={message.id}
+          data-chat-message=""
+          aria-label={
+            message.outgoing
+              ? "Your message"
+              : message.author
+                ? `${message.author.name} message`
+                : "Assistant message"
+          }
+          className={cn(
+            "flex min-w-0 flex-col",
+            index > 0 &&
+              (sameChatMessageGroup(transcript[index - 1], message)
+                ? "mt-1"
+                : "mt-5"),
+            message.outgoing ? "items-end" : "items-start"
+          )}
+        >
+          {!message.outgoing &&
+            message.author &&
+            !sameChatMessageGroup(transcript[index - 1], message) && (
+              <ChatMessageAuthor
+                name={message.author.name}
+                image={message.author.image}
+              />
+            )}
+          <div
+            data-bubble-message=""
+            data-bubble-user={message.outgoing ? "" : undefined}
+            className={cn(
+              "max-w-[min(85%,36rem)] rounded-2xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere] whitespace-pre-wrap",
+              message.outgoing
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-foreground"
+            )}
+          >
+            {message.text}
+          </div>
+          {renderMessageFooter?.(message.id)}
+        </article>
+      ))}
+      {pendingReply && (
+        <div className={transcript.length > 0 ? "mt-5" : undefined}>
+          {pendingReply}
+        </div>
+      )}
+    </div>
+  )
+}

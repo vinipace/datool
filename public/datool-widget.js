@@ -52,7 +52,7 @@
 
   var frame = document.createElement("iframe")
   frame.title = dataset.title || "Customer support chat"
-  // Preload the UI; visitor sessions start only after the first open message.
+  // Warm the UI and signed session before the launcher is opened.
   frame.loading = "eager"
   frame.allow = "clipboard-write"
   frame.setAttribute("aria-hidden", "true")
@@ -83,6 +83,13 @@
         },
         new URL(baseUrl).origin
       )
+  }
+
+  function notifyVisibility() {
+    if (frame.contentWindow) frame.contentWindow.postMessage({
+      type: "datool:chat:visibility",
+      visible: frame.style.display !== "none"
+    }, frameOrigin);
   }
 
   function open() {

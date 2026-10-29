@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Datool recovery backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+Unit=datool-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -80,12 +80,14 @@ export async function shopifyStorefrontSession(
     // above and by CSP, never inferred from a client-supplied embed header.
     origin: shopifyOrigin(),
   })
+  // Human handoff changes ownership, not the visitor's ongoing conversation.
+  // Keep it resumable when the storefront re-verifies identity after focus.
   const previous = input.newConversation
     ? null
     : await context.database.execute<{ id: string }>(sql`
     SELECT id FROM build_conversations WHERE project_id=${context.projectId}
       AND metadata_json->>'connectionId'=${connectionId} AND metadata_json->>'visitorId'=${visitor.visitorId}
-      AND status='active'
+      AND status IN ('active', 'handed_off')
     ORDER BY CASE WHEN id=${input.conversationId ?? ""} THEN 0 ELSE 1 END, updated_at DESC LIMIT 1
   `)
   const session = await createPublicSession(context, connectionId, {

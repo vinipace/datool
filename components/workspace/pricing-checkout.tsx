@@ -11,6 +11,7 @@ import {
   useOrganizationSessionSync,
 } from "@/lib/workspace-selection"
 import { billingPath, cloudPlans, type CloudPlan } from "@/src/lib/billing"
+import { trackCheckout } from "@/lib/site-analytics"
 
 type Onboarding = {
   organizationId: string
@@ -58,6 +59,7 @@ function OnboardingCheckout({
           body: JSON.stringify({ plan }),
         }
       )
+      await trackCheckout(plan)
       navigateWorkspace(result.url)
     } catch (cause) {
       setError({

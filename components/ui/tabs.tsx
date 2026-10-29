@@ -5,7 +5,7 @@ import { Tabs as Primitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 export const Tabs = Primitive.Root
-type TabsVariant = "default" | "panel" | "underline"
+type TabsVariant = "default" | "panel" | "underline" | "sidebar"
 const TabsVariantContext = React.createContext<TabsVariant>("default")
 const triggerVariants: Record<TabsVariant, string> = {
   default: "h-8 rounded-md data-[state=active]:bg-muted",
@@ -13,6 +13,8 @@ const triggerVariants: Record<TabsVariant, string> = {
     "h-full rounded-t-md border border-transparent data-[state=active]:border-border data-[state=active]:border-b-background data-[state=active]:bg-background",
   underline:
     "relative h-12 rounded-none px-1 text-sm font-medium hover:bg-transparent focus-visible:ring-inset after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 data-[state=active]:after:bg-foreground",
+  sidebar:
+    "h-8 rounded-md text-sm hover:bg-sidebar-accent/60 data-[state=active]:bg-sidebar-accent data-[state=active]:font-medium data-[state=active]:text-sidebar-accent-foreground",
 }
 
 export function TabsList({
@@ -36,14 +38,18 @@ export function TabsList({
 }
 export function TabsTrigger({
   className,
+  size = "default",
   ...props
-}: React.ComponentProps<typeof Primitive.Trigger>) {
+}: React.ComponentProps<typeof Primitive.Trigger> & {
+  size?: "default" | "icon"
+}) {
   const variant = React.useContext(TabsVariantContext)
   return (
     <Primitive.Trigger
       className={cn(
         "inline-flex items-center justify-center gap-1.5 px-3 text-xs whitespace-nowrap text-foreground-muted outline-none hover:bg-muted hover:text-foreground focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[state=active]:text-foreground [&_svg]:shrink-0",
         triggerVariants[variant],
+        size === "icon" && "size-8 p-0 [&_svg]:size-4",
         className
       )}
       {...props}

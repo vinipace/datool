@@ -7,6 +7,11 @@ import { getShopifyInstall } from "@/src/server/build/integrations/shopify-insta
 import { shopifyOrigin } from "@/src/server/build/integrations/shopify-provider"
 import Link from "next/link"
 
+export const metadata = {
+  title: "Connect Shopify",
+  robots: { index: false, follow: false },
+}
+
 export default async function Page() {
   const session = await requireWorkspaceSession("/shopify/connect")
   const intent = await getShopifyInstall(

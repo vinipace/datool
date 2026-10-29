@@ -55,12 +55,13 @@ import {
   AgentSidebarProvider,
   AgentSidebarTarget,
 } from "@/components/build/shared/agent-sidebar"
+
 import {
   InboxSidebar,
   InboxSidebarProvider,
 } from "@/components/build/shared/inbox-sidebar"
 
-const routeGroups = [
+const buildRouteGroups = [
   {
     label: "Build",
     routes: [
@@ -88,6 +89,9 @@ const routeGroups = [
       },
     ],
   },
+] as const
+
+const observeRouteGroups = [
   {
     label: "Observe",
     routes: [
@@ -272,11 +276,58 @@ function AppSidebar({
   const inSettings =
     pathname === `${prefix}/settings` ||
     pathname.startsWith(`${prefix}/settings/`)
+  const mode =
+    pathname === `${prefix}/build` || pathname.startsWith(`${prefix}/build/`)
+      ? "build"
+      : "observe"
+  const routeGroups = inSettings
+    ? [{ label: "Project settings", routes: settingsRoutes }]
+    : mode === "build"
+      ? buildRouteGroups
+      : observeRouteGroups
 
   return (
     <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="p-2">
-        <WorkspaceSelectors organization={organization} project={project} />
+      <SidebarHeader
+        className={cn("p-2", !inSettings && "border-b border-sidebar-border")}
+      >
+        <WorkspaceSelectors
+          organization={organization}
+          project={project}
+          only="organization"
+        />
+        {!inSettings && buildEnabled && (
+          <nav aria-label="Workspace area" className="grid grid-cols-2 gap-1">
+            <Button
+              asChild
+              size="sm"
+              variant={mode === "observe" ? "secondary" : "ghost-muted"}
+            >
+              <Link
+                href={prefix || "/"}
+                prefetch
+                onClick={closeMobileNavigation}
+                aria-current={mode === "observe" ? "page" : undefined}
+              >
+                Observe
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="sm"
+              variant={mode === "build" ? "secondary" : "ghost-muted"}
+            >
+              <Link
+                href={`${prefix}/build/agents`}
+                prefetch
+                onClick={closeMobileNavigation}
+                aria-current={mode === "build" ? "page" : undefined}
+              >
+                Build
+              </Link>
+            </Button>
+          </nav>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
@@ -419,7 +470,20 @@ function TracerAppShellContent({
           />
           <SidebarInset>
             <WorkspacePageLayout
-              leading={<SidebarTrigger className="-ml-0.5 shrink-0" />}
+              leading={
+                <div className="flex items-center gap-2">
+                  <SidebarTrigger className="-ml-0.5 shrink-0" />
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-px shrink-0 bg-border"
+                  />
+                  <WorkspaceSelectors
+                    organization={organization}
+                    project={project}
+                    only="project"
+                  />
+                </div>
+              }
             >
               <InspectorPanels>{children}</InspectorPanels>
             </WorkspacePageLayout>

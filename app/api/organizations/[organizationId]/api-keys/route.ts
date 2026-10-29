@@ -2,6 +2,7 @@ import { authApiError } from "@/src/server/auth/errors"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { readJson } from "@/src/server/tracer/http"
+import { securityAudit } from "@/src/server/security/audit"
 import {
   createOrganizationKey,
   keyAccess,
@@ -44,7 +45,7 @@ export async function POST(request: Request, context: Context) {
 export async function PATCH(request: Request, context: Context) {
   try {
     const { organizationId } = await context.params
-    await keyAccess(request, organizationId, true)
+    const access = await keyAccess(request, organizationId, true)
     const { creationDisabled } = z
       .object({ creationDisabled: z.boolean() })
       .strict()
@@ -54,6 +55,7 @@ export async function PATCH(request: Request, context: Context) {
       ON CONFLICT (organization_id) DO UPDATE SET creation_disabled = EXCLUDED.creation_disabled`,
       [organizationId, creationDisabled]
     )
+    securityAudit({ action: creationDisabled ? "api_key.creation_disabled" : "api_key.creation_enabled", identity: { actorType: "session", actorId: access.userId, organizationId } })
     return Response.json({ data: { creationDisabled } })
   } catch (error) {
     return authApiError(error)

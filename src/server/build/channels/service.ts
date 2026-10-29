@@ -1,3 +1,8 @@
+import { disconnectZernio, sendZernioEnvelope, zernioAccount } from "./zernio"
+import { prepareEvolutionMedia, ChannelMediaError } from "./media"
+import { prepareWhatsAppText } from "./links"
+import { evolutionEnabled } from "./evolution-api"
+import { assertEvolutionOutbound, sendEvolutionEnvelope, setEvolutionStatus } from "./evolution"
 import { verifyNewVisitorChallenge } from "./challenge"
 import { verifyChannelVisitor } from "./visitor-sessions"
 import { createHmac, randomUUID } from "node:crypto"
@@ -36,6 +41,7 @@ import {
 import { operationId, type BuildContext } from "../context"
 import { assertPublicHttpUrl } from "../http"
 import { TracerError } from "@/src/server/tracer/errors"
+import { securityAudit } from "@/src/server/security/audit"
 import {
   pinContinuationWidgets,
   runtimeChannelMessage,
@@ -596,7 +602,17 @@ export async function updateChannelStatus(
 ) {
   requireConnectionId(connectionId)
   const loaded = await getChannelConnection(context, connectionId)
-  if (loaded.connection.channel === "whatsapp") {
+  if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider === "evolution") {
+    await setEvolutionStatus(context, connectionId, status)
+    return (await getChannelConnection(context, connectionId)).connection
+  }
+  if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider === "zernio") {
+    if (status === "disconnected") {
+      await disconnectZernio(context, connectionId)
+      return (await getChannelConnection(context, connectionId)).connection
+    }
+    if (status === "connected") await zernioAccount(context, connectionId)
+  } else if (loaded.connection.channel === "whatsapp") {
     if (status === "disconnected") {
       await disconnectWhatsApp(context, connectionId)
       return (await getChannelConnection(context, connectionId)).connection
@@ -1221,6 +1237,7 @@ export async function enqueueOutboundEnvelope(
   if (loaded.connection.channel !== envelope.channel) {
     throw new Error("Outbound envelope does not match its connection.")
   }
+  if (loaded.connection.config.provider === "evolution") await assertEvolutionOutbound(context, envelope, externalConversationId)
   const consistency = await database(context).execute<Row>(sql`
     SELECT c.agent_id AS conversation_agent_id,
            c.channel AS conversation_channel,
@@ -1308,6 +1325,20 @@ export async function enqueueOutboundEnvelope(
     `)
     if (!inserted.rows.length)
       return { inserted: false, channelJobId: undefined as string | undefined }
+    const outboundText =
+      envelope.channel === "whatsapp"
+        ? await prepareWhatsAppText(
+            { ...context, database: scopedTracerTransaction(context.database, tx) },
+            messageId,
+            envelope.text
+          )
+        : envelope.text
+    if (outboundText !== envelope.text)
+      await tx.execute(sql`
+        UPDATE build_channel_message
+        SET content_json=jsonb_set(content_json,'{text}',${JSON.stringify(outboundText)}::jsonb)
+        WHERE project_id=${context.projectId} AND id=${messageId}
+      `)
     if (options.recordRuntimeMessage) {
       const conversations = new ConversationService({
         ...context,
@@ -1331,7 +1362,7 @@ export async function enqueueOutboundEnvelope(
         (id, project_id, connection_id, kind, message_id, payload_json, idempotency_key)
       VALUES (${randomUUID()}::uuid, ${context.projectId}, ${envelope.connectionId}::uuid,
         'deliver_outbound', ${messageId},
-        ${JSON.stringify({ ...envelope, externalConversationId })}::jsonb,
+        ${JSON.stringify({ ...envelope, text: outboundText, externalConversationId })}::jsonb,
         ${`outbound:${envelope.connectionId}:${envelope.idempotencyKey}`})
         ON CONFLICT (project_id, idempotency_key) DO NOTHING
         RETURNING id
@@ -1748,7 +1779,7 @@ function messageContent(row: Row) {
   }
 }
 
-function publicMessageMetadata(metadata: Record<string, unknown>) {
+function publicMessageMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   const allowed = new Set([
     "widget",
     "widgetDefinition",
@@ -1761,9 +1792,14 @@ function publicMessageMetadata(metadata: Record<string, unknown>) {
     "shopifyProducts",
     "shopifyCartCleanup",
   ])
-  return Object.fromEntries(
-    Object.entries(metadata).filter(([key]) => allowed.has(key))
-  )
+  return {
+    ...Object.fromEntries(
+      Object.entries(metadata).filter(([key]) => allowed.has(key))
+    ),
+    ...(metadata.widgetInteraction && typeof metadata.widgetInteraction === "object"
+      ? { customerInteraction: true }
+      : {}),
+  }
 }
 
 async function reconcileCampaignReply(
@@ -2085,6 +2121,7 @@ export async function processChannelJob(
     agentId: loaded.connection.agentId,
     channel: loaded.connection.channel,
   })
+  if (loaded.connection.config.provider === "evolution" && !evolutionEnabled(context.projectId)) throw new WhatsAppApiError("WHATSAPP_DISCONNECTED", "Evolution is disabled for this project.")
   if (job.kind === "shopify_reconcile") {
     const { processShopifyReconciliation } =
       await import("../integrations/shopify-reconciliation")
@@ -2189,7 +2226,7 @@ export async function processChannelJob(
         )
       )
     } else if (loaded.connection.channel === "whatsapp") {
-      ids = await sendWhatsAppEnvelope(
+      ids = await (loaded.connection.config.provider === "evolution" ? sendEvolutionEnvelope : loaded.connection.config.provider === "zernio" ? sendZernioEnvelope : sendWhatsAppEnvelope)(
         context,
         {
           connectionId: job.connectionId,
@@ -2219,7 +2256,7 @@ export async function processChannelJob(
         SET status = CASE WHEN status IN ('delivered','failed') THEN status ELSE 'sent' END, provider_message_id = ${ids[0] ?? null}, updated_at = now()
         WHERE project_id = ${job.projectId} AND id = ${job.messageId}
       `)
-      if (loaded.connection.channel === "whatsapp" && ids[0]) {
+      if (loaded.connection.channel === "whatsapp" && loaded.connection.config.provider !== "evolution" && ids[0]) {
         await database.execute(
           sql`UPDATE build_channel_message m SET status=CASE WHEN r.status='read' THEN 'delivered' ELSE r.status END,error_code=CASE WHEN r.status='failed' THEN 'WHATSAPP_' || COALESCE(r.error_code,'DELIVERY_FAILED') ELSE NULL END,error_message=CASE WHEN r.status='failed' THEN 'WhatsApp reported a delivery failure.' ELSE NULL END,content_json=jsonb_set(m.content_json,'{whatsappDelivery}',jsonb_build_object('status',r.status,'occurredAt',r.occurred_at)) FROM build_whatsapp_receipt r WHERE m.project_id=${job.projectId} AND m.id=${job.messageId} AND r.project_id=m.project_id AND r.connection_id=m.connection_id AND r.provider_message_id=${ids[0]}`
         )
@@ -2335,38 +2372,73 @@ export async function processChannelJob(
       agentId: String(message.agent_id),
       channel: loaded.connection.channel,
     })
-    output = await runner({
-      projectId: job.projectId,
-      agentId: String(message.agent_id),
-      conversationId: String(message.conversation_id),
-      channel: loaded.connection.channel,
-      contactId: String(message.contact_id ?? ""),
-      messages: [
-        ...historyRows.rows.map((row) => {
-          const content = messageContent(row)
-          const role: "user" | "assistant" =
-            row.direction === "inbound" ? "user" : "assistant"
-          return {
-            role,
-            content: content.text,
-            attachments: content.attachments,
-          }
-        }),
-        (() => {
-          const content = messageContent(message)
-          return {
-            role: "user" as const,
-            content: content.text,
-            attachments: content.attachments,
-          }
-        })(),
-      ],
-      metadata: {
-        ...jsonObject(job.payload),
-        requestKey: `channel:${job.id}`,
-        externalConversationId: String(message.conversation_external_id ?? ""),
-      },
-    })
+    const currentContent = messageContent(message)
+    let images: import("@/src/lib/build/channels").ChannelImage[] = []
+    let mediaFailure: string | undefined
+    if (
+      ["evolution", "zernio"].includes(String(loaded.connection.config.provider)) &&
+      currentContent.attachments.some(
+        (a) => a.type === "image" || a.type === "audio"
+      )
+    ) {
+      try {
+        const prepared = await prepareEvolutionMedia(context, job.messageId, async () => {
+          await assertChannelJobReady(database, job, { agentId: String(message.agent_id), channel: loaded.connection.channel })
+          const current = await database.execute(sql`SELECT 1 FROM build_conversations WHERE project_id=${job.projectId} AND id=${String(message.conversation_id)} AND owner_type='ai' AND owner_fence=${ownerFence} AND status='active'`)
+          if (!current.rows.length) throw new ChannelLeaseLostError()
+        }, loaded.connection.config.provider === "zernio" ? "zernio" : "evolution")
+        images = prepared.images
+        if (prepared.text !== undefined) currentContent.text = prepared.text
+      } catch (error) {
+        if (!(error instanceof ChannelMediaError)) throw error
+        mediaFailure = String(message.conversation_external_id).startsWith("55")
+          ? "Não consegui processar esta imagem ou áudio. Por favor, envie sua mensagem por texto."
+          : "I couldn't process this image or audio. Please send your message as text."
+        await database.execute(
+          sql`UPDATE build_channel_message SET error_code=${error.code},error_message='Media processing failed.' WHERE project_id=${job.projectId} AND id=${job.messageId}`
+        )
+      }
+      await assertChannelJobReady(database, job, {
+        agentId: String(message.agent_id),
+        channel: loaded.connection.channel,
+      })
+    }
+    output = mediaFailure
+      ? { messages: [{ text: mediaFailure }] }
+      : await runner({
+          images,
+          projectId: job.projectId,
+          agentId: String(message.agent_id),
+          conversationId: String(message.conversation_id),
+          channel: loaded.connection.channel,
+          contactId: String(message.contact_id ?? ""),
+          messages: [
+            ...historyRows.rows.map((row) => {
+              const content = messageContent(row)
+              const role: "user" | "assistant" =
+                row.direction === "inbound" ? "user" : "assistant"
+              return {
+                role,
+                content: content.text,
+                attachments: content.attachments,
+              }
+            }),
+            (() => {
+              return {
+                role: "user" as const,
+                content: currentContent.text,
+                attachments: currentContent.attachments,
+              }
+            })(),
+          ],
+          metadata: {
+            ...jsonObject(job.payload),
+            requestKey: `channel:${job.id}`,
+            externalConversationId: String(
+              message.conversation_external_id ?? ""
+            ),
+          },
+        })
   } catch (error) {
     await assertChannelJobReady(database, job, {
       agentId: String(message.agent_id),
@@ -2809,6 +2881,7 @@ export async function listPublicConversations(
       AND c.metadata_json->>'connectionId' = ${connectionId} AND c.status <> 'blocked'
     ORDER BY latest_message.updated_at DESC, c.id DESC LIMIT 100
   `)
+  securityAudit({ action: "visitor.conversations.list", identity: { actorType: "visitor", actorId: visitor.visitorId, organizationId: context.organizationId, projectId: context.projectId }, connectionId })
   return rows.rows.map((row) => ({
     id: String(row.id),
     title: String(row.title || "New chat"),
@@ -3033,12 +3106,21 @@ export async function readPublicConversation(
   })
   const rows = await database(context).execute<Row>(sql`
     SELECT m.id, m.direction, m.status, m.content_json, m.provider_message_id, m.created_at,
+      (m.direction='outbound' AND m.content_json->'metadata'->>'source'='human') AS human_reply,
+      author.name AS author_name, author.image AS author_image,
       (c.owner_type = 'ai' AND c.status = 'active' AND m.direction = 'inbound' AND EXISTS (
         SELECT 1 FROM build_channel_job j WHERE j.project_id = m.project_id AND j.message_id = m.id
           AND j.kind = 'process_inbound' AND j.status IN ('queued', 'running')
       )) AS pending_reply
     FROM build_conversations c
     LEFT JOIN build_channel_message m ON m.project_id = c.project_id AND m.conversation_id = c.id
+    LEFT JOIN "user" author ON m.direction='outbound'
+      AND m.content_json->'metadata'->>'source'='human'
+      AND author.id=m.content_json->'metadata'->>'actorId'
+      AND EXISTS (
+        SELECT 1 FROM member membership JOIN project p ON p.organization_id=membership."organizationId"
+        WHERE p.id=c.project_id AND membership."userId"=author.id
+      )
     WHERE c.project_id = ${context.projectId} AND c.id = ${conversationId}
       AND c.agent_id = ${loaded.connection.agentId}
       AND c.metadata_json->>'visitorId' = ${visitor.visitorId}
@@ -3048,10 +3130,26 @@ export async function readPublicConversation(
   `)
   if (!rows.rows.length)
     throw new Error("Conversation is not available for this visitor.")
+  // A saved form stays complete even if the follow-up model call failed.
+  // Return only its opaque completion IDs, never submitted values or receipts.
+  const receipts = await database(context).execute<Row>(sql`
+    SELECT metadata_json->>'completedContinuationId' AS continuation_id
+    FROM build_conversation_messages
+    WHERE project_id=${context.projectId} AND conversation_id=${conversationId}
+      AND metadata_json->>'internalFormReceipt'='true'
+    ORDER BY created_at DESC LIMIT 200
+  `)
+  const completedContinuationIds = receipts.rows
+    .map((row) => row.continuation_id)
+    .filter((id): id is string => typeof id === "string")
+  securityAudit({ action: "visitor.conversation.read", identity: { actorType: "visitor", actorId: visitor.visitorId, organizationId: context.organizationId, projectId: context.projectId }, connectionId, conversationId })
   return rows.rows
     .filter((row) => row.id !== null)
     .map((row) => {
       const content = messageContent(row)
+      const metadata = publicMessageMetadata(content.metadata)
+      if (completedContinuationIds.length) metadata.completedContinuationIds = completedContinuationIds
+      if (row.human_reply === true) metadata.source = "human"
       return {
         id: String(row.id),
         direction: String(row.direction),
@@ -3059,7 +3157,20 @@ export async function readPublicConversation(
         pendingReply: row.pending_reply === true,
         text: content.text,
         attachments: content.attachments,
-        metadata: publicMessageMetadata(content.metadata),
+        // Only publish the display identity of verified workspace senders.
+        // Internal actor IDs and email addresses stay out of visitor responses.
+        author: row.human_reply === true ? {
+          // Scope grouping identity to this conversation without exposing actor IDs.
+          key: typeof content.metadata?.actorId === "string" && content.metadata.actorId
+            ? createHmac("sha256", channelSigningSecret())
+                .update(JSON.stringify(["chat-author", context.projectId, conversationId, content.metadata.actorId]))
+                .digest("base64url")
+            : undefined,
+          name: typeof row.author_name === "string" && row.author_name.trim()
+            ? row.author_name.trim() : "Support teammate",
+          image: typeof row.author_image === "string" ? row.author_image : null,
+        } : null,
+        metadata,
         providerMessageId:
           row.provider_message_id == null
             ? null

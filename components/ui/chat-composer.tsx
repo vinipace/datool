@@ -43,6 +43,7 @@ export function ChatComposer({
   sendLabel = "Send message",
   variant = "default",
   accentSend,
+  allowDraftWhileRunning = false,
   maxLength,
 }: {
   text: string
@@ -53,19 +54,24 @@ export function ChatComposer({
   placeholder?: string
   messageLabel?: string
   sendLabel?: string
-  variant?: "default" | "customer" | "help-page"
+  variant?: "default" | "customer" | "help-page" | "inbox"
   accentSend?: boolean
   maxLength?: number
+  allowDraftWhileRunning?: boolean
 }) {
   return (
     <div
-      data-bubble-composer={variant !== "default" ? "" : undefined}
+      data-bubble-composer={
+        variant === "customer" || variant === "help-page" ? "" : undefined
+      }
       className={
-        variant === "help-page"
-          ? "rounded-2xl border border-border bg-background p-4 shadow-sm focus-within:ring-2 focus-within:ring-ring"
-          : variant === "customer"
-            ? "flex items-end gap-2 border border-border bg-input-background px-3 py-1.5 focus-within:ring-2 focus-within:ring-ring"
-            : "rounded-2xl border border-border bg-input-background p-3 focus-within:ring-2 focus-within:ring-ring"
+        variant === "inbox"
+          ? "flex items-end gap-2"
+          : variant === "help-page"
+            ? "rounded-2xl border border-border bg-background p-4 shadow-sm focus-within:ring-2 focus-within:ring-ring"
+            : variant === "customer"
+              ? "flex items-end gap-2 border border-border bg-input-background px-3 py-1.5 focus-within:ring-2 focus-within:ring-ring"
+              : "rounded-2xl border border-border bg-input-background p-3 focus-within:ring-2 focus-within:ring-ring"
       }
     >
       <Textarea
@@ -73,14 +79,16 @@ export function ChatComposer({
         placeholder={placeholder}
         variant="plain"
         autoSize
-        rows={variant === "customer" ? 1 : 2}
+        rows={variant === "customer" || variant === "inbox" ? 1 : 2}
         className={
-          variant === "customer"
-            ? "max-h-32 min-h-6 flex-1 resize-none self-center leading-6"
-            : "max-h-32 min-h-8 flex-1 resize-none"
+          variant === "inbox"
+            ? "max-h-32 min-h-11 flex-1 resize-none rounded-3xl bg-muted px-4 py-2.5 leading-6 focus-visible:ring-2 focus-visible:ring-ring"
+            : variant === "customer"
+              ? "max-h-32 min-h-6 flex-1 resize-none self-center leading-6"
+              : "max-h-32 min-h-8 flex-1 resize-none"
         }
         value={text}
-        readOnly={running}
+        readOnly={running && !allowDraftWhileRunning}
         disabled={disabled}
         maxLength={maxLength}
         onChange={(event) => onTextChange(event.target.value)}
@@ -98,7 +106,7 @@ export function ChatComposer({
       />
       <div
         className={
-          variant === "customer"
+          variant === "customer" || variant === "inbox"
             ? "shrink-0"
             : "mt-2 flex items-center justify-end gap-2"
         }
@@ -112,9 +120,11 @@ export function ChatComposer({
           disabled={!canSubmit || running || disabled}
           loading={running}
           className={
-            variant !== "default" && !disabled
-              ? "disabled:opacity-100"
-              : undefined
+            variant === "inbox"
+              ? "size-11 bg-inbox-outgoing text-inbox-outgoing-foreground hover:bg-inbox-outgoing/90"
+              : variant !== "default" && !disabled
+                ? "disabled:opacity-100"
+                : undefined
           }
           data-bubble-send={accentSend ? "accent" : undefined}
         >

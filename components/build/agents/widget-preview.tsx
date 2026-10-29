@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Chat } from "@/components/ui/chat"
 import { ChatRichContent } from "@/components/ui/chat-rich-content"
 import {
+  Select,
   SelectRoot,
   SelectContent,
   SelectItem,
@@ -46,6 +47,7 @@ export function WidgetPreview({
   onStateChange: (state: string) => void
   onCodeStatus?: (error: string | null) => void
 }) {
+  const [locale, setLocale] = useState("en")
   const [mode, setMode] = useState("widget")
   const [theme, setTheme] = useState("light")
   const [event, setEvent] = useState<{ label: string; input: unknown } | null>(
@@ -203,6 +205,7 @@ export function WidgetPreview({
           >
             {mode === "widget" || mode === "center" ? (
               <ChatRichContent
+                locale={locale}
                 variant="standalone"
                 message={message}
                 onInteraction={interact}
@@ -216,6 +219,7 @@ export function WidgetPreview({
                 </div>
                 <div className="min-h-0 flex-1 p-3">
                   <Chat
+                    locale={locale}
                     messages={[message]}
                     text=""
                     onTextChange={() => {}}
@@ -257,6 +261,16 @@ export function WidgetPreview({
         </div>
       )}
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-border bg-background p-3">
+        <Select
+          aria-label="Preview language"
+          className="w-auto"
+          value={locale}
+          onChange={(event) => setLocale(event.target.value)}
+        >
+          <option value="en">English</option>
+          <option value="pt-BR">Português (Brasil)</option>
+          <option value="es">Español</option>
+        </Select>
         <SelectRoot
           value={mode}
           onValueChange={(value) => {

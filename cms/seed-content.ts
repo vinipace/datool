@@ -1,4 +1,5 @@
 import type { Faq, Page } from "@/payload-types"
+import { demoHref } from "@/lib/marketing/demo"
 
 export function richText(text: string): Faq["answer"] {
   return {
@@ -36,7 +37,25 @@ export const faqContent = [
     slug: "what-is-datool",
     question: "What is Datool?",
     answer:
-      "Datool helps teams inspect AI traces, build evaluation datasets, and measure quality with scorers. Follow a request from input to output and see where it needs work.",
+      "Datool is one platform to build AI agents and see what they do. Launch agents that sell, support and guide customers on WhatsApp, your website or inside your product, then trace, evaluate and improve every conversation.",
+  },
+  {
+    slug: "where-can-agents-talk",
+    question: "Where can Datool agents talk to my customers?",
+    answer:
+      "On WhatsApp, in a chat widget on your website and inside your product. Your team works the same conversations from one inbox and can take over whenever a person should answer.",
+  },
+  {
+    slug: "how-do-agents-know-my-business",
+    question: "How does an agent know my products and policies?",
+    answer:
+      "Add your catalog, help articles and policies as knowledge, and give the agent actions such as checking an order or opening a ticket. Guardrails and tests keep its answers on track before and after launch.",
+  },
+  {
+    slug: "can-i-observe-my-own-agent",
+    question: "Can I use Datool with an AI app I built myself?",
+    answer:
+      "Yes. Connect any AI application with the Datool SDK or OpenTelemetry to trace its requests, evaluate real examples and measure quality. You don't need to build your agents in Datool.",
   },
   {
     slug: "what-can-i-evaluate",
@@ -87,10 +106,153 @@ export const faqContent = [
       "Yes. Create a review session from selected traces, define the ratings that matter to your team, and inspect each answer in context. Reviewers can save scores, leave comments, and annotate specific parts of the input or output. Those judgments complement your automated evaluations.",
   },
 ]
+// The home page sells the whole platform; the Observe page keeps the original
+// trace-first story.
+export const homeFaqSlugs = [
+  "what-is-datool",
+  "where-can-agents-talk",
+  "how-do-agents-know-my-business",
+  "can-i-observe-my-own-agent",
+  "how-do-i-start",
+]
+export const observeFaqSlugs = [
+  "how-do-i-connect-my-app",
+  "what-can-i-see-in-a-trace",
+  "can-i-turn-traces-into-test-cases",
+  "what-can-i-evaluate",
+  "how-do-i-measure-answer-quality",
+  "can-i-compare-prompts-and-models",
+  "can-my-team-review-answers",
+]
+
+export const landingMeta = {
+  title: "AI agents you can see inside",
+  seo: {
+    description:
+      "Build AI agents for WhatsApp, your website and your product, and trace, evaluate and improve every conversation with Datool.",
+  },
+}
+
 export function landingBlocks(faqIds: number[]): Page["layout"] {
   return [
     {
       blockType: "hero",
+      eyebrow: "AI agents & observability",
+      title: "Build AI agents. See every decision they make.",
+      description:
+        "Observe the agents and workflows you already run, or launch new ones on WhatsApp, your website and your app.",
+      actions: [
+        { label: "Get started", href: "/sign-up" },
+        { label: "Request a demo", href: demoHref },
+      ],
+    },
+    {
+      blockType: "features",
+      blockName: "platform",
+      title:
+        "Bring your agents or build new ones. See all of them in one place.",
+      items: [
+        {
+          title: "Observe the agents you already run",
+          description:
+            "Add the Datool SDK or OpenTelemetry to your app. Every request, model call and tool call becomes a trace.",
+          href: "/docs/get-started/first-trace",
+        },
+        {
+          title: "Launch new agents",
+          description:
+            "Give an agent your catalog, policies and tools. Put it on WhatsApp, your website or inside your app, and take over any conversation.",
+          href: "#agents",
+        },
+        {
+          title: "Improve every one of them",
+          description:
+            "Built in Datool or in your code, every agent gets the same traces, scores, reviews and dashboards. Keep failures as tests and ship the next version with evidence.",
+          href: "/product/observe",
+        },
+      ],
+    },
+    {
+      blockType: "features",
+      blockName: "agents",
+      title: "Agents that work where your customers already are.",
+      items: [
+        {
+          title: "Sales on WhatsApp",
+          description: "Recommends products and closes sales in the chat.",
+          href: "/agents/whatsapp-sales",
+        },
+        {
+          title: "Sales on your website",
+          description: "A chat widget that helps visitors find and buy.",
+          href: "/agents/website-sales",
+        },
+        {
+          title: "Support on WhatsApp",
+          description: "Answers from your policies and checks your systems.",
+          href: "/agents/whatsapp-support",
+        },
+        {
+          title: "Support on your website",
+          description: "A help widget that troubleshoots and hands off.",
+          href: "/agents/website-support",
+        },
+        {
+          title: "Product guide",
+          description: "Onboards and guides users inside your app.",
+          href: "/agents/product-guidance",
+        },
+      ],
+    },
+    {
+      blockType: "features",
+      blockName: "loop",
+      title: "Launch it. Watch it. Make it better.",
+      items: [
+        {
+          title: "Launch",
+          description:
+            "Start from a proven agent, connect your store or app and go live on the channels your customers use.",
+        },
+        {
+          title: "Watch",
+          description:
+            "Every conversation becomes a trace: the messages, the knowledge it used, the tools it called and what it cost.",
+        },
+        {
+          title: "Improve",
+          description:
+            "Score answers, review the hard cases and keep failures as tests, so each change makes the agent better.",
+        },
+      ],
+    },
+    ...(faqIds.length
+      ? [
+          {
+            blockType: "faq" as const,
+            title: "Questions teams ask before they start.",
+            items: faqIds,
+          },
+        ]
+      : []),
+    {
+      blockType: "callToAction",
+      title: "Put an agent to work. Keep an eye on every answer.",
+      description:
+        "Talk to us on WhatsApp and see an agent run on your own catalog.",
+      label: "Request a demo",
+      href: demoHref,
+    },
+  ]
+}
+
+// The original home page story, now the top of the Observe page. Blocks named
+// "story" render in the landing style above the Observe chapters.
+export function observeStoryBlocks(): Page["layout"] {
+  return [
+    {
+      blockType: "hero",
+      blockName: "story",
       eyebrow: "Observability & evaluation for AI",
       title: "See what your AI is doing. Make it better.",
       description:
@@ -102,6 +264,7 @@ export function landingBlocks(faqIds: number[]): Page["layout"] {
     },
     {
       blockType: "features",
+      blockName: "story",
       title: "From a single request to a clearer picture.",
       items: [
         {
@@ -123,21 +286,10 @@ export function landingBlocks(faqIds: number[]): Page["layout"] {
     },
     {
       blockType: "richContent",
+      blockName: "story",
       content: richText(
         "Start with the evidence you already have. Trace a workflow, review an unexpected result, and keep that example as a test for the next change."
       ),
-    },
-    {
-      blockType: "faq",
-      title: "A few things you might be wondering.",
-      items: faqIds,
-    },
-    {
-      blockType: "callToAction",
-      title: "Your next improvement starts with a trace.",
-      description: "Connect your application and take a closer look.",
-      label: "Open Datool",
-      href: "/sign-in",
     },
   ]
 }

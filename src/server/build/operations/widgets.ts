@@ -1,9 +1,9 @@
 import { z } from "zod"
 import { widgetTemplates } from "@/src/lib/build/widget-templates"
-import { widgetComponentCatalog } from "@/src/lib/build/widget-components"
+import { widgetComponentsGuide } from "@/src/lib/build/authoring-guide"
 import { widgetPreviewOptionsSchema } from "@/src/lib/build/widget-validation"
 import { validateWidgetDefinition } from "@/src/lib/build/widget-authoring-validation"
-import { notFound } from "@/src/server/tracer/errors"
+import { notFound, TracerError } from "@/src/server/tracer/errors"
 import { registerBuildOperation } from "../api"
 
 registerBuildOperation({
@@ -11,17 +11,23 @@ registerBuildOperation({
   description:
     "Discover widget starters from the same catalog as the Widgets editor. Search name, description and category; get a template's complete JSX, schema and representative default data with build_get_widget_template before creating a widget.",
   scopes: ["build:read"],
-  schema: z.object({ search: z.string().max(200).optional() }),
-  execute: (_context, { search }) =>
+  schema: z.object({
+    search: z.string().trim().max(200).optional(),
+    category: z.string().trim().max(80).optional(),
+  }),
+  execute: (_context, { search, category }) =>
     widgetTemplates
-      .filter((item) =>
-        `${item.category} ${item.definition.name} ${item.definition.description}`
-          .toLowerCase()
-          .includes(
-            String(search ?? "")
-              .trim()
-              .toLowerCase()
-          )
+      .filter(
+        (item) =>
+          (!category ||
+            item.category.toLowerCase() === String(category).toLowerCase()) &&
+          `${item.id} ${item.category} ${item.definition.name} ${item.definition.description}`
+            .toLowerCase()
+            .includes(
+              String(search ?? "")
+                .trim()
+                .toLowerCase()
+            )
       )
       .map(({ id, category, previewImage, definition }) => ({
         id,
@@ -29,6 +35,7 @@ registerBuildOperation({
         previewImage,
         name: definition.name,
         description: definition.description,
+        locales: ["en", ...Object.keys(definition.translations ?? {})],
       })),
 })
 registerBuildOperation({
@@ -36,8 +43,17 @@ registerBuildOperation({
   description:
     "Read a complete editable widget starter, including JSX, Zod schema, example state and Function placeholders. Examples are synthetic, actions are unbound and templates are disabled. Does not create a widget or connect a service.",
   scopes: ["build:read"],
-  schema: z.object({ templateId: z.string().min(1).max(120) }),
-  execute: (_context, { templateId }) => {
+  schema: z.object({
+    templateId: z.string().trim().min(1).max(120).optional(),
+    id: z.string().trim().min(1).max(120).optional(),
+  }),
+  execute: (_context, { templateId, id }) => {
+    if ((!templateId && !id) || (templateId && id && templateId !== id))
+      throw new TracerError(
+        "VALIDATION_ERROR",
+        "Provide a templateId or id; aliases must agree when both are supplied."
+      )
+    templateId ??= id
     const template = widgetTemplates.find((item) => item.id === templateId)
     if (!template) throw notFound("Widget template", String(templateId))
     return structuredClone(template)
@@ -49,7 +65,7 @@ registerBuildOperation({
     "Read supported widget components, their props and insertion examples, allowed imports, helpers and Function binding contract. These are the Widgets editor's components; do not assume application UI imports are available.",
   scopes: ["build:read"],
   schema: z.object({}),
-  execute: () => widgetComponentCatalog(),
+  execute: () => widgetComponentsGuide(),
 })
 registerBuildOperation({
   name: "build_validate_widget",

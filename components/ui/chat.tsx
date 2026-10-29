@@ -3,6 +3,7 @@
 import * as React from "react"
 import { MessageCircle } from "lucide-react"
 import type { InspectorMessage } from "@/src/lib/tracer/value-messages"
+import { cn } from "@/lib/utils"
 import { ChatComposer } from "./chat-composer"
 export { ChatComposer, ChatTypingIndicator } from "./chat-composer"
 import { MessageTranscript } from "./message-transcript"
@@ -13,6 +14,8 @@ import { ChatFeedback, type ChatFeedbackProps } from "./chat-feedback"
 export function Chat({
   messages,
   perspective = "customer",
+  locale = "en",
+  variant = "default",
   text,
   onTextChange,
   running,
@@ -29,6 +32,8 @@ export function Chat({
   onCodeStatus,
   onSubmit,
 }: {
+  locale?: string
+  variant?: "default" | "inbox"
   messages: InspectorMessage[]
   perspective?: React.ComponentProps<typeof MessageTranscript>["perspective"]
   text: string
@@ -58,7 +63,12 @@ export function Chat({
       scroll.current.scrollTop = scroll.current.scrollHeight
   }, [messages, running])
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        variant === "inbox" && "bg-muted/20"
+      )}
+    >
       <div
         ref={scroll}
         role="log"
@@ -66,7 +76,10 @@ export function Chat({
         aria-label="Conversation"
         aria-live="polite"
         aria-busy={running || loading}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          variant === "inbox" && "flex flex-col px-4 py-5 sm:px-6"
+        )}
         onScroll={(event) => {
           const element = event.currentTarget
           follow.current =
@@ -77,14 +90,23 @@ export function Chat({
         {loading && !messages.length ? (
           <LoadingState compact label="Loading messages…" />
         ) : messages.length ? (
-          <MessageTranscript
-            messages={messages}
-            variant="chat"
-            perspective={perspective}
-            onWidgetInteraction={onWidgetInteraction}
-            onCodeStatus={onCodeStatus}
-            renderMessageFooter={renderMessageFooter}
-          />
+          <div
+            className={
+              variant === "inbox"
+                ? "mx-auto w-full max-w-3xl shrink-0"
+                : undefined
+            }
+          >
+            <MessageTranscript
+              locale={locale}
+              messages={messages}
+              variant={variant === "inbox" ? "inbox" : "chat"}
+              perspective={perspective}
+              onWidgetInteraction={onWidgetInteraction}
+              onCodeStatus={onCodeStatus}
+              renderMessageFooter={renderMessageFooter}
+            />
+          </div>
         ) : transcriptNotice ? null : (
           <div className="flex h-full min-h-24 flex-col items-center justify-center gap-2 text-center text-sm text-foreground-muted">
             <MessageCircle aria-hidden="true" className="size-6" />
@@ -93,11 +115,18 @@ export function Chat({
         )}
         {running && <LoadingState compact label="Waiting for the agent…" />}
       </div>
-      <div className="shrink-0 px-3 pt-2 pb-4">
+      <div
+        className={cn(
+          "shrink-0 px-3 pt-2 pb-4",
+          variant === "inbox" &&
+            "mx-auto w-full max-w-3xl px-4 pt-3 pb-4 sm:px-6"
+        )}
+      >
         {composerToolbar}
         {onSubmit ? (
           <form onSubmit={onSubmit}>
             <ChatComposer
+              variant={variant === "inbox" ? "inbox" : "default"}
               text={text}
               onTextChange={onTextChange}
               running={running}
@@ -108,6 +137,7 @@ export function Chat({
           </form>
         ) : (
           <ChatComposer
+            variant={variant === "inbox" ? "inbox" : "default"}
             text={text}
             onTextChange={onTextChange}
             running={running}

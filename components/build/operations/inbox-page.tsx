@@ -1,8 +1,14 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   Bot,
+  MoreHorizontal,
+  MessageSquare,
+  StickyNote,
+  Info,
+  ListFilter,
   Check,
   LoaderCircle,
   LockKeyhole,
@@ -14,6 +20,31 @@ import {
   UserRound,
 } from "lucide-react"
 
+import {
+  ConversationAvatar,
+  ConversationRow,
+  InboxQueueChip,
+  ConversationListSkeleton,
+  TakeoverIndicator,
+} from "@/components/ui/inbox-conversation"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
+import { ChatFeedback } from "@/components/ui/chat-feedback"
 import { Chat } from "@/components/ui/chat"
 import { AgentAvatar } from "@/components/ui/agent-avatar"
 import { productIcons } from "@/components/product-icons"
@@ -31,7 +62,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PanelActionLabel } from "@/components/ui/panel-action-label"
 import { CollectionPanel } from "@/components/tracer/collection-panel"
 import {
   CollectionPage,
@@ -49,18 +79,14 @@ import type { CollectionListOptions } from "@/components/tracer/api"
 import { useTableView } from "@/components/tracer/use-table-view"
 import { Input } from "@/components/ui/input"
 import { Notice } from "@/components/ui/notice"
-import {
-  Select,
-  SelectRoot,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { InspectorSection } from "@/components/ui/inspector-section"
 import { useMutation, useRemote } from "@/components/tracer/hooks"
-import { useWorkspaceStorageScope } from "@/components/tracer/workspace-path"
+import {
+  useWorkspaceHref,
+  useWorkspaceStorageScope,
+} from "@/components/tracer/workspace-path"
 import { buildApi, asList, asRecord } from "./build-api"
 import {
   BuildEmpty,
@@ -75,6 +101,10 @@ import {
   TicketStatusIndicator,
   TicketStatusSelect,
 } from "@/components/build/shared/ticket-status"
+import {
+  ConversationStatusBadge,
+  ConversationStatusSelect,
+} from "@/components/build/shared/conversation-status"
 import type { ChannelId } from "@/src/lib/build/channels"
 import type { AgentAppearance } from "@/src/lib/build/contracts"
 import { InboxConversations } from "@/components/build/shared/inbox-sidebar"
@@ -84,14 +114,12 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import {
-  inboxViews,
-  useInboxNavigation,
-} from "@/components/build/shared/inbox-navigation"
+import { useInboxNavigation } from "@/components/build/shared/inbox-navigation"
 import { NewTicketDialog } from "./new-ticket-dialog"
 
 type Ticket = {
   id: string
+  needsTakeover?: boolean
   agentName?: string | null
   agentAvatar?: Pick<
     AgentAppearance,
@@ -214,6 +242,7 @@ function listTickets({ filter, cursor, limit, signal }: CollectionListOptions) {
       {
         cursor,
         limit,
+        order: "recent",
         search: filters.search || undefined,
         status: filters.status || undefined,
         queue: filters.queue,
@@ -223,20 +252,6 @@ function listTickets({ filter, cursor, limit, signal }: CollectionListOptions) {
     )
     .then(ticketList)
 }
-
-const conversationStatuses: Record<string, string> = {
-  active: "Ongoing",
-  handed_off: "Taken over",
-  closed: "Ended",
-  blocked: "Blocked",
-}
-const conversationStatusOptions = [
-  { value: "", label: "All statuses" },
-  ...Object.entries(conversationStatuses).map(([value, label]) => ({
-    value,
-    label,
-  })),
-]
 
 function listConversations({
   filter,
@@ -424,9 +439,6 @@ export function InboxPage({
 }) {
   const isInbox = view === "inbox"
   const showAgentColumn = !isInbox && !fixedAgentId
-  const ItemIcon = isInbox
-    ? productIcons.buildInbox
-    : productIcons.buildConversations
   const scope = useWorkspaceStorageScope()
   const navigation = useInboxNavigation()
   const { isMobile, setOpenMobile } = useSidebar()
@@ -457,7 +469,7 @@ export function InboxPage({
       ? "solved"
       : (isInbox
             ? ["open", "pending", "snoozed", "solved", "closed"]
-            : Object.keys(conversationStatuses)
+            : ["active", "handed_off", "closed", "blocked"]
           ).includes(requestedStatus)
         ? requestedStatus
         : ""
@@ -465,9 +477,6 @@ export function InboxPage({
     isInbox && ["mine", "mentions", "unassigned"].includes(navigation.view)
       ? navigation.view
       : undefined
-  const viewLabel = inboxViews.find(
-    (item) => item.id === navigation.view
-  )!.label
   const setStatus = (value: string) =>
     navigation.navigate({ status: value || null })
   const [showSetup, setShowSetup] = React.useState(false)
@@ -568,6 +577,7 @@ export function InboxPage({
                         ticket.contactName ||
                         "Untitled conversation"}
                     </span>
+                    {ticket.needsTakeover && <TakeoverIndicator compact />}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -579,14 +589,61 @@ export function InboxPage({
           )}
         </InboxConversations>
       ) : null}
-      <CollectionPanel label={isInbox ? "Inbox" : "Conversations"}>
+      <CollectionPanel
+        label={isInbox ? "Inbox" : "Conversations"}
+        refreshInMenu={isInbox}
+        compactToolbar={isInbox}
+        contentClassName={isInbox ? "px-2 py-2" : undefined}
+      >
         <CollectionPage
           className="contents"
           state={tickets}
           loadingLabel="Loading conversations"
+          loadingContent={isInbox ? <ConversationListSkeleton /> : undefined}
           pagination={tickets}
           toolbar={
             <>
+              {isInbox ? (
+                <div
+                  role="group"
+                  aria-label="Inbox queues"
+                  className="flex gap-1.5 overflow-x-auto px-1 pt-1 pb-3"
+                >
+                  {[
+                    { label: "Open", view: "all", status: "open" },
+                    { label: "Mine", view: "mine", status: "" },
+                    { label: "Unassigned", view: "unassigned", status: "" },
+                    { label: "Mentions", view: "mentions", status: "" },
+                    { label: "Solved", view: "solved", status: "solved" },
+                    { label: "All", view: "all", status: "" },
+                  ].map((item) => (
+                    <InboxQueueChip
+                      key={item.label}
+                      selected={
+                        navigation.view === item.view && status === item.status
+                      }
+                      onClick={() =>
+                        navigation.navigate({
+                          view: item.view,
+                          status: item.status || null,
+                        })
+                      }
+                    >
+                      {item.label}
+                    </InboxQueueChip>
+                  ))}
+                  {["pending", "snoozed", "closed"].includes(status) && (
+                    <InboxQueueChip
+                      selected
+                      onClick={() => setStatus("")}
+                      aria-label={`Clear ${status} filter`}
+                    >
+                      <TicketStatusIndicator status={status} />
+                      <X className="size-3" />
+                    </InboxQueueChip>
+                  )}
+                </div>
+              ) : null}
               {agentId && !fixedAgentId ? (
                 <div className="flex min-w-0 items-center gap-2 px-3 py-2">
                   <Button
@@ -595,7 +652,10 @@ export function InboxPage({
                     className="max-w-full"
                     aria-label={`Remove agent filter: ${agent.data?.name || agentId}`}
                     onClick={() =>
-                      navigation.navigate({ agentId: null, [selectionKey]: null })
+                      navigation.navigate({
+                        agentId: null,
+                        [selectionKey]: null,
+                      })
                     }
                   >
                     <Bot aria-hidden className="size-3.5 shrink-0" />
@@ -616,56 +676,64 @@ export function InboxPage({
             exportName: view,
             children: (
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="shrink-0 text-sm font-medium">
-                  {isInbox ? viewLabel : "Conversations"}
-                </span>
+                {!isInbox ? (
+                  <span className="shrink-0 text-sm font-medium">
+                    Conversations
+                  </span>
+                ) : null}
                 <CollectionSearch
                   label="Search conversations"
                   value={search}
                   onChange={setSearch}
                   focusRequest={Number(navigation.params.get("search")) || 0}
                 />
-                {isInbox ? (
-                  navigation.view !== "solved" ? (
-                    <TicketStatusSelect
-                      label="Inbox status"
-                      value={status}
-                      onValueChange={setStatus}
-                      includeAll
-                    />
-                  ) : null
-                ) : (
-                  <SelectRoot
+                {!isInbox && (
+                  <ConversationStatusSelect
                     value={status}
-                    items={conversationStatusOptions}
-                    onValueChange={(value) => {
-                      if (value !== null) setStatus(value)
-                    }}
-                  >
-                    <SelectTrigger aria-label="Conversation status" size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {conversationStatusOptions.map(({ value, label }) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </SelectRoot>
+                    onValueChange={setStatus}
+                  />
                 )}
               </div>
             ),
-            actions: isInbox ? (
-              <Button
-                size="sm"
-                variant="outline"
-                aria-label="Inbox settings"
-                onClick={() => setShowSetup(true)}
-              >
-                <Settings2 className="size-4" />
-                <PanelActionLabel>Settings</PanelActionLabel>
-              </Button>
+            menuActions: isInbox ? (
+              <>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <ListFilter className="size-3.5" />
+                    Status
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuRadioGroup
+                      value={status}
+                      onValueChange={(value) =>
+                        navigation.navigate({
+                          status: value || null,
+                          view:
+                            navigation.view === "solved"
+                              ? "all"
+                              : navigation.view,
+                        })
+                      }
+                    >
+                      <DropdownMenuRadioItem value="">
+                        All statuses
+                      </DropdownMenuRadioItem>
+                      {["open", "pending", "snoozed", "solved", "closed"].map(
+                        (value) => (
+                          <DropdownMenuRadioItem key={value} value={value}>
+                            <TicketStatusIndicator status={value} />
+                          </DropdownMenuRadioItem>
+                        )
+                      )}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuItem onSelect={() => setShowSetup(true)}>
+                  <Settings2 className="size-3.5" />
+                  Inbox settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
             ) : undefined,
           }}
           isEmpty={!tickets.items.length}
@@ -710,151 +778,225 @@ export function InboxPage({
             />
           }
         >
-          <CollectionTable
-            fillHeight
-            enableCardView
-            settings={tableView.settings}
-            onSettingsChange={tableView.onSettingsChange}
-            columnOrderStore={tableView.columnOrderStore}
-            widths={
-              isInbox
-                ? [330, 220, 130, 120, 120, 160, 200]
-                : [330, 220, ...(showAgentColumn ? [220] : []), 130, 120, 200]
-            }
-            columnIds={[
-              "subject",
-              "customer",
-              ...(showAgentColumn ? ["agent"] : []),
-              "channel",
-              "status",
-              ...(isInbox ? ["priority", "assignment"] : []),
-              "updated",
-            ]}
-            reorderable
-          >
-            <thead className={collectionTable.head}>
-              <tr>
-                <th aria-hidden className={collectionTable.heading} />
-                {[
-                  "Conversation",
-                  "Customer",
-                  ...(showAgentColumn ? ["Agent"] : []),
-                  "Channel",
-                  "Status",
-                  ...(isInbox ? ["Priority", "Assignment"] : []),
-                  "Updated",
-                ].map((label) => (
-                  <th key={label} className={collectionTable.heading}>
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <CollectionTableBody rows={tickets.items}>
-              {(ticket) => (
-                <CollectionRow
+          {isInbox ? (
+            <div
+              aria-label="Inbox conversations"
+              className="min-w-0 divide-y divide-border"
+            >
+              {tickets.items.map((ticket) => (
+                <ConversationRow
                   key={ticket.id}
-                  active={ticket.id === selectedId}
-                  rowLabel={ticket.subject || "Conversation"}
-                  tabIndex={0}
-                  aria-label={`Open ${ticket.subject || ticket.contactName || "conversation"}`}
+                  selected={ticket.id === selectedId}
+                  aria-label={`Open ${ticket.contactName || ticket.subject || "conversation"}${ticket.needsTakeover ? ", needs takeover" : ""}`}
                   onClick={(event) => {
                     returnFocusRef.current = event.currentTarget
                     setSelectedId(ticket.id)
                   }}
-                  onKeyDown={(event) => {
-                    if (
-                      event.target === event.currentTarget &&
-                      (event.key === "Enter" || event.key === " ")
-                    ) {
-                      event.preventDefault()
+                  avatar={
+                    <ConversationAvatar
+                      name={ticket.contactName || ticket.subject || "Customer"}
+                      identity={
+                        ticket.contactId || ticket.conversationId || ticket.id
+                      }
+                      badge={
+                        ticket.channel ? (
+                          <ChannelIcon channel={ticket.channel} size="sm" />
+                        ) : undefined
+                      }
+                    />
+                  }
+                  title={
+                    ticket.contactName ||
+                    ticket.subject ||
+                    "Customer conversation"
+                  }
+                  preview={ticket.subject || "No subject"}
+                  timestamp={
+                    ticket.updatedAt ? (
+                      <time
+                        dateTime={ticket.updatedAt}
+                        title={new Date(ticket.updatedAt).toLocaleString()}
+                      >
+                        {new Date(ticket.updatedAt).toLocaleDateString([], {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </time>
+                    ) : undefined
+                  }
+                  metadata={
+                    <>
+                      {ticket.needsTakeover ? (
+                        <TakeoverIndicator />
+                      ) : (
+                        <TicketStatusIndicator status={ticket.status} />
+                      )}
+                      <span className="truncate">
+                        {ticket.assigneeName || ticket.teamName || "Unassigned"}
+                      </span>
+                      {["high", "urgent"].includes(ticket.priority || "") && (
+                        <PriorityIndicator priority={ticket.priority} />
+                      )}
+                    </>
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <CollectionTable
+              fillHeight
+              selectionColumnWidth={0}
+              enableCardView
+              settings={tableView.settings}
+              onSettingsChange={tableView.onSettingsChange}
+              columnOrderStore={tableView.columnOrderStore}
+              widths={
+                isInbox
+                  ? [330, 220, 130, 120, 120, 160, 200]
+                  : [330, 220, ...(showAgentColumn ? [220] : []), 130, 120, 200]
+              }
+              columnIds={[
+                "subject",
+                "customer",
+                ...(showAgentColumn ? ["agent"] : []),
+                "channel",
+                "status",
+                ...(isInbox ? ["priority", "assignment"] : []),
+                "updated",
+              ]}
+              reorderable
+            >
+              <thead className={collectionTable.head}>
+                <tr>
+                  <th aria-hidden className="p-0" />
+                  {[
+                    "Conversation",
+                    "Customer",
+                    ...(showAgentColumn ? ["Agent"] : []),
+                    "Channel",
+                    "Status",
+                    ...(isInbox ? ["Priority", "Assignment"] : []),
+                    "Updated",
+                  ].map((label) => (
+                    <th key={label} className={collectionTable.heading}>
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <CollectionTableBody rows={tickets.items}>
+                {(ticket) => (
+                  <CollectionRow
+                    key={ticket.id}
+                    active={ticket.id === selectedId}
+                    rowLabel={ticket.subject || "Conversation"}
+                    tabIndex={0}
+                    aria-label={`Open ${ticket.subject || ticket.contactName || "conversation"}`}
+                    onClick={(event) => {
                       returnFocusRef.current = event.currentTarget
                       setSelectedId(ticket.id)
-                    }
-                  }}
-                >
-                  <td aria-hidden className={collectionTable.cell} />
-                  <td className={collectionTable.cell}>
-                    <span className="flex min-w-0 items-center gap-2 font-medium">
-                      <ItemIcon
-                        aria-hidden
-                        className="size-4 shrink-0 text-foreground-muted"
-                      />
-                      <span className="truncate">
-                        {ticket.subject || "Untitled conversation"}
-                      </span>
-                    </span>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    {ticket.contactName || "Unknown customer"}
-                  </td>
-                  {showAgentColumn ? (
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        event.target === event.currentTarget &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        event.preventDefault()
+                        returnFocusRef.current = event.currentTarget
+                        setSelectedId(ticket.id)
+                      }
+                    }}
+                  >
+                    <td aria-hidden className="p-0" />
                     <td className={collectionTable.cell}>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <AgentAvatar
-                          appearance={ticket.agentAvatar ?? undefined}
-                          className="size-5"
+                      <span className="flex min-w-0 items-center gap-2 font-medium">
+                        <ConversationAvatar
+                          compact
+                          name={
+                            ticket.contactName || ticket.subject || "Customer"
+                          }
+                          identity={
+                            ticket.contactId ||
+                            ticket.conversationId ||
+                            ticket.id
+                          }
                         />
                         <span className="truncate">
-                          {ticket.agentName || "Unknown agent"}
+                          {ticket.subject || "Untitled conversation"}
                         </span>
                       </span>
                     </td>
-                  ) : null}
-                  <td className={collectionTable.cell}>
-                    <span className="inline-flex items-center gap-2 capitalize">
-                      {ticket.channel ? (
-                        <ChannelIcon channel={ticket.channel} size="sm" />
-                      ) : null}
-                      {ticket.channel === "web"
-                        ? "Website"
-                        : ticket.channel || "—"}
-                    </span>
-                  </td>
-                  <td className={collectionTable.cell}>
-                    {isInbox ? (
-                      <TicketStatusIndicator status={ticket.status} />
-                    ) : (
-                      conversationStatuses[
-                        ticket.conversationStatus ?? "active"
-                      ]
-                    )}
-                  </td>
-                  {isInbox ? (
-                    <>
-                      <td className={collectionTable.cell}>
-                        <PriorityIndicator priority={ticket.priority} />
-                      </td>
+                    <td className={collectionTable.cell}>
+                      {ticket.contactName || "Unknown customer"}
+                    </td>
+                    {showAgentColumn ? (
                       <td className={collectionTable.cell}>
                         <span className="flex min-w-0 items-center gap-2">
-                          {ticket.assigneeName || ticket.teamName ? (
-                            <UserAvatarImage
-                              name={ticket.assigneeName || ticket.teamName!}
-                              image={ticket.assigneeImage ?? null}
-                            />
-                          ) : null}
-                          <span className="truncate text-foreground-muted">
-                            {ticket.assigneeName ||
-                              ticket.teamName ||
-                              (ticket.assigneeUserId
-                                ? "Assigned teammate"
-                                : "Unassigned")}
+                          <AgentAvatar
+                            appearance={ticket.agentAvatar ?? undefined}
+                            className="size-5"
+                          />
+                          <span className="truncate">
+                            {ticket.agentName || "Unknown agent"}
                           </span>
                         </span>
                       </td>
-                    </>
-                  ) : null}
-                  <td className={collectionTable.cell}>
-                    <span className="text-foreground-muted">
-                      {ticket.updatedAt
-                        ? new Date(ticket.updatedAt).toLocaleString()
-                        : "—"}
-                    </span>
-                  </td>
-                </CollectionRow>
-              )}
-            </CollectionTableBody>
-          </CollectionTable>
+                    ) : null}
+                    <td className={collectionTable.cell}>
+                      <span className="inline-flex items-center gap-2 capitalize">
+                        {ticket.channel ? (
+                          <ChannelIcon channel={ticket.channel} size="sm" />
+                        ) : null}
+                        {ticket.channel === "web"
+                          ? "Website"
+                          : ticket.channel || "—"}
+                      </span>
+                    </td>
+                    <td className={collectionTable.cell}>
+                      {isInbox ? (
+                        <TicketStatusIndicator status={ticket.status} />
+                      ) : (
+                        <ConversationStatusBadge
+                          status={ticket.conversationStatus}
+                        />
+                      )}
+                    </td>
+                    {isInbox ? (
+                      <>
+                        <td className={collectionTable.cell}>
+                          <PriorityIndicator priority={ticket.priority} />
+                        </td>
+                        <td className={collectionTable.cell}>
+                          <span className="flex min-w-0 items-center gap-2">
+                            {ticket.assigneeName || ticket.teamName ? (
+                              <UserAvatarImage
+                                name={ticket.assigneeName || ticket.teamName!}
+                                image={ticket.assigneeImage ?? null}
+                              />
+                            ) : null}
+                            <span className="truncate text-foreground-muted">
+                              {ticket.assigneeName ||
+                                ticket.teamName ||
+                                (ticket.assigneeUserId
+                                  ? "Assigned teammate"
+                                  : "Unassigned")}
+                            </span>
+                          </span>
+                        </td>
+                      </>
+                    ) : null}
+                    <td className={collectionTable.cell}>
+                      <span className="text-foreground-muted">
+                        {ticket.updatedAt
+                          ? new Date(ticket.updatedAt).toLocaleString()
+                          : "—"}
+                      </span>
+                    </td>
+                  </CollectionRow>
+                )}
+              </CollectionTableBody>
+            </CollectionTable>
+          )}
         </CollectionPage>
       </CollectionPanel>
       {selectedId ? (
@@ -862,6 +1004,7 @@ export function InboxPage({
           title="Conversation details"
           description="Read messages, reply, and manage this conversation."
           isWide={isWide}
+          defaultSize={68}
           onClose={closeConversation}
           onRestoreFocus={() => returnFocusRef.current?.focus()}
         >
@@ -1362,6 +1505,7 @@ function InboxInspector({
   onClose: () => void
   onChanged: () => void
 }) {
+  const href = useWorkspaceHref()
   const [activeTab, setActiveTab] = React.useState("conversation")
   const [message, setMessage] = React.useState("")
   const [note, setNote] = React.useState("")
@@ -1516,12 +1660,7 @@ function InboxInspector({
   }
   async function submitMessage(event: React.FormEvent) {
     event.preventDefault()
-    if (
-      !message.trim() ||
-      !canReply ||
-      !activeTicket.conversationId
-    )
-      return
+    if (!message.trim() || !canReply || !activeTicket.conversationId) return
     try {
       await send.run(() =>
         buildApi.call("build_send_human_reply", {
@@ -1695,186 +1834,241 @@ function InboxInspector({
   const canTakeover =
     ownershipAvailable && asRecord(ownershipState.data).canTakeover === true
 
+  const statusControl = ticketId ? (
+    <TicketStatusSelect
+      label="Ticket status"
+      value={activeTicket.status ?? "open"}
+      onValueChange={(value) => void statusChange(value)}
+      disabled={
+        update.isPending ||
+        isLoading ||
+        !!error ||
+        linkedTicket.isLoading ||
+        !!linkedTicket.error
+      }
+    />
+  ) : (
+    <ConversationStatusBadge
+      status={
+        typeof conversation.data?.status === "string"
+          ? conversation.data.status
+          : activeTicket.conversationStatus
+      }
+    />
+  )
+  const ownershipLabel = !ownershipAvailable
+    ? ownershipState.error
+      ? "Ownership unavailable"
+      : "Checking ownership…"
+    : canReply
+      ? "Handled by you"
+      : activeTicket.ownerType === "human"
+        ? canTakeover
+          ? "Waiting for a teammate"
+          : "Handled by a teammate"
+        : "Handled by AI"
+  const latestResponse = [...activeTicket.messages]
+    .reverse()
+    .find((item) => item.role === "assistant")
+  const responseFeedback = latestResponse?.id
+    ? {
+        label: "Review latest response",
+        value: ratings[latestResponse.id],
+        onChange: (value: ChatFeedbackValue) =>
+          void submitFeedback(value, latestResponse),
+        disabled: rateResponse.isPending || !conversationId,
+      }
+    : undefined
+
   return (
     <aside
       aria-label="Conversation details"
       className="flex h-full min-h-0 flex-col bg-background text-foreground"
     >
-      <header className="shrink-0 space-y-4 border-b border-border px-4 pt-4 pb-3">
-        <div className="flex items-start gap-3">
-          {activeTicket.channel ? (
-            <ChannelIcon channel={activeTicket.channel} />
-          ) : (
-            <UserRound
-              aria-hidden
-              className="mt-1 size-6 shrink-0 text-foreground-muted"
-            />
-          )}
-          <div className="min-w-0 flex-1">
-            <h2
-              className="line-clamp-2 text-base leading-6 font-semibold"
-              title={activeTicket.subject || "Conversation"}
-            >
-              {activeTicket.subject || "Conversation"}
-            </h2>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-foreground-muted">
-              <span
-                className="truncate"
-                title={activeTicket.contactName || "Customer"}
-              >
-                {activeTicket.contactName || "Customer"}
-              </span>
-              {activeTicket.channel ? (
-                <>
-                  <span aria-hidden>·</span>
-                  <span className="shrink-0 capitalize">
-                    {activeTicket.channel === "web"
-                      ? "Website"
-                      : activeTicket.channel}
-                  </span>
-                </>
-              ) : null}
-            </div>
-          </div>
-          <div className="-mt-1 -mr-1 flex shrink-0 items-center gap-0.5">
-            <Button
-              size="icon-sm"
-              variant="ghost-muted"
-              aria-label="Refresh conversation"
-              title="Refresh conversation"
-              onClick={refreshInspector}
-            >
-              <RefreshCw className="size-3.5" />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="ghost-muted"
-              aria-label="Close conversation"
-              title="Close conversation"
-              onClick={onClose}
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span
-            className="inline-flex items-center gap-1.5 text-xs text-foreground-muted"
-            role="status"
-          >
-            {!ownershipAvailable ? (
-              <LoaderCircle
-                aria-hidden
-                className={
-                  ownershipState.error
-                    ? "size-3.5 text-warning"
-                    : "size-3.5 motion-safe:animate-spin"
-                }
-              />
-            ) : activeTicket.ownerType === "human" ? (
-              <UserRound aria-hidden className="size-3.5 text-success" />
-            ) : (
-              <Bot aria-hidden className="size-3.5 text-info" />
-            )}
-            {!ownershipAvailable
-              ? ownershipState.error
-                ? "Ownership unavailable"
-                : "Checking ownership…"
-              : canReply
-                ? "Handled by you"
-                : activeTicket.ownerType === "human"
-                  ? canTakeover
-                    ? "Waiting for a teammate"
-                    : "Handled by a teammate"
-                  : "Handled by AI"}
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            {ticketId ? (
-              <TicketStatusSelect
-                label="Ticket status"
-                value={activeTicket.status ?? "open"}
-                onValueChange={(value) => void statusChange(value)}
-                disabled={
-                  update.isPending ||
-                  isLoading ||
-                  !!error ||
-                  linkedTicket.isLoading ||
-                  !!linkedTicket.error
-                }
-              />
-            ) : null}
-            <Button
-              size="sm"
-              variant={canReply ? "outline" : "default"}
-              onClick={() => void ownership(canReply ? "resume" : "takeover")}
-              loading={takeover.isPending}
-              disabled={!ownershipAvailable || (!canReply && !canTakeover)}
-            >
-              {canReply ? (
-                <>
-                  <Play className="size-3.5" />
-                  Resume AI
-                </>
-              ) : (
-                <>
-                  <UserRound className="size-3.5" />
-                  Take over
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-        {error ? <Notice variant="error">{error.message}</Notice> : null}
-        {linkedTicket.error ? (
-          <Notice variant="error">
-            Ticket details could not be loaded: {linkedTicket.error.message}
-          </Notice>
-        ) : null}
-        {update.error ? (
-          <Notice variant="error">{update.error.message}</Notice>
-        ) : null}
-        {takeover.error ? (
-          <Notice variant="error">{takeover.error.message}</Notice>
-        ) : null}
-        {conversation.error ? (
-          <Notice variant="error">{conversation.error.message}</Notice>
-        ) : null}
-        {ownershipState.error ? (
-          <Notice variant="error">
-            Ownership controls are unavailable: {ownershipState.error.message}
-          </Notice>
-        ) : null}
-      </header>
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <TabsList
-          variant="underline"
-          className="shrink-0 border-b border-border px-4"
-          aria-label="Conversation sections"
-        >
-          <TabsTrigger value="conversation">Conversation</TabsTrigger>
-          {ticketId ? (
-            <>
-              <TabsTrigger value="notes">
-                Notes
-                {activeTicket.notes.length > 0 ? (
-                  <span className="text-xs text-foreground-muted">
-                    {activeTicket.notes.length}
+        <header className="shrink-0 border-b border-border px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-1 basis-48 items-center gap-3">
+              <ConversationAvatar
+                compact
+                name={activeTicket.contactName || "Customer"}
+                identity={
+                  activeTicket.contactId ||
+                  activeTicket.conversationId ||
+                  activeTicket.id
+                }
+                badge={
+                  activeTicket.channel ? (
+                    <ChannelIcon channel={activeTicket.channel} size="sm" />
+                  ) : undefined
+                }
+              />
+              <div className="min-w-0 flex-1">
+                <h2
+                  className="truncate text-sm leading-5 font-semibold"
+                  title={activeTicket.subject || "Conversation"}
+                >
+                  {activeTicket.contactName || "Customer"}
+                </h2>
+                <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-foreground-muted">
+                  <span className="shrink-0 capitalize">
+                    {activeTicket.channel === "web"
+                      ? "Web chat"
+                      : activeTicket.channel || "Conversation"}
                   </span>
-                ) : null}
-              </TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
-            </>
+                  <span aria-hidden>·</span>
+                  <span role="status" className="truncate">
+                    {ownershipLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <>
+                {statusControl}
+                <TabsList aria-label="Conversation sections">
+                  {[
+                    {
+                      value: "conversation",
+                      label: "Conversation",
+                      icon: MessageSquare,
+                    },
+                    ...(ticketId
+                      ? [
+                          {
+                            value: "notes",
+                            label: "Notes",
+                            icon: StickyNote,
+                          },
+                          { value: "details", label: "Details", icon: Info },
+                        ]
+                      : []),
+                  ].map(({ value, label, icon: Icon }) => (
+                    <Tooltip key={value}>
+                      <TooltipTrigger asChild>
+                        <TabsTrigger
+                          value={value}
+                          size="icon"
+                          aria-label={label}
+                        >
+                          <Icon aria-hidden />
+                        </TabsTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {label}
+                        {value === "notes" && activeTicket.notes.length > 0
+                          ? ` (${activeTicket.notes.length})`
+                          : ""}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TabsList>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost-muted"
+                      aria-label="Conversation actions"
+                      title="Conversation actions"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      disabled={
+                        !ownershipAvailable ||
+                        takeover.isPending ||
+                        (!canReply && !canTakeover)
+                      }
+                      onSelect={() =>
+                        void ownership(canReply ? "resume" : "takeover")
+                      }
+                    >
+                      {canReply ? (
+                        <Play className="size-4" />
+                      ) : (
+                        <UserRound className="size-4" />
+                      )}
+                      {canReply ? "Resume AI" : "Take over"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={refreshInspector}>
+                      <RefreshCw className="size-4" />
+                      Refresh conversation
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+              <Button
+                size="icon-sm"
+                variant="ghost-muted"
+                aria-label="Close conversation"
+                title="Close conversation"
+                onClick={onClose}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          </div>
+          {error ? <Notice variant="error">{error.message}</Notice> : null}
+          {linkedTicket.error ? (
+            <Notice variant="error">
+              Ticket details could not be loaded: {linkedTicket.error.message}
+            </Notice>
           ) : null}
-        </TabsList>
+          {update.error ? (
+            <Notice variant="error">{update.error.message}</Notice>
+          ) : null}
+          {takeover.error ? (
+            <Notice variant="error">{takeover.error.message}</Notice>
+          ) : null}
+          {conversation.error ? (
+            <Notice variant="error">{conversation.error.message}</Notice>
+          ) : null}
+          {ownershipState.error ? (
+            <Notice variant="error">
+              Ownership controls are unavailable: {ownershipState.error.message}
+            </Notice>
+          ) : null}
+        </header>
+
+        {conversationId && (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+            <Button size="sm" variant="ghost-muted" asChild>
+              <Link
+                href={href(
+                  `/traces?${new URLSearchParams({
+                    filter: `sessionId = ${JSON.stringify(conversationId)}`,
+                  })}`
+                )}
+              >
+                <productIcons.traces className="size-3.5" aria-hidden />
+                View traces
+              </Link>
+            </Button>
+            {ownershipAvailable && !canReply && canTakeover && (
+              <Button
+                size="sm"
+                variant="outline"
+                loading={takeover.isPending}
+                onClick={() => void ownership("takeover")}
+              >
+                <UserRound className="size-3.5" />
+                Take over
+              </Button>
+            )}
+          </div>
+        )}
         <TabsContent
           value="conversation"
           className="flex min-h-0 flex-1 flex-col"
         >
           <Chat
+            variant="inbox"
             perspective="operator"
             messages={activeTicket.messages.map((item) => ({
               id: item.id,
@@ -1901,7 +2095,7 @@ function InboxInspector({
             canSubmit={canReply && !!message.trim() && !send.isPending}
             placeholder={
               canReply
-                ? "Write a reply…"
+                ? "Message"
                 : "Take over the conversation before replying…"
             }
             transcriptNotice={
@@ -1913,32 +2107,29 @@ function InboxInspector({
             }
             renderMessageFooter={(item) => {
               const approval = approvalFromMessage(item)
-              return approval ? (
-                <ApprovalActionCard
-                  approval={approval}
-                  approved={approvedContinuationIds.has(
-                    approval.continuationId
+              return (
+                <>
+                  {item.id === latestResponse?.id && responseFeedback && (
+                    <div className="mt-1 flex justify-end">
+                      <ChatFeedback {...responseFeedback} hideLabel />
+                    </div>
                   )}
-                  loading={approve.isPending}
-                  disabled={approve.isPending || !activeTicket.conversationId}
-                  onApprove={() => void approveAction(approval)}
-                />
-              ) : null
+                  {approval ? (
+                    <ApprovalActionCard
+                      approval={approval}
+                      approved={approvedContinuationIds.has(
+                        approval.continuationId
+                      )}
+                      loading={approve.isPending}
+                      disabled={
+                        approve.isPending || !activeTicket.conversationId
+                      }
+                      onApprove={() => void approveAction(approval)}
+                    />
+                  ) : null}
+                </>
+              )
             }}
-            feedback={(() => {
-              const response = [...activeTicket.messages]
-                .reverse()
-                .find((item) => item.role === "assistant")
-              return response?.id
-                ? {
-                    label: "Review latest response",
-                    value: ratings[response.id],
-                    onChange: (value: ChatFeedbackValue) =>
-                      void submitFeedback(value, response),
-                    disabled: rateResponse.isPending || !conversationId,
-                  }
-                : undefined
-            })()}
             composerFooter={
               <div className="mt-2 space-y-2">
                 {!canReply ? (

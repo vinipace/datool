@@ -59,6 +59,7 @@ type TicketRow = {
   created_at: unknown
   updated_at: unknown
   recent_updated_at?: string
+  needs_takeover?: boolean
 }
 
 function ticket(row: TicketRow) {
@@ -73,6 +74,7 @@ function ticket(row: TicketRow) {
     status: ticketStatusSchema.parse(row.status),
     priority: ticketPrioritySchema.parse(row.priority),
     tags: decodeJson<string[]>(row.tags_json, []),
+    needsTakeover: row.needs_takeover === true,
     assigneeUserId: row.assignee_user_id,
     assigneeName: row.assignee_name ?? null,
     assigneeImage: row.assignee_image ?? null,
@@ -87,6 +89,22 @@ function ticket(row: TicketRow) {
     updatedAt: iso(row.updated_at),
   }
 }
+
+// Assignment can name a queue before anyone claims the conversation. Only a
+// live lease for its current human owner means the handoff is being handled.
+const ticketNeedsTakeover = sql`(
+  t.status IN ('open', 'pending') AND EXISTS (
+    SELECT 1 FROM build_conversations conversation
+    WHERE conversation.project_id=t.project_id AND conversation.id=t.conversation_id
+      AND conversation.status='handed_off' AND conversation.owner_type='human'
+      AND NOT EXISTS (
+        SELECT 1 FROM build_conversation_ownership lease
+        WHERE lease.project_id=conversation.project_id AND lease.conversation_id=conversation.id
+          AND lease.mode='human' AND lease.owner_user_id=conversation.owner_id
+          AND (lease.lease_expires_at IS NULL OR lease.lease_expires_at>now())
+      )
+  )
+)`
 
 async function appendTicketEvent(
   database: BuildContext["database"],
@@ -146,7 +164,7 @@ export async function createTicket(context: BuildContext, value: unknown) {
 export async function getTicket(context: BuildContext, id: string) {
   const ctx = await prepareOperations(context)
   const result = await ctx.database.execute<TicketRow>(sql`
-    select t.*, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
+    select t.*, ${ticketNeedsTakeover} as needs_takeover, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
     left join build_contacts c on c.project_id=t.project_id and c.id=t.contact_id
     left join "user" u on u.id=t.assignee_user_id
     left join build_teams team on team.id=t.team_id
@@ -219,7 +237,7 @@ export async function listTickets(context: BuildContext, value?: unknown) {
     predicates.push(sql`(t.subject ilike ${query} or t.id ilike ${query} or t.conversation_id ilike ${query} or c.display_name ilike ${query} or c.email ilike ${query} or c.phone ilike ${query})`)
   }
   const result = await ctx.database.execute<TicketRow>(sql`
-    select t.*, t.updated_at::text as recent_updated_at, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
+    select t.*, ${ticketNeedsTakeover} as needs_takeover, t.updated_at::text as recent_updated_at, c.display_name as contact_name, coalesce(nullif(trim(u.name),''),u.email) as assignee_name, u.image as assignee_image, team.name as team_name from build_inbox_tickets t
     left join build_contacts c on c.project_id=t.project_id and c.id=t.contact_id
     left join "user" u on u.id=t.assignee_user_id
     left join build_teams team on team.id=t.team_id
@@ -539,7 +557,7 @@ export async function sendHumanReply(context: BuildContext, value: unknown) {
     `)
     const row = ensureRows(conversation.rows, "Conversation", input.conversationId)
     if (row.owner_type !== "human" || row.owner_id !== ctx.actorId)
-      throw new TracerError("CONFLICT", "Take over this conversation before replying. Another teammate may have claimed it.")
+      throw new TracerError("CONFLICT", "Take over this conversation before replying. Another teammate may have claimed it.", { details: { reason: "OWNERSHIP_CHANGED" } })
 
     // The canonical conversation owner is necessary but not sufficient: an
     // expired lease must stop a stale inbox tab from appending more replies.
@@ -560,7 +578,7 @@ export async function sendHumanReply(context: BuildContext, value: unknown) {
         (lease.lease_expires_at !== null &&
           new Date(String(lease.lease_expires_at)).getTime() <= Date.now()))
     ) {
-      throw new TracerError("CONFLICT", "Your conversation lease expired. Take over the conversation again before replying.")
+      throw new TracerError("CONFLICT", "Your conversation lease expired. Take over the conversation again before replying.", { details: { reason: "LEASE_EXPIRED" } })
     }
     await assertTicketAssignment(tx, ctx.projectId, { assigneeUserId: actorId, teamId: null })
 

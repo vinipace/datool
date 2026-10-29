@@ -122,7 +122,11 @@ export type OutboundEnvelope = {
   metadata?: Record<string, unknown>
 }
 
+export type ChannelImage = { data: Uint8Array; mediaType: string }
+
 export type AgentTurnInput = {
+  /** Server-fetched bytes; never accepted from public request metadata. */
+  images?: ChannelImage[]
   projectId: string
   agentId: string
   conversationId: string
@@ -316,7 +320,11 @@ export const CHANNEL_DESCRIPTORS: Record<ChannelId, ChannelDescriptor> = {
       "read_receipts",
       "human_handoff",
     ],
-    connectionSchema: z.object({}).strict(),
+    connectionSchema: z
+      .object({
+        provider: z.enum(["meta", "evolution", "zernio"]).default("meta"),
+      })
+      .strict(),
   },
   messenger: {
     id: "messenger",

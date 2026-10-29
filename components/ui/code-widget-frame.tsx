@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
+import type { WidgetTranslations } from "@/src/lib/build/widget-i18n"
+
 import { ChatNavigationContext } from "./chat-navigation-context"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
 import {
@@ -15,6 +17,8 @@ export function CodeWidgetFrame({
   schemaCode,
   data,
   functions,
+  locale = "en",
+  translations,
   onAction,
   onStatus,
 }: {
@@ -22,6 +26,8 @@ export function CodeWidgetFrame({
   schemaCode?: string
   data: Record<string, unknown>
   functions: WidgetDefinition["functions"]
+  locale?: string
+  translations?: WidgetTranslations
   onAction?: (
     actionId: string,
     input: Record<string, unknown>,
@@ -44,6 +50,8 @@ export function CodeWidgetFrame({
     code,
     schemaCode,
     data,
+    locale,
+    translations,
     enabled: Boolean(onAction),
     functions: functions.map((fn) => fn.name),
     theme,

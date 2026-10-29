@@ -1,0 +1,12 @@
+{
+  "cli": { "appVersionSource": "remote" },
+  "build": {
+    "development": { "developmentClient": true, "distribution": "internal" },
+    "simulator": { "developmentClient": true, "distribution": "internal", "ios": { "simulator": true } },
+    "preview": { "distribution": "internal" },
+    "production": { "autoIncrement": true, "distribution": "store", "environment": "production", "node": "24.22.1" }
+  },
+  "submit": {
+    "production": { "ios": { "appleTeamId": "JCYZZB9546", "ascAppId": "6826460773" } }
+  }
+}

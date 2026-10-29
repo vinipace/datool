@@ -16,6 +16,7 @@ export function CollectionInspectorOverlay({
   isWide,
   onClose,
   onRestoreFocus,
+  defaultSize = 45,
   children,
 }: React.PropsWithChildren<{
   title: string
@@ -23,14 +24,20 @@ export function CollectionInspectorOverlay({
   isWide: boolean
   onClose: () => void
   onRestoreFocus: () => void
+  defaultSize?: number
 }>) {
   const panel = React.useContext(InspectorPanelContext)
   const setOpen = panel?.setOpen
+  const setDefaultSize = panel?.setDefaultSize
   React.useEffect(() => {
     if (!isWide) return
+    setDefaultSize?.(defaultSize)
     setOpen?.(true)
-    return () => setOpen?.(false)
-  }, [isWide, setOpen])
+    return () => {
+      setOpen?.(false)
+      setDefaultSize?.(45)
+    }
+  }, [isWide, setOpen, setDefaultSize, defaultSize])
 
   React.useEffect(() => {
     if (!isWide) return

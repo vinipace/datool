@@ -7,7 +7,7 @@ import re
 import subprocess
 
 DESTINATION = Path("/var/log/datool-logging/containers")
-ALLOWED_NAME = re.compile(r"(?:datool\.(?:web|worker)\.\d+|dokku\.(?:postgres\.datool-db|redis\.datool-redis))\Z")
+ALLOWED_NAME = re.compile(r"(?:datool\.(?:web|worker)\.\d+|datool-evolution\.web\.\d+|dokku\.(?:postgres\.datool-db|redis\.datool-redis))\Z")
 
 
 def selected_logs(records):

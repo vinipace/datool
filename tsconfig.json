@@ -51,6 +51,7 @@
   ],
   "exclude": [
     "node_modules",
+    "apps/inbox",
     "artifacts",
     "tests/fixtures/packages"
   ]

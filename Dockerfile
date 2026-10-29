@@ -32,7 +32,7 @@ RUN --mount=type=tmpfs,target=/root/.bun/install/cache \
 
 FROM base AS runtime
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
-RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends python3 ffmpeg && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production PORT=3000 DATOOL_DATA_DIR=/app/.data
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next

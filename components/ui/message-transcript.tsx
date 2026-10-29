@@ -17,9 +17,11 @@ import {
 import { SyntaxCode } from "./syntax-code"
 import { CodeEditor } from "./code-editor"
 import { UserAvatarImage } from "./user-avatar"
+import { ChatMessageAuthor } from "./chat-message-author"
 import { AgentAvatar } from "./agent-avatar"
 import { SpanKindIcon } from "@/components/tracer/span-kind-icon"
 import { cn } from "@/lib/utils"
+import { sameChatMessageGroup } from "@/src/lib/build/chat-message-grouping"
 import {
   ChatRichContent,
   type ChatInteractionHandler,
@@ -196,15 +198,20 @@ export function MessageTranscript({
   onCodeStatus,
   renderMessageFooter,
   pendingReply,
+  locale = "en",
+  getMessageKey,
 }: {
   messages: InspectorMessage[]
+  /** Keep optimistic messages mounted when their persisted IDs arrive. */
+  getMessageKey?: (message: InspectorMessage) => string | undefined
   raw?: boolean
-  variant?: "default" | "chat" | "bubbles" | "customer"
+  variant?: "default" | "chat" | "bubbles" | "customer" | "inbox"
   perspective?: "customer" | "operator"
   onWidgetInteraction?: ChatInteractionHandler
   onCodeStatus?: (error: string | null) => void
   renderMessageFooter?: (message: InspectorMessage) => ReactNode
   pendingReply?: ReactNode
+  locale?: string
 }) {
   const transcript = useMemo(() => groupToolResults(messages), [messages])
   const completedContinuationIds = useMemo(
@@ -215,7 +222,14 @@ export function MessageTranscript({
             message.role === "assistant"
               ? message.metadata?.completedContinuationId
               : undefined
-          return typeof id === "string" ? [id] : []
+          return [
+            ...(typeof id === "string" ? [id] : []),
+            ...(Array.isArray(message.metadata?.completedContinuationIds)
+              ? message.metadata.completedContinuationIds.filter(
+                  (value): value is string => typeof value === "string"
+                )
+              : []),
+          ]
         })
       ),
     [messages]
@@ -224,12 +238,21 @@ export function MessageTranscript({
   return (
     <div
       className={cn(
-        "relative space-y-3 whitespace-normal",
-        variant !== "customer" && "font-sans"
+        "relative whitespace-normal",
+        variant !== "customer" && "space-y-3 font-sans",
+        variant === "inbox" && "space-y-2"
       )}
     >
       <AnimatePresence initial={false} mode="popLayout">
         {transcript.map(({ message, toolResults }, index) => {
+          if (message.metadata?.internalFormReceipt === true) return null
+          if (
+            variant === "customer" &&
+            message.role === "user" &&
+            (isRecord(message.metadata?.widgetInteraction) ||
+              message.metadata?.customerInteraction === true)
+          )
+            return null
           const text = messageText(message.content)
           const isUser = message.role.toLowerCase() === "user"
           const isAssistant = message.role.toLowerCase() === "assistant"
@@ -247,6 +270,18 @@ export function MessageTranscript({
                   : message.role
               : message.role
           const customer = variant === "customer"
+          const inbox = variant === "inbox"
+          const continuesGroup =
+            customer && sameChatMessageGroup(transcript[index - 1]?.message, message)
+          const endsGroup =
+            !customer || !sameChatMessageGroup(message, transcript[index + 1]?.message)
+          const previousDate = transcript[index - 1]?.message.createdAt
+          const startsDay =
+            inbox &&
+            message.createdAt &&
+            (!previousDate ||
+              new Date(previousDate).toDateString() !==
+                new Date(message.createdAt).toDateString())
           const needsFallback =
             (text === null &&
               !(message.content === null && message.toolCalls.length > 0)) ||
@@ -254,7 +289,11 @@ export function MessageTranscript({
               message.content.some((part) => !isTextOrToolPart(part)))
           return (
             <motion.article
-              key={message.id ?? `${message.role}-${index}`}
+              key={
+                getMessageKey?.(message) ??
+                message.id ??
+                `${message.role}-${index}`
+              }
               data-chat-message=""
               layout={customer && !reducedMotion ? "position" : false}
               initial={
@@ -271,17 +310,42 @@ export function MessageTranscript({
                   : customer
                     ? isUser
                       ? "Your message"
-                      : "Assistant message"
+                      : isHumanReply
+                        ? `${message.author?.name || "Support teammate"} message`
+                        : "Assistant message"
                     : undefined
               }
               className={cn(
-                "min-w-0 py-1",
+                "min-w-0",
+                !customer && "py-1",
+                customer && index > 0 && (continuesGroup ? "mt-1" : "mt-5"),
                 (variant !== "default" || isOutgoing) &&
                   "flex flex-col items-start",
-                isOutgoing && "items-end"
+                isOutgoing && "items-end",
+                inbox && "py-0"
               )}
             >
-              {!customer && (
+              {startsDay && (
+                <div className="mb-5 flex w-full items-center justify-center gap-4 self-stretch before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+                  <time
+                    dateTime={message.createdAt}
+                    className="py-1 text-[11px] font-medium text-foreground-muted"
+                  >
+                    {new Date(message.createdAt!).toLocaleDateString([], {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </time>
+                </div>
+              )}
+              {(customer || inbox) && isHumanReply && !continuesGroup && (
+                <ChatMessageAuthor
+                  name={message.author?.name || "Support teammate"}
+                  image={message.author?.image ?? null}
+                />
+              )}
+              {!customer && !inbox && (
                 <span
                   className={cn(
                     "inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-muted",
@@ -328,8 +392,14 @@ export function MessageTranscript({
                   data-bubble-user={customer && isOutgoing ? "" : undefined}
                   className={cn(
                     "max-w-full min-w-0",
-                    !customer && !isOutgoing && "w-full",
-                    !customer && isOutgoing && "max-w-[85%]",
+                    !customer && !inbox && !isOutgoing && "w-full",
+                    !customer && !inbox && isOutgoing && "max-w-[85%]",
+                    inbox &&
+                      "max-w-[min(88%,30rem)] rounded-xl px-3 py-2 text-[13px] sm:max-w-[min(76%,30rem)]",
+                    inbox &&
+                      (isOutgoing
+                        ? "rounded-br-sm bg-inbox-outgoing text-inbox-outgoing-foreground"
+                        : "rounded-bl-sm bg-inbox-incoming text-foreground"),
                     customer &&
                       "max-w-[min(85%,36rem)] rounded-2xl px-4 py-3 text-sm",
                     customer &&
@@ -338,24 +408,35 @@ export function MessageTranscript({
                         : "bg-muted text-foreground")
                   )}
                 >
+                  {inbox && isAssistant && !isHumanReply && (
+                    <p className="mb-1 text-xs font-semibold text-inherit">
+                      {label}
+                      {!isHumanReply && " · AI"}
+                    </p>
+                  )}
                   {text !== null && (
                     <div
                       className={cn(
-                        "mt-1.5 text-sm leading-6 [overflow-wrap:anywhere] text-foreground",
+                        "mt-1.5 leading-6 [overflow-wrap:anywhere] text-foreground",
+                        !customer && "text-sm",
                         !customer &&
+                          !inbox &&
                           (isOutgoing || variant === "bubbles") &&
                           "w-fit max-w-full rounded-2xl border border-border bg-muted px-3 py-2",
                         !customer &&
+                          !inbox &&
                           isOutgoing &&
                           "min-w-8 border-message-user bg-message-user text-message-user-foreground",
                         !customer &&
+                          !inbox &&
                           isOutgoing &&
                           perspective === "customer" &&
                           "text-right",
                         variant === "bubbles" && "px-4 py-3",
                         variant === "bubbles" &&
                           (isOutgoing ? "rounded-tr-sm" : "rounded-tl-sm"),
-                        customer && "mt-0 text-inherit"
+                        (customer || inbox) && "mt-0 text-inherit",
+                        inbox && "text-[13px] leading-5"
                       )}
                     >
                       {raw ? (
@@ -365,6 +446,7 @@ export function MessageTranscript({
                           className={cn(
                             "space-y-2 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-lg [&_h2]:text-base [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_table]:block [&_table]:overflow-auto [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:p-2 [&_ul]:list-disc [&_ul]:pl-5",
                             isOutgoing &&
+                              !inbox &&
                               "[&_blockquote]:border-message-user-foreground/20 [&_code]:bg-message-user-foreground/10 [&_pre]:bg-message-user-foreground/10 [&_td]:border-message-user-foreground/20 [&_th]:border-message-user-foreground/20"
                           )}
                         >
@@ -419,17 +501,31 @@ export function MessageTranscript({
                   )}
                   {!customer && (
                     <ChatRichContent
+                      locale={locale}
                       message={message}
                       completedContinuationIds={completedContinuationIds}
                       onInteraction={onWidgetInteraction}
                       onCodeStatus={onCodeStatus}
                     />
                   )}
-                  {!customer && renderMessageFooter?.(message)}
+                  {inbox && message.createdAt && (
+                    <time
+                      dateTime={message.createdAt}
+                      className="mt-1 block text-right text-[10px] text-inherit opacity-70"
+                    >
+                      {new Date(message.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                  )}
+                  {!customer && !inbox && renderMessageFooter?.(message)}
                 </div>
               )}
+              {inbox && renderMessageFooter?.(message)}
               {customer && (
                 <ChatRichContent
+                  locale={locale}
                   message={message}
                   variant="customer"
                   completedContinuationIds={completedContinuationIds}
@@ -437,14 +533,14 @@ export function MessageTranscript({
                   onCodeStatus={onCodeStatus}
                 />
               )}
-              {customer && renderMessageFooter?.(message)}
+              {customer && (isUser || endsGroup) && renderMessageFooter?.(message)}
             </motion.article>
           )
         })}
         {pendingReply ? (
           <motion.div
             key="pending-reply"
-            className="flex justify-start py-1"
+            className={cn("flex justify-start py-1", variant === "customer" && transcript.length > 0 && "mt-5")}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

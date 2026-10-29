@@ -9,6 +9,7 @@ import {
 } from "@/src/lib/auth/permissions"
 import { assertSameOrigin } from "./request"
 import { z } from "zod"
+import { securityAudit } from "@/src/server/security/audit"
 export const createKeySchema = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -117,6 +118,7 @@ export async function createOrganizationKey(
       },
     },
   })
+  securityAudit({ action: "api_key.create", identity: { actorType: "session", actorId: access.userId, organizationId }, targetId: key.id })
   return { id: key.id, key: key.key }
 }
 export async function revokeOrganizationKey(
@@ -124,7 +126,7 @@ export async function revokeOrganizationKey(
   organizationId: string,
   keyId: string
 ) {
-  await keyAccess(request, organizationId, true)
+  const access = await keyAccess(request, organizationId, true)
   const key = await getAuth().api.getApiKey({
     headers: request.headers,
     query: { id: keyId },
@@ -139,5 +141,6 @@ export async function revokeOrganizationKey(
     headers: request.headers,
     body: { keyId },
   })
+  securityAudit({ action: "api_key.revoke", identity: { actorType: "session", actorId: access.userId, organizationId }, targetId: key.id })
   return { revoked: true }
 }

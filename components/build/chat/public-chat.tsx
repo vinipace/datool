@@ -10,7 +10,13 @@ import { requestHostSession } from "@/src/lib/build/chat-host-session"
 import { usePublicChallenge } from "./use-public-challenge"
 import Image from "next/image"
 import datoolLogo from "@/app/icon.svg"
-import { MessageCircle, MessageCircleWarning, RefreshCw, X } from "lucide-react"
+import {
+  ArrowDown,
+  MessageCircle,
+  MessageCircleWarning,
+  RefreshCw,
+  X,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/ui/notice"
 import { cn } from "@/lib/utils"
@@ -21,7 +27,7 @@ import {
   HelpPageLinks,
 } from "./help-page-layout"
 import { AgentAvatar } from "@/components/ui/agent-avatar"
-import { LoadingState } from "@/components/ui/loading-state"
+import { ChatTextTranscript } from "@/components/ui/chat-text-transcript"
 import {
   chatBubbleSettingsSchema,
   type ChatBubbleSettings,
@@ -37,16 +43,17 @@ import {
   ChatComposer,
   ChatTypingIndicator,
 } from "@/components/ui/chat-composer"
+import { ChatDeliveryStatus } from "@/components/ui/chat-delivery-status"
 import { ChatFeedback } from "@/components/ui/chat-feedback"
 import { formatRelative } from "@/components/tracer/format"
 import { ChatNavigationContext } from "@/components/ui/chat-navigation-context"
 import { isSafeHttpUrl } from "@/src/lib/build/urls"
 
-const MessageTranscript = React.lazy(() =>
+const loadTranscript = () =>
   import("@/components/ui/message-transcript").then((module) => ({
     default: module.MessageTranscript,
   }))
-)
+const MessageTranscript = React.lazy(loadTranscript)
 
 type Appearance = ChatBubbleSettings
 
@@ -60,9 +67,17 @@ type Session = {
 
 type ChatMessage = {
   id: string
+  author?: { key?: string; name: string; image: string | null } | null
   direction?: string
   status?: string
   pendingReply?: boolean
+  providerMessageId?: string | null
+  localSend?: {
+    key: string
+    conversationId: string
+    visitorId: string
+    failed: boolean
+  }
   text?: string
   attachments?: Array<{
     type?: string
@@ -76,6 +91,15 @@ type ChatMessage = {
 
 const defaultAppearance = chatBubbleSettingsSchema.parse({})
 const defaultContext: Record<string, unknown> = {}
+
+function subscribeBrowserLanguage(onChange: () => void) {
+  window.addEventListener("languagechange", onChange)
+  return () => window.removeEventListener("languagechange", onChange)
+}
+
+function readBrowserLanguages() {
+  return navigator.languages.join(",")
+}
 
 function mergeAppearance(value?: Partial<Appearance>): Appearance {
   return chatBubbleSettingsSchema.parse({ ...defaultAppearance, ...value })
@@ -132,45 +156,111 @@ function sessionKey(channelId: string, origin?: string) {
   return `datool:public-chat:${channelId}:${origin ?? "same-origin"}:session`
 }
 
+// One bounded, tab-local snapshot per channel/origin. Never use it as identity
+// proof: the caller must obtain a fresh session before reading private content.
+function readTranscriptSnapshot(key: string, active: Session): ChatMessage[] {
+  try {
+    const snapshot = JSON.parse(
+      window.sessionStorage.getItem(`${key}:transcript`) ?? "null"
+    )
+    if (
+      snapshot?.visitorId === active.visitorId &&
+      snapshot.conversationId === active.conversationId &&
+      typeof snapshot.savedAt === "number" &&
+      Date.now() - snapshot.savedAt >= 0 &&
+      Date.now() - snapshot.savedAt < 5 * 60_000 &&
+      Array.isArray(snapshot.messages) &&
+      snapshot.messages.length <= 200 &&
+      snapshot.messages.every(
+        (message: ChatMessage) =>
+          message &&
+          typeof message.id === "string" &&
+          (message.direction === "inbound" ||
+            message.direction === "outbound") &&
+          (message.text == null || typeof message.text === "string")
+      )
+    )
+      return snapshot.messages
+  } catch {
+    /* Missing, blocked or corrupted storage falls back to the server. */
+  }
+  return []
+}
+
+function saveTranscriptSnapshot(
+  key: string,
+  active: Session,
+  messages: ChatMessage[]
+) {
+  try {
+    const value = JSON.stringify({
+      visitorId: active.visitorId,
+      conversationId: active.conversationId,
+      savedAt: Date.now(),
+      messages,
+    })
+    if (value.length <= 512_000)
+      window.sessionStorage.setItem(`${key}:transcript`, value)
+    else window.sessionStorage.removeItem(`${key}:transcript`)
+  } catch {
+    /* Chat remains available without browser storage. */
+  }
+}
+
 export function PublicChat({
   channelId,
   embedded = false,
-  deferSessionUntilOpen = false,
+  preloaded = false,
   shopifyIdentity = false,
   context = defaultContext,
   embedOrigin,
   previewAgentId,
   appearanceOverride,
   initialAppearance,
+  visitorCountry,
+  initialBrowserLanguages = "en",
   onBeforeSend,
   onClose,
+  variant = "default",
+  renderHeader,
 }: {
   channelId: string
   embedded?: boolean
-  deferSessionUntilOpen?: boolean
+  preloaded?: boolean
   shopifyIdentity?: boolean
   context?: Record<string, unknown>
   embedOrigin?: string
   previewAgentId?: string
   appearanceOverride?: Appearance
   initialAppearance?: Appearance
+  visitorCountry?: string | null
+  initialBrowserLanguages?: string
   onBeforeSend?: () => Promise<void>
   onClose?: () => void
+  variant?: "default" | "whatsapp"
+  renderHeader?: (controls: {
+    onNewChat: () => void
+    disabled: boolean
+  }) => React.ReactNode
 }) {
   const { verify: verifyChallenge, element: challengeElement } =
     usePublicChallenge()
-  const managedEmbed = embedded && deferSessionUntilOpen && !previewAgentId
-  const [hasOpened, setHasOpened] = React.useState(!managedEmbed)
+  const managedEmbed = embedded && preloaded && !previewAgentId
   const [frameVisible, setFrameVisible] = React.useState(!managedEmbed)
-  const sessionActive =
-    !managedEmbed || (shopifyIdentity ? frameVisible : hasOpened)
+  const frameVisibleRef = React.useRef(!managedEmbed)
   const [session, setSession] = React.useState<Session | null>(null)
   const [storedAppearance, setAppearance] = React.useState(
     initialAppearance ?? defaultAppearance
   )
+  const browserLanguages = React.useSyncExternalStore(
+    subscribeBrowserLanguage,
+    readBrowserLanguages,
+    () => initialBrowserLanguages
+  )
   const { appearance, copy, language } = localizeBubble(
     appearanceOverride ?? storedAppearance,
-    typeof navigator === "undefined" ? "en" : navigator.languages.join(",")
+    browserLanguages,
+    visitorCountry
   )
   const helpPage = appearance.layout === "help_page"
   const [visitorTheme, setVisitorTheme] = React.useState<
@@ -193,8 +283,10 @@ export function PublicChat({
   >(null)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [draft, setDraft] = React.useState("")
+  const draftRef = React.useRef("")
   const updateDraft = React.useCallback(
     (value: string) => {
+      draftRef.current = value
       setDraft(value)
       const active = sessionRef.current
       if (!active || previewAgentId) return
@@ -239,16 +331,35 @@ export function PublicChat({
     Record<string, string | undefined>
   >({})
   const messageLogRef = React.useRef<HTMLDivElement | null>(null)
-  const optimisticId = React.useRef(0)
+  const followLatest = React.useRef(true)
+  const [hasNewMessage, setHasNewMessage] = React.useState(false)
   const previewConversationKey = React.useRef(crypto.randomUUID())
-  const waitingReply = sending || isPublicReplyPending(messages)
+  const waitingReply =
+    sending ||
+    isPublicReplyPending(
+      messages.filter((message) => !message.localSend?.failed)
+    )
+  // Delivery receipts change storage IDs, not the identity of a visible bubble.
+  const messageKeys = new Map(
+    messages.map((message) => {
+      if (message.direction !== "inbound") return [message.id, message.id]
+      const clientKey =
+        message.localSend?.key ?? message.metadata?.clientMessageId
+      const receipt =
+        message.providerMessageId ??
+        (typeof clientKey === "string"
+          ? `${session?.visitorId}:${clientKey}`
+          : message.id)
+      return [message.id, `${message.direction}:${receipt}`]
+    })
+  )
   const currentTitle =
     threads.find((thread) => thread.id === session?.conversationId)?.title ??
     messages
       .find((message) => message.direction === "inbound")
       ?.text?.slice(0, 120) ??
     copy.newChatShort
-  const unavailable = !loading && !!error && !messages.length
+  const unavailable = !loading && !!error && !messages.length && !session
   const hasTimestamps = messages.some((message) => !!message.createdAt)
   const [, refreshRelativeTime] = React.useReducer(
     (tick: number) => tick + 1,
@@ -347,7 +458,30 @@ export function PublicChat({
         activeConversationId.current !== active.conversationId
       )
         return
-      setMessages(incoming)
+      if (!previewAgentId)
+        saveTranscriptSnapshot(
+          sessionKey(channelId, embedOrigin),
+          active,
+          incoming
+        )
+      setMessages((current) => [
+        ...incoming,
+        ...current.filter((message) => {
+          const local = message.localSend
+          return (
+            local?.failed &&
+            local.conversationId === active.conversationId &&
+            local.visitorId === active.visitorId &&
+            !incoming.some(
+              (saved) =>
+                saved.direction === "inbound" &&
+                (saved.providerMessageId ===
+                  `${active.visitorId}:${local.key}` ||
+                  saved.metadata?.clientMessageId === local.key)
+            )
+          )
+        }),
+      ])
       const first = incoming.find((message) => message.direction === "inbound")
       if (first?.text) {
         const thread = {
@@ -367,9 +501,12 @@ export function PublicChat({
 
   const startSession = React.useCallback(
     async (reset = false, threadId?: string) => {
+      // Focus and visibility can change when clicking the composer. Never
+      // restart a connection or overwrite its optimistic turn during a send.
+      if (sendingRef.current) return
       const sequence = ++sessionSequence.current
       ++readSequence.current
-      setLoading(true)
+      if (!sessionRef.current || reset || threadId) setLoading(true)
       setError(null)
       setFeedback({})
       setFeedbackError({})
@@ -523,6 +660,15 @@ export function PublicChat({
             )
         }
         if (sequence !== sessionSequence.current) return
+        const changedSession =
+          sessionRef.current?.visitorId !== active.visitorId ||
+          activeConversationId.current !== active.conversationId
+        if (newConversation) {
+          saveTranscriptSnapshot(key, active, [])
+          setMessages([])
+        } else if (changedSession) {
+          setMessages(readTranscriptSnapshot(key, active))
+        }
         activeConversationId.current = active.conversationId
         sessionRef.current = active
         setSession(active)
@@ -542,7 +688,6 @@ export function PublicChat({
         // Both public and Shopify session responses already include appearance.
         // Shopify may resume a thread, so only known-new public chats skip history.
         if (active.appearance) setAppearance(mergeAppearance(active.appearance))
-        if (newConversation) setMessages([])
         await Promise.all([
           active.appearance
             ? Promise.resolve()
@@ -645,23 +790,28 @@ export function PublicChat({
   }, [embedOrigin, loading, messages, previewAgentId, session, shopifyIdentity])
 
   React.useEffect(() => {
-    if (!shopifyIdentity || previewAgentId || (managedEmbed && !frameVisible))
-      return
+    if (!shopifyIdentity || previewAgentId) return
     const refresh = () => {
       if (document.visibilityState !== "hidden") void startSession()
       else {
         ++sessionSequence.current
         ++readSequence.current
-        setMessages([])
-        setThreads([])
-        setLoading(true)
       }
     }
-    window.addEventListener("focus", refresh)
+    const onFocus = () => {
+      if (!managedEmbed || frameVisibleRef.current) refresh()
+    }
+    window.addEventListener("focus", onFocus)
+    // Keep the last verified conversation mounted across tab switches while
+    // rejecting stale reads. Revalidate on return, even with the launcher closed;
+    // startSession clears the transcript on identity change or verification failure.
     document.addEventListener("visibilitychange", refresh)
-    const timer = window.setInterval(refresh, 60_000)
+    const timer =
+      !managedEmbed || frameVisible
+        ? window.setInterval(refresh, 60_000)
+        : undefined
     return () => {
-      window.removeEventListener("focus", refresh)
+      window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", refresh)
       window.clearInterval(timer)
     }
@@ -701,26 +851,25 @@ export function PublicChat({
         typeof event.data.visible !== "boolean"
       )
         return
+      const opening = event.data.visible && !frameVisibleRef.current
+      frameVisibleRef.current = event.data.visible
       setFrameVisible(event.data.visible)
-      if (event.data.visible) setHasOpened(true)
-      else if (shopifyIdentity) {
-        ++sessionSequence.current
-        ++readSequence.current
-        setMessages([])
-        setThreads([])
-        setLoading(true)
-      }
+      // Closing the launcher does not change the store identity. Keep the
+      // verified conversation mounted; check again without blanking it on open.
+      if (opening && shopifyIdentity && sessionRef.current) void startSession()
     }
     window.addEventListener("message", onVisibility)
     window.parent.postMessage({ type: "datool:chat:ready" }, parentOrigin)
     return () => window.removeEventListener("message", onVisibility)
-  }, [managedEmbed, embedOrigin, shopifyIdentity])
+  }, [managedEmbed, embedOrigin, shopifyIdentity, startSession])
 
   React.useEffect(() => {
-    // Loading the signed session is the external side effect this effect owns.
-    if (!sessionActive && window.parent !== window) return
+    // Warm the session and transcript with the iframe, before a launcher click.
     void startSession()
-  }, [startSession, sessionActive])
+    void loadTranscript().catch(() => {
+      // A failed preload must not interrupt session warmup.
+    })
+  }, [startSession])
 
   React.useEffect(() => {
     if (
@@ -775,6 +924,7 @@ export function PublicChat({
   ])
 
   const scrollToLatest = React.useCallback(() => {
+    if (!followLatest.current) return
     const log = messageLogRef.current
     if (!log) return
     const latestMessage = Array.from(
@@ -792,7 +942,7 @@ export function PublicChat({
         : messages.length
           ? log.scrollHeight
           : 0,
-      behavior: "smooth",
+      behavior: "instant",
     })
   }, [messages.length])
   const onTranscriptMount = React.useCallback(
@@ -801,11 +951,21 @@ export function PublicChat({
     },
     [scrollToLatest]
   )
-  const lastMessage = messages.at(-1)
-  React.useEffect(scrollToLatest, [
+  const lastMessage = messages.findLast((message) => !message.localSend?.failed)
+  React.useEffect(() => {
+    followLatest.current = true
+    setHasNewMessage(false)
+    // A different conversation starts at its latest message.
+  }, [session?.conversationId])
+  React.useEffect(() => {
+    if (followLatest.current) scrollToLatest()
+    else if (lastMessage?.direction === "outbound") setHasNewMessage(true)
+  }, [
     scrollToLatest,
+    session?.conversationId,
     lastMessage?.id,
     lastMessage?.text,
+    lastMessage?.direction,
     sending,
   ])
 
@@ -813,46 +973,106 @@ export function PublicChat({
     event?: React.FormEvent,
     suggestedText?: string,
     interaction?: Record<string, unknown>,
-    cartRequest?: { command?: unknown; expiresAt?: number }
+    cartRequest?: { command?: unknown; expiresAt?: number },
+    retryMessage?: ChatMessage
   ) {
     event?.preventDefault()
     const text = (suggestedText ?? draft).trim()
     if (!text || !session || waitingReply || loading || sendingRef.current)
       return
-    sendingRef.current = true
-    setSending(true)
+    if (
+      retryMessage &&
+      (!retryMessage.localSend?.failed ||
+        retryMessage.localSend.conversationId !== session.conversationId ||
+        retryMessage.localSend.visitorId !== session.visitorId)
+    )
+      return
     let activeSession = session
+    // Invalidate background session/message reads before showing the local turn.
+    ++sessionSequence.current
+    sendingRef.current = true
+    ++readSequence.current
+    if (!interaction && !retryMessage) updateDraft("")
+    setError(null)
+    setSending(true)
+    const requestKey = retryMessage?.localSend?.key ?? crypto.randomUUID()
+    const localMessageId = retryMessage?.id ?? `local-${requestKey}`
+    followLatest.current = true
+    setHasNewMessage(false)
+    const optimistic: ChatMessage = {
+      id: localMessageId,
+      direction: "inbound",
+      status: "queued",
+      pendingReply: true,
+      text,
+      metadata: {
+        clientMessageId: requestKey,
+        ...(interaction ? { widgetInteraction: interaction } : {}),
+      },
+      ...(!interaction
+        ? {
+            localSend: {
+              key: requestKey,
+              conversationId: activeSession.conversationId,
+              visitorId: activeSession.visitorId,
+              failed: false,
+            },
+          }
+        : {}),
+    }
+    setMessages((current) =>
+      retryMessage
+        ? current.map((message) =>
+            message.id === localMessageId ? optimistic : message
+          )
+        : [...current, optimistic]
+    )
+    const undoOptimistic = () => {
+      setMessages((current) =>
+        current.filter((message) => message.id !== localMessageId)
+      )
+      if (!suggestedText && !interaction && !draftRef.current) updateDraft(text)
+      sendingRef.current = false
+      setSending(false)
+    }
     if (shopifyIdentity && embedOrigin) {
       const verificationSequence = sessionSequence.current
       try {
         const result = await requestHostSession<Session>(embedOrigin, {
           conversationId: activeSession.conversationId,
         })
+        if (result.error || !result.session)
+          throw new Error(
+            result.error?.message || "Could not verify your store session."
+          )
         if (
           verificationSequence !== sessionSequence.current ||
-          result.error ||
-          !result.session ||
           result.session.visitorId !== activeSession.visitorId ||
           result.session.conversationId !== activeSession.conversationId
         ) {
+          undoOptimistic()
+          setMessages([])
+          setThreads([])
+          setLoading(true)
           await startSession()
+          if (!interaction) updateDraft(draftRef.current || text)
           setError(
             "Your store session changed. Please review the chat before sending."
           )
-          sendingRef.current = false
-          setSending(false)
           return
         }
         activeSession = result.session
         sessionRef.current = activeSession
         setSession(activeSession)
       } catch {
+        undoOptimistic()
         setMessages([])
+        setThreads([])
+        sessionRef.current = null
+        setSession(null)
         setError(
           "Could not verify your store session. Please refresh the page."
         )
-        sendingRef.current = false
-        setSending(false)
         return
       }
     }
@@ -881,26 +1101,10 @@ export function PublicChat({
             ? reason.message
             : "Could not access your cart."
         )
-        sendingRef.current = false
-        setSending(false)
+        undoOptimistic()
         return
       }
     }
-    sendingRef.current = true
-    ++readSequence.current
-    if (!interaction) updateDraft("")
-    setError(null)
-    setSending(true)
-    const localMessageId = `local-${optimisticId.current++}`
-    const optimistic: ChatMessage = {
-      id: localMessageId,
-      direction: "inbound",
-      status: "queued",
-      pendingReply: true,
-      text,
-      metadata: interaction ? { widgetInteraction: interaction } : undefined,
-    }
-    setMessages((current) => [...current, optimistic])
     if (!messages.some((message) => message.direction === "inbound")) {
       setThreads((current) => [
         {
@@ -917,18 +1121,22 @@ export function PublicChat({
       const messageContext = { ...activeSession.context, ...context }
       if (previewAgentId) {
         await onBeforeSend?.()
-        await buildApi.call("build_run_agent_turn", {
-          agentId: previewAgentId,
-          channel: "web",
-          conversationId: activeSession.conversationId,
-          requestKey: crypto.randomUUID(),
-          message: text,
-          metadata: {
-            source: "channel-preview",
-            context: messageContext,
-            ...(interaction ? { widgetInteraction: interaction } : {}),
+        await buildApi.call(
+          "build_run_agent_turn",
+          {
+            agentId: previewAgentId,
+            channel: "web",
+            conversationId: activeSession.conversationId,
+            message: text,
+            metadata: {
+              source: "channel-preview",
+              clientMessageId: requestKey,
+              context: messageContext,
+              ...(interaction ? { widgetInteraction: interaction } : {}),
+            },
           },
-        })
+          { idempotencyKey: requestKey }
+        )
       } else {
         await requestJson(
           `/api/build-public/${encodeURIComponent(channelId)}/conversation/${encodeURIComponent(activeSession.conversationId)}`,
@@ -941,6 +1149,7 @@ export function PublicChat({
             },
             body: JSON.stringify({
               text,
+              idempotencyKey: requestKey,
               metadata: {
                 context: messageContext,
                 ...(interaction ? { widgetInteraction: interaction } : {}),
@@ -950,17 +1159,30 @@ export function PublicChat({
         )
       }
     } catch (reason) {
-      setMessages((current) =>
-        current.filter((message) => message.id !== localMessageId)
-      )
-      if (!suggestedText && !interaction) updateDraft(text)
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Your message could not be sent."
-      )
-      sendingRef.current = false
-      setSending(false)
+      if (interaction) {
+        undoOptimistic()
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Your message could not be sent."
+        )
+      } else {
+        // A missing acknowledgement can mean the server accepted the message.
+        // Keep its key for retries; history reconciles it by the provider ID.
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === localMessageId && message.localSend
+              ? {
+                  ...message,
+                  pendingReply: false,
+                  localSend: { ...message.localSend, failed: true },
+                }
+              : message
+          )
+        )
+        sendingRef.current = false
+        setSending(false)
+      }
       return
     }
     try {
@@ -1118,13 +1340,28 @@ export function PublicChat({
     theme,
     onThemeChange: () => setVisitorTheme(theme === "light" ? "dark" : "light"),
   }
+  const messageDelivery = (id: string) => {
+    const message = messages.find((item) => item.id === id)
+    if (!message?.localSend?.failed) return null
+    return (
+      <ChatDeliveryStatus
+        label={copy.notSent}
+        retryLabel={copy.retryMessage}
+        disabled={waitingReply || loading || !session}
+        onRetry={() =>
+          void submit(undefined, message.text, undefined, undefined, message)
+        }
+      />
+    )
+  }
   const composer = (
     <footer
       hidden={unavailable}
       className={cn(
         "shrink-0 bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
         helpPage && "mx-auto w-full max-w-3xl bg-transparent",
-        helpPage && !messages.length && "p-0 pb-0"
+        helpPage && !messages.length && "p-0 pb-0",
+        variant === "whatsapp" && "p-2 pb-2"
       )}
     >
       {session &&
@@ -1147,7 +1384,7 @@ export function PublicChat({
           </div>
         </Notice>
       ) : null}
-      {error && messages.length ? (
+      {error && !unavailable ? (
         <div
           className="mb-3 flex items-start justify-between gap-3 rounded-md border border-destructive-border bg-destructive-background px-3 py-2 text-xs text-destructive"
           role="alert"
@@ -1234,6 +1471,7 @@ export function PublicChat({
           text={draft}
           onTextChange={updateDraft}
           running={waitingReply}
+          allowDraftWhileRunning
           disabled={unavailable}
           canSubmit={!!draft.trim() && !waitingReply && !loading && !!session}
           placeholder={appearance.inputPlaceholder}
@@ -1246,10 +1484,11 @@ export function PublicChat({
     </footer>
   )
 
+  const ChatSurface = previewAgentId || embedded ? "div" : "main"
   return (
     <ChatNavigationContext.Provider value={linkNavigation}>
       {challengeElement}
-      <main
+      <ChatSurface
         className={cn(
           "datool-chat-surface flex min-h-0 w-full justify-center bg-background text-foreground",
           previewAgentId ? "h-full" : "h-dvh",
@@ -1257,7 +1496,8 @@ export function PublicChat({
         )}
         lang={language}
         data-theme={theme}
-        style={bubbleStyle(appearance)}
+        data-chat-variant={variant}
+        style={variant === "whatsapp" ? undefined : bubbleStyle(appearance)}
       >
         {helpPage ? <HelpPageSidebar {...navigation} /> : null}
         <section
@@ -1269,7 +1509,12 @@ export function PublicChat({
             !helpPage && !previewAgentId && "border-x border-border shadow-sm"
           )}
         >
-          {helpPage ? (
+          {renderHeader ? (
+            renderHeader({
+              onNewChat: () => void resetConversation(),
+              disabled: loading || sending || !session,
+            })
+          ) : helpPage ? (
             <HelpPageToolbar {...navigation} />
           ) : (
             <header
@@ -1327,13 +1572,18 @@ export function PublicChat({
           <div
             role="log"
             ref={messageLogRef}
+            onScroll={(event) => {
+              const log = event.currentTarget
+              followLatest.current =
+                log.scrollHeight - log.scrollTop - log.clientHeight < 64
+              if (followLatest.current) setHasNewMessage(false)
+            }}
             tabIndex={0}
             aria-label={`Conversation with ${appearance.displayName}`}
             aria-live="polite"
             aria-busy={loading || waitingReply}
             className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset @min-[28rem]/chat:px-5"
           >
-            {loading ? <LoadingState compact label={copy.loading} /> : null}
             {unavailable ? (
               <div
                 role="alert"
@@ -1393,7 +1643,27 @@ export function PublicChat({
             ) : null}
             {messages.length > 0 || waitingReply ? (
               <React.Suspense
-                fallback={<LoadingState compact label={copy.loading} />}
+                fallback={
+                  <ChatTextTranscript
+                    renderMessageFooter={messageDelivery}
+                    messages={messages.map((message) => ({
+                      id: message.id,
+                      text: message.text ?? "",
+                      createdAt: message.createdAt,
+                      outgoing: message.direction === "inbound",
+                      author:
+                        message.direction === "outbound" &&
+                        message.metadata?.source === "human"
+                          ? message.author
+                          : undefined,
+                    }))}
+                    pendingReply={
+                      waitingReply ? (
+                        <ChatTypingIndicator label={copy.thinking} />
+                      ) : undefined
+                    }
+                  />
+                }
               >
                 <div
                   ref={onTranscriptMount}
@@ -1401,12 +1671,16 @@ export function PublicChat({
                 >
                   <MessageTranscript
                     key={session?.conversationId}
+                    getMessageKey={(message) =>
+                      messageKeys.get(message.id ?? "")
+                    }
                     pendingReply={
                       waitingReply ? (
                         <ChatTypingIndicator label={copy.thinking} />
                       ) : undefined
                     }
                     variant="customer"
+                    locale={language}
                     messages={messages
                       .filter(
                         (message) =>
@@ -1452,6 +1726,8 @@ export function PublicChat({
                           }
                     }
                     renderMessageFooter={(message) => {
+                      if (message.id && message.role === "user")
+                        return messageDelivery(message.id)
                       if (message.role !== "assistant" || !message.id)
                         return null
                       const messageId = message.id
@@ -1503,9 +1779,26 @@ export function PublicChat({
             ) : null}
             <div className="min-h-1" aria-hidden />
           </div>
+          {hasNewMessage ? (
+            <div className="flex shrink-0 justify-center py-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  followLatest.current = true
+                  setHasNewMessage(false)
+                  scrollToLatest()
+                }}
+              >
+                {copy.newMessage}
+                <ArrowDown className="size-3.5" aria-hidden />
+              </Button>
+            </div>
+          ) : null}
           {!helpPage || messages.length > 0 ? composer : null}
         </section>
-      </main>
+      </ChatSurface>
     </ChatNavigationContext.Provider>
   )
 }

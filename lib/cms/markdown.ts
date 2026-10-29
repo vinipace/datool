@@ -60,7 +60,11 @@ export function createCMSMarkdownRenderer(config: SanitizedConfig) {
           return document([
             heading(block.title),
             ...block.items.map((item) =>
-              document([heading(item.title, 3), text(item.description)])
+              document([
+                heading(item.title, 3),
+                text(item.description),
+                item.href ? link("Learn more", item.href) : null,
+              ])
             ),
           ])
         case "richContent":

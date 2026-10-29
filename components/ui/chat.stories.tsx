@@ -2,6 +2,11 @@ import { useState } from "react"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, fn, userEvent, within } from "storybook/test"
 import { Chat } from "./chat"
+import { Button } from "./button"
+import { ChatTextTranscript } from "./chat-text-transcript"
+import { MessageTranscript } from "./message-transcript"
+import { bubbleStyle } from "@/components/build/chat/bubble-style"
+import { chatBubbleSettingsSchema } from "@/src/lib/build/chat-bubble"
 
 const submitted = fn()
 
@@ -368,3 +373,98 @@ export const ShopifyRefund: Story = returnConfirmation(false)
 export const ShopifyExchange: Story = returnConfirmation(true)
 
 export const ShopifyResumeReturn: Story = returnConfirmation(false, true)
+
+const typographyMessages = [
+  {
+    id: "question",
+    outgoing: true,
+    text: "Please check the medium snowboard and tell me which colors are available.",
+  },
+  {
+    id: "answer",
+    outgoing: false,
+    author: { key: "teammate-1", name: "Marina", image: null },
+    createdAt: "2026-10-26T10:00:01Z",
+    text: "Medium is available in blue and black. Would you like to see both?",
+  },
+  {
+    id: "continuation",
+    outgoing: false,
+    author: { key: "teammate-1", name: "Marina", image: null },
+    createdAt: "2026-10-26T10:00:30Z",
+    text: "Both sizes are in stock.",
+  },
+]
+
+export const CustomerTextStability: Story = {
+  render: function TextStability() {
+    const [rich, setRich] = useState(false)
+    return (
+      <div className="space-y-4">
+        <Button onClick={() => setRich(true)}>Load formatted messages</Button>
+        {([14, 16, 18] as const).map((fontSize) => (
+          <section
+            key={fontSize}
+            aria-label={`${fontSize}px chat`}
+            className="datool-chat-surface w-80"
+            data-theme="light"
+            style={bubbleStyle(chatBubbleSettingsSchema.parse({ fontSize }))}
+          >
+            {rich ? (
+              <MessageTranscript
+                variant="customer"
+                messages={typographyMessages.map((message) => ({
+                  id: message.id,
+                  createdAt: message.createdAt,
+                  role: message.outgoing ? "user" : "assistant",
+                  author: message.author,
+                  metadata: message.author ? { source: "human" } : {},
+                  content: message.text,
+                  toolCalls: [],
+                }))}
+              />
+            ) : (
+              <ChatTextTranscript messages={typographyMessages} />
+            )}
+          </section>
+        ))}
+      </div>
+    )
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const measure = (size: number) => {
+      const section = within(
+        canvas.getByRole("region", { name: `${size}px chat` })
+      )
+      const bubbles = section.getAllByRole("article")
+      expect(section.getAllByText("Marina")).toHaveLength(1)
+      return {
+        fonts: typographyMessages.map((message) => {
+          const style = getComputedStyle(section.getByText(message.text))
+          return {
+            size: style.fontSize,
+            family: style.fontFamily,
+            lineHeight: style.lineHeight,
+          }
+        }),
+        heights: bubbles.map((bubble) => bubble.getBoundingClientRect().height),
+        gap:
+          bubbles[1].getBoundingClientRect().top -
+          bubbles[0].getBoundingClientRect().bottom,
+      }
+    }
+    const before = [16, 14, 18].map(measure)
+    for (const [index, size] of [16, 14, 18].entries())
+      for (const font of before[index].fonts)
+        await expect(font.size).toBe(`${size}px`)
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Load formatted messages" })
+    )
+    for (const [index, size] of [16, 14, 18].entries()) {
+      const after = measure(size)
+      for (const font of after.fonts) await expect(font.size).toBe(`${size}px`)
+      await expect(after).toEqual(before[index])
+    }
+  },
+}
