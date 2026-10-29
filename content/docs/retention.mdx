@@ -3,7 +3,7 @@ title: Retention and deletion
 description: What Datool expires automatically, what remains until deletion, and how to request removal.
 ---
 
-Version: 25 October 2026. Contact: **vini@vinipace.com**.
+Version: 29 October 2026. Contact: **vini@vinipace.com**.
 
 ## Current retention rules
 
@@ -11,10 +11,13 @@ Version: 25 October 2026. Contact: **vini@vinipace.com**.
 | --- | --- |
 | Ordinary Cloud traces and associated spans/scores | Core has a 90-day trace window; Pro has 365 days. Eligible traces are removed by bounded background sweeps, so expiry is not an exact-to-the-minute deletion guarantee. This applies to eligible direct-billing and Shopify-billing organizations. |
 | Traces referenced by evaluations, reviews or dataset items | Preserved as selected evidence; ordinary trace expiry excludes them. Removing the evidence references makes an otherwise eligible trace available to the expiry worker. |
-| Conversations, contacts, channel messages, knowledge, datasets and evaluation/review records | The trace window does not automatically expire these records. They remain until removed through available controls or an authorized deletion request. Administrators must choose what remains necessary. |
+| Inactive Cloud customer-service conversations and associated messages, action results and delivery copies | Eligible records are removed after 365 days without activity by bounded background sweeps. Open support cases, human handoffs, unfinished or uncertain actions, and conversations linked to curated evaluation evidence are preserved. These exceptions require a documented purpose and an annual necessity review. |
+| Inactive Cloud contacts | Removed after 365 days without activity when no remaining conversation, case, active campaign or other recent customer-service record needs them. Blocked contacts and unexpired suppression records are retained to respect opt-outs and prevent abuse; review their necessity annually. |
+| Knowledge, datasets, evaluations, selected evidence and administrator-created exports | Retained for their selected purpose until removed through available controls or an authorized request. Administrators must review necessity annually and remove unnecessary personal data. The conversation sweep does not erase independent exports or selected evidence. |
 | Ingestion queue copies | The Cloud worker sweeps completed jobs older than 24 hours and failed jobs older than 32 days, in bounded batches. Pending jobs and other application queues are separate. |
 | Account, billing and security records | Kept as needed to administer the account, meet applicable recordkeeping obligations, resolve disputes and investigate abuse. A removal request is reviewed for applicable obligations and exceptions. |
-| Operational logs and backups | Retention depends on the deployed logging and backup configuration. There is no published universal expiry or backup-deletion guarantee. Ask for the verified schedule before relying on one. |
+| Cloud recovery backups | Daily recovery sets are retained for 30 days, with weekly cleanup; normal expiry can take up to 37 days. If backups fail, the latest complete recovery set is preserved and the failure is handled as an incident. Completed erasures must be reapplied before a restored database is made available. |
+| Operational logs and self-hosted backups | Retention depends on the installation's logging and backup configuration. Ask for the verified schedule and scope before relying on one. |
 
 These are the current product rules, not a promise that every copy of personal
 data disappears after the trace window. A stopped worker or cleanup backlog can
@@ -32,6 +35,9 @@ Workspace administrators can use available record-management controls or contact
 workspace and the scope of the request, without sending passwords, keys or an
 unnecessary copy of the customer's data. We verify authority and coordinate any
 necessary merchant instructions, legal exceptions and applicable deadlines.
+Datool's operating target is to complete an authorized request within 30 days,
+or sooner when applicable law requires it. A shorter merchant retention period
+or a specific lawful exception must be agreed and documented before relying on it.
 
 Customer requests received from Shopify are recorded for handling. Receipt or
 acknowledgement of a webhook is not proof of a completed export or erasure. A
