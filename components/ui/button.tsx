@@ -26,6 +26,8 @@ const buttonVariants = cva(
           "border border-dashed border-border bg-transparent text-foreground-muted hover:bg-muted hover:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        sidebar:
+          "text-foreground-muted hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground aria-[current=page]:bg-sidebar-accent aria-[current=page]:text-sidebar-accent-foreground",
         "scorer-llm":
           "bg-scorer-llm text-scorer-llm-foreground hover:bg-scorer-llm/90",
         "scorer-library": "bg-selection text-selection-foreground hover:bg-selection/90",
