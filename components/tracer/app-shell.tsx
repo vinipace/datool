@@ -301,7 +301,7 @@ function AppSidebar({
             <Button
               asChild
               size="sm"
-              variant={mode === "observe" ? "secondary" : "ghost-muted"}
+              variant="sidebar"
             >
               <Link
                 href={prefix || "/"}
@@ -315,7 +315,7 @@ function AppSidebar({
             <Button
               asChild
               size="sm"
-              variant={mode === "build" ? "secondary" : "ghost-muted"}
+              variant="sidebar"
             >
               <Link
                 href={`${prefix}/build/agents`}
@@ -333,11 +333,11 @@ function AppSidebar({
       <SidebarContent>
         <AgentSidebarTarget>
           {!inSettings && !inInbox && (
-            <SidebarGroup>
+            <SidebarGroup spacing="compact">
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    className="h-7 text-xs"
+                    className="h-8 text-xs"
                     isActive={pathname === prefix || pathname === `${prefix}/`}
                     aria-current={
                       pathname === prefix || pathname === `${prefix}/`
@@ -363,7 +363,7 @@ function AppSidebar({
                   (group) => group.label !== "Build" || buildEnabled
                 )
             ).map((group) => (
-              <SidebarGroup key={group.label}>
+              <SidebarGroup key={group.label} spacing="compact">
                 <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
                 <SidebarMenu>
                   {group.routes.map((route) => {
@@ -380,7 +380,7 @@ function AppSidebar({
                         : route.icon
                     const link = (
                       <SidebarMenuButton
-                        className="h-7 text-xs group-data-[collapsible=icon]/sidebar:size-7"
+                        className="h-8 text-xs group-data-[collapsible=icon]/sidebar:size-8"
                         isActive={active}
                         onClick={closeMobileNavigation}
                         aria-current={active ? "page" : undefined}

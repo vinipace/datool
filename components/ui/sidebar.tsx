@@ -280,11 +280,18 @@ export function SidebarFooter({
 
 export function SidebarGroup({
   className,
+  spacing = "default",
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+}: React.ComponentPropsWithoutRef<"div"> & {
+  spacing?: "default" | "compact"
+}) {
   return (
     <div
-      className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+      className={cn(
+        "relative flex w-full min-w-0 flex-col p-2",
+        spacing === "compact" && "py-0 first:pt-2 last:pb-2",
+        className
+      )}
       data-sidebar="group"
       data-slot="sidebar-group"
       {...props}

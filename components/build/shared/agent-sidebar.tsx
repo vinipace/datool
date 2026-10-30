@@ -46,9 +46,9 @@ export function AgentSidebarTarget({ children }: React.PropsWithChildren) {
     <>
       <div
         ref={context?.setTarget}
-        className="peer flex flex-col gap-2 empty:hidden"
+        className="peer flex flex-col gap-0 empty:hidden"
       />
-      <div className="flex flex-col gap-2 peer-[:not(:empty)]:hidden">
+      <div className="flex flex-col gap-0 peer-[:not(:empty)]:hidden">
         {children}
       </div>
     </>
