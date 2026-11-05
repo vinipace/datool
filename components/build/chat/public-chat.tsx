@@ -1532,7 +1532,6 @@ export function PublicChat({
                   <h1 className="truncate text-sm font-semibold">
                     {appearance.displayName}
                   </h1>
-                  <p className="text-xs opacity-70">{copy.assistant}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1">

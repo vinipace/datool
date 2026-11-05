@@ -12,7 +12,9 @@ export function compileWidgetCode(source: string): string {
   const code = source.trim().startsWith("<")
     ? `export default function Widget({ data }) { return (${source}); }`
     : source
-  return compileModule(code, "widget.jsx")
+  // Module declarations may shadow implicit runtime helpers, just as they can
+  // shadow imports in a normal module. Keep them outside the injected scope.
+  return `(function () {\n${compileModule(code, "widget.jsx")}\n})();`
 }
 
 export function compileWidgetSchema(source: string): string {
