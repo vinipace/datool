@@ -15,6 +15,7 @@ import { defaultScorer } from "@/src/lib/tracer/scorers"
 import { defaultLibraryScorer } from "@/src/lib/tracer/scorer-libraries"
 import type { EvalRunDetail } from "@/src/lib/tracer/contracts"
 import { agentJourneySchema } from "@/src/lib/build/agent-journey"
+import { parseCreateEvalRun } from "@/src/server/tracer/validation"
 import { createKnowledgeSource } from "@/src/server/build/knowledge/service"
 
 const pickerCode = `import {useState} from "react"
@@ -252,13 +253,18 @@ test("agent journey evals drive controls and fence publishing by current cases a
     const functionalOnly = await completed(
       service,
       await run(
-        service.createEvalRun({
-          agentId: agent.id,
-          datasetId: dataset.id,
-          evaluatorIds: [],
-        })
+        service.createEvalRun(
+          parseCreateEvalRun({
+            agentId: agent.id,
+            datasetId: dataset.id,
+            evaluatorIds: [],
+          })
+        )
       )
     )
+    expect(() =>
+      parseCreateEvalRun({ datasetId: dataset.id, evaluatorIds: [] })
+    ).toThrow()
     expect((await gate(functionalOnly.id)).passed).toBe(true)
     expect(
       (
