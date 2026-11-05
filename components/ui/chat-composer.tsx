@@ -9,7 +9,7 @@ import { Textarea } from "./textarea"
 export function ChatTypingIndicator({ label }: { label: string }) {
   return (
     <div
-      className="flex items-center gap-1.5 rounded-full bg-muted px-4 py-3 text-foreground-muted"
+      className="flex w-fit items-center gap-1.5 rounded-full bg-muted px-4 py-3 text-foreground-muted"
       role="status"
     >
       <span className="sr-only">{label}</span>

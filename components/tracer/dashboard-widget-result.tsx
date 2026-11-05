@@ -129,6 +129,7 @@ export function WidgetResult({
         />
       ) : widget.type === "bar" && dimensions.length ? (
         <DashboardBarChart
+          variant={widget.barStyle}
           baseline={baseline}
           highlights={highlights}
           references={references}

@@ -11,31 +11,31 @@ export const agentPages = [
   {
     href: "/agents/whatsapp-sales",
     name: "Sales on WhatsApp",
-    summary: "Recommends products and closes sales in the chat.",
+    summary: "Answer product questions and guide shoppers to checkout.",
     Icon: MessageCircle,
   },
   {
     href: "/agents/website-sales",
     name: "Sales on your website",
-    summary: "A chat widget that helps visitors find and buy.",
+    summary: "Help shoppers choose before they leave your store.",
     Icon: ShoppingBag,
   },
   {
     href: "/agents/whatsapp-support",
     name: "Support on WhatsApp",
-    summary: "Answers from your policies and checks your systems.",
+    summary: "Handle repeat questions and check connected order data.",
     Icon: LifeBuoy,
   },
   {
     href: "/agents/website-support",
     name: "Support on your website",
-    summary: "A help widget that troubleshoots and hands off.",
+    summary: "Walk customers through a fix, then hand off with context.",
     Icon: CircleHelp,
   },
   {
     href: "/agents/product-guidance",
     name: "Product guide",
-    summary: "Onboards and guides users inside your app.",
+    summary: "Help users finish the task they signed up for.",
     Icon: Compass,
   },
 ]

@@ -21,16 +21,16 @@ const chapters = {
   discover: ["dashboards", "alerts"],
 } as const
 const questions = {
-  build: "How do I turn a prompt into something that works?",
+  build: "Can it handle the questions my customers actually ask?",
   observe: "Why did my AI give that answer?",
   evaluate: "Did my change actually make things better?",
   discover: "What needs my attention next?",
 }
 const takeaways = {
   build: [
-    "A version you can name.",
-    "A result you can inspect.",
-    "A change you can test.",
+    "Answers from your business content.",
+    "Actions connected to your systems.",
+    "A team that can take over.",
   ],
   observe: [
     "The input that started it.",

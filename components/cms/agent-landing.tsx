@@ -212,6 +212,9 @@ export function AgentLandingPage({ page }: { page: AgentLandingView }) {
             <motion.div className={styles.actions} {...rise(0.5)}>
               <WhatsAppAction whatsapp={whatsapp} label={hero.primaryLabel} />
             </motion.div>
+            <p className="mt-3 max-w-sm text-sm text-foreground-muted">
+              Demo with your content and a real customer question.
+            </p>
             {hero.scrollLabel && (
               <motion.a
                 href="#story"
@@ -222,6 +225,10 @@ export function AgentLandingPage({ page }: { page: AgentLandingView }) {
                 <ArrowDown aria-hidden="true" />
               </motion.a>
             )}
+            <p className="mt-3 max-w-sm text-xs text-foreground-muted">
+              Example conversation. Brands, policies and results are fictional.
+              Actions require the matching integrations.
+            </p>
           </section>
         }
       />

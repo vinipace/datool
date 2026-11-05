@@ -8,6 +8,13 @@ import {
   compileWidgetSchema,
 } from "../lib/build/widget-compiler"
 import "./widget-runtime.css"
+import "./widget-controls.css"
+import {
+  WidgetChoiceGroup,
+  WidgetDatePicker,
+  type ChoiceGroupProps,
+  type DatePickerProps,
+} from "./widget-controls"
 import { checkWidgetPreview } from "./widget-preview-check"
 import type { WidgetComponentName } from "../lib/build/widget-components"
 
@@ -218,7 +225,9 @@ function Form({
               <select {...common}>
                 <option value="">{context.t("Select…")}</option>
                 {config.options?.map((option) => (
-                  <option key={option} value={option}>{context.t(option)}</option>
+                  <option key={option} value={option}>
+                    {context.t(option)}
+                  </option>
                 ))}
               </select>
             ) : (
@@ -252,6 +261,33 @@ function get(value: unknown, path: string): unknown {
       value
     )
 }
+function ChoiceGroup(props: ChoiceGroupProps) {
+  const context = React.useContext(Context)
+  return (
+    <WidgetChoiceGroup
+      {...props}
+      label={context.t(props.label)}
+      options={props.options.map((option) => ({
+        ...option,
+        label: context.t(option.label),
+        description: option.description
+          ? context.t(option.description)
+          : undefined,
+      }))}
+      disabled={props.disabled || !context.enabled}
+    />
+  )
+}
+function DatePicker(props: DatePickerProps) {
+  const context = React.useContext(Context)
+  return (
+    <WidgetDatePicker
+      {...props}
+      label={context.t(props.label)}
+      disabled={props.disabled || !context.enabled}
+    />
+  )
+}
 function format(template: string, data: unknown) {
   return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, path: string) => {
     const value = get(data, path.trim())
@@ -272,6 +308,8 @@ const components = {
   Form,
   List,
   Image,
+  ChoiceGroup,
+  DatePicker,
   get,
   format,
 } satisfies Record<WidgetComponentName, unknown> & {
@@ -367,8 +405,7 @@ class Boundary extends React.Component<
 }
 type WidgetProps = { data: unknown; locale: string; t: (key: string) => string }
 let cached:
-  | { code: string; Component: React.ComponentType<WidgetProps> }
-  | undefined
+  { code: string; Component: React.ComponentType<WidgetProps> } | undefined
 let cachedSchema: { code: string; schema: z.ZodType } | undefined
 window.addEventListener("message", (event) => {
   if (event.source !== parent || event.data?.type !== "render-widget") return

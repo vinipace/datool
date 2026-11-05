@@ -1,3 +1,4 @@
+import { agentDirectoryCatalog } from "@/src/server/metrics/agent-directory"
 import { evalConfigurationChanges } from "@/src/lib/tracer/eval-comparison"
 import { collectEvalAttributions, saveEvalAttributions } from "./eval-attribution"
 import { resolveRunIteration } from "./eval-iteration"
@@ -112,6 +113,7 @@ import type {
   SavedViewData,
   SavedViewDataQuery,
   Session,
+  SessionActivity,
   SessionDetail,
   Span,
   SpanOverview,
@@ -642,7 +644,20 @@ export class TracerService {
     total?: number
   }> {
     return tracerEffect(() =>
-      this.read((service) => service.listSessionsUnsafe(options))
+      this.read(async (service) => {
+        const page = await service.listSessionsUnsafe(options)
+        return { ...page, items: page.items.map(({ conversation, ...session }) => { void conversation; return session }) }
+      })
+    )
+  }
+
+  listSessionActivity(options: ListOptions = {}): TracerEffect<{
+    items: SessionActivity[]
+    nextCursor: string | null
+    total?: number
+  }> {
+    return tracerEffect(() =>
+      this.read((service) => service.listSessionsUnsafe(options, true))
     )
   }
 
@@ -1208,6 +1223,13 @@ export class TracerService {
     )
   }
 
+  queryAgentDirectory(input: unknown): TracerEffect<SemanticResult> {
+    return Effect.mapError(
+      createSemanticQueryService({ catalog: agentDirectoryCatalog, database: this.database }).query(input),
+      semanticErrorToTracerError
+    )
+  }
+
   querySemanticMetrics(input: unknown): TracerEffect<SemanticResult> {
     return Effect.mapError(
       this.semanticQueryService.query(input),
@@ -1242,14 +1264,59 @@ export class TracerService {
     }
   }
 
-  private async listSessionsUnsafe(options: ListOptions) {
-    const relation = sql`select id, name, attributes_json as metadata, attributes_json as attributes,
+  private async listSessionsUnsafe(options: ListOptions, includeConversations = false) {
+    const sessionsRelation = sql`select id, name, attributes_json as metadata, attributes_json as attributes,
       created_at as "createdAt", updated_at as "updatedAt",
       (select count(*) from traces t where t.project_id = ${this.projectId} and t.session_id = sessions.id) as "traceCount"
       from sessions where project_id = ${this.projectId}`
+    // Build uses the conversation ID as the trace session ID. Fold that pair
+    // into one row before filtering, counting or paginating the collection.
+    const relation = includeConversations ? sql`
+      select s.id, s.name, s.metadata::jsonb, s.attributes::jsonb,
+        s."createdAt"::timestamptz, s."updatedAt"::timestamptz, s."traceCount", null::jsonb as conversation
+      from (${sessionsRelation}) s
+      where not exists (select 1 from build_conversations c
+        where c.project_id = ${this.projectId} and c.id = s.id)
+      union all
+      select c.id,
+        coalesce(nullif(ticket.subject, ''), nullif(left(preview.subject, 500), ''),
+          s.name, a.name || ' · ' || c.channel) as name,
+        coalesce(s.attributes_json::jsonb, c.metadata_json) as metadata,
+        coalesce(s.attributes_json::jsonb, c.metadata_json) as attributes,
+        least(c.created_at, s.created_at::timestamptz) as "createdAt",
+        greatest(c.updated_at, s.updated_at::timestamptz) as "updatedAt",
+        (select count(*) from traces t where t.project_id = c.project_id and t.session_id = c.id) as "traceCount",
+        jsonb_build_object('agentId', c.agent_id, 'agentName', a.name,
+          'channel', c.channel, 'status', c.status,
+          'contactId', contact.id, 'contactName', contact.display_name,
+          'ticketId', ticket.id, 'ticketStatus', ticket.status, 'ticketVersion', ticket.version) as conversation
+      from build_conversations c
+      left join sessions s on s.project_id = c.project_id and s.id = c.id
+      left join build_agents a on a.project_id = c.project_id and a.id = c.agent_id
+      left join build_inbox_tickets ticket on ticket.project_id = c.project_id and ticket.conversation_id = c.id
+      left join build_contacts contact on contact.project_id = c.project_id
+        and contact.id = coalesce(ticket.contact_id, c.metadata_json->>'contactId')
+      left join lateral (
+        select coalesce(
+          (select m.content_json #>> '{}' from build_conversation_messages m
+            where m.project_id = c.project_id and m.conversation_id = c.id
+              and m.role = 'user' and jsonb_typeof(m.content_json) = 'string'
+            order by m.ordinal limit 1),
+          (select m.content_json->>'text' from build_channel_message m
+            where m.project_id = c.project_id and m.conversation_id = c.id and m.direction = 'inbound'
+            order by m.created_at, m.id limit 1)
+        ) as subject
+      ) preview on true
+      where c.project_id = ${this.projectId}
+    ` : sql`select s.*, null::jsonb as conversation from (${sessionsRelation}) s`
     const fields = {
       id: { value: sql`id`, type: "string" as const },
       name: { value: sql`name`, type: "string" as const },
+      agentId: { value: sql`conversation->>'agentId'`, type: "string" as const },
+      agentName: { value: sql`conversation->>'agentName'`, type: "string" as const },
+      channel: { value: sql`conversation->>'channel'`, type: "string" as const },
+      status: { value: sql`conversation->>'status'`, type: "string" as const },
+      contactName: { value: sql`conversation->>'contactName'`, type: "string" as const },
       metadata: { value: sql`metadata`, type: "json" as const },
       attributes: { value: sql`attributes`, type: "json" as const },
       createdAt: { value: sql`"createdAt"`, type: "date" as const },
@@ -1257,7 +1324,7 @@ export class TracerService {
       traceCount: { value: sql`"traceCount"`, type: "number" as const },
     }
     const filter = collectionSqlFilter("sessions", options.filter, fields)
-    const page = await collectionSqlPage<Session & { attributes: string }>(
+    const page = await collectionSqlPage<SessionActivity & { attributes: string }>(
       this.database,
       sql`select * from (${relation}) summaries where ${filter}`,
       options,
@@ -1272,6 +1339,7 @@ export class TracerService {
         updatedAt: row.updatedAt,
         attributes: fromObjectJson(row.attributes),
         traceCount: Number(row.traceCount),
+        conversation: row.conversation,
       })),
     }
   }

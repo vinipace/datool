@@ -1,10 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { useState } from "react"
+import { delay } from "msw"
 import { Button } from "@/components/ui/button"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import { StorybookProjectFrame } from "../../.storybook/component-frame"
 import { traceDetail } from "../../.storybook/scenarios/traces/fixtures"
 import { TraceInspector } from "./trace-inspector"
+import { createTraceDetailLoader } from "./trace-detail-loader"
 import { ComputedColumnDetails } from "./eval-computed-columns"
 
 function InspectorExample() {
@@ -30,6 +32,37 @@ const meta = {
 
 export default meta
 type Story = StoryObj<typeof InspectorExample>
+
+const pendingTraceLoader = {
+  ...createTraceDetailLoader(traceDetail.id, traceDetail),
+  overview: async () => {
+    await delay("infinite")
+    return traceDetail
+  },
+}
+
+export const LightMode: Story = {
+  parameters: { themes: { themeOverride: "light" } },
+  render: () => (
+    <div className="h-screen max-w-[520px] bg-background">
+      <TraceInspector mode="panel" initialTab="trace" snapshot={traceDetail} traceId={traceDetail.id} />
+    </div>
+  ),
+}
+
+export const LightModeLoading: Story = {
+  parameters: { themes: { themeOverride: "light" } },
+  render: () => (
+    <div className="h-screen max-w-[520px] bg-background">
+      <TraceInspector mode="panel" initialTab="trace" loader={pendingTraceLoader} traceId={traceDetail.id} />
+    </div>
+  ),
+}
+
+export const DarkModeLoading: Story = {
+  ...LightModeLoading,
+  parameters: { themes: { themeOverride: "dark" } },
+}
 
 function RunningInspectorExample() {
   const [snapshot] = useState(() => {

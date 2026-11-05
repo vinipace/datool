@@ -1,4 +1,7 @@
-import { checkCollectionPanel, checkCompactCollectionPanel } from "../../.storybook/collection-panel-checks"
+import {
+  checkCollectionPanel,
+  checkCompactCollectionPanel,
+} from "../../.storybook/collection-panel-checks"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 import { delay, http, HttpResponse } from "msw"
@@ -10,7 +13,16 @@ import {
   sessionHandlers,
   traceHandlers,
 } from "../../.storybook/scenarios/traces/handlers"
-import { envelope, list, storybookSessionDetail, storybookSessionId, traceDetail, traceOverview, traceRows, traceSpans } from "../../.storybook/scenarios/traces/fixtures"
+import {
+  envelope,
+  list,
+  storybookSessionDetail,
+  storybookSessionId,
+  traceDetail,
+  traceOverview,
+  traceRows,
+  traceSpans,
+} from "../../.storybook/scenarios/traces/fixtures"
 import { SessionDetailPage, SessionsPage } from "./sessions-page"
 
 const meta = {
@@ -18,18 +30,46 @@ const meta = {
   component: SessionsPage,
   parameters: {
     layout: "fullscreen",
-    msw: { handlers: [
-      http.get("/api/traces/:id/overview", ({ params }) => {
-        const trace = traceRows.find(trace => trace.id === params.id)!
-        return HttpResponse.json(envelope({ ...traceOverview, ...trace,
-          spans: params.id === traceOverview.id ? traceOverview.spans : [],
-        }))
-      }),
-      http.get("/api/traces/:id/payload", ({ params }) => HttpResponse.json(envelope(traceRows.find(trace => trace.id === params.id)))),
-      http.get("/api/traces/:id/spans", ({ params }) => HttpResponse.json(envelope(list(params.id === traceOverview.id ? traceSpans : [])))),
-      http.get("/api/traces/:id/scores", ({ params }) => HttpResponse.json(envelope(list(params.id === traceOverview.id ? traceDetail.scores.map((score, index) => ({ ...score, id: String(index) })) : [])))),
-      ...sessionHandlers, ...traceHandlers,
-    ] },
+    msw: {
+      handlers: [
+        http.get("/api/traces/:id/overview", ({ params }) => {
+          const trace = traceRows.find((trace) => trace.id === params.id)!
+          return HttpResponse.json(
+            envelope({
+              ...traceOverview,
+              ...trace,
+              spans: params.id === traceOverview.id ? traceOverview.spans : [],
+            })
+          )
+        }),
+        http.get("/api/traces/:id/payload", ({ params }) =>
+          HttpResponse.json(
+            envelope(traceRows.find((trace) => trace.id === params.id))
+          )
+        ),
+        http.get("/api/traces/:id/spans", ({ params }) =>
+          HttpResponse.json(
+            envelope(list(params.id === traceOverview.id ? traceSpans : []))
+          )
+        ),
+        http.get("/api/traces/:id/scores", ({ params }) =>
+          HttpResponse.json(
+            envelope(
+              list(
+                params.id === traceOverview.id
+                  ? traceDetail.scores.map((score, index) => ({
+                      ...score,
+                      id: String(index),
+                    }))
+                  : []
+              )
+            )
+          )
+        ),
+        ...sessionHandlers,
+        ...traceHandlers,
+      ],
+    },
     nextjs: {
       navigation: {
         pathname: `${storybookProject.prefix}/sessions`,
@@ -37,14 +77,16 @@ const meta = {
       },
     },
   },
-  loaders: [async () => {
-    localStorage.removeItem("datool:session:inspector-tab")
-    localStorage.removeItem("datool:trace-inspector:detail-tab")
-    return {}
-  }],
-  render: () => (
+  loaders: [
+    async () => {
+      localStorage.removeItem("datool:session:inspector-tab")
+      localStorage.removeItem("datool:trace-inspector:detail-tab")
+      return {}
+    },
+  ],
+  render: (args) => (
     <StorybookProjectFrame title="Sessions">
-      <SessionsPage />
+      <SessionsPage {...args} />
     </StorybookProjectFrame>
   ),
 } satisfies Meta<typeof SessionsPage>
@@ -60,7 +102,12 @@ export const Collection: Story = {
       canvas.findByText("Invoice support conversation")
     ).resolves.toBeVisible()
     await expect(canvas.getByRole("img", { name: "session" })).toBeVisible()
-    await expect(canvas.getByRole("link", { name: /Invoice support conversation/ })).toHaveAttribute("href", `${storybookProject.prefix}/sessions/${storybookSessionId}`)
+    await expect(
+      canvas.getByRole("link", { name: /Invoice support conversation/ })
+    ).toHaveAttribute(
+      "href",
+      `${storybookProject.prefix}/sessions/${storybookSessionId}`
+    )
     await userEvent.click(
       canvas.getByRole("checkbox", { name: "Select all visible sessions" })
     )
@@ -91,86 +138,185 @@ export const Detail: Story = {
         name: "Invoice support conversation",
       })
     ).resolves.toBeVisible()
-    const conversation = within(canvas.getByRole("region", { name: "Session conversation" }))
-    await expect(conversation.findByText("Where is my latest invoice?")).resolves.toBeVisible()
-    await expect(conversation.findByText("Your September invoice is ready in the billing portal.")).resolves.toBeVisible()
+    const conversation = within(
+      canvas.getByRole("region", { name: "Session conversation" })
+    )
+    await expect(
+      conversation.findByText("Where is my latest invoice?")
+    ).resolves.toBeVisible()
+    await expect(
+      conversation.findByText(
+        "Your September invoice is ready in the billing portal."
+      )
+    ).resolves.toBeVisible()
     await expect(canvas.queryByText("Session ID")).not.toBeInTheDocument()
     await userEvent.click(canvas.getByRole("button", { name: "Details" }))
     await expect(canvas.findByText("Session ID")).resolves.toBeVisible()
     await userEvent.click(canvas.getByRole("button", { name: "Metadata" }))
-    await expect(canvas.findByRole("heading", { name: "Session attributes" })).resolves.toBeVisible()
+    await expect(
+      canvas.findByRole("heading", { name: "Session attributes" })
+    ).resolves.toBeVisible()
     await userEvent.click(canvas.getByRole("button", { name: "Overview" }))
-    const hierarchy = within(canvas.getByRole("region", { name: "Session trace hierarchy" }))
-    await expect(hierarchy.getByRole("button", { name: /^session Invoice support conversation/ })).toHaveAttribute("aria-pressed", "true")
-    await expect(hierarchy.getByRole("button", { name: /^agent Summarize account history/ })).toBeVisible()
-    await userEvent.click(hierarchy.getByRole("button", { name: /^llm Generate invoice response/ }))
-    await expect(canvas.findByRole("heading", { name: "Generate invoice response" })).resolves.toBeVisible()
-    await expect(canvas.findByText("Where is my latest invoice?")).resolves.toBeVisible()
-    await userEvent.click(hierarchy.getByRole("button", { name: /^agent Summarize account history/ }))
-    await expect(canvas.findByRole("heading", { name: "Summarize account history" })).resolves.toBeVisible()
-    await expect(canvas.findByText(/Summarize the account history/)).resolves.toBeVisible()
-    await userEvent.click(hierarchy.getByRole("button", { name: "Collapse Invoice support conversation" }))
-    await expect(hierarchy.queryByRole("button", { name: /^llm Generate invoice response/ })).not.toBeInTheDocument()
-    const expand = hierarchy.getByRole("button", { name: "Expand Invoice support conversation" })
+    const hierarchy = within(
+      canvas.getByRole("region", { name: "Session trace hierarchy" })
+    )
+    await expect(
+      hierarchy.getByRole("button", {
+        name: /^session Invoice support conversation/,
+      })
+    ).toHaveAttribute("aria-pressed", "true")
+    await expect(
+      hierarchy.getByRole("button", {
+        name: /^agent Summarize account history/,
+      })
+    ).toBeVisible()
+    await userEvent.click(
+      hierarchy.getByRole("button", { name: /^llm Generate invoice response/ })
+    )
+    await expect(
+      canvas.findByRole("heading", { name: "Generate invoice response" })
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.findByText("Where is my latest invoice?")
+    ).resolves.toBeVisible()
+    await userEvent.click(
+      hierarchy.getByRole("button", {
+        name: /^agent Summarize account history/,
+      })
+    )
+    await expect(
+      canvas.findByRole("heading", { name: "Summarize account history" })
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.findByText(/Summarize the account history/)
+    ).resolves.toBeVisible()
+    await userEvent.click(
+      hierarchy.getByRole("button", {
+        name: "Collapse Invoice support conversation",
+      })
+    )
+    await expect(
+      hierarchy.queryByRole("button", {
+        name: /^llm Generate invoice response/,
+      })
+    ).not.toBeInTheDocument()
+    const expand = hierarchy.getByRole("button", {
+      name: "Expand Invoice support conversation",
+    })
     expand.focus()
     await userEvent.keyboard("{Enter}")
-    await expect(hierarchy.findByRole("button", { name: /^llm Generate invoice response/ })).resolves.toBeVisible()
-    await userEvent.click(hierarchy.getByRole("button", { name: /^session Invoice support conversation/ }))
-    await expect(canvas.findByRole("heading", { name: "Invoice support conversation" })).resolves.toBeVisible()
-    await expect(canvas.getByRole("link", { name: "All sessions" })).toHaveAttribute("href", `${storybookProject.prefix}/sessions`)
+    await expect(
+      hierarchy.findByRole("button", { name: /^llm Generate invoice response/ })
+    ).resolves.toBeVisible()
+    await userEvent.click(
+      hierarchy.getByRole("button", {
+        name: /^session Invoice support conversation/,
+      })
+    )
+    await expect(
+      canvas.findByRole("heading", { name: "Invoice support conversation" })
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.getByRole("link", { name: "All sessions" })
+    ).toHaveAttribute("href", `${storybookProject.prefix}/sessions`)
     await userEvent.click(canvas.getByRole("button", { name: "Evaluators" }))
-    await expect(canvas.findByText("Answer groundedness")).resolves.toBeVisible()
+    await expect(
+      canvas.findByText("Answer groundedness")
+    ).resolves.toBeVisible()
   },
 }
 
 export const DeepLinkedSpan: Story = {
   ...Detail,
   parameters: {
-    nextjs: { navigation: {
-      pathname: `${storybookProject.prefix}/sessions/${storybookSessionId}`,
-      query: { trace: traceOverview.id, span: traceSpans[1].id },
-    } },
+    nextjs: {
+      navigation: {
+        pathname: `${storybookProject.prefix}/sessions/${storybookSessionId}`,
+        query: { trace: traceOverview.id, span: traceSpans[1].id },
+      },
+    },
   },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).findByRole("heading", { name: "Generate invoice response" })).resolves.toBeVisible()
+    await expect(
+      within(canvasElement).findByRole("heading", {
+        name: "Generate invoice response",
+      })
+    ).resolves.toBeVisible()
   },
 }
 
 export const EmptySession: Story = {
   ...Detail,
-  parameters: { ...Detail.parameters, msw: { handlers: [
-    http.get("/api/sessions/:id", () => HttpResponse.json(envelope({ ...storybookSessionDetail, traceCount: 0, traces: [] }))),
-    http.get("/api/traces", () => HttpResponse.json(envelope(list([])))),
-  ] } },
+  parameters: {
+    ...Detail.parameters,
+    msw: {
+      handlers: [
+        http.get("/api/sessions/:id", () =>
+          HttpResponse.json(
+            envelope({ ...storybookSessionDetail, traceCount: 0, traces: [] })
+          )
+        ),
+        http.get("/api/traces", () => HttpResponse.json(envelope(list([])))),
+      ],
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.findByText("No traces are linked to this session yet.")).resolves.toBeVisible()
-    await expect(canvas.getByRole("region", { name: "Session trace hierarchy" })).toBeVisible()
+    await expect(
+      canvas.findByText("No traces are linked to this session yet.")
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.getByRole("region", { name: "Session trace hierarchy" })
+    ).toBeVisible()
   },
 }
 
 export const FailedSession: Story = {
   ...Detail,
-  parameters: { ...Detail.parameters, msw: { handlers: [
-    http.get("/api/sessions/:id", () => HttpResponse.json({ error: { message: "Session unavailable" } }, { status: 503 })),
-    http.get("/api/traces", () => HttpResponse.json(envelope(list([])))),
-  ] } },
+  parameters: {
+    ...Detail.parameters,
+    msw: {
+      handlers: [
+        http.get("/api/sessions/:id", () =>
+          HttpResponse.json(
+            { error: { message: "Session unavailable" } },
+            { status: 503 }
+          )
+        ),
+        http.get("/api/traces", () => HttpResponse.json(envelope(list([])))),
+      ],
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.findByText("Session unavailable")).resolves.toBeVisible()
+    await expect(
+      canvas.findByText("Session unavailable")
+    ).resolves.toBeVisible()
     await expect(canvas.getByRole("button", { name: /retry/i })).toBeVisible()
   },
 }
 
 export const FailedConversation: Story = {
   ...Detail,
-  parameters: { ...Detail.parameters, msw: { handlers: [
-    http.get("/api/traces/:id/payload", () => HttpResponse.json({ error: { message: "Conversation unavailable" } }, { status: 503 })),
-    ...meta.parameters.msw.handlers,
-  ] } },
+  parameters: {
+    ...Detail.parameters,
+    msw: {
+      handlers: [
+        http.get("/api/traces/:id/payload", () =>
+          HttpResponse.json(
+            { error: { message: "Conversation unavailable" } },
+            { status: 503 }
+          )
+        ),
+        ...meta.parameters.msw.handlers,
+      ],
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.findByRole("alert")).resolves.toHaveTextContent("Could not load the complete conversation")
+    await expect(canvas.findByRole("alert")).resolves.toHaveTextContent(
+      "Could not load the complete conversation"
+    )
     await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible()
     await userEvent.click(canvas.getByRole("button", { name: "Details" }))
     await expect(canvas.findByText("Session ID")).resolves.toBeVisible()
@@ -179,58 +325,234 @@ export const FailedConversation: Story = {
 
 export const LoadingConversation: Story = {
   ...Detail,
-  parameters: { ...Detail.parameters, msw: { handlers: [
-    http.get("/api/traces/:id/payload", async ({ params }) => {
-      await delay(500)
-      return HttpResponse.json(envelope(traceRows.find(trace => trace.id === params.id)))
-    }),
-    ...meta.parameters.msw.handlers,
-  ] } },
+  parameters: {
+    ...Detail.parameters,
+    msw: {
+      handlers: [
+        http.get("/api/traces/:id/payload", async ({ params }) => {
+          await delay(500)
+          return HttpResponse.json(
+            envelope(traceRows.find((trace) => trace.id === params.id))
+          )
+        }),
+        ...meta.parameters.msw.handlers,
+      ],
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.findByText("Loading session conversation…")).resolves.toBeVisible()
-    await expect(canvas.findByText("Where is my latest invoice?")).resolves.toBeVisible()
+    await expect(
+      canvas.findByText("Loading session conversation…")
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.findByText("Where is my latest invoice?")
+    ).resolves.toBeVisible()
   },
 }
 
 export const NarrowDetail: Story = {
   ...Detail,
-  render: () => <div className="w-[390px] max-w-full"><StorybookProjectFrame title="Sessions"><SessionDetailPage sessionId={storybookSessionId} /></StorybookProjectFrame></div>,
+  render: () => (
+    <div className="w-[390px] max-w-full">
+      <StorybookProjectFrame title="Sessions">
+        <SessionDetailPage sessionId={storybookSessionId} />
+      </StorybookProjectFrame>
+    </div>
+  ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const page = within(canvasElement.ownerDocument.body)
-    await expect(canvas.findByText("Where is my latest invoice?")).resolves.toBeVisible()
+    await expect(
+      canvas.findByText("Where is my latest invoice?")
+    ).resolves.toBeVisible()
     await expect(canvas.queryByRole("separator")).not.toBeInTheDocument()
-    await expect(canvas.queryByRole("region", { name: "Session trace hierarchy" })).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole("region", { name: "Session trace hierarchy" })
+    ).not.toBeInTheDocument()
     const trigger = canvas.getByRole("button", { name: "Browse traces" })
     await userEvent.click(trigger)
-    let drawer = within(await page.findByRole("dialog", { name: "Trace navigator" }))
-    await userEvent.click(drawer.getByRole("button", { name: "Collapse Invoice support conversation" }))
-    await expect(drawer.queryByRole("button", { name: /^llm Generate invoice response/ })).not.toBeInTheDocument()
-    await userEvent.click(drawer.getByRole("button", { name: "Expand Invoice support conversation" }))
-    await userEvent.click(drawer.getByRole("button", { name: /^llm Generate invoice response/ }))
-    await waitFor(() => expect(page.queryByRole("dialog")).not.toBeInTheDocument())
-    await expect(canvas.findByRole("heading", { name: "Generate invoice response" })).resolves.toBeVisible()
+    let drawer = within(
+      await page.findByRole("dialog", { name: "Trace navigator" })
+    )
+    await userEvent.click(
+      drawer.getByRole("button", {
+        name: "Collapse Invoice support conversation",
+      })
+    )
+    await expect(
+      drawer.queryByRole("button", { name: /^llm Generate invoice response/ })
+    ).not.toBeInTheDocument()
+    await userEvent.click(
+      drawer.getByRole("button", {
+        name: "Expand Invoice support conversation",
+      })
+    )
+    await userEvent.click(
+      drawer.getByRole("button", { name: /^llm Generate invoice response/ })
+    )
+    await waitFor(() =>
+      expect(page.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+    await expect(
+      canvas.findByRole("heading", { name: "Generate invoice response" })
+    ).resolves.toBeVisible()
     await expect(trigger).toHaveFocus()
 
     await userEvent.click(trigger)
-    drawer = within(await page.findByRole("dialog", { name: "Trace navigator" }))
-    await userEvent.click(drawer.getByRole("button", { name: /^session Invoice support conversation/ }))
-    await waitFor(() => expect(page.queryByRole("dialog")).not.toBeInTheDocument())
-    await expect(canvas.findByRole("heading", { name: "Invoice support conversation" })).resolves.toBeVisible()
-    await expect(canvas.findByText("Where is my latest invoice?")).resolves.toBeVisible()
+    drawer = within(
+      await page.findByRole("dialog", { name: "Trace navigator" })
+    )
+    await userEvent.click(
+      drawer.getByRole("button", {
+        name: /^session Invoice support conversation/,
+      })
+    )
+    await waitFor(() =>
+      expect(page.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+    await expect(
+      canvas.findByRole("heading", { name: "Invoice support conversation" })
+    ).resolves.toBeVisible()
+    await expect(
+      canvas.findByText("Where is my latest invoice?")
+    ).resolves.toBeVisible()
     await userEvent.click(trigger)
     await page.findByRole("dialog", { name: "Trace navigator" })
     await userEvent.keyboard("{Escape}")
-    await waitFor(() => expect(page.queryByRole("dialog")).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(page.queryByRole("dialog")).not.toBeInTheDocument()
+    )
     await expect(trigger).toHaveFocus()
   },
 }
 
 export const NarrowCollection: Story = {
   parameters: Collection.parameters,
-  render: () => <div className="w-[375px] max-w-full"><StorybookProjectFrame title="Sessions"><SessionsPage /></StorybookProjectFrame></div>,
+  render: () => (
+    <div className="w-[375px] max-w-full">
+      <StorybookProjectFrame title="Sessions">
+        <SessionsPage />
+      </StorybookProjectFrame>
+    </div>
+  ),
   play: async ({ canvasElement }) => {
     await checkCompactCollectionPanel(canvasElement, "Sessions")
+  },
+}
+
+const activityRows = [
+  {
+    ...storybookSessionDetail,
+    id: "support-chat",
+    name: "Where is my order?",
+    traceCount: 2,
+    conversation: {
+      agentId: "support",
+      agentName: "Store assistant",
+      channel: "web",
+      status: "active",
+      contactId: null,
+      contactName: "Casey",
+      ticketId: null,
+      ticketStatus: null,
+      ticketVersion: null,
+    },
+  },
+  { ...storybookSessionDetail, conversation: null },
+]
+const activityHandlers = [
+  ...traceHandlers,
+  http.get("/api/page-views", () => HttpResponse.json(envelope(list([])))),
+  http.get("/api/sessions/activity", ({ request }) =>
+    HttpResponse.json(
+      envelope(
+        list(
+          new URL(request.url).searchParams.get("filter")?.includes("id =")
+            ? [activityRows[0]]
+            : activityRows
+        )
+      )
+    )
+  ),
+  http.post("/api/build/build_get_conversation", () =>
+    HttpResponse.json(envelope({ ownerType: "ai", id: "support-chat" }))
+  ),
+  http.post("/api/build/build_list_conversation_messages", () =>
+    HttpResponse.json(
+      envelope({
+        items: [
+          {
+            id: "question",
+            role: "user",
+            content: "Where is my order?",
+            createdAt: "2026-10-29T12:00:00Z",
+            status: "completed",
+          },
+          {
+            id: "answer",
+            role: "assistant",
+            content: "Your order is on its way.",
+            createdAt: "2026-10-29T12:00:01Z",
+            status: "completed",
+          },
+        ],
+      })
+    )
+  ),
+  http.post("/api/build/build_get_conversation_ownership", () =>
+    HttpResponse.json(
+      envelope({ mode: "ai", canTakeover: true, canReply: false })
+    )
+  ),
+  http.post("/api/build/build_list_macros", () =>
+    HttpResponse.json(envelope([]))
+  ),
+]
+
+export const CombinedSessions: Story = {
+  args: { buildEnabled: true },
+  parameters: { msw: { handlers: activityHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const conversation = await canvas.findByRole("link", {
+      name: /Where is my order\?/,
+    })
+    await expect(conversation).toHaveAttribute(
+      "href",
+      `${storybookProject.prefix}/sessions?conversation=support-chat`
+    )
+    await expect(
+      canvas.getByRole("link", { name: /Invoice support conversation/ })
+    ).toHaveAttribute(
+      "href",
+      `${storybookProject.prefix}/sessions/${storybookSessionId}`
+    )
+    await expect(canvas.getByText("Store assistant")).toBeVisible()
+    await expect(canvas.getByText("Ongoing")).toBeVisible()
+  },
+}
+
+export const CombinedConversationDetails: Story = {
+  args: { buildEnabled: true },
+  parameters: {
+    msw: { handlers: activityHandlers },
+    nextjs: {
+      navigation: {
+        pathname: `${storybookProject.prefix}/sessions`,
+        query: { conversation: "support-chat" },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    await expect(
+      page.findByText("Your order is on its way.")
+    ).resolves.toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Close conversation" })
+    ).toBeVisible()
+    await expect(
+      page.getByRole("link", { name: "View traces" })
+    ).toHaveAttribute("href", expect.stringContaining("support-chat"))
   },
 }

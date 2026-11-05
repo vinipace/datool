@@ -1,4 +1,5 @@
 import type { ChannelPresentationId } from "./channel-catalog"
+import { MessagesSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { channelCatalog, channelLabel } from "./channel-catalog"
 
@@ -7,11 +8,13 @@ export function ChannelIcon({
   className,
   size = "default",
 }: {
-  channel: ChannelPresentationId
+  channel: string
   className?: string
   size?: "default" | "sm"
 }) {
-  const { icon: Icon, tone } = channelCatalog[channel]
+  const { icon: Icon, tone } = Object.hasOwn(channelCatalog, channel)
+    ? channelCatalog[channel as ChannelPresentationId]
+    : { icon: MessagesSquare, tone: "text-foreground-muted bg-muted" }
   return (
     <span
       aria-hidden

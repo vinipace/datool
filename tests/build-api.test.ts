@@ -130,6 +130,9 @@ describe("Build operation HTTP contract", () => {
   })
 
   test("classifies only registered Build POST operations and fails closed", async () => {
+    expect(await routeScopes(new Request("https://datool.example/api/sessions/activity"))).toEqual(["traces:read", "build:read"])
+    expect(await routeScopes(new Request("https://datool.example/api/agents/directory", { method: "POST" }))).toEqual(["metrics:read", "build:read"])
+
     expect(
       await routeScopes(
         new Request("https://datool.example/api/build/build_list_agents", {

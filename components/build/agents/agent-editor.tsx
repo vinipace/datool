@@ -367,7 +367,7 @@ function BuildAgentEditorContent({
         agentId: agentToArchive.id,
         expectedRevision: agentToArchive.currentRevision,
       })
-      router.push(workspaceHref("/build/agents"))
+      router.push(workspaceHref("/agents"))
     } catch (reason) {
       setError(formatBuildError(reason))
     }

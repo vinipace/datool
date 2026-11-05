@@ -21,7 +21,6 @@ import {
 } from "lucide-react"
 
 import {
-  ConversationAvatar,
   ConversationRow,
   InboxQueueChip,
   ConversationListSkeleton,
@@ -792,19 +791,6 @@ export function InboxPage({
                     returnFocusRef.current = event.currentTarget
                     setSelectedId(ticket.id)
                   }}
-                  avatar={
-                    <ConversationAvatar
-                      name={ticket.contactName || ticket.subject || "Customer"}
-                      identity={
-                        ticket.contactId || ticket.conversationId || ticket.id
-                      }
-                      badge={
-                        ticket.channel ? (
-                          <ChannelIcon channel={ticket.channel} size="sm" />
-                        ) : undefined
-                      }
-                    />
-                  }
                   title={
                     ticket.contactName ||
                     ticket.subject ||
@@ -910,17 +896,6 @@ export function InboxPage({
                     <td aria-hidden className="p-0" />
                     <td className={collectionTable.cell}>
                       <span className="flex min-w-0 items-center gap-2 font-medium">
-                        <ConversationAvatar
-                          compact
-                          name={
-                            ticket.contactName || ticket.subject || "Customer"
-                          }
-                          identity={
-                            ticket.contactId ||
-                            ticket.conversationId ||
-                            ticket.id
-                          }
-                        />
                         <span className="truncate">
                           {ticket.subject || "Untitled conversation"}
                         </span>
@@ -1492,6 +1467,39 @@ function InboxOperationsPanel({ ticket }: { ticket: Ticket | null }) {
   )
 }
 
+/** Reuse the conversation controls when a chat is opened from the Sessions collection. */
+export function SessionConversationInspector({
+  session,
+  onClose,
+  onChanged,
+}: {
+  session: import("@/src/lib/tracer/contracts").SessionActivity
+  onClose: () => void
+  onChanged: () => void
+}) {
+  if (!session.conversation) return null
+  const conversation = session.conversation
+  return (
+    <InboxInspector
+      ticket={{
+        ...conversation,
+        id: session.id,
+        conversationId: session.id,
+        subject: session.name,
+        channel: conversation.channel as ChannelId,
+        conversationStatus: conversation.status,
+        status: conversation.ticketStatus,
+        version: conversation.ticketVersion ?? undefined,
+        updatedAt: session.updatedAt,
+      }}
+      isLoading={false}
+      error={null}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
+  )
+}
+
 function InboxInspector({
   ticket,
   isLoading,
@@ -1893,20 +1901,9 @@ function InboxInspector({
         <header className="shrink-0 border-b border-border px-4 py-3">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex min-w-0 flex-1 basis-48 items-center gap-3">
-              <ConversationAvatar
-                compact
-                name={activeTicket.contactName || "Customer"}
-                identity={
-                  activeTicket.contactId ||
-                  activeTicket.conversationId ||
-                  activeTicket.id
-                }
-                badge={
-                  activeTicket.channel ? (
-                    <ChannelIcon channel={activeTicket.channel} size="sm" />
-                  ) : undefined
-                }
-              />
+              {activeTicket.channel && (
+                <ChannelIcon channel={activeTicket.channel} size="sm" />
+              )}
               <div className="min-w-0 flex-1">
                 <h2
                   className="truncate text-sm leading-5 font-semibold"

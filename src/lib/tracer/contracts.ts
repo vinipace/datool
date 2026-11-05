@@ -142,6 +142,21 @@ export type Session = {
   updatedAt: string
 }
 
+/** A workspace row combines a Build conversation with its trace session, when present. */
+export type SessionActivity = Session & {
+  conversation: {
+    agentId: string
+    agentName: string | null
+    channel: string
+    status: string
+    contactId: string | null
+    contactName: string | null
+    ticketId: string | null
+    ticketStatus: string | null
+    ticketVersion: number | null
+  } | null
+}
+
 export type SessionDetail = Session & {
   nextCursor?: string | null
   traces: TraceSummary[]

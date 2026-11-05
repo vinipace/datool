@@ -153,6 +153,8 @@
   --color-comparison-6: #bcaa42;
   --color-input: var(--input);
   --color-input-background: var(--input-background);
+  --color-switch-track: var(--switch-track);
+  --color-switch-thumb: var(--switch-thumb);
   --color-filter-fulltext: var(--filter-fulltext);
   --color-filter-date: var(--filter-date);
   --color-filter-enum: var(--filter-enum);
@@ -195,6 +197,7 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-active: var(--sidebar-active);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -280,6 +283,8 @@
   --color-comparison-4: var(--data-series-4);
   --color-input: var(--input);
   --color-input-background: var(--input-background);
+  --color-switch-track: var(--switch-track);
+  --color-switch-thumb: var(--switch-thumb);
   --color-filter-fulltext: var(--filter-fulltext);
   --color-filter-date: var(--filter-date);
   --color-filter-enum: var(--filter-enum);
@@ -310,6 +315,7 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-active: var(--sidebar-active);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -418,7 +424,10 @@
     --selection-control: #818cf8;
     --surface-emphasis: #ededf0;
     --surface-canvas: #ffffff;
-    --input-background: #f2f2f3;
+    /* Editable fields stay white against the lightly tinted form panels. */
+    --input-background: #ffffff;
+    --switch-track: #d4d4d8;
+    --switch-thumb: #ffffff;
     --surface-row: #f7f7f8;
     --surface-row-hover: #ededf0;
     --border-strong: #d4d4d8;
@@ -470,6 +479,7 @@
     --sidebar-primary: oklch(0.216 0.006 56.043);
     --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
     --sidebar-accent: oklch(98.5% 0.001 106.423);
+    --sidebar-active: #e0e0e3;
     --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
     --sidebar-border: oklch(0.923 0.003 48.717);
     --sidebar-ring: oklch(0.709 0.01 56.259);
@@ -528,6 +538,8 @@
     --surface-emphasis: #18181b;
     --surface-canvas: var(--background);
     --input-background: #0e0e0f;
+    --switch-track: var(--muted);
+    --switch-thumb: var(--foreground);
     --surface-row: var(--muted);
     --surface-row-hover: #202023;
     --background: #000000;
@@ -636,6 +648,7 @@
     --sidebar-primary: oklch(0.488 0.243 264.376);
     --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
     --sidebar-accent: oklch(0.268 0.007 34.298);
+    --sidebar-active: var(--sidebar-accent);
     --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.553 0.013 58.071);
@@ -995,18 +1008,18 @@
 }
 
 :root {
-  --json-key: #075985;
-  --json-string: #166534;
-  --json-number: #9a3412;
-  --json-literal: #7e22ce;
+  --json-key: #0057d9;
+  --json-string: #007828;
+  --json-number: #bb3700;
+  --json-literal: #8a00d4;
   --json-punctuation: #71717a;
   --filter-operator: #be185d;
 }
 .dark {
-  --json-key: #93c5fd;
-  --json-string: #86efac;
-  --json-number: #fdba74;
-  --json-literal: #c4b5fd;
+  --json-key: #60a5fa;
+  --json-string: #4ade80;
+  --json-number: #fb923c;
+  --json-literal: #b083ff;
   --json-punctuation: #a1a1aa;
   --filter-operator: #fb7185;
 }

@@ -44,6 +44,102 @@ export function WorkspaceSelectors(props: WorkspaceSelectorsProps) {
   )
 }
 
+function OrganizationProjectsSubmenu({
+  organization,
+  currentOrganizationId,
+  selectedProjectId,
+  organizationDestination,
+  onClose,
+}: {
+  organization: WorkspaceOrganization
+  currentOrganizationId: string
+  selectedProjectId?: string
+  organizationDestination: string
+  onClose: () => void
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [search, setSearch] = React.useState("")
+  const [selectionError, setSelectionError] = React.useState<{
+    error: Error
+    href: string
+  } | null>(null)
+  const selecting = React.useRef(false)
+  const projects = useQuery({
+    queryKey: workspaceSelectorKeys.projectSearch(organization.id, search),
+    queryFn: ({ signal }) =>
+      listWorkspaceProjects(organization.id, {
+        signal,
+        search,
+        pageSize: 100,
+      }),
+    enabled: open,
+  })
+
+  async function navigate(href: string) {
+    if (selecting.current) return
+    selecting.current = true
+    setSelectionError(null)
+    try {
+      if (organization.id !== currentOrganizationId) {
+        await selectOrganization(organization.id)
+      }
+      navigateWorkspace(href)
+      onClose()
+    } catch (cause) {
+      setSelectionError({
+        href,
+        error:
+          cause instanceof Error
+            ? cause
+            : new Error("Unable to select organization."),
+      })
+    } finally {
+      selecting.current = false
+    }
+  }
+
+  return (
+    <ResourceSwitcher
+      label="project"
+      value={organization.name}
+      submenu={{ selected: organization.id === currentOrganizationId }}
+      selectedId={
+        organization.id === currentOrganizationId
+          ? selectedProjectId
+          : undefined
+      }
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value)
+        if (!value) {
+          setSearch("")
+          setSelectionError(null)
+        }
+      }}
+      search={search}
+      onSearchChange={setSearch}
+      items={(projects.data?.projects ?? []).map((item) => ({
+        ...item,
+        href: projectHref(organization, item),
+      }))}
+      loading={projects.isLoading}
+      error={selectionError?.error ?? projects.error}
+      onRetry={() => {
+        if (selectionError) void navigate(selectionError.href)
+        else void projects.refetch()
+      }}
+      onItemSelect={(item) => void navigate(item.href)}
+      moreHref={organizationDestination}
+      moreLabel={
+        organizationDestination === "/projects"
+          ? "View all projects"
+          : "View organization"
+      }
+      onMoreSelect={() => void navigate(organizationDestination)}
+    />
+  )
+}
+
 function WorkspaceSelectorControls({
   organization,
   project,
@@ -57,8 +153,6 @@ function WorkspaceSelectorControls({
   const [projectOpen, setProjectOpen] = React.useState(false)
   const [organizationSearch, setOrganizationSearch] = React.useState("")
   const [projectSearch, setProjectSearch] = React.useState("")
-  const [organizationSelectionError, setOrganizationSelectionError] =
-    React.useState<string | null>(null)
   const [creatingProject, setCreatingProject] = React.useState(false)
   const organizations = useQuery({
     queryKey: workspaceSelectorKeys.organizations,
@@ -120,44 +214,32 @@ function WorkspaceSelectorControls({
               )
               .map((item) => ({
                 ...item,
-                href:
-                  item.id === organization.id && project
-                    ? projectHref(organization, project)
-                    : organizationDestination,
+                href: organizationDestination,
               }))}
             loading={organizations.isLoading}
             error={organizations.error}
             onRetry={() => void organizations.refetch()}
-            onItemSelect={(item) => {
-              if (item.id === organization.id) return
-              void selectOrganization(item.id)
-                .then(() => navigateWorkspace(organizationDestination))
-                .catch((cause) => {
-                  setOrganizationSelectionError(
-                    cause instanceof Error
-                      ? cause.message
-                      : "Unable to select organization."
-                  )
-                })
+            renderItem={(item, close) => {
+              const itemOrganization = organizations.data?.find(
+                (candidate) => candidate.id === item.id
+              )
+              return itemOrganization ? (
+                <OrganizationProjectsSubmenu
+                  organization={itemOrganization}
+                  currentOrganizationId={organization.id}
+                  selectedProjectId={project?.id}
+                  organizationDestination={item.href}
+                  onClose={close}
+                />
+              ) : null
             }}
             onCreate={() => navigateWorkspace("/organizations/new")}
           />
-          {organizationSelectionError ? (
-            <p role="alert" className="px-2 pt-1 text-xs text-destructive">
-              {organizationSelectionError}
-            </p>
-          ) : null}
         </div>
       ) : null}
       {project && only === "project" ? (
         <ResourceSwitcher
           label="project"
-          leadingIcon={
-            <span
-              aria-hidden="true"
-              className="size-3 shrink-0 rounded-full bg-avatar-blue"
-            />
-          }
           triggerRef={projectTrigger}
           triggerClassName="h-8 w-auto max-w-56"
           value={project.name}

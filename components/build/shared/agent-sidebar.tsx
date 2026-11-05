@@ -46,9 +46,9 @@ export function AgentSidebarTarget({ children }: React.PropsWithChildren) {
     <>
       <div
         ref={context?.setTarget}
-        className="peer flex flex-col gap-2 empty:hidden"
+        className="peer flex flex-col gap-0 empty:hidden"
       />
-      <div className="flex flex-col gap-2 peer-[:not(:empty)]:hidden">
+      <div className="flex flex-col gap-0 peer-[:not(:empty)]:hidden">
         {children}
       </div>
     </>
@@ -166,7 +166,7 @@ export function AgentSidebarNavigation({
             title={`${name} — back to agents`}
             aria-label={`${name} — back to agents`}
             onClick={closeMobileNavigation}
-            render={<Link href={workspaceHref("/build/agents")} />}
+            render={<Link href={workspaceHref("/agents")} />}
           >
             <AgentAvatar appearance={appearance} className="size-8" />
             <span className="line-clamp-2">{name}</span>

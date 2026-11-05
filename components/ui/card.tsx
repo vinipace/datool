@@ -1,4 +1,5 @@
 import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "@/lib/utils"
 
@@ -68,11 +69,16 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
 function CardAction({
   className,
   variant = "default",
+  asChild = false,
   ...props
-}: React.ComponentProps<"button"> & { variant?: "default" | "preview" }) {
+}: React.ComponentProps<"button"> & {
+  variant?: "default" | "preview"
+  asChild?: boolean
+}) {
+  const Comp = asChild ? Slot : "button"
   return (
-    <button
-      type="button"
+    <Comp
+      type={asChild ? undefined : "button"}
       data-slot="card-action"
       className={cn(
         "group grid w-full min-w-0 cursor-pointer rounded-xl text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",

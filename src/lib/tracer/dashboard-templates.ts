@@ -221,6 +221,7 @@ export function agentOverviewWidgets(
 ): DashboardWidget[] {
   return customerExperienceTemplate.create(now).widgets.map((widget) => ({
     ...widget,
+    ...(widget.id === "chats-by-channel" ? { barStyle: "progress" as const } : {}),
     query: {
       ...widget.query,
       filters: [

@@ -1,6 +1,23 @@
 import type { SemanticDataRow } from "../semantic"
+import { agentAppearanceSchema } from "../build/contracts"
+
+const agentAvatarSchema = agentAppearanceSchema.pick({
+  avatarUrl: true,
+  avatarStyle: true,
+  avatarColor: true,
+})
 
 export type PerformanceModel = "agents" | "workflows"
+export const agentDirectoryDimensions = [
+  "agents.name",
+  "agents.identity",
+  "agents.managedId",
+  "agents.managedStatus",
+  "agents.avatarUrl",
+  "agents.avatarStyle",
+  "agents.avatarColor",
+]
+
 export const performanceMeasures = [
   "count",
   "versionCount",
@@ -18,6 +35,9 @@ export const performanceMeasures = [
 
 export type PerformanceTableRow = {
   id: string
+  managedId?: string
+  managedStatus?: string
+  avatar?: ReturnType<typeof agentAvatarSchema.parse>
   groupType: "agent" | "workflow"
   name: string
   version: string | null
@@ -33,7 +53,21 @@ export function performanceTableRow(
   const version =
     row[`${model}.version`] == null ? null : String(row[`${model}.version`])
   return {
-    id: JSON.stringify([model, name, version]),
+    id:
+      typeof row[`${model}.identity`] === "string"
+        ? String(row[`${model}.identity`])
+        : JSON.stringify([model, name, version]),
+    ...(typeof row[`${model}.managedId`] === "string"
+      ? {
+          managedId: String(row[`${model}.managedId`]),
+          managedStatus: String(row[`${model}.managedStatus`]),
+          avatar: agentAvatarSchema.parse({
+            avatarUrl: row[`${model}.avatarUrl`] ?? undefined,
+            avatarStyle: row[`${model}.avatarStyle`] ?? undefined,
+            avatarColor: row[`${model}.avatarColor`] ?? undefined,
+          }),
+        }
+      : {}),
     groupType: model === "agents" ? "agent" : "workflow",
     name,
     version,

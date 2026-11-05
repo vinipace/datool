@@ -57,3 +57,7 @@ export const Empty: Story = {
     ).toBeVisible()
   },
 }
+
+export const Progress: Story = {
+  args: { variant: "progress" },
+}

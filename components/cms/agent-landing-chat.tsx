@@ -172,7 +172,7 @@ function WidgetHeader({ story, typing }: { story: Story; typing: boolean }) {
       <span>
         <span className={styles.chatTitle}>{story.assistant}</span>
         <span className={styles.chatStatus}>
-          {typing ? "Typing…" : "AI agent · replies instantly"}
+          {typing ? "Typing…" : "AI agent · example conversation"}
         </span>
       </span>
     </div>
@@ -282,7 +282,7 @@ export function StoryDevice({
               <span>
                 <span className={styles.chatTitle}>{story.contact}</span>
                 <span className={styles.chatStatus}>
-                  {typing ? "AI agent is typing…" : "WhatsApp"}
+                  {typing ? "AI agent is typing…" : "WhatsApp · example"}
                 </span>
               </span>
             </div>

@@ -15,5 +15,5 @@ export default async function HomeLayout({
     cmsEnabled() &&
     (await headers()).get("x-datool-workspace-path") === "/" &&
     !(await getWorkspaceSession())
-  return <Document theme={marketing ? "light" : "dark"}>{children}</Document>
+  return <Document theme={marketing ? "light" : "system"}>{children}</Document>
 }

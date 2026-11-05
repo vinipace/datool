@@ -373,7 +373,7 @@ function TraceInspectorSession(props: TraceInspectorProps) {
         trace={null}
         {...props}
       >
-        <TraceInspectorSkeleton />
+        <TraceInspectorSkeleton loader={loader} navigation={activeTab === "timeline" ? "timeline" : "trace"} />
       </InspectorFrame>
     )
   }
@@ -642,7 +642,7 @@ function InspectorFrame({
     <section
       aria-label={title}
       className={cn(
-        "flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border border-white/[0.12] bg-black text-foreground shadow-2xl shadow-black/40",
+        "flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border border-border bg-background text-foreground shadow-2xl shadow-overlay/60",
         mode === "panel"
           ? "h-full rounded-none border-0 shadow-none"
           : mode === "page"
@@ -650,7 +650,7 @@ function InspectorFrame({
             : "h-[calc(100dvh-24px)] max-h-full rounded-md"
       )}
     >
-      <header className="shrink-0 border-b border-foreground bg-background">
+      <header className="shrink-0 border-b border-border bg-background">
         <div className={cn("flex items-center justify-between gap-3 px-3", compactHeader ? "min-h-8" : "min-h-11")}>
           <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
             {!hideTraceNavigation && <>
@@ -694,7 +694,7 @@ function InspectorFrame({
             ) : mode === "page" ? (
               <Link
                 aria-label={backLink.label}
-                className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground-muted transition-colors hover:bg-white/[0.07] hover:text-foreground"
+                className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-row-hover hover:text-foreground"
                 href={workspaceHref(backLink.href)}
               >
                 <ArrowLeft className="size-3.5" />
@@ -703,7 +703,7 @@ function InspectorFrame({
             ) : (
               <Link
                 aria-label="Open trace full page"
-                className="grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-white/[0.07] hover:text-foreground"
+                className="grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-surface-row-hover hover:text-foreground"
                 href={fullPageHref}
                 title="Open full page"
               >
@@ -716,7 +716,7 @@ function InspectorFrame({
                   ? `Unable to copy ${resourceName} link`
                   : `Copy ${resourceName} link`
               }
-              className="grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-white/[0.07] hover:text-foreground"
+              className="grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-surface-row-hover hover:text-foreground"
               onClick={() => void copyLink()}
               title={
                 copyState === "copied"
@@ -736,7 +736,7 @@ function InspectorFrame({
             {onClose ? (
               <button
                 aria-label="Close trace inspector"
-                className="grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-white/[0.07] hover:text-foreground"
+                className="grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-surface-row-hover hover:text-foreground"
                 onClick={onClose}
                 title="Close"
                 type="button"
@@ -791,7 +791,7 @@ function TraceNavigationButton({
   const Icon = direction === "previous" ? ArrowUp : ArrowDown
   const label = direction === "previous" ? "Previous trace" : "Next trace"
   const className = cn(
-    "grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-white/[0.07] hover:text-foreground",
+    "grid size-7 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-surface-row-hover hover:text-foreground",
     !traceId &&
       "cursor-not-allowed opacity-30 hover:bg-transparent hover:text-foreground-muted"
   )
@@ -832,26 +832,44 @@ function InspectorPlaceholder({ label }: { label: string }) {
   )
 }
 
-function TraceInspectorSkeleton() {
+function TraceInspectorSkeleton({ loader, navigation }: {
+  loader: TraceDetailLoader
+  navigation: "trace" | "timeline"
+}) {
   return (
-    <div role="status" aria-label="Loading trace" className="min-h-0 flex-1 overflow-hidden p-3 sm:p-4">
+    <div role="status" aria-label="Loading trace" aria-busy="true" className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <span className="sr-only">Loading trace…</span>
-      <div aria-hidden="true" className="space-y-6">
-        <div className="space-y-3">
-          <Skeleton className="h-5 w-2/3" />
-          <Skeleton className="h-3 w-1/3" />
-          <div className="flex gap-2">
-            <Skeleton className="h-6 w-20" />
-            <Skeleton className="h-6 w-16" />
+      <TraceWorkspace
+        navigation={navigation}
+        hideOverviewScores
+        loader={loader}
+        selectedSpanId={null}
+        onSelectSpan={() => {}}
+        navigator={() => <div aria-hidden="true" className="space-y-3 p-2">
+          {["w-3/4", "w-2/3", "w-1/2", "w-2/3"].map((width, index) => (
+            <div key={index} className={cn("flex items-center gap-2", index > 0 && "pl-4")}>
+              <Skeleton className="size-5 shrink-0" />
+              <Skeleton className={cn("h-3", width)} />
+            </div>
+          ))}
+        </div>}
+        timeline={() => <div aria-hidden="true" className="space-y-4 p-3">
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-5 w-4/5" />
+          <Skeleton className="ml-auto h-5 w-1/2" />
+        </div>}
+        details={<div className="min-h-full px-3">
+          <div aria-hidden="true" className="flex min-h-12 items-center gap-2 py-3">
+            <Skeleton className="size-5 shrink-0" />
+            <Skeleton className="h-5 w-1/2" />
+            <Skeleton className="ml-auto h-4 w-14" />
           </div>
-        </div>
-        {["input", "output"].map(field => (
-          <div key={field} className="space-y-4 border-t border-border pt-4">
-            <Skeleton className="h-3 w-16" />
-            <FieldSkeleton />
+          <div aria-hidden="true" className="flex gap-1 overflow-hidden pb-2">
+            {["w-20", "w-16", "w-20", "w-12"].map((width, index) => <Skeleton key={index} className={cn("h-7 shrink-0", width)} />)}
           </div>
-        ))}
-      </div>
+          <SpanDetailSkeleton detailTab="messages" hasCustomFields={false} />
+        </div>}
+      />
     </div>
   )
 }
@@ -881,7 +899,7 @@ function TraceWorkspace(props: TraceWorkspaceProps) {
   }, [])
 
   return (
-    <div ref={container} className="min-h-0 flex-1">
+    <div ref={container} className="min-h-0 flex-1 bg-background">
       {horizontal !== null && (
         <TraceWorkspacePanels key={String(horizontal)} horizontal={horizontal} {...props} />
       )}
@@ -960,9 +978,9 @@ function TraceWorkspacePanels({
   )
 
   if (!horizontal) return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <Dialog open={navigatorOpen} onOpenChange={setNavigatorOpen}>
-        <div className="shrink-0 border-b border-border px-0.5 py-1.5">
+        <div className="shrink-0 border-b border-border bg-background px-0.5 py-1.5">
           <DialogTrigger asChild>
             <Button variant="ghost-muted" size="sm">
               <ListTree aria-hidden className="size-4" />
@@ -1275,7 +1293,7 @@ function SpanDetail({
             <PayloadSection key={annotationFocus?.reference.field === "output" ? annotationFocus.nonce : "output"} label="Output" value={payload.output} inputValue={payload.input} annotationTarget={{ traceId: trace.id, spanId: span?.id ?? null, spanName: title }} />
             <CapturedErrors attributes={attributes} status={status} />
             {!hideOverviewScores && trace.scores.length > 0 && (
-              <details {...scoresDisclosure} className="group border-t border-white/[0.18]">
+              <details {...scoresDisclosure} className="group border-t border-border">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 text-sm text-foreground-secondary [&::-webkit-details-marker]:hidden">
                   <span className="flex items-center gap-2">
                     <Percent className="size-4 text-foreground-muted" />
@@ -1360,7 +1378,7 @@ function DetailTabButton({
       aria-pressed={active}
       className={cn(
         "h-7 shrink-0 rounded-md px-2.5 text-sm font-medium whitespace-nowrap text-foreground-muted transition-colors hover:text-foreground-secondary",
-        active && "bg-white/[0.1] text-foreground"
+        active && "bg-surface-emphasis text-foreground"
       )}
       onClick={onClick}
       type="button"
@@ -1754,7 +1772,7 @@ function EvaluatorScore({ score }: { score: TraceScore }) {
             "rounded-md border px-2 py-1 text-xs font-semibold tabular-nums",
             score.status === "error"
               ? "border-destructive-border bg-destructive-background text-destructive"
-              : "border-white/[0.12] bg-muted text-foreground-secondary"
+              : "border-border bg-muted text-foreground-secondary"
           )}
         >
           {score.valueLabel !== undefined ? <span className="whitespace-pre-wrap break-words">{score.valueLabel}</span> : <EvalScoreCell result={score} />}
@@ -1796,7 +1814,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
   return (
     <React.Suspense
       fallback={
-        <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center bg-black text-sm text-foreground-muted">
+        <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center bg-background text-sm text-foreground-muted">
           Loading trace inspector…
         </div>
       }

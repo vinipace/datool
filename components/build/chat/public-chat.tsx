@@ -1642,32 +1642,32 @@ export function PublicChat({
               </div>
             ) : null}
             {messages.length > 0 || waitingReply ? (
-              <React.Suspense
-                fallback={
-                  <ChatTextTranscript
-                    renderMessageFooter={messageDelivery}
-                    messages={messages.map((message) => ({
-                      id: message.id,
-                      text: message.text ?? "",
-                      createdAt: message.createdAt,
-                      outgoing: message.direction === "inbound",
-                      author:
-                        message.direction === "outbound" &&
-                        message.metadata?.source === "human"
-                          ? message.author
-                          : undefined,
-                    }))}
-                    pendingReply={
-                      waitingReply ? (
-                        <ChatTypingIndicator label={copy.thinking} />
-                      ) : undefined
-                    }
-                  />
-                }
+              <div
+                ref={onTranscriptMount}
+                className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}
               >
-                <div
-                  ref={onTranscriptMount}
-                  className={helpPage ? "mx-auto w-full max-w-3xl" : undefined}
+                <React.Suspense
+                  fallback={
+                    <ChatTextTranscript
+                      renderMessageFooter={messageDelivery}
+                      messages={messages.map((message) => ({
+                        id: message.id,
+                        text: message.text ?? "",
+                        createdAt: message.createdAt,
+                        outgoing: message.direction === "inbound",
+                        author:
+                          message.direction === "outbound" &&
+                          message.metadata?.source === "human"
+                            ? message.author
+                            : undefined,
+                      }))}
+                      pendingReply={
+                        waitingReply ? (
+                          <ChatTypingIndicator label={copy.thinking} />
+                        ) : undefined
+                      }
+                    />
+                  }
                 >
                   <MessageTranscript
                     key={session?.conversationId}
@@ -1774,8 +1774,8 @@ export function PublicChat({
                       )
                     }}
                   />
-                </div>
-              </React.Suspense>
+                </React.Suspense>
+              </div>
             ) : null}
             <div className="min-h-1" aria-hidden />
           </div>

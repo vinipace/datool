@@ -4,6 +4,7 @@ import { expect, fn, userEvent, within } from "storybook/test"
 import { Chat } from "./chat"
 import { Button } from "./button"
 import { ChatTextTranscript } from "./chat-text-transcript"
+import { ChatTypingIndicator } from "./chat-composer"
 import { MessageTranscript } from "./message-transcript"
 import { bubbleStyle } from "@/components/build/chat/bubble-style"
 import { chatBubbleSettingsSchema } from "@/src/lib/build/chat-bubble"
@@ -413,6 +414,7 @@ export const CustomerTextStability: Story = {
             {rich ? (
               <MessageTranscript
                 variant="customer"
+                pendingReply={<ChatTypingIndicator label="Thinking" />}
                 messages={typographyMessages.map((message) => ({
                   id: message.id,
                   createdAt: message.createdAt,
@@ -424,7 +426,10 @@ export const CustomerTextStability: Story = {
                 }))}
               />
             ) : (
-              <ChatTextTranscript messages={typographyMessages} />
+              <ChatTextTranscript
+                messages={typographyMessages}
+                pendingReply={<ChatTypingIndicator label="Thinking" />}
+              />
             )}
           </section>
         ))}
@@ -438,6 +443,7 @@ export const CustomerTextStability: Story = {
         canvas.getByRole("region", { name: `${size}px chat` })
       )
       const bubbles = section.getAllByRole("article")
+      const typing = section.getByRole("status").getBoundingClientRect()
       expect(section.getAllByText("Marina")).toHaveLength(1)
       return {
         fonts: typographyMessages.map((message) => {
@@ -452,9 +458,17 @@ export const CustomerTextStability: Story = {
         gap:
           bubbles[1].getBoundingClientRect().top -
           bubbles[0].getBoundingClientRect().bottom,
+        typing: {
+          width: typing.width,
+          height: typing.height,
+          left: typing.left - bubbles[0].getBoundingClientRect().left,
+          gap: typing.top - bubbles.at(-1)!.getBoundingClientRect().bottom,
+        },
       }
     }
     const before = [16, 14, 18].map(measure)
+    for (const state of before)
+      await expect(state.typing.width).toBeLessThan(96)
     for (const [index, size] of [16, 14, 18].entries())
       for (const font of before[index].fonts)
         await expect(font.size).toBe(`${size}px`)

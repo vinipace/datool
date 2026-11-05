@@ -1,8 +1,10 @@
-import { BuildAgentsPage } from "@/components/build/agents/agents-page"
-import { pageMetadata } from "@/lib/page-metadata"
+import { redirect } from "next/navigation"
 
-export const metadata = pageMetadata("buildAgents")
-
-export default function Page() {
-  return <BuildAgentsPage />
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ projectSlug: string }>
+}) {
+  const { projectSlug } = await params
+  redirect(`/p/${encodeURIComponent(projectSlug)}/agents`)
 }

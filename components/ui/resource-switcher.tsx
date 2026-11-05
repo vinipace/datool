@@ -6,6 +6,7 @@ import { Popover } from "radix-ui"
 import {
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   Plus,
@@ -14,6 +15,8 @@ import {
 import { Button, buttonVariants } from "./button"
 import { Input } from "./input"
 import { cn } from "@/lib/utils"
+
+type ResourceSwitcherItem = { id: string; name: string; href: string }
 
 /** Searchable navigation shared by the organization and project selectors. */
 export function ResourceSwitcher({
@@ -31,14 +34,24 @@ export function ResourceSwitcher({
   onRetry,
   onCreate,
   moreHref,
+  moreLabel = "View all projects",
+  onMoreSelect,
+  renderItem,
+  submenu,
   triggerRef,
   leadingIcon,
   triggerClassName,
 }: {
   label: "organization" | "project"
   value: string
-  items: { id: string; name: string; href: string }[]
-  onItemSelect?: (item: { id: string; name: string; href: string }) => void
+  items: ResourceSwitcherItem[]
+  /** Custom selection owns closing, so a failed switch can stay visible. */
+  onItemSelect?: (item: ResourceSwitcherItem) => void
+  renderItem?: (
+    item: ResourceSwitcherItem,
+    close: () => void
+  ) => React.ReactNode
+  submenu?: { selected: boolean }
   selectedId?: string
   search: string
   onSearchChange: (value: string) => void
@@ -47,8 +60,10 @@ export function ResourceSwitcher({
   loading: boolean
   error: Error | null
   onRetry: () => void
-  onCreate: () => void
+  onCreate?: () => void
   moreHref?: string
+  moreLabel?: string
+  onMoreSelect?: () => void
   triggerRef?: React.Ref<HTMLButtonElement>
   leadingIcon?: React.ReactNode
   triggerClassName?: string
@@ -57,8 +72,29 @@ export function ResourceSwitcher({
   const content = React.useRef<HTMLDivElement>(null)
   const openingCreateDialog = React.useRef(false)
   const plural = label === "organization" ? "Organizations" : "Projects"
+  const isSubmenu = Boolean(submenu)
+  const [narrow, setNarrow] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!isSubmenu) return
+    const media = window.matchMedia("(max-width: 767px)")
+    const update = () => setNarrow(media.matches)
+    update()
+    media.addEventListener("change", update)
+    return () => media.removeEventListener("change", update)
+  }, [isSubmenu])
 
   function moveFocus(event: React.KeyboardEvent) {
+    // Events from a portalled submenu bubble through the parent React tree.
+    if (!event.currentTarget.contains(event.target as Node)) return
+    if (submenu && event.key === "ArrowLeft" && event.target === input.current)
+      return
+    if (submenu && event.key === "ArrowLeft") {
+      event.preventDefault()
+      event.stopPropagation()
+      onOpenChange(false)
+      return
+    }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
     const targets = Array.from(
       content.current?.querySelectorAll<HTMLElement>(
@@ -79,17 +115,38 @@ export function ResourceSwitcher({
         <Button
           ref={triggerRef}
           variant="ghost"
-          aria-label={`Switch ${label}: ${value}`}
+          aria-label={
+            submenu ? `Projects in ${value}` : `Switch ${label}: ${value}`
+          }
+          aria-current={submenu?.selected ? "true" : undefined}
           title={value}
+          onKeyDown={(event) => {
+            if (submenu && event.key === "ArrowRight") {
+              event.preventDefault()
+              event.stopPropagation()
+              onOpenChange(true)
+            }
+          }}
           className={cn(
             "min-w-0 justify-between gap-2 px-2 text-sm has-[>svg]:px-2 data-[state=open]:bg-muted",
             label === "project" ? "w-full" : "max-w-full",
+            submenu &&
+              "h-10 w-full justify-start gap-3 px-3 font-normal has-[>svg]:px-3",
             triggerClassName
           )}
         >
-          {leadingIcon}
+          {submenu ? (
+            <Check
+              aria-hidden="true"
+              className={cn("size-4", !submenu.selected && "invisible")}
+            />
+          ) : (
+            leadingIcon
+          )}
           <span className="min-w-0 flex-1 truncate text-left">{value}</span>
-          {label === "project" ? (
+          {submenu ? (
+            <ChevronRight className="size-3.5 text-foreground-muted" />
+          ) : label === "project" ? (
             <ChevronsUpDown className="size-3.5 text-foreground-muted" />
           ) : (
             <ChevronDown className="size-3.5 text-foreground-muted" />
@@ -101,6 +158,7 @@ export function ResourceSwitcher({
           ref={content}
           aria-label={`Choose ${label}`}
           align="start"
+          side={submenu && !narrow ? "right" : "bottom"}
           sideOffset={6}
           collisionPadding={8}
           onOpenAutoFocus={(event) => {
@@ -120,10 +178,21 @@ export function ResourceSwitcher({
           className="z-50 flex max-h-(--radix-popover-content-available-height) w-80 max-w-[calc(100vw-1rem)] flex-col rounded-xl border border-border bg-background p-2 text-foreground shadow-xl outline-none"
         >
           <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 pb-2">
-            <Search
-              aria-hidden="true"
-              className="size-4 shrink-0 text-foreground-muted"
-            />
+            {submenu && narrow ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Back to organizations"
+                onClick={() => onOpenChange(false)}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+            ) : (
+              <Search
+                aria-hidden="true"
+                className="size-4 shrink-0 text-foreground-muted"
+              />
+            )}
             <Input
               ref={input}
               aria-label={`Find ${label}`}
@@ -162,39 +231,46 @@ export function ResourceSwitcher({
                   : `No ${plural.toLowerCase()} yet.`}
               </p>
             ) : null}
-            {items.map((item) => (
-              <Link
-                key={item.id}
-                href={item.href}
-                onClick={(event) => {
-                  onOpenChange(false)
-                  if (onItemSelect) {
-                    event.preventDefault()
-                    onItemSelect(item)
-                  }
-                }}
-                aria-current={item.id === selectedId ? "true" : undefined}
-                className={cn(
-                  buttonVariants({ variant: "ghost" }),
-                  "h-10 w-full justify-start gap-3 px-3 font-normal"
-                )}
-              >
-                <Check
-                  aria-hidden="true"
+            {items.map((item) =>
+              renderItem ? (
+                <React.Fragment key={item.id}>
+                  {renderItem(item, () => onOpenChange(false))}
+                </React.Fragment>
+              ) : (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  onClick={(event) => {
+                    if (onItemSelect) {
+                      event.preventDefault()
+                      onItemSelect(item)
+                    } else {
+                      onOpenChange(false)
+                    }
+                  }}
+                  aria-current={item.id === selectedId ? "true" : undefined}
                   className={cn(
-                    "size-4",
-                    item.id !== selectedId && "invisible"
+                    buttonVariants({ variant: "ghost" }),
+                    "h-10 w-full justify-start gap-3 px-3 font-normal"
                   )}
-                />
-                <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                {item.id === selectedId ? (
-                  <ChevronRight
+                >
+                  <Check
                     aria-hidden="true"
-                    className="size-3.5 text-foreground-muted"
+                    className={cn(
+                      "size-4",
+                      item.id !== selectedId && "invisible"
+                    )}
                   />
-                ) : null}
-              </Link>
-            ))}
+                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                  {item.id === selectedId && !submenu ? (
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="size-3.5 text-foreground-muted"
+                    />
+                  ) : null}
+                </Link>
+              )
+            )}
             {moreHref ? (
               <Button
                 asChild
@@ -202,26 +278,38 @@ export function ResourceSwitcher({
                 size="sm"
                 className="mt-1 w-full"
               >
-                <Link href={moreHref} onClick={() => onOpenChange(false)}>
-                  View all projects
+                <Link
+                  href={moreHref}
+                  onClick={(event) => {
+                    if (onMoreSelect) {
+                      event.preventDefault()
+                      onMoreSelect()
+                    } else {
+                      onOpenChange(false)
+                    }
+                  }}
+                >
+                  {moreLabel}
                 </Link>
               </Button>
             ) : null}
           </div>
-          <div className="shrink-0 border-t border-border pt-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                openingCreateDialog.current = true
-                onOpenChange(false)
-                onCreate()
-              }}
-              className="h-10 w-full justify-start gap-3 px-3 font-normal"
-            >
-              <Plus className="size-4" />
-              Create {label}
-            </Button>
-          </div>
+          {onCreate ? (
+            <div className="shrink-0 border-t border-border pt-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  openingCreateDialog.current = true
+                  onOpenChange(false)
+                  onCreate()
+                }}
+                className="h-10 w-full justify-start gap-3 px-3 font-normal"
+              >
+                <Plus className="size-4" />
+                Create {label}
+              </Button>
+            </div>
+          ) : null}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
