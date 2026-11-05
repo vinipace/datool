@@ -38,6 +38,8 @@ export const dashboardDataWidgetSchema = z
     layout: dashboardLayoutSchema.optional(),
     /** Group icons are opt-in; omitted settings preserve existing charts. */
     showGroupIcons: z.boolean().optional(),
+    /** Thin bars sit below their labels; omitted settings retain filled rows. */
+    barStyle: z.enum(["filled", "progress"]).optional(),
     trendDirection: z.enum(["increase", "decrease", "neutral"]).optional(),
     presentation: dashboardPresentationSchema.optional(),
     query: semanticQuerySchema,

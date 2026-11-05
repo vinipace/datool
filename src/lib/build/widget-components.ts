@@ -81,6 +81,39 @@ export const widgetComponents = [
     requiresFunction: true,
   },
   {
+    name: "ChoiceGroup",
+    description:
+      "Clickable text or image choices, supporting one or multiple selections. Keep the controlled value across categories/pages and submit it with a bound Button.",
+    props: {
+      label: "string (accessible group label)",
+      options:
+        "Array<{ id: string; label: string; image?: string; description?: string; disabled?: boolean }>",
+      value: "string[] (selected IDs, including choices on other pages)",
+      onChange: "(selectedIds: string[]) => void",
+      multiple: "boolean (default false)",
+      disabled: "boolean; also disabled in read-only widgets",
+    },
+    example:
+      '<ChoiceGroup label="Models" options={data.models} value={selected} onChange={setSelected} multiple />',
+  },
+  {
+    name: "DatePicker",
+    description:
+      "Native calendar date control. Exchanges YYYY-MM-DD values without timezone conversion. Use for event dates, not confirmed booking availability.",
+    props: {
+      label: "string",
+      value: "string (YYYY-MM-DD or empty)",
+      onChange: "(date: string) => void",
+      min: "string (optional YYYY-MM-DD)",
+      max: "string (optional YYYY-MM-DD)",
+      required: "boolean (optional)",
+      disabled: "boolean; also disabled in read-only widgets",
+      locale: "string (optional input language)",
+    },
+    example:
+      '<DatePicker label="Event date" value={date} onChange={setDate} min={data.today} locale={locale} />',
+  },
+  {
     name: "Form",
     description:
       "Validated form. Submission dispatches values to a named Function.",

@@ -71,7 +71,7 @@ export function ConversationRow({
   ...props
 }: Omit<React.ComponentProps<"button">, "title"> & {
   selected: boolean
-  avatar: React.ReactNode
+  avatar?: React.ReactNode
   title: string
   preview: string
   timestamp?: React.ReactNode

@@ -7,6 +7,7 @@ import {
   type ProductFeature,
 } from "../lib/marketing/product"
 import { observeStoryBlocks, richText } from "./seed-content"
+import { demoHref } from "../lib/marketing/demo"
 
 type FeatureCopy = {
   title: string
@@ -324,22 +325,22 @@ const pillarCopy: Record<
   }
 > = {
   build: {
-    title: "Make your next prompt work better.",
+    title: "Give customers an answer. And a way forward.",
     description:
-      "Try an idea against your actual application. See what changes, keep the useful versions, and take the result back into your code.",
-    workflowTitle: "A shorter path from idea to evidence.",
+      "Build AI agents that answer from your content, check connected systems and hand off to your team. Test real customer questions before going live on your website or WhatsApp.",
+    workflowTitle: "Start with a question from your own inbox.",
     workflow: [
       [
-        "Shape the instruction",
-        "Draft a prompt, preview variables, and keep the published version stable while you experiment.",
+        "Connect your business",
+        "Add your product details, help articles and policies. Connect actions for the tasks it needs to handle, such as checking an order.",
       ],
       [
-        "Run your application",
-        "Connect your agent or workflow and try a real input in the Playground.",
+        "Try the difficult questions",
+        "Test customer questions and inspect the sources and tool calls behind an answer. Set the requests that need your team.",
       ],
       [
-        "Keep what you learn",
-        "Inspect the saved run, compare the output, and take useful cases into an evaluation.",
+        "Launch and keep checking",
+        "Connect your channel, review conversations and take over from the inbox when needed. Save useful examples as tests for the next change.",
       ],
     ],
   },
@@ -432,10 +433,15 @@ export const productSeedPages = (
                 eyebrow: pillar.name,
                 title: content.title,
                 description: content.description,
-                actions: [
-                  { label: "Start building", href: "/sign-up" },
-                  { label: "Read the docs", href: pillar.docs },
-                ],
+                actions: pillar.slug === "build"
+                  ? [
+                      { label: "Request my demo", href: demoHref },
+                      { label: "See a sales example", href: "/agents/website-sales" },
+                    ]
+                  : [
+                      { label: "Start building", href: "/sign-up" },
+                      { label: "Read the docs", href: pillar.docs },
+                    ],
               },
             ]),
         {
@@ -485,7 +491,16 @@ export const productSeedPages = (
               },
             ]
           : []),
-        pillar.slug === "observe"
+        pillar.slug === "build"
+          ? {
+              blockType: "callToAction",
+              title: "Try a question from your own inbox.",
+              description:
+                "Send us your website and a question customers keep asking. We'll show you a demo using your content and explain the actions it needs.",
+              label: "Request my demo",
+              href: demoHref,
+            }
+          : pillar.slug === "observe"
           ? {
               blockType: "callToAction",
               title: "Your next improvement starts with a trace.",

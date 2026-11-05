@@ -17,7 +17,7 @@ const stops: {
     page: "build",
     label: "Build",
     icon: productIcons.buildAgents,
-    caption: "Launch agents and work every conversation from one inbox.",
+    caption: "Answer customer questions and take over from the same inbox.",
   },
   {
     page: "observe",

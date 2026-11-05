@@ -9,5 +9,5 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return <Document theme="dark">{children}</Document>
+  return <Document theme="system">{children}</Document>
 }

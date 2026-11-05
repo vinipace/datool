@@ -9,6 +9,7 @@ import {
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { MetricDelta } from "@/components/ui/metric-delta"
 import { metricDelta } from "@/src/lib/tracer/dashboard-metric-comparison"
 import type { DashboardBarBaseline } from "@/src/lib/tracer/dashboard-bar-comparison"
@@ -57,7 +58,9 @@ export function DashboardBarChart({
   references = [],
   dimensionAnnotations,
   baseline,
+  variant = "filled",
 }: {
+  variant?: "filled" | "progress"
   baseline?: DashboardBarBaseline
   highlights?: ReportHighlight[]
   references?: ReportReference[]
@@ -122,7 +125,10 @@ export function DashboardBarChart({
       <div
         role="group"
         aria-label={`${title} bar chart`}
-        className="relative space-y-2.5 px-0 py-2"
+        className={cn(
+          "relative space-y-2.5 px-0 py-2",
+          variant === "progress" && "space-y-4"
+        )}
         style={{ marginTop: markers.length ? 32 : undefined }}
       >
         {markers.map((reference, index) => {
@@ -151,7 +157,12 @@ export function DashboardBarChart({
         })}
         {data.map((row, index) => (
           <BarRow key={`${row.category}:${index}`} href={row.href}>
-            <div className="relative inset-0 z-15 flex items-center justify-between gap-3 px-2 py-2 text-xs">
+            <div
+              className={cn(
+                "relative inset-0 z-15 flex items-center justify-between gap-3 px-2 py-2 text-xs",
+                variant === "progress" && "pt-0 pb-1.5"
+              )}
+            >
               <span
                 className="flex min-w-0 items-center gap-2 text-foreground"
                 title={row.category}
@@ -239,11 +250,22 @@ export function DashboardBarChart({
               </div>
             </div>
 
-            <div className="absolute inset-0 z-5 overflow-hidden rounded-md bg-surface-row-hover"></div>
+            {variant === "filled" && (
+              <div className="absolute inset-0 z-5 overflow-hidden rounded-md bg-surface-row-hover" />
+            )}
             <div
-              className="absolute inset-0 z-10 overflow-hidden rounded-md"
+              className={cn(
+                "z-10 overflow-hidden rounded-md",
+                variant === "progress"
+                  ? "relative mx-2 h-1.5 rounded-full bg-surface-row-hover"
+                  : "absolute inset-0"
+              )}
               aria-hidden="true"
-              style={{ right: valueGutter }}
+              style={
+                variant === "progress"
+                  ? { marginRight: 8 + valueGutter }
+                  : { right: valueGutter }
+              }
             >
               {minimum < 0 && (
                 <span

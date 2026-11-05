@@ -19,80 +19,74 @@ export const agentLandingPath = (slug: string) => `/agents/${slug}`
 
 const whatsapp = (agent: string) => ({
   number: "551151995330",
-  message: `Hi! I'd like a personalized demo of Datool's ${agent}.`,
+  message: `Hi! I'd like to try Datool's ${agent} with my own content and a real customer question.`,
 })
 const cta = {
-  title: "See it with your products.",
+  title: "Bring the question that costs you sales.",
   description:
-    "Message us on WhatsApp. We'll build your demo on your own content.",
-  label: "Request a demo on WhatsApp",
+    "Send us your website and a question shoppers keep asking. We'll use your content to show you the answer, the next step and where your team takes over.",
+  label: "Request my demo on WhatsApp",
 }
 
 // Bento tiles shared across pages; each page picks the ones that fit its story.
 const feature = {
   whatsapp: {
-    title: "Lives in your WhatsApp.",
-    text: "Your business number, answered in seconds, day and night.",
+    title: "Keep your business number.",
+    text: "Help customers on WhatsApp, including outside your team's working hours.",
     visual: "whatsapp",
     size: "large",
   },
   website: {
-    title: "A widget on every page.",
-    text: "A chat bubble on your site and a hosted help page.",
+    title: "Help where the question starts.",
+    text: "Add a chat bubble to your site or give customers a full help page.",
     visual: "website",
     size: "large",
   },
   catalog: {
     title: "Recommends from your catalog.",
-    text: "Stock, sizes and prices from your own store data.",
+    text: "Help shoppers compare sizes, prices and stock using your connected store data.",
     visual: "catalog",
     size: "wide",
   },
   handoff: {
     title: "Hands off with context.",
-    text: "Your team gets a summary, not a transcript.",
+    text: "Your team picks up the conversation with its history and collected details.",
     visual: "handoff",
     size: "regular",
   },
   knowledge: {
     title: "Answers from your docs.",
-    text: "Policies and help articles, not guesses.",
+    text: "Give it your policies and help articles, then check which sources it used.",
     visual: "knowledge",
     size: "regular",
   },
   actions: {
     title: "Acts on your systems.",
-    text: "Looks up orders, opens tickets and calls your APIs.",
+    text: "Connect actions to look up an order, open a ticket or call your API.",
     visual: "actions",
     size: "wide",
   },
   widgets: {
     title: "Forms in the chat.",
-    text: "Collects sizes, addresses and order numbers up front.",
+    text: "Collect the details your team needs without sending customers to another page.",
     visual: "widgets",
     size: "regular",
   },
   leads: {
     title: "Captures leads.",
-    text: "Names, numbers and intent saved to contacts.",
+    text: "Save contact details and what the customer needs for your team's follow-up.",
     visual: "leads",
     size: "regular",
   },
-  campaigns: {
-    title: "WhatsApp campaigns.",
-    text: "Restocks and drops for opted-in customers.",
-    visual: "campaigns",
-    size: "regular",
-  },
   guardrails: {
-    title: "Guardrails.",
-    text: "Topics it avoids. Promises it won't make.",
+    title: "Set the limits.",
+    text: "Define what it can do and which requests need a person or approval.",
     visual: "guardrails",
     size: "regular",
   },
   analytics: {
-    title: "Tested before it ships.",
-    text: "Replay real conversations as tests, then track what it resolves.",
+    title: "Check the answer before launch.",
+    text: "Test customer questions, inspect sources and tool calls, and compare your next change.",
     visual: "analytics",
     size: "wide",
   },
@@ -104,7 +98,7 @@ const faq = {
     slug: "which-whatsapp-number-does-an-agent-use",
     question: "Which WhatsApp number does a Datool agent use?",
     answer:
-      "Your business's own WhatsApp number, connected in Datool. Customers keep messaging the number they already know.",
+      "Your business's own number, connected through the official WhatsApp Business Platform. Meta account eligibility and setup requirements apply. Test sending and receiving messages before putting it in front of customers.",
   },
   websiteInstall: {
     slug: "how-do-i-add-an-agent-to-my-website",
@@ -116,13 +110,13 @@ const faq = {
     slug: "how-does-a-sales-agent-know-my-products",
     question: "How does a sales agent know my products?",
     answer:
-      "You connect your catalog as a data source. It recommends only from what you've connected, so it never suggests something you don't sell.",
+      "Connect your catalog as knowledge, or use a store integration or action to retrieve product details. Live prices and stock need a connected store or API. Test recommendations against your catalog before launch.",
   },
   checkout: {
     slug: "can-customers-buy-inside-the-chat",
     question: "Can customers buy inside the chat?",
     answer:
-      "It sends checkout links from your store, and it can call your own APIs for things like order lookups.",
+      "The agent can share checkout links returned by your connected store. Customers complete payment through your store's checkout. Cart changes and order lookups need the matching integration or action.",
   },
   answers: {
     slug: "where-does-a-support-agent-get-its-answers",
@@ -134,7 +128,7 @@ const faq = {
     slug: "what-happens-when-an-agent-cannot-solve-something",
     question: "What happens when an agent can't solve something?",
     answer:
-      "It hands the conversation to your team in the inbox, with a summary and everything it already collected.",
+      "Configure when it should hand off. Your team can take over in the inbox with the conversation history and collected details, then return it to the agent when ready.",
   },
   team: {
     slug: "does-an-ai-agent-replace-my-team",
@@ -146,19 +140,19 @@ const faq = {
     slug: "can-i-control-what-an-agent-says",
     question: "Can I control what an agent says?",
     answer:
-      "Yes. You write its instructions, choose its data sources and set guardrails for topics it should avoid. You can test it on real conversations before it goes live.",
+      "You choose its instructions, knowledge, actions and guardrails. Test real customer questions before launch, inspect the sources and tool calls behind an answer, and compare changes against saved cases. Keep reviewing live conversations after launch.",
   },
   start: {
     slug: "how-do-i-get-started-with-an-agent",
     question: "How do I get started with an agent?",
     answer:
-      "Request a demo on WhatsApp. We set it up with your own content so you can see real answers before you decide.",
+      "Request a demo on WhatsApp with your website and a real customer question. We use your content to walk through the answer and handoff. Your store, APIs and channels need to be connected and tested before going live.",
   },
   productInstall: {
     slug: "how-does-a-product-guide-get-into-my-app",
     question: "How does a product guide get into my app?",
     answer:
-      "You add the chat widget to your app, then define the actions it can run there and the APIs it can call.",
+      "Add the chat widget to your app and connect your help content. Your developer defines any in-app actions or APIs the guide needs to use.",
   },
   productActions: {
     slug: "can-a-product-guide-click-things-for-users",
@@ -170,14 +164,14 @@ const faq = {
     slug: "can-a-product-guide-use-each-users-data",
     question: "Can a product guide use each user's own data?",
     answer:
-      "Yes, through the APIs you connect. It looks up the account it's helping, so answers fit that user instead of a generic article.",
+      "Yes, through connections that authorize access to each customer's account. Your developer controls which account data the guide can read and which actions it can take.",
   },
 } satisfies Record<string, AgentFAQ>
 export const agentFaqContent: AgentFAQ[] = Object.values(faq)
 
 const supportGuardrails: Feature = {
   ...feature.guardrails,
-  text: "Refunds and exceptions stay with your team.",
+  text: "Keep refunds and exceptions with your team.",
 }
 
 // Seeds the "agent-landings" collection and renders each page until an editor publishes it.
@@ -188,11 +182,11 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
     channel: "whatsapp",
     whatsapp: whatsapp("AI sales agent for WhatsApp"),
     hero: {
-      title: "Sell on WhatsApp.",
-      accent: "Even at midnight.",
+      title: "The question comes at midnight.",
+      accent: "Help them choose anyway.",
       description:
-        "An AI agent that answers every WhatsApp message, recommends from your catalog and closes the sale in the chat.",
-      primaryLabel: "Request a demo",
+        "Help shoppers find the right product and reach checkout on WhatsApp. Your AI agent uses your catalog and policies. Your team can take over when needed.",
+      primaryLabel: "Request my demo",
       scrollLabel: "Follow one customer",
     },
     story: {
@@ -252,8 +246,8 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
         },
         {
           time: "Tuesday, 11:44 pm",
-          title: "She pays without leaving the chat.",
-          text: "No search page. No abandoned cart.",
+          title: "The next step is checkout.",
+          text: "A link to your store's checkout, with the product she chose.",
           messages: [
             { from: "customer", text: "Ok, I'll take the Stride Max." },
             {
@@ -295,18 +289,13 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
           ],
         },
         {
-          time: "Next month",
-          title: "And she comes back.",
-          text: "Opted-in campaigns reach her where she already talks to you.",
+          time: "Before your next update",
+          title: "Keep the question as a test.",
+          text: "Use real customer questions to check recommendations before changing the agent.",
           messages: [
             {
-              from: "agent",
-              text: "Hi Ana! The Tempo Glide you looked at is 15% off this week, in size 39.",
-            },
-            { from: "customer", text: "Send me the link!" },
-            {
-              from: "agent",
-              text: "Here you go: stride.com.br/checkout/tempo-glide-39",
+              from: "event",
+              text: "Example test case · recommend a wide-fit shoe in size 38 under R$ 600",
             },
           ],
         },
@@ -327,7 +316,7 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
         feature.knowledge,
         feature.actions,
         feature.leads,
-        feature.campaigns,
+        feature.website,
         feature.guardrails,
         feature.widgets,
         feature.analytics,
@@ -348,7 +337,7 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
     seo: {
       title: "AI sales agent for WhatsApp",
       description:
-        "An AI agent that answers every WhatsApp message, recommends products from your catalog, sends checkout links and hands off to your team with full context.",
+        "Help WhatsApp shoppers choose products and reach your store's checkout. Connect your catalog, test real questions and let your team take over in Datool.",
     },
   },
 
@@ -358,11 +347,11 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
     channel: "web",
     whatsapp: whatsapp("AI sales agent for websites"),
     hero: {
-      title: "Every visitor helped.",
-      accent: "Like your best salesperson.",
+      title: "One question from checkout.",
+      accent: "Be there to answer it.",
       description:
-        "A chat widget on your store that answers product questions, recommends the right fit and gets shoppers to checkout.",
-      primaryLabel: "Request a demo",
+        "Will it fit? Is it in stock? Can I return it? Give shoppers answers from your catalog and policies, with a path to checkout and your team close by.",
+      primaryLabel: "Request my demo",
       scrollLabel: "Follow one visitor",
     },
     story: {
@@ -508,11 +497,11 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
     channel: "whatsapp",
     whatsapp: whatsapp("AI support agent for WhatsApp"),
     hero: {
-      title: "Support on WhatsApp.",
-      accent: "Solved in the chat.",
+      title: "“Where's my order?”",
+      accent: "Check it in the chat.",
       description:
-        "An AI agent that answers on WhatsApp from your policies, checks your systems and brings in your team when it should.",
-      primaryLabel: "Request a demo",
+        "Let your AI agent handle repeat questions on WhatsApp using your policies and connected order data. Give your team the cases that need a person, with the history attached.",
+      primaryLabel: "Request my demo",
       scrollLabel: "Follow one customer",
     },
     story: {
@@ -619,8 +608,8 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
       products: [],
     },
     features: {
-      title: "Support that scales.",
-      accent: "Without the queue.",
+      title: "Help with the repeat questions.",
+      accent: "Keep your team in reach.",
       items: [
         feature.whatsapp,
         feature.actions,
@@ -642,7 +631,12 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
         faq.start,
       ],
     },
-    cta: { ...cta, title: "See it with your policies." },
+    cta: {
+      ...cta,
+      title: "Bring the question your team answers every day.",
+      description:
+        "Send us your help content and a common WhatsApp question. We'll show you how an answer uses your policies, when it needs an order lookup and where a person takes over.",
+    },
     seo: {
       title: "AI support agent for WhatsApp",
       description:
@@ -656,11 +650,11 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
     channel: "web",
     whatsapp: whatsapp("AI support agent for websites"),
     hero: {
-      title: "Answers before tickets.",
-      accent: "Right on your website.",
+      title: "Help them fix it.",
+      accent: "Right where they're stuck.",
       description:
-        "A help widget that troubleshoots, checks orders and warranties, and hands exceptions to your team.",
-      primaryLabel: "Request a demo",
+        "Walk customers through the fix using your help articles. Connect order and warranty lookups, and pass exceptions to your team with the steps already tried.",
+      primaryLabel: "Request my demo",
       scrollLabel: "Follow one customer",
     },
     story: {
@@ -765,8 +759,8 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
       products: [],
     },
     features: {
-      title: "Support that scales.",
-      accent: "Without the queue.",
+      title: "Help with the repeat questions.",
+      accent: "Keep your team in reach.",
       items: [
         feature.website,
         feature.actions,
@@ -788,7 +782,12 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
         faq.start,
       ],
     },
-    cta: { ...cta, title: "See it with your help center." },
+    cta: {
+      ...cta,
+      title: "Try the support question that keeps coming back.",
+      description:
+        "Send us your help center and a common customer problem. We'll walk through the answer, the steps it takes and the handoff your team would receive.",
+    },
     seo: {
       title: "AI support agent for your website",
       description:
@@ -802,11 +801,11 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
     channel: "app",
     whatsapp: whatsapp("AI product guidance agent"),
     hero: {
-      title: "Every user onboarded.",
-      accent: "Right inside your product.",
+      title: "Get users past “How do I…?”",
+      accent: "And into your product.",
       description:
-        "An AI agent that lives in your app, answers from your docs and shows users exactly where to click.",
-      primaryLabel: "Request a demo",
+        "Help users finish the task they signed up for. Answer from your docs, guide them with actions you connect and bring in your team for the tricky parts.",
+      primaryLabel: "Request my demo",
       scrollLabel: "Follow one user",
     },
     story: {
@@ -911,7 +910,7 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
     },
     features: {
       title: "A guide inside your app.",
-      accent: "Not a link to the docs.",
+      accent: "With a next step.",
       items: [
         {
           title: "Lives in your product.",
@@ -942,7 +941,7 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
         },
         {
           ...feature.analytics,
-          text: "Replay real sessions as tests, then track what it resolves.",
+          text: "Test common tasks and inspect the sources and actions behind each answer.",
         },
       ],
     },
@@ -957,7 +956,12 @@ export const agentLandingContent: Record<string, AgentLandingContent> = {
         faq.start,
       ],
     },
-    cta: { ...cta, title: "See it inside your product." },
+    cta: {
+      ...cta,
+      title: "Show us where new users get stuck.",
+      description:
+        "Send us your product docs and a task new users struggle to finish. We'll show how a guide can explain the next step and which in-app actions need to be connected.",
+    },
     seo: {
       title: "AI product guidance agent inside your app",
       description:

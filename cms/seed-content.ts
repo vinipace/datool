@@ -49,7 +49,7 @@ export const faqContent = [
     slug: "how-do-agents-know-my-business",
     question: "How does an agent know my products and policies?",
     answer:
-      "Add your catalog, help articles and policies as knowledge, and give the agent actions such as checking an order or opening a ticket. Guardrails and tests keep its answers on track before and after launch.",
+      "Add your catalog, help articles and policies as knowledge. Connect actions to look up an order or open a ticket. Test real customer questions, inspect the sources and tool calls behind an answer, and review conversations after launch.",
   },
   {
     slug: "can-i-observe-my-own-agent",
@@ -159,9 +159,9 @@ export function landingBlocks(faqIds: number[]): Page["layout"] {
           href: "/docs/get-started/first-trace",
         },
         {
-          title: "Launch new agents",
+          title: "Help customers take the next step",
           description:
-            "Give an agent your catalog, policies and tools. Put it on WhatsApp, your website or inside your app, and take over any conversation.",
+            "Answer a product question, check an order or guide someone through your app. Connect your content and actions, test the answers and let your team take over when needed.",
           href: "#agents",
         },
         {
@@ -175,31 +175,31 @@ export function landingBlocks(faqIds: number[]): Page["layout"] {
     {
       blockType: "features",
       blockName: "agents",
-      title: "Agents that work where your customers already are.",
+      title: "A product question. An order update. A customer who needs a hand.",
       items: [
         {
           title: "Sales on WhatsApp",
-          description: "Recommends products and closes sales in the chat.",
+          description: "Answer product questions and guide shoppers to checkout.",
           href: "/agents/whatsapp-sales",
         },
         {
           title: "Sales on your website",
-          description: "A chat widget that helps visitors find and buy.",
+          description: "Help shoppers choose before they leave your store.",
           href: "/agents/website-sales",
         },
         {
           title: "Support on WhatsApp",
-          description: "Answers from your policies and checks your systems.",
+          description: "Handle repeat questions and check connected order data.",
           href: "/agents/whatsapp-support",
         },
         {
           title: "Support on your website",
-          description: "A help widget that troubleshoots and hands off.",
+          description: "Walk customers through a fix, then hand off with context.",
           href: "/agents/website-support",
         },
         {
           title: "Product guide",
-          description: "Onboards and guides users inside your app.",
+          description: "Help users finish the task they signed up for.",
           href: "/agents/product-guidance",
         },
       ],
@@ -207,22 +207,22 @@ export function landingBlocks(faqIds: number[]): Page["layout"] {
     {
       blockType: "features",
       blockName: "loop",
-      title: "Launch it. Watch it. Make it better.",
+      title: "Start with a question. Check the answer. Then go live.",
       items: [
         {
-          title: "Launch",
+          title: "Connect your business",
           description:
-            "Start from a proven agent, connect your store or app and go live on the channels your customers use.",
+            "Give the agent your help content and policies. Connect the store or app actions it needs, such as finding a product or checking an order.",
         },
         {
-          title: "Watch",
+          title: "Try the hard questions",
           description:
-            "Every conversation becomes a trace: the messages, the knowledge it used, the tools it called and what it cost.",
+            "Ask the questions customers really send. Inspect the answer, its sources and its tool calls. Set the requests your team should handle.",
         },
         {
-          title: "Improve",
+          title: "Launch and keep checking",
           description:
-            "Score answers, review the hard cases and keep failures as tests, so each change makes the agent better.",
+            "Connect a channel and review live conversations. Keep useful examples as tests, so you can see what a change improves and what still needs work.",
         },
       ],
     },

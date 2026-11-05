@@ -44,6 +44,10 @@ export async function routeScopes(request: Request): Promise<WorkspaceScope[]> {
     if (operation.name === "build_describe_operations") return []
     return [...operation.scopes]
   }
+  if (url.pathname === "/api/sessions/activity" && request.method === "GET")
+    return ["traces:read", "build:read"]
+  if (url.pathname === "/api/agents/directory" && request.method === "POST")
+    return ["metrics:read", "build:read"]
   const domains: Record<string, string> = {
     ingest: "traces",
     traces: "traces",

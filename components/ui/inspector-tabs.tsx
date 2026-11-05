@@ -46,7 +46,7 @@ export function InspectorTabs<Value extends string>({
           data-active={value === tab}
           className={cn(
             "group/inspector-tab flex shrink-0 self-end items-center rounded-t-md",
-            value === tab && "bg-foreground text-background"
+            value === tab && "bg-surface-emphasis text-foreground"
           )}
         >
           <button
@@ -56,7 +56,7 @@ export function InspectorTabs<Value extends string>({
               "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-t-md px-2 text-xs font-medium whitespace-nowrap text-foreground-muted transition-colors outline-none hover:bg-muted hover:text-foreground-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
               (onClose || hasActions) && "rounded-tr-none",
               value === tab &&
-                "bg-foreground text-background hover:bg-foreground hover:text-background"
+                "bg-surface-emphasis text-foreground hover:bg-surface-emphasis hover:text-foreground"
             )}
             onClick={() => onValueChange(tab)}
           >
@@ -85,7 +85,7 @@ export function InspectorTabs<Value extends string>({
               className={cn(
                 "grid h-7 w-6 shrink-0 place-items-center rounded-tr-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 value === tab
-                  ? "text-background hover:bg-background/15"
+                  ? "text-foreground hover:bg-surface-row-hover"
                   : "text-foreground-muted hover:bg-muted hover:text-foreground-secondary"
               )}
             >
@@ -110,7 +110,7 @@ function InspectorTabActionsSlot<Value extends string>({ value, onContainerChang
 
 export function InspectorTabAction({ className, ...props }: ComponentProps<typeof Button>) {
   return <Button {...props} variant="ghost" size="icon-sm" className={cn(
-    "h-7 w-6 rounded-none text-foreground-muted hover:bg-muted hover:text-foreground-secondary focus-visible:ring-inset group-data-[active=true]/inspector-tab:text-background group-data-[active=true]/inspector-tab:hover:bg-background/15 group-data-[active=true]/inspector-tab:hover:text-background",
+    "h-7 w-6 rounded-none text-foreground-muted hover:bg-muted hover:text-foreground-secondary focus-visible:ring-inset group-data-[active=true]/inspector-tab:text-foreground group-data-[active=true]/inspector-tab:hover:bg-surface-row-hover group-data-[active=true]/inspector-tab:hover:text-foreground",
     className
   )} />
 }

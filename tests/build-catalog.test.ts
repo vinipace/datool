@@ -50,11 +50,17 @@ const dbTest = (name: string, fn: () => Promise<void>) => {
 
 describe("Build catalog contracts", () => {
   test("normalizes the complete agent configuration and rejects unsafe values", () => {
+    const defaults = agentConfigurationSchema.parse({})
+    expect(defaults.model).toBe("openai/gpt-6-luna")
+    expect(defaults.instructions.trim().length).toBeGreaterThan(100)
     const configuration = agentConfigurationSchema.parse({
       instructions: "Answer from the approved knowledge base.",
       model: "openai/gpt-4.1-mini",
       channelOverrides: { telegram: { temperature: 0.4 } },
     })
+    expect(configuration.instructions).toBe("Answer from the approved knowledge base.")
+    expect(configuration.model).toBe("openai/gpt-4.1-mini")
+    expect(agentConfigurationSchema.parse({ instructions: "" }).instructions).toBe("")
     expect(configuration.appearance.displayName).toBe("Assistant")
     expect(configuration.channelAllowlist).toContain("telegram")
     expect(configuration.guardrails.maxTurns).toBe(50)

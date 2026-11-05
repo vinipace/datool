@@ -280,11 +280,18 @@ export function SidebarFooter({
 
 export function SidebarGroup({
   className,
+  spacing = "default",
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+}: React.ComponentPropsWithoutRef<"div"> & {
+  spacing?: "default" | "compact"
+}) {
   return (
     <div
-      className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+      className={cn(
+        "relative flex w-full min-w-0 flex-col p-2",
+        spacing === "compact" && "py-0 first:pt-2 last:pb-2",
+        className
+      )}
       data-sidebar="group"
       data-slot="sidebar-group"
       {...props}
@@ -358,10 +365,10 @@ export function SidebarMenuButton({
     props: mergeProps<"button">(
       {
         className: cn(
-          "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md px-2 text-left text-sm text-sidebar-foreground transition-colors outline-none group-data-[collapsible=icon]/sidebar:size-9 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+          "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md px-2 text-left text-sm text-sidebar-foreground transition-colors outline-none group-data-[collapsible=icon]/sidebar:size-9 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[active=true]:bg-sidebar-active data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
           size === "default" ? "h-9" : "h-11",
           isActive &&
-            "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+            "bg-sidebar-active font-semibold text-sidebar-accent-foreground hover:bg-sidebar-active",
           className
         ),
       },

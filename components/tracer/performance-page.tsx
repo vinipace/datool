@@ -4,15 +4,31 @@ import { useWorkspaceHref, useWorkspaceStorageScope } from "./workspace-path"
 
 import * as React from "react"
 import Link from "next/link"
-import { Bot, ChevronLeft, ChevronRight, Workflow } from "lucide-react"
+import {
+  Bot,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Plus,
+  Workflow,
+} from "lucide-react"
 
+import {
+  buildCall,
+  buildOperations,
+  formatBuildError,
+} from "@/components/build/shared/build-api"
+import type { ManagedAgent } from "@/src/lib/build/contracts"
+import { useRouter } from "next/navigation"
 import type { SemanticQueryInput } from "@/src/lib/semantic"
 import {
+  agentDirectoryDimensions,
   performanceMeasures,
   performanceTableRow,
   type PerformanceModel,
 } from "@/src/lib/tracer/performance-table"
 import { Button } from "@/components/ui/button"
+import { AgentAvatar } from "@/components/ui/agent-avatar"
 import { CollectionFilterBar } from "./collection-filter"
 import { useCollectionFilter } from "./use-collection-filter"
 import {
@@ -24,7 +40,13 @@ import { HeaderSlot } from "./collection-header"
 import { CollectionPanel } from "./collection-panel"
 import { CollectionPage } from "./collection-page"
 import { ColumnEditor, ComputedValue } from "./eval-computed-columns"
-import { CollectionRow, CollectionRowSelection, CollectionSelectAll, CollectionTable, CollectionTableBody } from "./collection-table"
+import {
+  CollectionRow,
+  CollectionRowSelection,
+  CollectionSelectAll,
+  CollectionTable,
+  CollectionTableBody,
+} from "./collection-table"
 import { useComputedColumns } from "./use-computed-columns"
 import { useTableView } from "./use-table-view"
 import { Notice } from "@/components/ui/notice"
@@ -32,6 +54,7 @@ import { formatDuration } from "./format"
 import { useRemote } from "./hooks"
 import { collectionTable } from "./collection-table-styles"
 import { EmptyState } from "./primitives"
+import { PercentageCell } from "./percentage-cell"
 import { SpanKindIcon } from "./span-kind-icon"
 
 const PAGE_SIZE = 50
@@ -41,7 +64,8 @@ const columns = [
     id: "versionCount",
     label: "Versions",
     width: 120,
-    title: "Distinct recorded versions in the selected time range; excludes operations without a version",
+    title:
+      "Distinct recorded versions in the selected time range; excludes operations without a version",
   },
   { id: "count", label: "Operations", width: 150 },
   {
@@ -68,20 +92,37 @@ function latency(value: number | null) {
   return value === null ? "—" : formatDuration(Math.round(value * 100) / 100)
 }
 
-function percent(value: number | null) {
-  return value === null
-    ? "—"
-    : `${(value * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`
-}
-
 function PerformanceResults({
   model,
   search,
+  includeManagedAgents = false,
 }: {
   model: PerformanceModel
   search: string
+  includeManagedAgents?: boolean
 }) {
   const workspaceHref = useWorkspaceHref()
+  const router = useRouter()
+  const [cloning, setCloning] = React.useState<string | null>(null)
+  const [cloneError, setCloneError] = React.useState<string | null>(null)
+  async function cloneAgent(id: string, name: string) {
+    if (cloning) return
+    setCloning(id)
+    setCloneError(null)
+    try {
+      const agent = await buildCall<ManagedAgent>(buildOperations.cloneAgent, {
+        sourceAgentId: id,
+        name: `${name} copy`,
+      })
+      router.push(
+        workspaceHref(`/build/agents/${encodeURIComponent(agent.id)}`)
+      )
+    } catch (error) {
+      setCloneError(formatBuildError(error))
+    } finally {
+      setCloning(null)
+    }
+  }
   const [offset, setOffset] = React.useState(0)
   const [checkedIds, setCheckedIds] = React.useState<Set<string>>(new Set())
   const kind = model === "agents" ? "agent" : "workflow"
@@ -147,7 +188,9 @@ function PerformanceResults({
         })
       const query: SemanticQueryInput = {
         measures: performanceMeasures.map((name) => `${model}.${name}`),
-        dimensions: [`${model}.name`],
+        dimensions: includeManagedAgents
+          ? agentDirectoryDimensions
+          : [`${model}.name`],
         timeDimensions: [
           {
             dimension: `${model}.startedAt`,
@@ -166,9 +209,11 @@ function PerformanceResults({
         offset,
         total: true,
       }
-      return tracerApi.performance(query, signal)
+      return includeManagedAgents
+        ? tracerApi.agentDirectory(query, signal)
+        : tracerApi.performance(query, signal)
     },
-    [model, offset, search]
+    [model, offset, search, includeManagedAgents]
   )
   const { data, error, isLoading, isRefreshing, refresh } = useRemote(
     load,
@@ -202,15 +247,28 @@ function PerformanceResults({
       state={{ data, error, isLoading, isRefreshing, refresh }}
       loadingLabel={`Loading ${model} performance`}
       selection={{
-        rows: (data?.data ?? []).filter((_, index) => checkedIds.has(rows[index].id)),
+        rows: (data?.data ?? []).filter((_, index) =>
+          checkedIds.has(rows[index].id)
+        ),
         onClear: () => setCheckedIds(new Set()),
       }}
-      header={{ exportRows: data?.data ?? [], exportName: model }}
+      header={{
+        exportRows: data?.data ?? [],
+        exportName: model,
+        actions: includeManagedAgents ? (
+          <Button asChild size="sm">
+            <Link href={workspaceHref("/build/agents/new")}>
+              <Plus />
+              New agent
+            </Link>
+          </Button>
+        ) : undefined,
+      }}
       savedView={tableView.savedView}
       toolbar={
-        computed.storageError || tableView.storageError ? (
+        cloneError || computed.storageError || tableView.storageError ? (
           <Notice variant="error" role="status" className="mb-2">
-            {computed.storageError || tableView.storageError}
+            {cloneError || computed.storageError || tableView.storageError}
           </Notice>
         ) : null
       }
@@ -223,14 +281,18 @@ function PerformanceResults({
         onSettingsChange={tableView.onSettingsChange}
         columnOrderStore={tableView.columnOrderStore}
         computedColumnStore={computed.store}
-        actionColumnIds={["add-column"]}
+        actionColumnIds={
+          includeManagedAgents ? ["actions", "add-column"] : ["add-column"]
+        }
         columnIds={[
           ...columns.map((column) => column.id),
+          ...(includeManagedAgents ? ["actions"] : []),
           ...computed.columns.map((column) => `computed:${column.id}`),
           "add-column",
         ]}
         widths={[
           ...columns.map((column) => column.width),
+          ...(includeManagedAgents ? [100] : []),
           ...computed.columns.map(() => 240),
           160,
         ]}
@@ -243,7 +305,11 @@ function PerformanceResults({
                 checked={allChecked}
                 partial={checkedRows.length > 0 && !allChecked}
                 disabled={!rows.length}
-                onChange={() => setCheckedIds(allChecked ? new Set() : new Set(rows.map((row) => row.id)))}
+                onChange={() =>
+                  setCheckedIds(
+                    allChecked ? new Set() : new Set(rows.map((row) => row.id))
+                  )
+                }
               />
             </th>
             {columns.map((column) => (
@@ -256,6 +322,11 @@ function PerformanceResults({
                 {column.label}
               </th>
             ))}
+            {includeManagedAgents && (
+              <th scope="col" className={collectionTable.heading}>
+                Actions
+              </th>
+            )}
             {computed.columns.map((column) => (
               <th
                 key={column.id}
@@ -306,7 +377,13 @@ function PerformanceResults({
           rows={rows}
           empty={
             <tr>
-              <td colSpan={columns.length + computed.columns.length + 2}>
+              <td
+                colSpan={
+                  columns.length +
+                  computed.columns.length +
+                  (includeManagedAgents ? 3 : 2)
+                }
+              >
                 <EmptyState
                   icon={kind === "agent" ? Bot : Workflow}
                   title={
@@ -331,31 +408,57 @@ function PerformanceResults({
             const cost = metrics.reportedCostUsd
             const filter = `groupType = ${JSON.stringify(kind)} groupName = ${JSON.stringify(name)}`
             const href = workspaceHref(
-              `/traces?${new URLSearchParams({ filter })}`
+              row.managedId
+                ? `/build/agents/${encodeURIComponent(row.managedId)}`
+                : `/traces?${new URLSearchParams({ filter })}`
             )
             return (
-              <CollectionRow key={row.id} checked={checkedIds.has(row.id)} className="cursor-default">
+              <CollectionRow
+                key={row.id}
+                checked={checkedIds.has(row.id)}
+                className="cursor-default"
+              >
                 <CollectionRowSelection
                   index={offset + index}
                   checked={checkedIds.has(row.id)}
                   label={`Select ${name}`}
-                  onChange={() => setCheckedIds((current) => {
-                    const next = new Set(current)
-                    if (next.has(row.id)) next.delete(row.id)
-                    else next.add(row.id)
-                    return next
-                  })}
+                  onChange={() =>
+                    setCheckedIds((current) => {
+                      const next = new Set(current)
+                      if (next.has(row.id)) next.delete(row.id)
+                      else next.add(row.id)
+                      return next
+                    })
+                  }
                 />
                 <td className={`${collectionTable.cell} font-medium`}>
-                  <Link
-                    className="flex max-w-full items-center gap-2 rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                    href={href}
-                  >
-                    <SpanKindIcon kind={kind} />
-                    <span className="truncate" title={name}>
-                      {name}
-                    </span>
-                  </Link>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Link
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                      href={href}
+                    >
+                      {row.managedId ? (
+                        <AgentAvatar
+                          appearance={row.avatar}
+                          className="size-5 rounded-sm"
+                        />
+                      ) : (
+                        <SpanKindIcon kind={kind} />
+                      )}
+                      <span className="truncate" title={name}>
+                        {name}
+                      </span>
+                    </Link>
+                    {includeManagedAgents && (
+                      <span className="shrink-0 text-xs font-normal text-foreground-muted">
+                        {row.managedId
+                          ? row.managedStatus === "archived"
+                            ? "Archived"
+                            : "Created"
+                          : "Traced"}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className={`${collectionTable.cell} tabular-nums`}>
                   {metrics.versionCount?.toLocaleString() ?? "—"}
@@ -369,10 +472,10 @@ function PerformanceResults({
                   <span
                     className={metrics.erroredCount ? "text-destructive" : ""}
                   >
-                    {percent(metrics.errorRate)}
+                    <PercentageCell value={metrics.errorRate} tone="destructive" />
                   </span>
-                  <span className="ml-1 text-xs text-foreground-muted">
-                    ({metrics.erroredCount} errors)
+                  <span className="ml-2 align-middle text-xs text-foreground-muted">
+                    ({metrics.erroredCount} {metrics.erroredCount === 1 ? "error" : "errors"})
                   </span>
                 </td>
                 <td className={`${collectionTable.cell} tabular-nums`}>
@@ -407,6 +510,22 @@ function PerformanceResults({
                     </>
                   )}
                 </td>
+                {includeManagedAgents && (
+                  <td className={collectionTable.cell}>
+                    {row.managedId && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Clone ${name}`}
+                        title="Clone agent"
+                        loading={cloning === row.managedId}
+                        onClick={() => void cloneAgent(row.managedId!, name)}
+                      >
+                        <Copy />
+                      </Button>
+                    )}
+                  </td>
+                )}
                 {computed.columns.map((column) => (
                   <td key={column.id} className={collectionTable.cell}>
                     <div className={collectionTable.compactContent}>
@@ -466,9 +585,11 @@ function PerformanceResults({
 export function PerformancePage({
   model,
   initialFilter = "startedAt >= -7d",
+  includeManagedAgents = false,
 }: {
   model: PerformanceModel
   initialFilter?: string
+  includeManagedAgents?: boolean
 }) {
   const search = useCollectionFilter(model, initialFilter)
   const storageScope = useWorkspaceStorageScope()
@@ -488,6 +609,7 @@ export function PerformancePage({
         key={JSON.stringify([storageScope, model, search.filter])}
         model={model}
         search={search.filter}
+        includeManagedAgents={model === "agents" && includeManagedAgents}
       />
     </CollectionPanel>
   )

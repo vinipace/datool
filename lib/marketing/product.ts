@@ -4,7 +4,7 @@ export const productPillars = [
     slug: "build",
     name: "Build",
     icon: "playground",
-    summary: "From your first prompt to a working AI application.",
+    summary: "Help customers choose, get answers and take the next step.",
     docs: "/docs/guides/playground",
   },
   {

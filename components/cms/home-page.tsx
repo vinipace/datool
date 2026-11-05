@@ -180,7 +180,7 @@ function Platform({ block }: { block: FeaturesBlock }) {
 function Agents({ block }: { block: FeaturesBlock }) {
   return (
     <section id="agents" className={`${styles.section} ${styles.agents}`}>
-      <p className={styles.eyebrow}>Ready-made agents</p>
+      <p className={styles.eyebrow}>Agents for your customer conversations</p>
       <h2 className={styles.heading}>{block.title}</h2>
       <div className={styles.agentGrid}>
         {block.items.map((item, index) => {

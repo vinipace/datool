@@ -47,7 +47,6 @@ export function AgentAvatar({
       data-slot="agent-avatar"
       className={cn(
         "relative inline-flex size-6 shrink-0 overflow-hidden rounded-md",
-        color.className,
         className
       )}
     >
@@ -57,7 +56,7 @@ export function AgentAvatar({
         referrerPolicy="no-referrer"
         className="size-full object-cover"
       />
-      <AvatarPrimitive.Fallback className="size-full">
+      <AvatarPrimitive.Fallback className={cn("size-full", color.className)}>
         <svg
           viewBox="0 0 468 468"
           fill="none"

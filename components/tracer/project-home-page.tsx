@@ -7,6 +7,7 @@ import {
   Check,
   LayoutDashboard,
   MoreHorizontal,
+  Pencil,
   Pin,
   PinOff,
   Plus,
@@ -23,19 +24,27 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { ProjectHome } from "@/src/lib/tracer/project-home"
 import { dashboardFilterScope } from "@/src/lib/tracer/dashboard-queries"
-import { CollectionHeaderControls } from "./collection-header"
-import { CollectionFilterBar } from "./collection-filter"
-import { useCollectionFilter } from "./use-collection-filter"
+import { CollectionHeaderControls, HeaderSlot } from "./collection-header"
 import { DashboardRenderer } from "./dashboard-renderer"
 import { ErrorState } from "./primitives"
 import { HomeWidgetPicker } from "./home-widget-picker"
 import { useProjectHome } from "./use-project-home"
 import { useWorkspaceHref } from "./workspace-path"
 import { useProjectScope } from "./project-scope-context"
+import { ProjectHomeAgents } from "./project-home-agents"
 
-export function ProjectHomePage() {
+export function ProjectHomePage({
+  buildEnabled = false,
+}: {
+  buildEnabled?: boolean
+}) {
   const projectId = useProjectScope()?.projectId
-  return <ProjectHomeContent key={projectId} />
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      {buildEnabled && <ProjectHomeAgents key={`agents:${projectId}`} />}
+      <ProjectHomeContent key={projectId} />
+    </div>
+  )
 }
 
 function ProjectHomeContent() {
@@ -46,12 +55,11 @@ function ProjectHomeContent() {
   const [draft, setDraft] = useState<ProjectHome | null>(null)
   const [revision, setRevision] = useState(0)
   const [rangeEnd, setRangeEnd] = useState(() => Date.now())
-  const filter = useCollectionFilter("dashboard", "startedAt >= -7d")
   const scoped = useMemo(() => {
     try {
       return {
         scope: dashboardFilterScope(
-          filter.filter,
+          "startedAt >= -7d",
           rangeEnd,
           Intl.DateTimeFormat().resolvedOptions().timeZone
         ),
@@ -62,7 +70,7 @@ function ProjectHomeContent() {
           error instanceof Error ? error.message : "Choose a valid date range.",
       }
     }
-  }, [filter.filter, rangeEnd])
+  }, [rangeEnd])
   const current = draft ?? home
   const unavailable = home?.pins.filter((pin) => pin.unavailable) ?? []
   if (!home && store.state.error)
@@ -70,7 +78,7 @@ function ProjectHomeContent() {
   if (!current || !home) return <DashboardSkeleton />
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 p-3">
+    <div className="flex min-h-80 flex-col gap-3 p-3">
       <CollectionHeaderControls
         showExport={false}
         onRefresh={() => {
@@ -79,16 +87,7 @@ function ProjectHomeContent() {
           setRevision((value) => value + 1)
         }}
       />
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="w-full min-w-0 flex-auto sm:w-auto sm:flex-1">
-          {home.pins.length > 0 && (
-            <CollectionFilterBar
-              {...filter}
-              resource="dashboard"
-              label="Filter Home dates"
-            />
-          )}
-        </div>
+      <HeaderSlot name="actions">
         {draft ? (
           <>
             <Button
@@ -116,35 +115,37 @@ function ProjectHomeContent() {
             </Button>
           </>
         ) : (
-          <>
-            {home.widgets.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
-                size="sm"
-                className="hidden md:inline-flex"
-                disabled={store.pending || unavailable.length > 0}
-                title={
-                  unavailable.length
-                    ? "Unpin unavailable widgets before arranging Home"
-                    : undefined
-                }
-                onClick={() => setDraft(home)}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Edit Home"
+                title="Edit Home"
+                disabled={store.pending}
               >
-                <LayoutDashboard />
-                Arrange
+                <Pencil />
               </Button>
-            )}
-            <Button
-              size="sm"
-              onClick={() => setPickerOpen(true)}
-              disabled={store.pending}
-            >
-              <Plus />
-              Pin widgets
-            </Button>
-          </>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setPickerOpen(true)}>
+                <Plus />
+                Pin widgets
+              </DropdownMenuItem>
+              {home.widgets.length > 0 && (
+                <DropdownMenuItem
+                  className="hidden md:flex"
+                  disabled={unavailable.length > 0}
+                  onSelect={() => setDraft(home)}
+                >
+                  <LayoutDashboard />
+                  Arrange widgets
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-      </div>
+      </HeaderSlot>
       {store.error && (
         <Notice variant="error" role="alert">
           {store.error}

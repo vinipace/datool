@@ -76,7 +76,12 @@ export function ChatTextTranscript({
         </article>
       ))}
       {pendingReply && (
-        <div className={transcript.length > 0 ? "mt-5" : undefined}>
+        <div
+          className={cn(
+            "flex justify-start py-1",
+            transcript.length > 0 && "mt-5"
+          )}
+        >
           {pendingReply}
         </div>
       )}

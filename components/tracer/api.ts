@@ -46,6 +46,7 @@ import type {
   SavedView,
   SavedViewData,
   Session,
+  SessionActivity,
   SessionDetail,
   Span,
   TraceDetail,
@@ -192,6 +193,8 @@ export const tracerApi = {
     item: (sessionId: string, itemId: string, signal?: AbortSignal) => request<ReviewItemDetail>(`/api/reviews/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}`, { signal }),
     record: (sessionId: string, itemId: string, input: RecordReview) => request<ReviewItemDetail>(`/api/reviews/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}`, { method: "PUT", body: input }),
   },
+  agentDirectory: (query: SemanticQueryInput, signal?: AbortSignal) =>
+    request<SemanticResult>("/api/agents/directory", { method: "POST", body: query, signal }),
   performance: (query: SemanticQueryInput, signal?: AbortSignal) =>
     request<SemanticResult>("/api/metrics/query", {
       method: "POST",
@@ -256,6 +259,16 @@ export const tracerApi = {
       ),
   },
   sessions: {
+    activity: (options: CollectionListOptions = {}) =>
+      collection<SessionActivity>(
+        withQuery("/api/sessions/activity", {
+          filter: options.filter,
+          cursor: options.cursor,
+          includeTotal: options.includeTotal?.toString(),
+          limit: options.limit?.toString(),
+        }),
+        options.signal
+      ),
     create: (input: CreateSessionInput) =>
       request<Session>("/api/sessions", { body: input, method: "POST" }),
     get: (id: string, signal?: AbortSignal) =>

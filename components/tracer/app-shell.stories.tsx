@@ -138,9 +138,10 @@ export const InboxSidebar: Story = {
       canvas.getByRole("link", { name: "My Inbox" })
     ).toHaveAttribute("href", `${prefix}/build/inbox?view=mine`)
     await expect(canvas.getByRole("link", { name: "Mentions" })).toBeVisible()
-    await expect(
-      canvas.queryByRole("link", { name: "Home" })
-    ).not.toBeInTheDocument()
+    await expect(canvas.getByRole("link", { name: "Home" })).toHaveAttribute(
+      "href",
+      prefix
+    )
     await expect(
       canvas.queryByRole("link", { name: "Traces" })
     ).not.toBeInTheDocument()
@@ -160,20 +161,18 @@ export const BuildEnabled: Story = {
     if (toggle.getAttribute("aria-expanded") !== "true")
       await userEvent.click(toggle)
     await expect(
-      within(
-        canvas.getByRole("navigation", { name: "Workspace area" })
-      ).getByRole("link", { name: "Build" })
-    ).toBeVisible()
-    for (const [label, route] of [
-      ["Agents", "agents"],
-      ["Conversations", "conversations"],
-      ["Inbox", "inbox"],
-      ["Contacts", "contacts"],
-    ]) {
-      await expect(canvas.getByRole("link", { name: label })).toHaveAttribute(
-        "href",
-        `${prefix}/build/${route}`
-      )
+      canvas.queryByRole("navigation", { name: "Workspace area" })
+    ).not.toBeInTheDocument()
+    await expect(canvas.getByRole("link", { name: "Traces" })).toBeVisible()
+    await expect(canvas.getByRole("link", { name: "Inbox" })).toHaveAttribute(
+      "href",
+      `${prefix}/build/inbox`
+    )
+    await expect(
+      canvas.getByRole("link", { name: "Sessions" })
+    ).toHaveAttribute("href", `${prefix}/sessions`)
+    for (const name of ["Conversations", "Contacts"]) {
+      await expect(canvas.queryByRole("link", { name })).not.toBeInTheDocument()
     }
   },
 }
@@ -215,7 +214,7 @@ export const NewScorerRoute: Story = {
 export const BuildNavigation: Story = {
   render: () => <AppShellExample buildEnabled />,
   parameters: {
-    nextjs: { navigation: { pathname: `${prefix}/build/agents`, query: {} } },
+    nextjs: { navigation: { pathname: `${prefix}/sessions`, query: {} } },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -227,22 +226,11 @@ export const BuildNavigation: Story = {
       header.getByRole("button", { name: /Switch project/ })
     ).toBeVisible()
     await expect(
-      within(
-        canvas.getByRole("navigation", { name: "Workspace area" })
-      ).getByRole("link", { name: "Build" })
+      canvas.getByRole("link", { name: "Sessions" })
     ).toHaveAttribute("aria-current", "page")
-    await expect(
-      within(
-        canvas.getByRole("navigation", { name: "Workspace area" })
-      ).getByRole("link", { name: "Observe" })
-    ).toHaveAttribute("href", prefix)
-    await expect(canvas.getByRole("link", { name: "Agents" })).toHaveAttribute(
-      "aria-current",
-      "page"
-    )
-    await expect(
-      canvas.queryByRole("link", { name: "Traces" })
-    ).not.toBeInTheDocument()
+    const traces = canvas.getByRole("link", { name: "Traces" })
+    await expect(traces).toHaveAttribute("href", `${prefix}/traces`)
+    await expect(traces).not.toHaveAttribute("aria-current")
   },
 }
 
@@ -523,5 +511,47 @@ export const EditProfile: Story = {
       reopened.queryByRole("button", { name: "Remove photo" })
     ).toBeNull()
     await userEvent.click(reopened.getByRole("button", { name: "Done" }))
+  },
+}
+
+export const Appearance: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const page = within(canvasElement.ownerDocument.body)
+    const original = localStorage.getItem("datool:theme")
+    const root = canvasElement.ownerDocument.documentElement
+    const originalClass = root.className
+    const originalScheme = root.style.colorScheme
+    try {
+      for (const mode of ["Light", "Dark", "System"]) {
+        await userEvent.click(
+          canvas.getByRole("button", {
+            name: "Account menu for ana@example.com",
+          })
+        )
+        await userEvent.click(
+          page.getByRole("menuitem", { name: "Appearance" })
+        )
+        await userEvent.click(
+          await page.findByRole("menuitemradio", { name: mode })
+        )
+        const expected =
+          mode === "System"
+            ? matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : mode.toLowerCase()
+        await expect(root).toHaveClass(expected)
+        await expect(localStorage.getItem("datool:theme")).toBe(
+          mode.toLowerCase()
+        )
+      }
+    } finally {
+      if (original === null) localStorage.removeItem("datool:theme")
+      else localStorage.setItem("datool:theme", original)
+      window.dispatchEvent(new StorageEvent("storage", { key: "datool:theme" }))
+      root.className = originalClass
+      root.style.colorScheme = originalScheme
+    }
   },
 }

@@ -8,10 +8,17 @@ For browser titles, follow [Page titles and metadata](./page-metadata.md). Every
 rendered server page exports metadata using the shared title catalog; the root
 layout applies the `Page · Datool` format.
 
+The account menu includes Appearance choices for Light, Dark, and System.
+`lib/theme.ts` persists the browser preference and follows OS changes in System
+mode. `app/document.tsx` applies the saved theme before paint; fixed marketing
+themes remain owned by their layouts. Sidebar sections use 0.5rem separation
+and project navigation items remain 32px high.
+
 ## Owners
 
 Project Home (`/p/[projectSlug]`) is the default project landing page. It reuses
-`DashboardRenderer` and the shared date filter. Users pin existing widgets from
+`DashboardRenderer` with the default seven-day scope. The page header has an Edit Home
+menu for pinning widgets and arranging the layout. Users pin existing widgets from
 a dashboard card or Home's widget picker. Pins are shared within the project;
 the source dashboard owns each widget's definition, while Home owns placement.
 Unpinning never edits the source. Missing sources stay visible as removable
@@ -750,6 +757,23 @@ saving and saved states. New agents still require the explicit Create agent acti
 
 ### Agent and Inbox navigation
 
+The workspace sidebar shows Home followed by Inbox, then Observe and Test, without
+mode tabs. Inbox and Home's agent cards appear only when Build is enabled for the
+server-verified organization. Home lists the project's current agents above its
+pinned dashboard widgets. Cards use the saved avatar and last-updated time, and
+open the agent editor; their menu links to the editor and Settings. Agent loading
+and failures remain independent of pinned widgets. Home uses the default seven-day
+widget range without a filter bar; the top-bar Edit Home menu opens widget pinning
+and layout controls.
+
+Agents is one directory for created and traced agents, with performance metrics.
+Saved agent IDs join renamed Build activity; older traces use an unambiguous exact
+slug/name match. Distinct created agents with the same name keep separate rows.
+Created agents with no operations remain visible with zero counts and unavailable
+latency/cost. Filtering, deduplication and pagination happen in SQL, inside the
+project scope. Created rows open the editor and retain cloning; traced rows open
+the trace collection. The old Build agents URL redirects to this directory.
+
 The workspace sidebar switches to the agent's navigation while its editor or a
 channel opened from that agent owns `AgentSidebarTarget`. The agent avatar/name
 returns to the agent list. Analytics comes first, Build and Activity are
@@ -759,10 +783,13 @@ Conversations opens inside the agent editor at `section=conversations`, retainin
 the agent sidebar. It reuses the shared all-chats collection with a fixed agent
 scope applied before pagination; URL filters cannot override or remove it. The
 current agent's Integrations page remains reachable from this navigation.
-The project-wide Conversations table includes an Agent column with the current
-agent name and configured avatar, including archived agents, using the shared
-column visibility and ordering controls. Agent-scoped conversations omit this
-redundant column from both the table and Display controls.
+Project-wide Sessions combines agent conversations and traced sessions in one
+list, ordered by latest update. A conversation and its traced session share an
+ID and appear once, including chats without traces. Agent, channel, status and
+contact filters apply before pagination. Opening a conversation retains the
+shared reply, ownership and trace controls. Customer initials avatars are omitted
+from conversation rows and inspectors. Agent-scoped conversations keep their
+fixed scope and omit the redundant Agent column.
 Contacts opens at `section=contacts` in the same agent navigation. It reuses the
 contact directory and inspector with a fixed agent scope, applied before
 pagination and CSV export. A contact belongs in this view when linked to one of
@@ -779,4 +806,4 @@ status is shown as a removable chip.
 Queue and agent filters are applied before pagination on the server; My Inbox
 uses the authenticated actor, and Mentions matches explicit @email mentions in
 internal notes. Selection and filters are reflected in the URL for browser Back
-and deep links. Conversations remains the separate collection of all chats.
+and deep links. Sessions contains the combined collection of all chats and traced sessions.

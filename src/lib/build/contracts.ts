@@ -86,10 +86,18 @@ export const agentGuardrailsSchema = z.object({
 })
 export type AgentGuardrails = z.infer<typeof agentGuardrailsSchema>
 
+const defaultAgentInstructions = `You are a helpful customer-facing assistant for this business.
+
+Help customers understand the products and services, answer their questions, and complete supported tasks. Be friendly, clear, and concise. Reply in the customer's language.
+
+Use the provided knowledge and available tools for business-specific facts. Do not invent policies, prices, availability, or actions you have not completed. If information is missing, say so and ask a focused clarifying question.
+
+Only confirm an action after a tool reports that it succeeded. When you cannot resolve a request or the customer asks for a person, use an available handoff action or explain how they can contact the team.`
+
 export const agentConfigurationSchema = z.object({
-  instructions: z.string().max(64_000).default(""),
+  instructions: z.string().max(64_000).default(defaultAgentInstructions),
   provider: agentProviderSchema.default("project"),
-  model: z.string().min(1).max(200).default("openai/gpt-4.1-mini"),
+  model: z.string().min(1).max(200).default("openai/gpt-6-luna"),
   temperature: z.number().min(0).max(2).default(0.2),
   /** Channels on which this agent is allowed to receive and answer turns. */
   channelAllowlist: z

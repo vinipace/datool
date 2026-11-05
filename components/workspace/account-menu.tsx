@@ -3,7 +3,14 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ChevronsUpDown, LoaderCircle, LogOut } from "lucide-react"
+import {
+  ChevronsUpDown,
+  LoaderCircle,
+  LogOut,
+  Monitor,
+  Moon,
+  Sun,
+} from "lucide-react"
 
 import {
   DropdownMenu,
@@ -12,12 +19,18 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
 import { Notice } from "@/components/ui/notice"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 import { UserAvatarImage } from "@/components/ui/user-avatar"
 import { authClient } from "@/lib/auth-client"
 import { Dialog } from "@/components/ui/dialog"
+import { setThemeMode, useThemeMode, type ThemeMode } from "@/lib/theme"
 import { ProfileEditor } from "./profile-editor"
 
 export type AccountMenuUser = {
@@ -27,6 +40,7 @@ export type AccountMenuUser = {
 }
 
 export function AccountMenu({ user: initialUser }: { user: AccountMenuUser }) {
+  const theme = useThemeMode()
   const [savedUser, setSavedUser] = React.useState<AccountMenuUser | null>(null)
   const [profileOpen, setProfileOpen] = React.useState(false)
   const user = savedUser ?? initialUser
@@ -99,6 +113,38 @@ export function AccountMenu({ user: initialUser }: { user: AccountMenuUser }) {
           <DropdownMenuItem asChild>
             <Link href="/billing">Billing</Link>
           </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              {theme === "light" ? (
+                <Sun />
+              ) : theme === "dark" ? (
+                <Moon />
+              ) : (
+                <Monitor />
+              )}
+              Appearance
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuRadioGroup
+                value={theme}
+                onValueChange={(value) => setThemeMode(value as ThemeMode)}
+              >
+                <DropdownMenuRadioItem value="light">
+                  <Sun />
+                  Light
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dark">
+                  <Moon />
+                  Dark
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="system">
+                  <Monitor />
+                  System
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={isPending}
             onSelect={(event) => {

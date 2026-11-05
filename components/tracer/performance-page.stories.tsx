@@ -1,4 +1,8 @@
-import { checkCollectionSelection, checkCollectionPanel, checkCompactCollectionPanel } from "../../.storybook/collection-panel-checks"
+import {
+  checkCollectionSelection,
+  checkCollectionPanel,
+  checkCompactCollectionPanel,
+} from "../../.storybook/collection-panel-checks"
 import type { ComponentProps } from "react"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { expect, userEvent, within } from "storybook/test"
@@ -30,27 +34,46 @@ function groupedPerformanceHandler(model: "agents" | "workflows") {
 
 async function checkVersions(canvasElement: HTMLElement, name: string) {
   const canvas = within(canvasElement)
-  await expect(canvas.getByRole("columnheader", { name: "Versions" })).toBeVisible()
+  await expect(
+    canvas.getByRole("columnheader", { name: "Versions" })
+  ).toBeVisible()
   const link = canvas.getByRole("link", { name: new RegExp(name) })
   const row = link.closest("tr")!
-  const selectAll = canvas.getByRole("checkbox", { name: /^Select all visible/ })
-  const selectRow = within(row).getByRole("checkbox", { name: `Select ${name}` })
+  const selectAll = canvas.getByRole("checkbox", {
+    name: /^Select all visible/,
+  })
+  const selectRow = within(row).getByRole("checkbox", {
+    name: `Select ${name}`,
+  })
   selectRow.focus()
   await expect(selectRow).toBeVisible()
-  await expect(selectAll.getBoundingClientRect().left).toBe(selectRow.getBoundingClientRect().left)
-  await expect(selectAll.getBoundingClientRect().width).toBe(selectRow.getBoundingClientRect().width)
+  await expect(selectAll.getBoundingClientRect().left).toBe(
+    selectRow.getBoundingClientRect().left
+  )
+  await expect(selectAll.getBoundingClientRect().width).toBe(
+    selectRow.getBoundingClientRect().width
+  )
   await expect(within(row).getByRole("cell", { name: "3" })).toBeVisible()
-  const filter = new URL(link.getAttribute("href")!, "http://localhost").searchParams.get("filter")!
+  const filter = new URL(
+    link.getAttribute("href")!,
+    "http://localhost"
+  ).searchParams.get("filter")!
   await expect(filter).toContain(`groupName = ${JSON.stringify(name)}`)
   await expect(filter).not.toContain("groupVersion")
   await expect(row).not.toHaveTextContent("2026.09")
   await userEvent.click(canvas.getByRole("button", { name: "Display" }))
-  const versions = within(document.body).getByRole("menuitemcheckbox", { name: "Versions" })
+  const versions = within(document.body).getByRole("menuitemcheckbox", {
+    name: "Versions",
+  })
   await userEvent.click(versions)
-  await expect(canvas.queryByRole("columnheader", { name: "Versions" })).not.toBeInTheDocument()
+  await expect(
+    canvas.queryByRole("columnheader", { name: "Versions" })
+  ).not.toBeInTheDocument()
   await userEvent.click(versions)
   await userEvent.keyboard("{Escape}")
-  await expect(canvas.getByRole("columnheader", { name: "Versions" })).toBeVisible()
+  await expect(
+    canvas.getByRole("columnheader", { name: "Versions" })
+  ).toBeVisible()
 }
 
 function PerformanceScenario(props: ComponentProps<typeof PerformancePage>) {
@@ -81,7 +104,11 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Agents: Story = {
-  parameters: { msw: { handlers: [groupedPerformanceHandler("agents"), ...performanceHandlers()] } },
+  parameters: {
+    msw: {
+      handlers: [groupedPerformanceHandler("agents"), ...performanceHandlers()],
+    },
+  },
   play: async ({ canvasElement }) => {
     await checkCollectionPanel(canvasElement, "Agents")
     const canvas = within(canvasElement)
@@ -134,6 +161,16 @@ export const ErrorAndRetry: Story = {
   parameters: {
     msw: {
       handlers: [
+        http.get("/api/page-views", () =>
+          HttpResponse.json({
+            data: {
+              items: [],
+              nextCursor: null,
+              hasMore: false,
+              totalCount: 0,
+            },
+          })
+        ),
         metricsQueryHandler("error", { once: true }),
         metricsQueryHandler(),
         customFieldsHandler(),
@@ -157,7 +194,12 @@ export const Workflows: Story = {
     nextjs: {
       navigation: { pathname: `${storybookProject.prefix}/workflows` },
     },
-    msw: { handlers: [groupedPerformanceHandler("workflows"), ...performanceHandlers()] },
+    msw: {
+      handlers: [
+        groupedPerformanceHandler("workflows"),
+        ...performanceHandlers(),
+      ],
+    },
   },
   play: async ({ canvasElement }) => {
     await checkCollectionPanel(canvasElement, "Workflows")
@@ -170,7 +212,11 @@ export const Workflows: Story = {
 
 export const NarrowCollection: Story = {
   parameters: Agents.parameters,
-  render: () => <div className="w-[375px] max-w-full"><PerformanceScenario model="agents" initialFilter={fixedFilter} /></div>,
+  render: () => (
+    <div className="w-[375px] max-w-full">
+      <PerformanceScenario model="agents" initialFilter={fixedFilter} />
+    </div>
+  ),
   play: async ({ canvasElement }) => {
     await checkCompactCollectionPanel(canvasElement, "Agents")
   },
@@ -178,15 +224,113 @@ export const NarrowCollection: Story = {
 
 export const SelectionHeader: Story = {
   ...Agents,
-  play: async ({ canvasElement }) => checkCollectionSelection(canvasElement, "Agents"),
+  play: async ({ canvasElement }) =>
+    checkCollectionSelection(canvasElement, "Agents"),
 }
 
 export const WorkflowSelectionHeader: Story = {
   ...Workflows,
-  play: async ({ canvasElement }) => checkCollectionSelection(canvasElement, "Workflows"),
+  play: async ({ canvasElement }) =>
+    checkCollectionSelection(canvasElement, "Workflows"),
 }
 
 export const NarrowSelectionHeader: Story = {
   ...NarrowCollection,
-  play: async ({ canvasElement }) => checkCollectionSelection(canvasElement, "Agents"),
+  play: async ({ canvasElement }) =>
+    checkCollectionSelection(canvasElement, "Agents"),
+}
+
+export const CreatedAndTracedAgents: Story = {
+  args: { includeManagedAgents: true },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get("/api/page-views", () =>
+          HttpResponse.json({
+            data: {
+              items: [],
+              nextCursor: null,
+              hasMore: false,
+              totalCount: 0,
+            },
+          })
+        ),
+        http.post("/api/agents/directory", async ({ request }) => {
+          const query = semanticQuerySchema.parse(await request.json())
+          const result = semanticResultForQuery(query)
+          const sample = result.data[0]
+          return HttpResponse.json({
+            data: {
+              ...result,
+              data: [
+                {
+                  ...sample,
+                  "agents.name": "Store assistant",
+                  "agents.identity": "managed:store",
+                  "agents.managedId": "store",
+                  "agents.managedStatus": "active",
+                  "agents.avatarUrl": null,
+                  "agents.avatarStyle": "wink",
+                  "agents.avatarColor": "violet",
+                },
+                {
+                  ...sample,
+                  "agents.name": "Research agent",
+                  "agents.identity": "traced:Research agent",
+                  "agents.managedId": null,
+                  "agents.managedStatus": null,
+                  "agents.avatarUrl": null,
+                  "agents.avatarStyle": null,
+                  "agents.avatarColor": null,
+                },
+                {
+                  ...sample,
+                  ...Object.fromEntries(
+                    Object.keys(sample)
+                      .filter((key) => key !== "agents.name")
+                      .map((key) => [
+                        key,
+                        key.endsWith("Count") || key.endsWith(".count")
+                          ? 0
+                          : null,
+                      ])
+                  ),
+                  "agents.name": "New assistant",
+                  "agents.identity": "managed:new",
+                  "agents.managedId": "new",
+                  "agents.managedStatus": "active",
+                  "agents.avatarUrl": null,
+                  "agents.avatarStyle": "happy",
+                  "agents.avatarColor": "blue",
+                },
+              ],
+              meta: { ...result.meta, page: { ...result.meta.page, total: 3 } },
+            },
+          })
+        }),
+        ...performanceHandlers(),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.findByRole("link", { name: /Store assistant/ })
+    ).resolves.toHaveAttribute(
+      "href",
+      `${storybookProject.prefix}/build/agents/store`
+    )
+    await expect(
+      canvas.getByRole("link", { name: /Research agent/ })
+    ).toHaveAttribute("href", expect.stringContaining("/traces?"))
+    await expect(
+      canvas.getByRole("link", { name: /New assistant/ })
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole("button", { name: "Clone Store assistant" })
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole("link", { name: "New agent" })
+    ).toHaveAttribute("href", `${storybookProject.prefix}/build/agents/new`)
+  },
 }
