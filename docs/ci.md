@@ -44,6 +44,12 @@ publishing gate. The image acceptance script repeats the journey and isolation
 tests as the image's non-root user, so a missing browser or runtime asset blocks
 release even when source checks pass.
 
+`bun run test` uses `scripts/test.mjs`: ordinary tests retain their Bun batch,
+while browser-backed journeys run on Node with Vitest's isolated workers, matching
+the supported Playwright runtime. This keeps browser-driver handles and provider
+mocks separate from Bun's test-file lifecycle. After preparing assets, run only these files with
+`bun run test:agent:journeys`. Image acceptance uses the same runner.
+
 `production-image` verifies generated public API/docs contracts as part of the
 application build, then runs the actual deployable image through its acceptance
 checks: repeatable application and CMS migrations, CMS rendering, denied

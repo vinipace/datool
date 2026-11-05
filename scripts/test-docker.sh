@@ -61,7 +61,9 @@ docker run --rm "${environment[@]}" "$image" bun run db:alerts-reader
 docker run --rm --network "container:$prefix-db" \
   -e DATOOL_TEST_DATABASE_URL=postgresql://datool:isolated-test@127.0.0.1:5432/postgres \
   --mount "type=bind,source=$PWD/tests,target=/app/tests,readonly" \
-  "$image" bun --no-env-file test tests/agent-journey-evaluations.test.ts tests/agent-journey-browser.test.ts
+  --mount "type=bind,source=$PWD/scripts/test.mjs,target=/app/scripts/test.mjs,readonly" \
+  --mount "type=bind,source=$PWD/vitest.agent-journeys.config.mts,target=/app/vitest.agent-journeys.config.mts,readonly" \
+  "$image" bun --no-env-file scripts/test.mjs --journeys-only
 docker run -d --name "$prefix-web" "${environment[@]}" -v "$prefix-data:/app/.data" "$image" >/dev/null
 docker run -d --name "$prefix-worker" "${environment[@]}" "$image" bun run worker:ingestion >/dev/null
 docker run -d --name "$prefix-buildworker" "${environment[@]}" "$image" bun run worker:build >/dev/null

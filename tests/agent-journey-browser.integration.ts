@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import { rejects } from "node:assert/strict"
 import { createServer } from "node:http"
 import { widgetDefinitionSchema } from "@/src/lib/build/contracts"

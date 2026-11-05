@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from "bun:test"
+import { expect, vi, test } from "vitest"
 import { rejects } from "node:assert/strict"
 import { sql } from "drizzle-orm"
 import { createAgent, getAgent, updateAgent } from "@/src/server/build/agents"
@@ -96,7 +96,7 @@ test("agent journey evals drive controls and fence publishing by current cases a
   process.env.DATOOL_PROVIDER_ENCRYPTION_KEY =
     "journey-evaluation-local-fixture-secret"
   const requests: string[] = []
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((async (
     url,
     init
   ) => {
@@ -411,7 +411,7 @@ test("journey evaluations mock external actions and submit forms without creatin
   let requested = false
   let pausedRequest: { started: () => void; stopped: () => void } | null = null
   const requests: string[] = []
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((async (
     url,
     init
   ) => {
