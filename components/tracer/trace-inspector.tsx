@@ -43,6 +43,8 @@ import {
 import { usePathname, useRouter, useSearchParams } from "@/components/navigation/navigation"
 
 import { cn } from "@/lib/utils"
+import { readJourneyResult } from "@/src/lib/build/agent-journey"
+import { JourneyResults } from "@/components/build/agents/journey-results"
 import {
   HoverCard,
   HoverCardTrigger,
@@ -453,6 +455,7 @@ function LoadedInspector({
   const validInitialSpanId = trace.spans.some(
     (span) => span.id === initialSpanId
   )
+  const journey = readJourneyResult(trace.attributes)
   const annotationFocus = useReviewAnnotations()?.focus ?? null
   const [selection, setSelection] = React.useState({
     focus: annotationFocus,
@@ -481,6 +484,7 @@ function LoadedInspector({
       {...props}
       viewLoader={loader}
     >
+      {journey ? <details open={journey.status !== "passed"} className="max-h-[45%] shrink-0 overflow-y-auto border-b border-border"><summary className="cursor-pointer px-4 py-3 text-xs font-medium">Customer journey · {journey.status === "passed" ? "Interactions passed" : journey.status === "failed" ? "Interactions failed" : "Could not run interactions"}</summary><JourneyResults result={journey} /></details> : null}
       {activeTab === "trace" || activeTab === "timeline" ? (
         <TraceWorkspace
           navigation={activeTab}

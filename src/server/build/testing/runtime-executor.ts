@@ -567,6 +567,7 @@ async function executeRuntimeSimulationCase(
     return { status: "completed", output: toolCall.response ?? null }
   }
   const dependencies: RuntimeDependencies = {
+    mockExternalActions: true,
     resolveActions: async () => actions,
     resolveProcedures: async () => procedures,
     retrieveKnowledge: async ({ query }) => knowledge(query),

@@ -53,6 +53,12 @@ docker run --rm "${environment[@]}" "$image" bun run cms:seed --database datool 
 docker run --rm "${environment[@]}" "$image" bun run cms:seed --database datool --apply
 docker run --rm "${environment[@]}" "$image" bun run db:alerts-reader
 docker run --rm "${environment[@]}" "$image" bun run db:alerts-reader
+# The non-root release image must execute the browser and continuation pipeline,
+# rather than only containing the browser dependency or passing a source build.
+docker run --rm "${environment[@]}" \
+  -e DATOOL_TEST_DATABASE_URL=postgresql://datool:isolated-test@database:5432/datool \
+  --mount "type=bind,source=$PWD/tests,target=/app/tests,readonly" \
+  "$image" bun --no-env-file test tests/agent-journey-evaluations.test.ts tests/agent-journey-browser.test.ts
 docker run -d --name "$prefix-web" "${environment[@]}" -v "$prefix-data:/app/.data" "$image" >/dev/null
 docker run -d --name "$prefix-worker" "${environment[@]}" "$image" bun run worker:ingestion >/dev/null
 docker run -d --name "$prefix-buildworker" "${environment[@]}" "$image" bun run worker:build >/dev/null

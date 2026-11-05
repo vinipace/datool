@@ -871,6 +871,9 @@
         "error": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
         },
+        "functional": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_functional"
+        },
         "outcome": {
           "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_outcome"
         },
@@ -1849,6 +1852,12 @@
         "id": {
           "type": "string"
         },
+        "journeys": {
+          "type": "number"
+        },
+        "journeysPassed": {
+          "type": "number"
+        },
         "passRate": {
           "$ref": "#/components/schemas/Output_run_app_results_item_definition_config_threshold"
         },
@@ -1857,6 +1866,9 @@
         },
         "status": {
           "type": "string"
+        },
+        "targets": {
+          "type": "number"
         },
         "unscored": {
           "type": "number"
@@ -1867,9 +1879,12 @@
         "errors",
         "expected",
         "id",
+        "journeys",
+        "journeysPassed",
         "passRate",
         "score",
         "status",
+        "targets",
         "unscored"
       ]
     },
@@ -6505,6 +6520,91 @@
         {
           "$ref": "#/components/schemas/Output_value"
         }
+      ]
+    },
+    "Output_list_dataset_items_items_item_latestEvaluation_functional": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_functional_2"
+        }
+      ]
+    },
+    "Output_list_dataset_items_items_item_latestEvaluation_functional_2": {
+      "type": "object",
+      "properties": {
+        "agentRevision": {
+          "type": "number"
+        },
+        "error": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "locale": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_functional_status"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_functional_steps_item"
+          }
+        },
+        "width": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "agentRevision",
+        "error",
+        "fingerprint",
+        "name",
+        "status",
+        "steps",
+        "width"
+      ]
+    },
+    "Output_list_dataset_items_items_item_latestEvaluation_functional_status": {
+      "enum": [
+        "error",
+        "failed",
+        "passed"
+      ]
+    },
+    "Output_list_dataset_items_items_item_latestEvaluation_functional_steps_item": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_functional_steps_item_status"
+        }
+      },
+      "required": [
+        "error",
+        "name",
+        "status"
+      ]
+    },
+    "Output_list_dataset_items_items_item_latestEvaluation_functional_steps_item_status": {
+      "enum": [
+        "error",
+        "failed",
+        "skipped",
+        "passed"
       ]
     },
     "Output_list_dataset_items_items_item_latestEvaluation_outcome": {
@@ -11910,6 +12010,9 @@
         },
         "error": {
           "$ref": "#/components/schemas/Output_run_app_completedAt"
+        },
+        "functional": {
+          "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_functional"
         },
         "outcome": {
           "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_outcome"

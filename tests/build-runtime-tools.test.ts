@@ -96,6 +96,7 @@ function agent(
         dailyTurnLimit: null,
         dailyBudgetUsd: null,
       },
+      testing: { requirePassingJourneys: false },
       metadata: {},
       ...overrides,
     },

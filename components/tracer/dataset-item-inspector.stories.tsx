@@ -23,22 +23,26 @@ import {
 } from "../../.storybook/scenarios/react-views"
 import { ProjectScope } from "./project-scope-context"
 import { DatasetItemInspector } from "./dataset-item-inspector"
+import { newJourneyInput } from "@/src/lib/build/agent-journey"
 
 function ItemInspectorExample({
   error,
   navigate = false,
   item = datasetItems[0],
   fieldViews = { input: "json", expectedOutput: "pretty", metadata: "tree" },
+  agentTest = false,
 }: {
   error?: string
   navigate?: boolean
   item?: DatasetItem
   fieldViews?: Record<string, ValueView>
+  agentTest?: boolean
 }) {
   const [currentItem, setCurrentItem] = useState(item)
   const [draft, setDraft] = useState(() => itemDraft(item))
   return (
     <DatasetItemInspector
+      agentTest={agentTest}
       draft={draft}
       error={error}
       fieldViews={fieldViews}
@@ -110,6 +114,20 @@ const meta = {
 
 export default meta
 type Story = StoryObj<typeof meta>
+
+export const CustomerJourney: Story = {
+  render: () => <ItemInspectorExample agentTest item={{ ...datasetItems[0], input: newJourneyInput() }} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.type(canvas.getByLabelText("First customer message"), "Quero uma roupa personalizada")
+    await userEvent.type(canvas.getByLabelText("Step 1 expected text"), "Escolha os modelos")
+    await expect(canvas.getByLabelText("First customer message")).toHaveValue("Quero uma roupa personalizada")
+    const advanced = canvas.getByText("Advanced input").closest("details")!
+    await expect(advanced).not.toHaveAttribute("open")
+    await userEvent.click(canvas.getByText("Advanced input"))
+    await waitFor(() => expect(advanced).toHaveTextContent("Escolha os modelos"), { timeout: 10_000 })
+  },
+}
 
 export const Editing: Story = {
   render: () => <ItemInspectorExample />,
@@ -274,7 +292,7 @@ export const SharedViews: Story = {
       await userEvent.click(canvas.getByRole("button", { name: "Views" }))
       await canvas.findByText("Select a project view to preview this record.")
       await userEvent.click(
-        canvas.getByRole("combobox", { name: "React view" })
+        canvas.getByRole("combobox", { name: "View" })
       )
       await userEvent.click(
         await within(canvasElement.ownerDocument.body).findByRole("option", {
@@ -283,7 +301,7 @@ export const SharedViews: Story = {
       )
       await waitFor(() =>
         expect(
-          canvas.getByRole("combobox", { name: "React view" })
+          canvas.getByRole("combobox", { name: "View" })
         ).toHaveTextContent(savedView.name)
       )
       await userEvent.click(canvas.getByRole("button", { name: "View actions" }))
@@ -324,11 +342,11 @@ export const EmptyViews: Story = {
         "Create a view from the view menu to get started."
       )
     ).toBeVisible()
-    await userEvent.click(canvas.getByRole("combobox", { name: "React view" }))
+    await userEvent.click(canvas.getByRole("combobox", { name: "View" }))
     await expect(
       within(
         await within(canvasElement.ownerDocument.body).findByRole("dialog", {
-          name: "React view options",
+          name: "View options",
         })
       ).getByRole("button", { name: "Create new view" })
     ).toBeVisible()
@@ -482,7 +500,7 @@ export const ProjectViews: Story = {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole("button", { name: "Views" }))
     await canvas.findByText("Select a project view to preview this record.")
-    await userEvent.click(canvas.getByRole("combobox", { name: "React view" }))
+    await userEvent.click(canvas.getByRole("combobox", { name: "View" }))
     await userEvent.click(
       await within(canvasElement.ownerDocument.body).findByRole("option", {
         name: "Answer view",
@@ -490,7 +508,7 @@ export const ProjectViews: Story = {
     )
     await waitFor(() =>
       expect(
-        canvas.getByRole("combobox", { name: "React view" })
+        canvas.getByRole("combobox", { name: "View" })
       ).toHaveTextContent("Answer view")
     )
     await userEvent.click(canvas.getByRole("button", { name: "View actions" }))

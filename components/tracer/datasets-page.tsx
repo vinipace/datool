@@ -41,6 +41,7 @@ import { useDatasetItemLocation } from "./use-dataset-item-location"
 import { TraceInspectorOverlay } from "./trace-list-overlay"
 import { DatasetItemsTable } from "./dataset-items-table"
 import { DatasetEvaluationSummary } from "./dataset-evaluation-summary"
+import { newJourneyInput } from "@/src/lib/build/agent-journey"
 import { DatasetSchemaDialog } from "./dataset-schema-dialog"
 import { DockedInspector } from "./docked-inspector"
 import { DatasetKindIcon } from "./dataset-kind-icon"
@@ -284,13 +285,13 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
     } catch (error) { setPageError((error as Error).message) }
   }
 
-  function addRow() {
+  function addRow(input?: DatasetItem["input"]) {
     const id = `ditem_${crypto.randomUUID()}`
     const timestamp = new Date().toISOString()
     const row: DatasetItem = {
       id,
       datasetId,
-      input: testAgent ? "" : {},
+      input: input ?? (testAgent ? "" : {}),
       expectedOutput: testAgent ? "" : {},
       metadata: {},
       sourceTraceId: null,
@@ -397,7 +398,8 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
             <Upload className="size-3.5" />
             <PanelActionLabel>Import</PanelActionLabel>
           </Button>
-          <Button size="sm" variant="outline" onClick={addRow}>
+          {testAgent ? <Button size="sm" variant="outline" onClick={() => addRow(newJourneyInput())}><Plus className="size-3.5" />Journey</Button> : null}
+          <Button size="sm" variant="outline" onClick={() => addRow()}>
             <Plus className="size-3.5" />
             <PanelActionLabel>Row</PanelActionLabel>
           </Button>
@@ -508,6 +510,7 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
           )}
           {selected ? (
             <DatasetItemInspector
+              agentTest={Boolean(testAgent)}
               key={selected.id}
               item={selected}
               activeTab={itemLocation.tab}

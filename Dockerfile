@@ -34,7 +34,10 @@ FROM base AS runtime
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 RUN apt-get update && apt-get install -y --no-install-recommends python3 ffmpeg && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production PORT=3000 DATOOL_DATA_DIR=/app/.data
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/datool-browsers
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
+RUN node node_modules/playwright/cli.js install --with-deps --only-shell chromium && \
+    chmod -R a+rX /opt/datool-browsers && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build /app/package.json /app/tsconfig.json /app/next.config.ts /app/Procfile /app/app.json ./

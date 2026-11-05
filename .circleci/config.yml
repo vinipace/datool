@@ -210,6 +210,13 @@ jobs:
           command: bun audit --audit-level high
       - start-services
       - run:
+          name: Verify agent interaction tests and publishing gates
+          command: |
+            bunx playwright install --with-deps chromium
+            bun run build:monaco
+            bun --no-env-file test tests/agent-journey-evaluations.test.ts tests/agent-journey-browser.test.ts tests/build-agent-autosave.test.ts
+            bunx vitest run --project=storybook components/build/agents/agent-journey-editor.stories.tsx components/tracer/dataset-item-inspector.stories.tsx
+      - run:
           name: Verify ingestion retries, retention, and safe diagnostics
           command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-inspection.test.ts tests/ingestion-sequence.test.ts tests/inbox-diagnostics.test.ts
       - run:
@@ -267,6 +274,7 @@ jobs:
       - run:
           name: Prepare runtime assets, built SDK and CLI, and scorer images
           command: |
+            bunx playwright install --with-deps chromium
             bun run build:monaco
             bun run build:chatgpt
             bun run build:packages

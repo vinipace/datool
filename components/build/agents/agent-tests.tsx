@@ -11,6 +11,7 @@ import type { Dataset } from "@/src/lib/tracer/contracts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Notice } from "@/components/ui/notice"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -29,9 +30,19 @@ import {
 export function AgentTests({
   agentId,
   agentName,
+  requireJourneys = false,
+  onRequireJourneys,
+  onPublish,
+  pending,
+  unpublished,
 }: {
   agentId: string
   agentName: string
+  requireJourneys?: boolean
+  onRequireJourneys?: (required: boolean) => void
+  onPublish?: () => Promise<unknown>
+  pending?: boolean
+  unpublished?: boolean
 }) {
   const params = useSearchParams()
   const state = useRemote(
@@ -124,7 +135,10 @@ export function AgentTests({
         >
           <Plus className="size-3.5" /> New dataset
         </Button>
+        {onRequireJourneys ? <label className="ml-auto flex items-center gap-2 text-xs"><Checkbox checked={requireJourneys} disabled={pending} onChange={event => onRequireJourneys(event.target.checked)} />Require journeys before publishing</label> : null}
+        {requireJourneys && onPublish ? <Button size="sm" disabled={pending || !unpublished} loading={pending} onClick={() => void onPublish().catch(() => {})}>Publish tested version</Button> : null}
       </div>
+      {requireJourneys && unpublished ? <Notice>Saved changes are not live. Run required journeys, then publish the tested version.</Notice> : null}
       {state.error ? (
         <ErrorState error={state.error} onRetry={state.refresh} />
       ) : state.isLoading && !datasetId ? (

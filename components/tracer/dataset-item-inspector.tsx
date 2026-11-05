@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { StructuredValueView } from "@/components/ui/structured-value-view"
+import { AgentJourneyEditor } from "@/components/build/agents/agent-journey-editor"
 import Link from "next/link"
 import {
   ArrowDown,
@@ -30,6 +31,7 @@ import { DeferredValue } from "@/components/ui/deferred-value"
 import type { ValueView } from "@/src/lib/tracer/value-views"
 import type {
   DatasetFieldSchemas,
+  JsonObject,
   DatasetItem,
   DatasetItemField,
   DatasetItemPreview,
@@ -41,6 +43,7 @@ import {
 } from "@/src/lib/tracer/dataset-schemas"
 import {
   parseValueDocument,
+  jsonDocument,
   type ItemDraft,
 } from "@/src/lib/tracer/dataset-editor"
 import { formatDate, formatRelative } from "./format"
@@ -51,6 +54,7 @@ import type { DatasetItemTab as ItemTab } from "@/src/lib/tracer/dataset-item-lo
 const icons = { input: ArrowDownRight, expectedOutput: Equal, metadata: Braces }
 
 export function DatasetItemInspector({
+  agentTest = false,
   item,
   draft,
   onDraftChange,
@@ -75,6 +79,7 @@ export function DatasetItemInspector({
   onViewChange,
   onLoadView,
 }: {
+  agentTest?: boolean
   item: DatasetItemPreview
   draft: ItemDraft
   onDraftChange: (draft: ItemDraft) => void
@@ -217,9 +222,11 @@ export function DatasetItemInspector({
               </InspectorSection>
             )
             let warnings: string[] = []
+            let journeyInput: JsonObject | null = null
             let metadataError = ""
             try {
               const value = parseValueDocument(draft[field])
+              if (agentTest && field === "input" && value && typeof value === "object" && !Array.isArray(value) && "journey" in value) journeyInput = value
               if (
                 field === "metadata" &&
                 (!value || typeof value !== "object" || Array.isArray(value))
@@ -231,13 +238,7 @@ export function DatasetItemInspector({
             } catch {
               /* The editor displays syntax errors. */
             }
-            return (
-              <InspectorSection
-                key={field}
-                label={datasetFieldLabels[field]}
-                icon={<Icon className="size-3.5" />}
-              >
-                <div data-dataset-field={field} tabIndex={-1} role="group" aria-label={`${datasetFieldLabels[field]} field`}>
+            const structuredEditor = (
                   <StructuredValueEditor
                     disabled={Boolean(loadingField)}
                     autoSize={draft[field].text.length <= 16 * 1024}
@@ -251,6 +252,16 @@ export function DatasetItemInspector({
                     }
                     schema={schemas[field]?.schema}
                   />
+            )
+            return (
+              <InspectorSection
+                key={field}
+                label={datasetFieldLabels[field]}
+                icon={<Icon className="size-3.5" />}
+              >
+                <div data-dataset-field={field} tabIndex={-1} role="group" aria-label={`${datasetFieldLabels[field]} field`}>
+                  {journeyInput ? <AgentJourneyEditor disabled={Boolean(loadingField)} input={journeyInput} onChange={input => onDraftChange({ ...draft, input: jsonDocument(input) })} /> : null}
+                  {journeyInput ? <details className="mt-4"><summary className="mb-2 cursor-pointer text-xs text-foreground-muted">Advanced input</summary>{structuredEditor}</details> : structuredEditor}
                 </div>
                 {metadataError ? (
                   <p className="mt-2 text-xs text-destructive" role="alert">
