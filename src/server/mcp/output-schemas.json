@@ -6093,6 +6093,9 @@
     "Output_list_dashboard_templates_item_config_widgets_item": {
       "type": "object",
       "properties": {
+        "barStyle": {
+          "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_barStyle"
+        },
         "compare": {
           "$ref": "#/components/schemas/Output_list_dashboard_templates_item_config_widgets_item_compare"
         },
@@ -6136,6 +6139,12 @@
         "title",
         "type",
         "width"
+      ]
+    },
+    "Output_list_dashboard_templates_item_config_widgets_item_barStyle": {
+      "enum": [
+        "filled",
+        "progress"
       ]
     },
     "Output_list_dashboard_templates_item_config_widgets_item_compare": {
