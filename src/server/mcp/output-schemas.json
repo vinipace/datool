@@ -6550,6 +6550,9 @@
         "name": {
           "type": "string"
         },
+        "screenshot": {
+          "$ref": "#/components/schemas/Output_list_apps_item_codeProvenance_fingerprint"
+        },
         "status": {
           "$ref": "#/components/schemas/Output_list_dataset_items_items_item_latestEvaluation_functional_status"
         },
