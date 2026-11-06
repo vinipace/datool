@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
-import { expect, fn, userEvent, within } from "storybook/test"
+import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import { newJourneyInput } from "@/src/lib/build/agent-journey"
 import { AgentJourneyEditor } from "./agent-journey-editor"
 import { JourneyResults } from "./journey-results"
@@ -35,18 +35,24 @@ export const AuthorJourney: Story = {
       canvas.getByLabelText("First customer message"),
       "Quero uma roupa personalizada"
     )
-    await userEvent.type(
-      canvas.getByLabelText("Step 1 expected text"),
-      "Escolha os modelos"
+    const editor = await canvas.findByRole(
+      "textbox",
+      { name: "Test code" },
+      { timeout: 10_000 }
     )
-    await expect(canvas.queryByRole("status")).not.toBeInTheDocument()
-    await userEvent.click(canvas.getByRole("button", { name: "Add step" }))
-    await userEvent.selectOptions(canvas.getByLabelText("Step 2 type"), "fill")
-    await userEvent.type(
-      canvas.getByLabelText("Step 2 button or field label"),
-      "Data do evento"
+    await userEvent.click(editor)
+    const { monaco } = await import("@/components/tracer/monaco-runtime")
+    const codeEditor = monaco.editor
+      .getEditors()
+      .find((candidate) => candidate.getDomNode()?.contains(editor))
+    if (!codeEditor) throw new Error("The test code editor did not load.")
+    codeEditor.trigger("storybook", "editor.action.selectAll", undefined)
+    await waitFor(() =>
+      expect(codeEditor.getSelection()?.isEmpty()).toBe(false)
     )
-    await userEvent.type(canvas.getByLabelText("Step 2 value"), "2030-12-30")
+    await userEvent.paste(
+      'await expect(page.getByRole("button", { name: "Continuar" })).toBeVisible();'
+    )
     await userEvent.selectOptions(
       canvas.getByLabelText("Journey preview width"),
       "768"
@@ -62,16 +68,12 @@ export const AuthorJourney: Story = {
           required: false,
           width: 768,
           locale: "pt-BR",
-          steps: [
-            { type: "expect_text", text: "Escolha os modelos" },
-            { type: "fill", name: "Data do evento", value: "2030-12-30" },
-          ],
+          code: 'await expect(page.getByRole("button", { name: "Continuar" })).toBeVisible();',
         }),
       })
     )
-    await userEvent.click(canvas.getByRole("button", { name: "Remove step 1" }))
-    await expect(canvas.getByLabelText("Step 1 value")).toHaveValue(
-      "2030-12-30"
+    await waitFor(() =>
+      expect(canvas.queryByRole("status")).not.toBeInTheDocument()
     )
   },
 }
@@ -81,9 +83,7 @@ export const ReadOnly: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getByLabelText("First customer message")).toBeDisabled()
-    await expect(
-      canvas.getByRole("button", { name: "Add step" })
-    ).toBeDisabled()
+    await expect(canvas.getByLabelText("Test name")).toBeDisabled()
   },
 }
 

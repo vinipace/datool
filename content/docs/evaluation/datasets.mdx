@@ -14,9 +14,49 @@ Review input/output formatting in the editor before starting a run. Dataset valu
 
 ## Agent interaction cases
 
-Agent **Tests** uses the same datasets and evaluation runs. Add a **Journey**
-through the guided editor, or supply this structured case input through REST,
-MCP or dataset import:
+Agent **Tests** uses the same datasets and evaluation runs. Choose **Add test**,
+enter the starting customer message, then write executable browser-test code.
+The editor provides completions for `page`, `expect`, `agent`, and `test.step`.
+**Import tests** is available in the collection menu.
+
+```javascript
+await test.step("Choose a model", async () => {
+  const model = page.getByRole("button", { name: "Camisa de linho", exact: true });
+  await model.click();
+  await expect(model).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+});
+await page.getByLabel("Data do evento").fill("2030-12-30");
+await agent.expectHandoff("Falar com a equipe", { message: "2030-12-30" });
+```
+
+Code uses JavaScript with async/await, variables, loops and functions. It runs
+inside an isolated Chromium frame; browser commands use the saved widget and
+its real conversation continuations. `page` is scoped to the current widget.
+Supported locators are `getByRole`, `getByLabel`, `getByText`,
+`getByPlaceholder`, `getByTestId`, and CSS `locator`, with `first`, `last`,
+and `nth` for disambiguation. Selectors and text expectations use strings.
+
+Controls support `click`, `fill`, `selectOption`, `check`, `uncheck` and
+`setChecked`. Read text, values, attributes or counts and use awaited
+Playwright assertions such as `toBeVisible`, `toHaveText`, `toContainText`,
+`toHaveValue`, `toHaveAttribute` and `toHaveCount`; `.not` is supported.
+Value assertions include `toBe`, `toEqual`, `toContain`, `toBeTruthy` and
+`toBeFalsy`. `agent.expectText` checks either the answer or widget text;
+`agent.sendMessage` sends another customer turn, and `agent.expectAction`
+checks submitted action fields. Handoff link clicks are observed without
+opening the external service.
+
+Each code test must complete at least one assertion, and has a 30-second,
+160-operation limit. Imports, Node APIs, navigation and arbitrary browser
+`evaluate` calls are not part of this scoped API. Assertion failures retain
+the operation name, error and a bounded screenshot when Chromium can capture
+one. Syntax errors, timeouts and caught assertion failures still fail the test.
+
+Through REST, MCP or import, set `input.journey.code` to the JavaScript string
+and omit `steps`. Existing step-based cases remain executable and appear as
+editable code in the editor. Editing them saves code without the legacy steps.
+The older structured input remains supported:
 
 ```json
 {

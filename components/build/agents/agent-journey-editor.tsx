@@ -1,28 +1,20 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/ui/notice"
+import { CodeEditor } from "@/components/ui/code-editor"
+import {
+  journeyStepsToCode,
+  journeyCodeDeclarations,
+} from "@/src/lib/build/journey-code"
 import { agentEvaluationInputSchema } from "@/src/lib/build/agent-journey"
 import type { JsonObject, JsonValue } from "@/src/lib/tracer/contracts"
-
-const kinds = [
-  ["click", "Click a button"],
-  ["fill", "Fill a field"],
-  ["select", "Select an option"],
-  ["check", "Check or uncheck"],
-  ["expect_text", "Check visible text"],
-  ["expect_value", "Check a field value"],
-  ["expect_selected", "Check a selected model"],
-  ["expect_link", "Check a handoff link"],
-  ["expect_action", "Check submitted details"],
-  ["message", "Send another message"],
-] as const
 
 function record(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -85,27 +77,32 @@ export function AgentJourneyEditor({
   disabled?: boolean
 }) {
   const journey = record(input.journey)
-  const steps = Array.isArray(journey.steps) ? journey.steps.map(record) : []
+  const code =
+    typeof journey.code === "string"
+      ? journey.code
+      : journeyStepsToCode(Array.isArray(journey.steps) ? journey.steps : [])
   const mocks = Array.isArray(journey.actionMocks)
     ? journey.actionMocks.map(record)
     : []
-  const change = (patch: JsonObject) =>
-    onChange({ ...input, channel: "web", journey: { ...journey, ...patch } })
-  const changeStep = (index: number, patch: JsonObject) =>
-    change({
-      steps: steps.map((step, i) =>
-        i === index ? { ...step, ...patch } : step
-      ),
+  const change = (patch: JsonObject, inputPatch: JsonObject = {}) => {
+    const { steps: _steps, ...saved } = journey
+    void _steps
+    onChange({
+      ...input,
+      ...inputPatch,
+      channel: "web",
+      journey: { ...saved, code, ...patch },
     })
+  }
   const parsed = agentEvaluationInputSchema.safeParse(input)
   return (
     <fieldset
       disabled={disabled}
       className="min-w-0 space-y-4"
-      aria-label="Customer journey"
+      aria-label="Agent test"
     >
       <label className="grid gap-1.5 text-xs">
-        Journey name
+        Test name
         <Input
           value={String(journey.name ?? "")}
           maxLength={160}
@@ -116,9 +113,7 @@ export function AgentJourneyEditor({
         First customer message
         <Textarea
           value={String(input.message ?? "")}
-          onChange={(event) =>
-            onChange({ ...input, message: event.target.value })
-          }
+          onChange={(event) => change({}, { message: event.target.value })}
         />
       </label>
       <div className="flex flex-wrap items-center gap-3">
@@ -152,190 +147,59 @@ export function AgentJourneyEditor({
           </Select>
         </label>
       </div>
-      <ol className="space-y-3" aria-label="Journey steps">
-        {steps.map((step, index) => (
-          <li
-            key={index}
-            className="space-y-3 rounded-md border border-border p-3"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-foreground-muted">{index + 1}</span>
-              <Select
-                aria-label={`Step ${index + 1} type`}
-                value={String(step.type)}
-                onChange={(event) => {
-                  const type = event.target.value
-                  const next: JsonObject =
-                    type === "expect_text"
-                      ? { type, text: "" }
-                      : type === "message"
-                        ? { type, message: "" }
-                        : type === "expect_action"
-                          ? { type, actionId: "", input: {} }
-                          : {
-                              type,
-                              name: "",
-                              ...(["fill", "select", "expect_value"].includes(
-                                type
-                              )
-                                ? { value: "" }
-                                : {}),
-                            }
-                  change({
-                    steps: steps.map((s, i) => (i === index ? next : s)),
-                  })
-                }}
-              >
-                {kinds.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={`Remove step ${index + 1}`}
-                onClick={() =>
-                  change({ steps: steps.filter((_, i) => i !== index) })
-                }
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
-            {step.type === "expect_text" ? (
-              <Input
-                aria-label={`Step ${index + 1} expected text`}
-                placeholder="Text the customer should see"
-                value={String(step.text ?? "")}
-                onChange={(event) =>
-                  changeStep(index, { text: event.target.value })
-                }
-              />
-            ) : step.type === "message" ? (
-              <Textarea
-                aria-label={`Step ${index + 1} customer message`}
-                value={String(step.message ?? "")}
-                onChange={(event) =>
-                  changeStep(index, { message: event.target.value })
-                }
-              />
-            ) : step.type === "expect_action" ? (
-              <>
-                <Input
-                  aria-label={`Step ${index + 1} action ID`}
-                  placeholder="Action ID"
-                  value={String(step.actionId ?? "")}
-                  onChange={(event) =>
-                    changeStep(index, { actionId: event.target.value })
-                  }
-                />
-                <JsonField
-                  label={`Step ${index + 1} expected action input`}
-                  value={step.input ?? {}}
-                  onChange={(value) => changeStep(index, { input: value })}
-                />
-              </>
-            ) : (
-              <Input
-                aria-label={`Step ${index + 1} button or field label`}
-                placeholder="Exact button or field label"
-                value={String(step.name ?? "")}
-                onChange={(event) =>
-                  changeStep(index, { name: event.target.value })
-                }
-              />
-            )}
-            {["fill", "select", "expect_value"].includes(String(step.type)) ? (
-              <Input
-                aria-label={`Step ${index + 1} value`}
-                placeholder="Value"
-                value={String(step.value ?? "")}
-                onChange={(event) =>
-                  changeStep(index, { value: event.target.value })
-                }
-              />
-            ) : null}
-            {step.type === "click" ? (
-              <Select
-                aria-label={`Step ${index + 1} control`}
-                value={String(step.role ?? "button")}
-                onChange={(event) =>
-                  changeStep(index, { role: event.target.value })
-                }
-              >
-                <option value="button">Button</option>
-                <option value="link">Link</option>
-                <option value="checkbox">Checkbox</option>
-                <option value="radio">Radio option</option>
-              </Select>
-            ) : null}
-            {step.type === "check" || step.type === "expect_selected" ? (
-              <label className="flex items-center gap-2 text-xs">
-                <Checkbox
-                  checked={
-                    (step.type === "check" ? step.checked : step.selected) !==
-                    false
-                  }
-                  onChange={(event) =>
-                    changeStep(index, {
-                      [step.type === "check" ? "checked" : "selected"]:
-                        event.target.checked,
-                    })
-                  }
-                />
-                Selected
-              </label>
-            ) : null}
-            {step.type === "expect_link" ? (
-              <div className="space-y-2">
-                <Input
-                  aria-label={`Step ${index + 1} destination`}
-                  placeholder="Expected destination (optional)"
-                  value={String(step.href ?? "")}
-                  onChange={(event) => {
-                    const { href: _href, ...rest } = steps[index]
-                    void _href
-                    change({
-                      steps: steps.map((s, i) =>
-                        i === index
-                          ? {
-                              ...rest,
-                              ...(event.target.value
-                                ? { href: event.target.value }
-                                : {}),
-                            }
-                          : s
-                      ),
-                    })
-                  }}
-                />
-                <Input
-                  aria-label={`Step ${index + 1} handoff message`}
-                  placeholder="Text required in the prefilled message (optional)"
-                  value={String(step.message ?? "")}
-                  onChange={(event) =>
-                    changeStep(index, { message: event.target.value })
-                  }
-                />
-              </div>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={steps.length >= 80}
-        onClick={() =>
-          change({
-            steps: [...steps, { type: "click", role: "button", name: "" }],
-          })
-        }
-      >
-        <Plus className="size-3.5" />
-        Add step
-      </Button>
+      <div className="space-y-2">
+        <div className="text-xs font-medium" id="test-code-label">
+          Test code
+        </div>
+        <p className="text-xs text-foreground-muted">
+          Use Playwright-style locators and awaited assertions. Controls run in
+          the current widget; clicks continue the conversation.
+        </p>
+        <CodeEditor
+          label="Test code"
+          language="javascript"
+          value={code}
+          onChange={(code) => change({ code })}
+          declarations={journeyCodeDeclarations}
+          readOnly={disabled}
+          className="h-96"
+        />
+        <details className="text-xs">
+          <summary className="cursor-pointer text-foreground-muted">
+            Browser API
+          </summary>
+          <div className="mt-2 space-y-2 text-foreground-muted">
+            <p>
+              <code>page.getByRole</code>, <code>getByLabel</code>,{" "}
+              <code>getByText</code>, <code>getByPlaceholder</code>,{" "}
+              <code>getByTestId</code> and <code>locator</code> select widget
+              controls. Use <code>first()</code>, <code>last()</code> or{" "}
+              <code>nth()</code> to choose a match.
+            </p>
+            <p>
+              Click, fill, select options, check controls, and read text, values
+              or attributes. Use{" "}
+              <code>await expect(locator).toBeVisible()</code>,{" "}
+              <code>toHaveText</code>, <code>toHaveValue</code>,{" "}
+              <code>toHaveAttribute</code> or <code>toHaveCount</code>. Value
+              assertions support <code>toBe</code>, <code>toEqual</code> and{" "}
+              <code>toContain</code>; <code>.not</code> is supported.
+            </p>
+            <p>
+              <code>agent.sendMessage</code> continues the chat;{" "}
+              <code>agent.expectText</code>, <code>agent.expectAction</code> and{" "}
+              <code>agent.expectHandoff</code> check the response, submitted
+              details and prefilled links. Group operations with{" "}
+              <code>test.step(name, async () =&gt; &#123; … &#125;)</code>.
+            </p>
+            <p>
+              Write JavaScript with async/await and string selectors, without
+              imports. Include at least one assertion. Code runs in an isolated
+              browser with a 30-second limit.
+            </p>
+          </div>
+        </details>
+      </div>
       <details className="space-y-3 text-xs">
         <summary className="cursor-pointer text-foreground-muted">
           Mock external actions
@@ -434,8 +298,7 @@ export function AgentJourneyEditor({
       </details>
       {!parsed.success ? (
         <Notice variant="warning" role="status">
-          Complete the journey before running it:{" "}
-          {parsed.error.issues[0]?.message}
+          Complete the test before running it: {parsed.error.issues[0]?.message}
         </Notice>
       ) : null}
     </fieldset>

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
 import {
   journeyStepLabel,
+  journeyStepSchema,
   type AgentJourney,
   type JourneyResult,
 } from "@/src/lib/build/agent-journey"
@@ -215,6 +216,39 @@ export async function executeJourneyEvaluation(
         : undefined
     )
   }
+  const afterAction = async () => {
+    for (const action of await browser.actions()) {
+      const definition = activeDefinition
+      const continuation = activeContinuation
+      const bound = definition
+        ? widgetAsCode(definition).functions.find(
+            (fn) => fn.name === action.functionName
+          )
+        : undefined
+      if (!bound?.actionId || !continuation)
+        throw new Error("The clicked widget control has no bound action.")
+      await turn({
+        message: action.label ?? bound.name,
+        metadata: {
+          widgetInteraction: JSON.parse(
+            JSON.stringify({
+              actionId: bound.actionId,
+              widgetId: continuation.widgetId,
+              continuationId: continuation.continuationId,
+              input: action.input,
+            })
+          ),
+        },
+      })
+      if (continuation.type === "form" && !continuation.submitActionId)
+        observed.push({
+          actionId: bound.actionId,
+          input: action.input,
+          status: "succeeded",
+        })
+      await show()
+    }
+  }
   try {
     try {
       await turn({ message, metadata: {} })
@@ -246,6 +280,62 @@ export async function executeJourneyEvaluation(
         }
       }
     }
+    if (journey.code && report.status === "passed") {
+      try {
+        await browser.runCode(journey.code, {
+          afterAction,
+          record: (step) => report.steps.push(step),
+          agent: async (method, args) => {
+            await assertActive()
+            if (method === "sendMessage") {
+              await turn({ message: String(args[0] ?? ""), metadata: {} })
+              await show()
+            } else if (method === "expectText") {
+              await browser.step({
+                type: "expect_text",
+                text: String(args[0] ?? ""),
+              })
+            } else if (method === "expectHandoff") {
+              const step = journeyStepSchema.parse({
+                type: "expect_link",
+                name: args[0],
+                ...((args[1] as Record<string, unknown>) ?? {}),
+              })
+              if (step.type === "expect_link") await browser.step(step)
+            } else if (method === "expectAction") {
+              const step = journeyStepSchema.parse({
+                type: "expect_action",
+                actionId: args[0],
+                input: args[1] ?? {},
+              })
+              if (
+                step.type === "expect_action" &&
+                !observed.some(
+                  (action) =>
+                    action.actionId === step.actionId &&
+                    action.status === "succeeded" &&
+                    matchesInput(step.input, action.input)
+                )
+              )
+                throw new Error(
+                  `The expected action ${step.actionId} did not succeed with the expected input.`
+                )
+            }
+          },
+        })
+      } catch (error) {
+        report.status = "failed"
+        report.error =
+          report.steps.findLast((step) => step.status === "failed")?.error ??
+          String(error).slice(0, 2000)
+        if (!report.steps.some((step) => step.status === "failed"))
+          report.steps.push({
+            name: "Run test code",
+            status: "failed",
+            error: report.error,
+          })
+      }
+    }
     for (const step of journey.steps) {
       if (report.status !== "passed") {
         report.steps.push({
@@ -274,37 +364,7 @@ export async function executeJourneyEvaluation(
             )
         } else {
           await browser.step(step)
-          for (const action of await browser.actions()) {
-            const definition = activeDefinition
-            const continuation = activeContinuation
-            const bound = definition
-              ? widgetAsCode(definition).functions.find(
-                  (fn) => fn.name === action.functionName
-                )
-              : undefined
-            if (!bound?.actionId || !continuation)
-              throw new Error("The clicked widget control has no bound action.")
-            await turn({
-              message: action.label ?? bound.name,
-              metadata: {
-                widgetInteraction: JSON.parse(
-                  JSON.stringify({
-                    actionId: bound.actionId,
-                    widgetId: continuation.widgetId,
-                    continuationId: continuation.continuationId,
-                    input: action.input,
-                  })
-                ),
-              },
-            })
-            if (continuation.type === "form" && !continuation.submitActionId)
-              observed.push({
-                actionId: bound.actionId,
-                input: action.input,
-                status: "succeeded",
-              })
-            await show()
-          }
+          await afterAction()
         }
         report.steps.push({
           name: journeyStepLabel(step),
@@ -320,6 +380,10 @@ export async function executeJourneyEvaluation(
           error: report.error,
         })
       }
+    }
+    if (report.status !== "passed" && browserOpened) {
+      const screenshot = await browser.screenshot()
+      if (screenshot) report.screenshot = screenshot
     }
     return {
       text: answers.join("\n\n"),

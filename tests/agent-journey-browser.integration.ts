@@ -44,6 +44,45 @@ test("journey browser reports JSX failures and blocks widget requests to private
     })
     await browser.step({ type: "expect_text", text: "Escolha um modelo" })
     await rejects(browser.step({ type: "expect_text", text: "Missing model" }))
+    const steps: Array<{ name: string; status: string; error: string | null }> =
+      []
+    const hooks = {
+      record: (step: (typeof steps)[number]) => steps.push(step),
+      afterAction: async () => {},
+      agent: async () => {
+        throw new Error("No agent turn expected")
+      },
+    }
+    await browser.runCode(
+      `
+      await expect(typeof process).toBe("undefined");
+      await expect(typeof require).toBe("undefined");
+      await expect(page.getByText("Escolha um modelo")).toBeVisible();
+      let blocked=false;
+      try {await fetch("http://127.0.0.1:${address.port}/from-test")} catch {blocked=true}
+      await expect(blocked).toBe(true);
+    `,
+      hooks
+    )
+    expect(privateRequests).toBe(0)
+    expect(steps.every((step) => step.status === "passed")).toBe(true)
+    await rejects(
+      browser.runCode(
+        'try { await expect(page.getByText("Escolha um modelo")).toHaveText("Wrong model"); } catch {}',
+        hooks
+      ),
+      /Wrong model/
+    )
+    expect(steps.at(-1)?.status).toBe("failed")
+    await rejects(
+      browser.runCode("const answer = 42;", hooks),
+      /at least one expect/
+    )
+    await rejects(
+      browser.runCode("await page.evaluate(() => 1);", hooks),
+      /evaluate/
+    )
+    await rejects(browser.runCode("while (true) {}", hooks, 200), /time limit/)
   } finally {
     await browser.close()
     await new Promise<void>((resolve, reject) =>
@@ -69,6 +108,27 @@ test("queued journey browsers stop on cancellation without blocking the next cas
       await replacement.open()
       await replacement.show("Still working")
       await replacement.step({ type: "expect_text", text: "Still working" })
+      await replacement.runCode(
+        'await expect(page.getByText("Still working")).toBeVisible();',
+        {
+          record: () => {},
+          afterAction: async () => {},
+          agent: async () => {
+            throw new Error("No agent turn expected")
+          },
+        }
+      )
+      await rejects(
+        replacement.runCode(
+          'await Promise.all(Array.from({length:161}, () => page.getByText("Still working").count()));',
+          {
+            record: () => {},
+            afterAction: async () => {},
+            agent: async () => {},
+          }
+        ),
+        /160 browser operations/
+      )
     } finally {
       await replacement.close()
     }

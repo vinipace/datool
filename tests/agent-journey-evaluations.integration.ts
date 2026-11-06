@@ -277,6 +277,38 @@ test("agent journey evals drive controls and fence publishing by current cases a
       score: null,
       functional: { status: "passed" },
     })
+    // The authored code passes through the same browser, continuations, scores
+    // and publication gate as legacy saved steps.
+    const codeJourney = agentJourneySchema.parse({
+      name: "Personalized clothing",
+      required: true,
+      code: `
+        await test.step("Choose both models", async () => {
+          for (const name of ["Linen shirt", "Blue romper"]) {
+            const model = page.getByRole("button", {name, exact:true});
+            await model.click();
+            await expect(model).toHaveAttribute("aria-pressed", "true");
+          }
+        });
+        await page.getByLabel("Event date").fill("2030-12-30");
+        await page.getByLabel("City").fill("São Paulo");
+        await expect(page.getByLabel("Event date")).toHaveValue("2030-12-30");
+        await page.getByRole("button", {name:"Continue", exact:true}).click();
+        await expect(page.getByText("Review your request")).toBeVisible();
+        const href = await page.getByRole("link", {name:"Talk to team"}).getAttribute("href");
+        await expect(new URL(href).searchParams.get("text")).toContain("linen, blue; 2030-12-30; São Paulo");
+        await agent.expectAction("summary", {selectedModelIds:["linen","blue"],date:"2030-12-30",city:"São Paulo"});
+      `,
+    })
+    await run(
+      service.patchDatasetItem(item.id, {
+        input: {
+          message: "I want a custom outfit",
+          channel: "web",
+          journey: codeJourney,
+        },
+      })
+    )
     const result = await completed(
       service,
       await run(
@@ -287,7 +319,6 @@ test("agent journey evals drive controls and fence publishing by current cases a
         })
       )
     )
-    expect((await gate(result.id)).passed).toBe(true)
     const first = (
       await run(service.listDatasetItems(dataset.id, { includeResults: true }))
     ).items[0].latestEvaluation!
@@ -299,6 +330,7 @@ test("agent journey evals drive controls and fence publishing by current cases a
     expect(
       first.functional!.steps.every((step) => step.status === "passed")
     ).toBe(true)
+    expect((await gate(result.id)).passed).toBe(true)
     expect(result.rows![0].trace.output).toContain("Choose your options.")
     agent = await updateAgent(context, agent.id, {
       expectedRevision: agent.currentRevision,
@@ -378,6 +410,7 @@ test("agent journey evals drive controls and fence publishing by current cases a
       functional: { status: "failed" },
     })
     expect(broken.functional!.error).toContain("Broken model picker")
+    expect(broken.functional!.screenshot).toMatch(/^data:image\/png;base64,/)
     expect(
       broken
         .functional!.steps.slice(1)

@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Braces, Check, ChevronRight, Info, Loader2, Plus, Save, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { Notice } from "@/components/ui/notice"
 import type {
@@ -390,19 +391,14 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
       {testAgent && <DatasetEvaluationSummary summary={page.data?.evaluationSummary} />}
       <CollectionPanel label="Dataset rows">
         <HeaderSlot name="actions">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload className="size-3.5" />
-            <PanelActionLabel>Import</PanelActionLabel>
-          </Button>
-          {testAgent ? <Button size="sm" variant="outline" onClick={() => addRow(newJourneyInput())}><Plus className="size-3.5" />Journey</Button> : null}
-          <Button size="sm" variant="outline" onClick={() => addRow()}>
-            <Plus className="size-3.5" />
-            <PanelActionLabel>Row</PanelActionLabel>
-          </Button>
+          {testAgent ? (
+            <Button size="sm" variant="outline" onClick={() => addRow(newJourneyInput())}>
+              <Plus className="size-3.5" /> Add test
+            </Button>
+          ) : <>
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-3.5" /><PanelActionLabel>Import</PanelActionLabel></Button>
+            <Button size="sm" variant="outline" onClick={() => addRow()}><Plus className="size-3.5" /><PanelActionLabel>Row</PanelActionLabel></Button>
+          </>}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -453,6 +449,7 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
           }}
           className="p-2"
           header={{
+            menuActions: testAgent ? <DropdownMenuItem onSelect={() => setImportOpen(true)}><Upload className="size-3.5" />Import tests</DropdownMenuItem> : undefined,
             onExportJson: () => void exportItems(items),
             exportName: dataset.name.split("/").at(-1) ?? "dataset-rows",
             children: (
@@ -491,6 +488,7 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
         title={selectedId ? "Dataset row" : "Dataset details"}
         mobileOpen={!!selectedId || mobileDetails}
         onMobileClose={close}
+        defaultSize={testAgent ? 60 : undefined}
       >
         <div className="h-full min-h-0">
           <div className={selectedId ? "hidden" : "h-full"}>

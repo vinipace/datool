@@ -1,3 +1,4 @@
+import Image from "next/image"
 import type { JourneyResult } from "@/src/lib/build/agent-journey"
 import { ExecutionStatus } from "@/components/ui/execution-status"
 
@@ -46,6 +47,21 @@ export function JourneyResults({ result }: { result: JourneyResult }) {
           </li>
         ))}
       </ol>
+      {result.screenshot ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-foreground-muted">
+            Failure screenshot
+          </summary>
+          <Image
+            unoptimized
+            src={result.screenshot}
+            alt="Widget at the failed test assertion"
+            width={result.width}
+            height={900}
+            className="mt-2 max-h-80 w-auto max-w-full rounded-md border border-border object-contain"
+          />
+        </details>
+      ) : null}
     </section>
   )
 }

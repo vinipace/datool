@@ -10,7 +10,7 @@ export const newJourneyInput = (): JsonObject => ({
     required: true,
     width: 390,
     locale: "en",
-    steps: [{ type: "expect_text", text: "" }],
+    code: 'await expect(page.getByText("Expected response")).toBeVisible();',
     actionMocks: [],
   },
 })
@@ -82,7 +82,8 @@ export const agentJourneySchema = z
         "Use a language tag such as en or pt-BR."
       )
       .default("en"),
-    steps: z.array(journeyStepSchema).min(1).max(80),
+    code: z.string().trim().min(1).max(32_000).optional(),
+    steps: z.array(journeyStepSchema).max(80).default([]),
     actionMocks: z
       .array(
         z
@@ -97,6 +98,14 @@ export const agentJourneySchema = z
       .default([]),
   })
   .strict()
+  .superRefine((journey, context) => {
+    if (Boolean(journey.code) === Boolean(journey.steps.length))
+      context.addIssue({
+        code: "custom",
+        path: ["code"],
+        message: "Provide test code or saved steps, not both.",
+      })
+  })
 export type AgentJourney = z.infer<typeof agentJourneySchema>
 
 export const agentEvaluationInputSchema = z.union([
@@ -154,6 +163,11 @@ export const journeyResultSchema = z.object({
     })
   ),
   error: z.string().nullable(),
+  screenshot: z
+    .string()
+    .max(1_000_000)
+    .regex(/^data:image\/png;base64,/)
+    .optional(),
 })
 export type JourneyResult = z.infer<typeof journeyResultSchema>
 export const journeyResultAttribute = "datool.agent.journey"

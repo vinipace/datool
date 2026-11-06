@@ -120,12 +120,11 @@ export const CustomerJourney: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await userEvent.type(canvas.getByLabelText("First customer message"), "Quero uma roupa personalizada")
-    await userEvent.type(canvas.getByLabelText("Step 1 expected text"), "Escolha os modelos")
     await expect(canvas.getByLabelText("First customer message")).toHaveValue("Quero uma roupa personalizada")
     const advanced = canvas.getByText("Advanced input").closest("details")!
     await expect(advanced).not.toHaveAttribute("open")
     await userEvent.click(canvas.getByText("Advanced input"))
-    await waitFor(() => expect(advanced).toHaveTextContent("Escolha os modelos"), { timeout: 10_000 })
+    await waitFor(() => expect(advanced).toHaveTextContent("Expected response"), { timeout: 10_000 })
   },
 }
 

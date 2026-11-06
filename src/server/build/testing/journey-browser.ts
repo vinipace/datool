@@ -15,6 +15,7 @@ import {
   widgetThemeProperties,
 } from "@/src/lib/build/widget-frame"
 import { publicHttpRequest } from "../http"
+import { runJourneyCode, type JourneyCodeHooks } from "./journey-code"
 
 const origin = "https://widget-tests.invalid"
 const assets = new Map([
@@ -66,6 +67,7 @@ export class JourneyBrowser {
   private page?: Page
   private failure: string | null = null
   private lastText = ""
+  private hasWidget = false
   private release?: () => void
   private abort = () => {
     void this.close()
@@ -190,6 +192,7 @@ export class JourneyBrowser {
   ) {
     if (!this.page) throw new Error("Journey browser is unavailable.")
     this.lastText = text
+    this.hasWidget = Boolean(widget)
     this.failure = null
     const definition = widget ? widgetAsCode(widget.definition) : null
     const observed = await this.page.evaluate(
@@ -208,7 +211,7 @@ export class JourneyBrowser {
             properties: string[]
             locale: string
           }
-        document.querySelector("iframe")?.remove()
+        document.querySelector('iframe[title="Widget content"]')?.remove()
         document.getElementById("answer")!.textContent = text
         const state = window as unknown as {
           journeyActions: JourneyBrowserAction[]
@@ -409,6 +412,10 @@ export class JourneyBrowser {
         break
       }
     }
+    await this.settle()
+  }
+
+  private async settle() {
     await this.page!.evaluate(
       () =>
         new Promise<void>((resolve) =>
@@ -419,6 +426,40 @@ export class JourneyBrowser {
       () => (window as unknown as { journeyError: string | null }).journeyError
     )
     if (error) throw new Error(error.slice(0, 2_000))
+  }
+
+  async runCode(code: string, hooks: JourneyCodeHooks, timeoutMs?: number) {
+    if (!this.page) throw new Error("Journey browser is unavailable.")
+    await runJourneyCode(
+      this.page,
+      () => (this.hasWidget ? this.frame() : this.page!),
+      code,
+      this.signal,
+      {
+        ...hooks,
+        afterAction: async () => {
+          await this.settle()
+          await hooks.afterAction()
+        },
+      },
+      timeoutMs
+    )
+  }
+
+  async screenshot(): Promise<string | null> {
+    try {
+      const image = await this.page!.screenshot({
+        type: "png",
+        timeout: 2000,
+        animations: "disabled",
+        scale: "css",
+      })
+      return image.length <= 700_000
+        ? "data:image/png;base64," + image.toString("base64")
+        : null
+    } catch {
+      return null
+    }
   }
 
   async actions(): Promise<JourneyBrowserAction[]> {
