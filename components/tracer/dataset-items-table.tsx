@@ -278,6 +278,7 @@ export function DatasetItemsTable({
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="flex items-center gap-2">
                       <ResultStatus result={item.latestEvaluation} />
+                      {item.latestEvaluation.functional ? <span className="text-xs text-foreground-muted">Interactions {item.latestEvaluation.functional.status}</span> : null}
                       {item.latestEvaluation.score !== null && <span className="font-mono text-xs">{Number(item.latestEvaluation.score).toFixed(2)}</span>}
                     </span>
                     <span className="line-clamp-2 whitespace-normal text-xs text-foreground-muted">{item.latestEvaluation.error ?? item.latestEvaluation.output}</span>

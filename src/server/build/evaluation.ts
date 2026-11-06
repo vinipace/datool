@@ -1,26 +1,17 @@
-import { createHash } from "node:crypto"
 import { z } from "zod"
 import type { AppDefinition } from "@/src/lib/playground/contracts"
 import {
-  buildChannelSchema,
   type ManagedAgent,
 } from "@/src/lib/build/contracts"
 import type { PromptRunScope } from "@/src/lib/tracer/prompt-overrides"
 import { getTracerProjectId, type TracerDatabase } from "../tracer/db"
-import { validation } from "../tracer/errors"
-import { canonicalJson } from "@/src/lib/tracer/resource-document"
 import { getAgent } from "./agents"
+import { agentEvaluationInputSchema } from "@/src/lib/build/agent-journey"
+import { captureEvaluationCatalog, evaluationFingerprint } from "./testing/evaluation-catalog"
+import type { AppliedAgentDefinitions } from "./definitions"
 
 export const agentEvaluationPrefix = "build-agent."
-const caseSchema = z.union([
-  z.string().trim().min(1).max(20_000),
-  z
-    .object({
-      message: z.string().trim().min(1).max(20_000),
-      channel: buildChannelSchema.default("web"),
-    })
-    .strict(),
-])
+export type AgentEvaluationTarget = { database: TracerDatabase; agent: ManagedAgent; catalog: AppliedAgentDefinitions; fingerprint: string }
 
 /** The existing eval executor pins this definition and checks it before dispatch. */
 export async function resolveAgentEvaluation(
@@ -29,35 +20,38 @@ export async function resolveAgentEvaluation(
 ) {
   const projectId = getTracerProjectId(database)
   const agent = await getAgent({ database, projectId }, id)
-  if (!agent.appliedRevision)
-    throw validation("Apply the agent before running an evaluation.")
+  const catalog = await captureEvaluationCatalog({ database, projectId }, agent)
+  const fingerprint = evaluationFingerprint(agent.configuration, catalog)
   const definition: AppDefinition = {
     id: `${agentEvaluationPrefix}${id}`,
     name: agent.name,
     mode: "input",
-    revision: agent.appliedRevision,
-    inputSchema: z.toJSONSchema(caseSchema, { target: "draft-7", io: "input" }),
+    revision: agent.currentRevision,
+    inputSchema: z.toJSONSchema(agentEvaluationInputSchema, { target: "draft-7", io: "input", unrepresentable: "any" }),
     outputSchema: { type: "string" },
     evaluatorIds: [],
     internalTracing: true,
     codeProvenance: {
       source: "declared",
-      fingerprint: createHash("sha256")
-        .update(canonicalJson(agent.appliedConfiguration))
-        .digest("hex"),
+      fingerprint,
     },
   }
-  return { definition, buildAgent: { database, agent } }
+  return { definition, buildAgent: { database, agent: { ...agent, appliedRevision: agent.currentRevision, appliedConfiguration: agent.configuration }, catalog, fingerprint } }
 }
 
 /** Each frozen case gets its own conversation and the real knowledge/model path. */
 export async function executeAgentEvaluation(
-  target: { database: TracerDatabase; agent: ManagedAgent },
+  target: AgentEvaluationTarget,
   input: unknown,
   callId: string,
   scope?: PromptRunScope,
+  execution?: { assertActive: () => Promise<void> },
 ) {
-  const parsed = caseSchema.parse(input)
+  const parsed = agentEvaluationInputSchema.parse(input)
+  if (typeof parsed !== "string" && parsed.journey) {
+    const { executeJourneyEvaluation } = await import("./testing/journey-executor")
+    return executeJourneyEvaluation(target, parsed.message, parsed.journey, callId, scope, execution)
+  }
   const message = typeof parsed === "string" ? parsed : parsed.message
   const channel = typeof parsed === "string" ? "web" : parsed.channel
   const { runAgentTurn } = await import("./runtime")
@@ -73,8 +67,11 @@ export async function executeAgentEvaluation(
     },
     {
       agent: target.agent,
+      catalog: target.catalog,
+      recordFormData: false,
       signal: AbortSignal.timeout(60_000),
       dependencies: {
+        mockExternalActions: true,
         executeAction: async () => ({
           status: "failed",
           output: {
@@ -86,5 +83,5 @@ export async function executeAgentEvaluation(
   )
   if (!["completed", "blocked", "replayed"].includes(result.status))
     throw new Error(`Agent evaluation stopped with status ${result.status}.`)
-  return { text: result.text, traceId: result.traceId }
+  return { text: result.text, traceId: result.traceId, traceIds: result.traceId ? [result.traceId] : [], journey: undefined }
 }

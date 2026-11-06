@@ -15,6 +15,7 @@ import { promoteSpansSchema, type PromoteSpansInput, type SpanPromotionResult } 
 import type { TracerEffect } from "./effect"
 import { createHash } from "node:crypto"
 import { sql } from "drizzle-orm"
+import { journeyResultAttribute } from "@/src/lib/build/agent-journey"
 import type {
   CreateDatasetItemInput,
   CreateEvalRunInput,
@@ -436,7 +437,13 @@ export function createAgentFoundations(
         read(async (db) => {
           async function summary(id: string) {
             const result = await db.execute(
-              sql`select r.id,r.status,(select count(*) from eval_run_targets t where t.project_id=${project} and t.run_id=r.id) * (select count(*) from eval_run_evaluators e where e.project_id=${project} and e.run_id=r.id) as expected,count(e.id) as actual,count(*) filter(where e.status='error') as errors,count(*) filter(where e.passed=true) as passed,count(*) filter(where e.passed is not null) as classified,count(*) filter(where e.score is null or e.passed is null) as unscored,avg(e.score) as score from eval_runs r left join eval_results e on e.project_id=r.project_id and e.run_id=r.id where r.project_id=${project} and r.id=${id} group by r.id`
+              sql`select r.id,r.status,
+                (select count(*) from eval_run_targets t where t.project_id=${project} and t.run_id=r.id) as targets,
+                (select count(*) from eval_run_targets t where t.project_id=${project} and t.run_id=r.id and r.agent_id is not null and t.snapshot_json::jsonb #> '{trace,input,journey}' is not null) as journeys,
+                (select count(*) from eval_run_targets t where t.project_id=${project} and t.run_id=r.id and r.agent_id is not null and t.stage='completed' and t.snapshot_json::jsonb->'trace'->'attributes'->${journeyResultAttribute}->>'status'='passed') as "journeysPassed",
+                (select count(*) from eval_run_targets t where t.project_id=${project} and t.run_id=r.id) * (select count(*) from eval_run_evaluators e where e.project_id=${project} and e.run_id=r.id) as expected,
+                count(e.id) as actual,count(e.id) filter(where e.status='error') as errors,count(e.id) filter(where e.passed=true) as passed,count(e.id) filter(where e.passed is not null) as classified,count(e.id) filter(where e.score is null or e.passed is null) as unscored,avg(e.score) as score
+              from eval_runs r left join eval_results e on e.project_id=r.project_id and e.run_id=r.id where r.project_id=${project} and r.id=${id} group by r.id`
             )
             const row = result.rows[0]
             if (!row) throw notFound("Eval run", id)
@@ -447,6 +454,9 @@ export function createAgentFoundations(
               actual: Number(row.actual),
               errors: Number(row.errors),
               unscored: Number(row.unscored),
+              journeys: Number(row.journeys),
+              journeysPassed: Number(row.journeysPassed),
+              targets: Number(row.targets),
               passRate: Number(row.classified)
                 ? Number(row.passed) / Number(row.classified)
                 : null,
@@ -456,15 +466,17 @@ export function createAgentFoundations(
           const run = await summary(input.id)
           const reasons: string[] = []
           if (run.status !== "completed") reasons.push(`Run is ${run.status}.`)
-          if (!run.expected || run.actual !== run.expected)
+          if (!run.targets || (!run.expected && run.journeys !== run.targets) || run.actual !== run.expected)
             reasons.push("Missing evaluation results or empty run.")
+          if (run.journeysPassed !== run.journeys)
+            reasons.push("Customer journeys failed, errored or have incomplete interaction checks.")
           if (run.errors > input.maxErrors)
             reasons.push("Error count exceeds the limit.")
           if (!input.allowUnscored && run.unscored)
             reasons.push("Unscored, skipped or unclassified results exist.")
-          if (run.score === null || run.score < input.minScore)
+          if (run.expected && (run.score === null || run.score < input.minScore))
             reasons.push("Mean score is missing or below the minimum.")
-          if (run.passRate === null || run.passRate < input.minPassRate)
+          if (run.expected && (run.passRate === null || run.passRate < input.minPassRate))
             reasons.push("Pass rate is missing or below the minimum.")
           const baseline = input.baselineId
             ? await summary(input.baselineId)
@@ -475,6 +487,7 @@ export function createAgentFoundations(
               !baseline.expected ||
               baseline.actual !== baseline.expected ||
               baseline.errors ||
+              baseline.journeysPassed !== baseline.journeys ||
               baseline.unscored ||
               baseline.score === null ||
               run.score === null ||

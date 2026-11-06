@@ -1105,6 +1105,8 @@ export class ConversationService {
     widgetId?: string
     continuationId?: string
     allowApproval?: boolean
+    /** A server-owned frozen evaluation catalog; never accepted from transport input. */
+    widgetActionIds?: string[]
   }): Promise<{
     call: ConversationToolCall
     sourceSnapshot: Record<string, unknown>
@@ -1152,7 +1154,7 @@ export class ConversationService {
                     OR (
                       tc.continuation_json->>'type' = 'widget'
                       AND tc.continuation_json->>'widgetId' = ${input.widgetId ?? null}
-                      AND EXISTS (
+                      AND (${Boolean(input.widgetActionIds?.includes(input.actionId))} OR EXISTS (
                         SELECT 1
                         FROM build_agent_catalog_snapshots cas
                         JOIN build_agent_catalog_widgets caw
@@ -1189,7 +1191,7 @@ export class ConversationService {
                               AND (component->>'actionId' = ${input.actionId}
                                 OR component->>'submitActionId' = ${input.actionId}))
                           )
-                      )
+                      ))
                     )`
             }
           )

@@ -12,6 +12,42 @@ Choose **Run dataset** from Evals, a dataset detail page, or a playground node. 
 
 Watch the run detail page as cases finish. Inspect failures individually; an app error on one case does not mean every other case failed. Internal model or tool details require instrumentation inside the app.
 
+## Test an agent's customer journey
+
+Open an agent's **Tests** tab, choose its dataset, and add a **Journey** case.
+Enter the first customer message, then add steps using the exact labels customers
+see: click a model, fill a date, continue to the next widget, check the submitted
+details, and verify the summary in a prefilled handoff link. Choose a mobile,
+tablet, or desktop width and the customer's language, such as `pt-BR`, to test
+translated controls. Existing message-only cases keep working.
+
+The run tests the agent's saved configuration and current widgets, actions,
+procedures and indexed knowledge. It uses the shipped widget sandbox in a real
+browser and resumes the conversation through its normal continuations. External
+actions require explicit test responses; missing mocks fail the journey. Links
+are inspected without opening their destinations, and form submissions do not
+create live contacts or leads. Actual model calls still incur provider usage.
+
+**Interactions** shows a separate verdict beside response-quality scores. Open
+the result's trace to see each step, its error and subsequent skipped steps. A
+passing answer score cannot turn a failed interaction into a passing case or
+CI gate. Journeys can run without a response scorer; message-only cases still
+need a scorer for a quality verdict. Re-scoring saved evidence retains the
+original interaction result and does not rerun the browser.
+
+Enable **Require journeys before publishing** to save agent edits as drafts.
+Mark the cases that must pass as **Required for publishing**, run them, then
+choose **Publish tested version**. Publishing verifies the saved configuration,
+catalog and knowledge revisions and the current case contents against completed
+passing evidence, including any selected scorer results. Edited cases, changed
+widgets and cancelled runs cannot reuse a previous pass. Create an agent before
+enabling this policy; it requires at least one passing required journey.
+
+Journey execution has a two-minute limit per case, at most 80 steps and 50
+external-action mocks. The deployment must include Playwright Chromium; Datool's
+production image installs and exercises it during image acceptance. A browser
+startup failure is an error, never a passing interaction result.
+
 ## Re-score or run again
 
 **Re-score saved traces** evaluates frozen evidence with the selected scorer versions without invoking the app. Use it when changing a rubric or checking a deterministic rule.

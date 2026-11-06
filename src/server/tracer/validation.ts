@@ -206,7 +206,7 @@ export const createEvalRun = z
     metadata: jsonObject.optional(),
     datasetId: id.optional(),
     datasetItemIds: z.array(id).min(1).max(10_000).optional(),
-    evaluatorIds: z.array(id).min(1).max(100).optional(),
+    evaluatorIds: z.array(id).max(100).optional(),
     name: name.optional(),
     traceIds: z.array(id).min(1).max(10_000).optional(),
   })
@@ -333,7 +333,7 @@ export function parsePatchEvaluator(value: unknown) {
 
 export function parseCreateEvalRun(value: unknown) {
   const input = parse(createEvalRun, value, "eval run payload") as CreateEvalRunInput
-  if (!input.evaluatorIds?.length && !input.parentRunId && !input.sourceRunId) throw validation("Select evaluators or an existing run.")
+  if (!input.evaluatorIds?.length && !input.agentId && !input.parentRunId && !input.sourceRunId) throw validation("Select evaluators or an existing run.")
   try { validateInputOverrides(input); validatePromptOverrides(input) } catch (error) {
     throw validation((error as Error).message)
   }
