@@ -12,7 +12,7 @@ import {
   traceRows,
   list,
 } from "../../.storybook/scenarios/datasets-evals/fixtures"
-import { itemDraft, jsonDocument } from "@/src/lib/tracer/dataset-editor"
+import { itemDraft, jsonDocument, type ItemDraft, parseValueDocument } from "@/src/lib/tracer/dataset-editor"
 import {
   data,
   failure,
@@ -31,12 +31,14 @@ function ItemInspectorExample({
   item = datasetItems[0],
   fieldViews = { input: "json", expectedOutput: "pretty", metadata: "tree" },
   agentTest = false,
+  onChange,
 }: {
   error?: string
   navigate?: boolean
   item?: DatasetItem
   fieldViews?: Record<string, ValueView>
   agentTest?: boolean
+  onChange?: (draft: ItemDraft) => void
 }) {
   const [currentItem, setCurrentItem] = useState(item)
   const [draft, setDraft] = useState(() => itemDraft(item))
@@ -50,7 +52,7 @@ function ItemInspectorExample({
       item={currentItem}
       onClose={fn()}
       onDelete={fn()}
-      onDraftChange={setDraft}
+      onDraftChange={next=>{setDraft(next);onChange?.(next)}}
       onFieldViewChange={fn()}
       onNext={
         navigate
@@ -116,15 +118,40 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const CustomerJourney: Story = {
-  render: () => <ItemInspectorExample agentTest item={{ ...datasetItems[0], input: newJourneyInput() }} />,
-  play: async ({ canvasElement }) => {
+  render: (args) => <ItemInspectorExample agentTest item={{ ...datasetItems[0], input: newJourneyInput(), expectedOutput:{model:"M09"} }} onChange={args.onDraftChange} />,
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
-    await userEvent.type(canvas.getByLabelText("First customer message"), "Quero uma roupa personalizada")
-    await expect(canvas.getByLabelText("First customer message")).toHaveValue("Quero uma roupa personalizada")
-    const advanced = canvas.getByText("Advanced input").closest("details")!
+    await userEvent.type(canvas.getByLabelText("Customer message"), "Quero uma roupa personalizada")
+    await expect(canvas.getByLabelText("Customer message")).toHaveValue("Quero uma roupa personalizada")
+    await expect(canvas.queryByRole("textbox",{name:"Test code"})).not.toBeInTheDocument()
+    const calls=args.onDraftChange.mock.calls.length
+    await userEvent.click(canvas.getByRole("tab",{name:"Code"}))
+    const editor=await canvas.findByRole("textbox",{name:"Test code"},{timeout:10_000})
+    await expect(args.onDraftChange).toHaveBeenCalledTimes(calls)
+    await userEvent.click(editor)
+    const {monaco}=await import("@/components/tracer/monaco-runtime")
+    const instance=monaco.editor.getEditors().find(value=>value.getDomNode()?.contains(editor))
+    if(!instance) throw new Error("Expected editor did not load")
+    if(instance.getModel()?.getValue()) {
+      instance.trigger("storybook","editor.action.selectAll",undefined)
+      await waitFor(()=>expect(instance.getSelection()?.isEmpty()).toBe(false))
+    }
+    const expectedCode='await expect(page.getByText("Escolha os modelos")).toBeVisible();'
+    await userEvent.paste(expectedCode)
+    await waitFor(()=>expect(parseValueDocument(args.onDraftChange.mock.calls.at(-1)![0].input)).toMatchObject({journey:{code:expectedCode}}))
+    await userEvent.click(canvas.getByRole("tab",{name:"JSON"}))
+    const json=await canvas.findByRole("textbox",{name:"Expected JSON"},{timeout:10_000})
+    await waitFor(()=>expect(monaco.editor.getEditors().find(value=>value.getDomNode()?.contains(json))?.getModel()?.getValue()).toBe(JSON.stringify({model:"M09"},null,2)))
+    await expect(parseValueDocument(args.onDraftChange.mock.calls.at(-1)![0].input)).toMatchObject({journey:{name:"New test"}})
+    const jsonOnly=parseValueDocument(args.onDraftChange.mock.calls.at(-1)![0].input) as {journey:{code?:string}}
+    await expect(jsonOnly.journey.code).toBeUndefined()
+    await expect(parseValueDocument(args.onDraftChange.mock.calls.at(-1)![0].expectedOutput)).toEqual({model:"M09"})
+    await userEvent.click(canvas.getByRole("tab",{name:"Code"}))
+    await expect(parseValueDocument(args.onDraftChange.mock.calls.at(-1)![0].input)).toMatchObject({journey:{code:expectedCode}})
+    const advanced = canvas.getByText("Advanced").closest("details")!
     await expect(advanced).not.toHaveAttribute("open")
-    await userEvent.click(canvas.getByText("Advanced input"))
-    await waitFor(() => expect(advanced).toHaveTextContent("Expected response"), { timeout: 10_000 })
+    await userEvent.click(canvas.getByText("Advanced"))
+    await waitFor(() => expect(advanced).toHaveTextContent("Quero uma roupa personalizada"), { timeout: 10_000 })
   },
 }
 

@@ -32,9 +32,13 @@ export const AuthorJourney: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await userEvent.type(
-      canvas.getByLabelText("First customer message"),
+      canvas.getByLabelText("Customer message"),
       "Quero uma roupa personalizada"
     )
+    await expect(
+      canvas.getByText("Test code").closest("details")
+    ).not.toHaveAttribute("open")
+    await userEvent.click(canvas.getByText("Test code"))
     const editor = await canvas.findByRole(
       "textbox",
       { name: "Test code" },
@@ -46,19 +50,22 @@ export const AuthorJourney: Story = {
       .getEditors()
       .find((candidate) => candidate.getDomNode()?.contains(editor))
     if (!codeEditor) throw new Error("The test code editor did not load.")
-    codeEditor.trigger("storybook", "editor.action.selectAll", undefined)
-    await waitFor(() =>
-      expect(codeEditor.getSelection()?.isEmpty()).toBe(false)
-    )
+    if (codeEditor.getModel()?.getValue()) {
+      codeEditor.trigger("storybook", "editor.action.selectAll", undefined)
+      await waitFor(() =>
+        expect(codeEditor.getSelection()?.isEmpty()).toBe(false)
+      )
+    }
     await userEvent.paste(
       'await expect(page.getByRole("button", { name: "Continuar" })).toBeVisible();'
     )
+    await userEvent.click(canvas.getByText("Options"))
     await userEvent.selectOptions(
-      canvas.getByLabelText("Journey preview width"),
+      canvas.getByLabelText("Test preview width"),
       "768"
     )
-    await userEvent.clear(canvas.getByLabelText("Journey language"))
-    await userEvent.type(canvas.getByLabelText("Journey language"), "pt-BR")
+    await userEvent.clear(canvas.getByLabelText("Test language"))
+    await userEvent.type(canvas.getByLabelText("Test language"), "pt-BR")
     await userEvent.click(canvas.getByLabelText("Required for publishing"))
     await expect(args.onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -82,7 +89,7 @@ export const ReadOnly: Story = {
   args: { disabled: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByLabelText("First customer message")).toBeDisabled()
+    await expect(canvas.getByLabelText("Customer message")).toBeDisabled()
     await expect(canvas.getByLabelText("Test name")).toBeDisabled()
   },
 }

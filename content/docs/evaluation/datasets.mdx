@@ -15,7 +15,7 @@ Review input/output formatting in the editor before starting a run. Dataset valu
 ## Agent interaction cases
 
 Agent **Tests** uses the same datasets and evaluation runs. Choose **Add test**,
-enter the starting customer message, then write executable browser-test code.
+enter the starting customer message and the expected answer. Add browser-test code only when the case needs interaction checks.
 The editor provides completions for `page`, `expect`, `agent`, and `test.step`.
 **Import tests** is available in the collection menu.
 
@@ -30,7 +30,7 @@ await page.getByLabel("Data do evento").fill("2030-12-30");
 await agent.expectHandoff("Falar com a equipe", { message: "2030-12-30" });
 ```
 
-Code uses JavaScript with async/await, variables, loops and functions. It runs
+Optional test code uses JavaScript with async/await, variables, loops and functions. It runs
 inside an isolated Chromium frame; browser commands use the saved widget and
 its real conversation continuations. `page` is scoped to the current widget.
 Supported locators are `getByRole`, `getByLabel`, `getByText`,
@@ -46,6 +46,8 @@ Value assertions include `toBe`, `toEqual`, `toContain`, `toBeTruthy` and
 `agent.sendMessage` sends another customer turn, and `agent.expectAction`
 checks submitted action fields. Handoff link clicks are observed without
 opening the external service.
+
+Expected appears last in the form, with JSON and Code tabs. JSON supplies reference data for answer scorers. Code runs optional executable browser assertions, without requiring an expected final reply. Switching modes retains the JSON reference and keeps code available while editing. Without browser code, the test renders the initial response and uses the selected answer scorers.
 
 Each code test must complete at least one assertion, and has a 30-second,
 160-operation limit. Imports, Node APIs, navigation and arbitrary browser

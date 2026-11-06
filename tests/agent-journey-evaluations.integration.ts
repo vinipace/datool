@@ -309,6 +309,35 @@ test("agent journey evals drive controls and fence publishing by current cases a
         },
       })
     )
+    await run(
+      service.patchDatasetItem(item.id, {
+        expectedOutput: "A reference that does not match the final message",
+      })
+    )
+    const assertionsOnly = await completed(
+      service,
+      await run(
+        service.createEvalRun({
+          agentId: agent.id,
+          datasetId: dataset.id,
+          evaluatorIds: [],
+        })
+      )
+    )
+    expect((await gate(assertionsOnly.id)).passed).toBe(true)
+    const codeExpectation = (
+      await run(service.listDatasetItems(dataset.id, { includeResults: true }))
+    ).items[0].latestEvaluation!
+    expect(codeExpectation).toMatchObject({
+      outcome: "passed",
+      score: null,
+      functional: { status: "passed" },
+    })
+    await run(
+      service.patchDatasetItem(item.id, {
+        expectedOutput: "Choose your options.",
+      })
+    )
     const result = await completed(
       service,
       await run(
@@ -332,6 +361,42 @@ test("agent journey evals drive controls and fence publishing by current cases a
     ).toBe(true)
     expect((await gate(result.id)).passed).toBe(true)
     expect(result.rows![0].trace.output).toContain("Choose your options.")
+    const answerDataset = await run(
+      service.createDataset({ agentId: agent.id, name: "Answer-only tests" })
+    )
+    await run(
+      service.createDatasetItem(answerDataset.id, {
+        input: {
+          message: "I want a custom outfit",
+          channel: "web",
+          journey: { name: "Answer only", required: false },
+        },
+        expectedOutput: "Choose your options.",
+      })
+    )
+    await completed(
+      service,
+      await run(
+        service.createEvalRun({
+          agentId: agent.id,
+          datasetId: answerDataset.id,
+          evaluatorIds: [scorer.id],
+        })
+      )
+    )
+    const answerOnly = (
+      await run(
+        service.listDatasetItems(answerDataset.id, { includeResults: true })
+      )
+    ).items[0].latestEvaluation!
+    expect(answerOnly).toMatchObject({
+      outcome: "passed",
+      score: 1,
+      functional: {
+        status: "passed",
+        steps: [{ name: "Render the initial response", status: "passed" }],
+      },
+    })
     agent = await updateAgent(context, agent.id, {
       expectedRevision: agent.currentRevision,
       apply: true,

@@ -183,7 +183,7 @@ export function ConnectedEvalButton({
         <DialogHeader>
           <DialogTitle>{agentId ? `Test ${agentName ?? "agent"}` : "Run dataset against an app"}</DialogTitle>
           <DialogDescription>
-            {agentId ? "Test saved changes with current knowledge. Journey cases exercise widgets and submitted details with mocked external actions. Add scorers to assess response quality." : "Choose an app, dataset, and scorers."}
+            {agentId ? "Code supplies its own assertions. Answer scorers are optional." : "Choose an app, dataset, and scorers."}
           </DialogDescription>
         </DialogHeader>
         <div className="-mx-3 min-w-0">

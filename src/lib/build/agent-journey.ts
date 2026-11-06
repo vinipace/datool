@@ -6,11 +6,10 @@ export const newJourneyInput = (): JsonObject => ({
   message: "",
   channel: "web",
   journey: {
-    name: "Customer journey",
+    name: "New test",
     required: true,
     width: 390,
     locale: "en",
-    code: 'await expect(page.getByText("Expected response")).toBeVisible();',
     actionMocks: [],
   },
 })
@@ -99,11 +98,11 @@ export const agentJourneySchema = z
   })
   .strict()
   .superRefine((journey, context) => {
-    if (Boolean(journey.code) === Boolean(journey.steps.length))
+    if (journey.code && journey.steps.length)
       context.addIssue({
         code: "custom",
         path: ["code"],
-        message: "Provide test code or saved steps, not both.",
+        message: "Use test code or saved steps, not both.",
       })
   })
 export type AgentJourney = z.infer<typeof agentJourneySchema>

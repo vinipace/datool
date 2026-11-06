@@ -3,6 +3,7 @@
 import * as React from "react"
 import { StructuredValueView } from "@/components/ui/structured-value-view"
 import { AgentJourneyEditor } from "@/components/build/agents/agent-journey-editor"
+import { AgentTestForm } from "@/components/build/agents/agent-test-form"
 import Link from "next/link"
 import {
   ArrowDown,
@@ -122,6 +123,13 @@ export function DatasetItemInspector({
     const omitted = item.omittedFields?.[field]
     return omitted && <DeferredValue label={label} {...omitted} onLoad={() => onLoadField?.(field)} loading={loadingField === field} disabled={!onLoadField || Boolean(loadingField)} error={fieldErrors?.[field]} />
   }
+  let agentInput: JsonObject | null = null
+  if (agentTest && !item.omittedFields?.input) {
+    try {
+      const value = parseValueDocument(draft.input)
+      if (value && typeof value === "object" && !Array.isArray(value) && "journey" in value) agentInput = value
+    } catch { /* The raw editor retains invalid drafts. */ }
+  }
   return (
     <aside
       aria-label="Dataset row inspector"
@@ -147,10 +155,7 @@ export function DatasetItemInspector({
           <ArrowDown className="size-4" />
         </Button>
         <h2 className="ml-1 min-w-0 flex-1 truncate text-sm">
-          Dataset row{" "}
-          <span className="ml-2 font-mono text-xs text-foreground-muted">
-            {item.id.slice(-8)}
-          </span>
+          {agentTest ? "Test" : <>Dataset row <span className="ml-2 font-mono text-xs text-foreground-muted">{item.id.slice(-8)}</span></>}
         </h2>
         <Button
           variant="ghost"
@@ -176,7 +181,7 @@ export function DatasetItemInspector({
           value={activeTab}
           onValueChange={setActiveTab}
           tabs={[
-            { value: "form", label: "Form", icon: TextCursorInput },
+            { value: "form", label: agentTest ? "Edit" : "Form", icon: TextCursorInput },
             { value: "runs", label: "Runs", icon: ListChecks },
             { value: "views", label: "Views", icon: Code2 },
           ]}
@@ -214,6 +219,7 @@ export function DatasetItemInspector({
         />
       ) : (
         <div ref={form} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-5">
+          {agentInput ? <div className="py-4"><AgentTestForm key={item.id} input={agentInput} item={item} draft={draft} onChange={onDraftChange} disabled={Boolean(loadingField)} expected={item.omittedFields?.expectedOutput ? deferred("expectedOutput", "Expected") : undefined} metadata={item.omittedFields?.metadata ? deferred("metadata", "Metadata") : undefined}>{customColumnDetails}</AgentTestForm></div> : <>
           {datasetFields.map((field) => {
             const Icon = icons[field]
             if (item.omittedFields?.[field]) return (
@@ -347,6 +353,7 @@ export function DatasetItemInspector({
               </dd>
             </dl>
           </InspectorSection>
+          </>}
         </div>
       )}
     </aside>
