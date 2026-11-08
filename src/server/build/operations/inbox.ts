@@ -455,6 +455,17 @@ export async function takeoverConversation(context: BuildContext, value: unknown
       set owner_type='human',owner_id=${ctx.actorId},owner_fence=owner_fence+1,status='handed_off',updated_at=now()
       where project_id=${ctx.projectId} and id=${input.conversationId}
     `)
+    // Same rule as ConversationService.claim: a takeover fences in-flight AI
+    // turns, and a tool may already have reached its destination, so their
+    // outcome is uncertain rather than left running until the lock expires.
+    await tx.execute(sql`
+      update build_conversation_turns
+      set status='uncertain',
+          error_json=${JSON.stringify({ kind: "CONVERSATION_HUMAN_OWNED", message: "The conversation was handed to a human while the AI turn was running." })}::jsonb,
+          completed_at=now(),lock_expires_at=null
+      where project_id=${ctx.projectId} and conversation_id=${input.conversationId}
+        and status in ('started','running') and owner_fence<${ownerFence + 1}
+    `)
     await tx.execute(sql`
       insert into build_conversation_ownership_events
         (id,project_id,conversation_id,from_owner_type,from_owner_id,to_owner_type,to_owner_id,fence,reason)

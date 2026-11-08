@@ -552,9 +552,6 @@ export class ConversationService {
     input: StartConversationTurnInput
   ): Promise<TurnAdmission> {
     const parsed = startConversationTurnInputSchema.parse(input)
-    const lockUntil = new Date(
-      new Date(this.currentTime()).getTime() + this.lockMs
-    ).toISOString()
     return this.database.transaction(async (tx) => {
       const conversationResult = await tx.execute<Record<string, unknown>>(sql`
         SELECT * FROM build_conversations
@@ -640,7 +637,9 @@ export class ConversationService {
         VALUES
           (${turnId}, ${this.projectId}, ${conversationId}, ${parsed.requestKey},
            ${parsed.sourceEventId ?? null}, 'running', ${inputMessageId},
-           ${json(parsed.snapshot)}::jsonb, ${nextOwnerFence}, ${lockUntil}, now())
+           ${json(parsed.snapshot)}::jsonb, ${nextOwnerFence},
+           -- Liveness checks compare locks with the database clock.
+           now() + ${this.lockMs}::double precision * interval '1 millisecond', now())
         RETURNING *
       `)
       const messageResult = await tx.execute<Record<string, unknown>>(sql`

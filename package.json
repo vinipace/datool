@@ -20,6 +20,7 @@
     "db:init": "bun run scripts/migrate.ts",
     "db:alerts-reader": "bun run scripts/provision-alert-reader.ts",
     "db:migrate": "bun run scripts/migrate.ts",
+    "db:validate-invariants": "bun run scripts/validate-invariants.ts",
     "vercel:build": "bun run scripts/vercel-build.ts",
     "demo:trace": "bun run scripts/demo-trace.ts",
     "build": "bun run check:docs && bun run build:monaco && bun run build:chatgpt && next build",

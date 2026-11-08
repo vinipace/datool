@@ -42,12 +42,17 @@ export function assertDatabaseConfiguration() {
   }
 }
 
-/** Analytical snapshots have a separate ceiling so they cannot occupy the write pool. */
+/** Analytical snapshots have a separate ceiling so they cannot occupy the write pool.
+ * PostgreSQL enforces it as read-only, so it can never write traces or spans
+ * outside the billing-aware connection settings that meter them. */
 const analyticsGlobal = globalThis as typeof globalThis & {
   datoolAnalyticsPool?: Pool
 }
 export const analyticsDb = (analyticsGlobal.datoolAnalyticsPool ??= new Pool({
-  connectionString: process.env.DATABASE_URL ?? missingDatabaseUrl,
+  connectionString: billingDatabaseUrl(
+    process.env.DATABASE_URL ?? missingDatabaseUrl,
+    "-c default_transaction_read_only=on"
+  ),
   max: 6,
   connectionTimeoutMillis: 1000,
   statement_timeout: 10000,

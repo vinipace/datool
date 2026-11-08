@@ -83,7 +83,7 @@ async function captureSpanEvidenceSnapshot(
       case when s.ended_at_ms >= s.started_at_ms then s.ended_at_ms-s.started_at_ms else null end as "durationMs",
       s.input_json::jsonb as input, s.output_json::jsonb as output, s.attributes_json::jsonb as attributes
     from spans s join selected on selected.id=s.id where s.project_id=${project} and s.trace_id=${traceId}
-    order by s.started_at, s.id`)
+    order by s.started_at_ms, s.started_at, s.id`)
   const span = result.rows.find((row) => row.id === spanId)!
   if (span.status === "running" || !span.endedAt)
     throw validation(

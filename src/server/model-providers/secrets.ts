@@ -1,6 +1,7 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHmac,
   hkdfSync,
   randomBytes,
 } from "node:crypto"
@@ -15,6 +16,20 @@ function encryptionKey() {
   return Buffer.from(
     hkdfSync("sha256", secret, "datool", "model-provider-credentials:v1", 32)
   )
+}
+
+/** A one-way identifier for the credential key. Stored ciphertexts carry no key
+ * id, so releases compare this value to detect a changed or newly set secret. */
+export function encryptionKeyFingerprint() {
+  return createHmac("sha256", encryptionKey())
+    .update("datool:credential-key-fingerprint:v1")
+    .digest("hex")
+}
+
+export function encryptionKeyConfigured() {
+  const secret =
+    process.env.DATOOL_PROVIDER_ENCRYPTION_KEY || process.env.BETTER_AUTH_SECRET
+  return !!secret && secret.length >= 32
 }
 
 /** Bind ciphertext to its project and provider so copied rows cannot cross tenants. */
