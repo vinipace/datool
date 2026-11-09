@@ -115,10 +115,11 @@ export const ManageTools: Story = {
     const canvas = within(canvasElement)
     const page = within(canvasElement.ownerDocument.body)
     const sidebar = canvas.getByRole("button", { name: "Toggle sidebar" })
-    if (sidebar.getAttribute("aria-expanded") !== "true") await userEvent.click(sidebar)
+    if (sidebar.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(sidebar)
     await userEvent.click(await canvas.findByRole("button", { name: "Manage" }))
     const dialog = within(
-      await page.findByRole("dialog", { name: "Google Calendar" })
+      await page.findByRole("region", { name: "Google Calendar" })
     )
     const toggle = await dialog.findByRole("switch", {
       name: "Enable List calendar events",
@@ -132,14 +133,21 @@ export const ManageTools: Story = {
     ).resolves.toBeChecked()
     await userEvent.click(dialog.getByRole("button", { name: "Settings" }))
     const editor = within(await page.findByRole("dialog"))
-    await expect(editor.getByLabelText("Name", { selector: "input" })).toHaveValue("Google Calendar: List calendar events")
+    await expect(
+      editor.getByLabelText("Name", { selector: "input" })
+    ).toHaveValue("Google Calendar: List calendar events")
     await userEvent.click(editor.getByRole("button", { name: "Cancel" }))
-    await userEvent.click(canvas.getByRole("button", { name: "Manage" }))
-    const reopened = within(await page.findByRole("dialog", { name: "Google Calendar" }))
-    const enabled = await reopened.findByRole("switch", { name: "Enable Google Calendar: List calendar events" })
+    const reopened = within(
+      await page.findByRole("region", { name: "Google Calendar" })
+    )
+    const enabled = await reopened.findByRole("switch", {
+      name: "Enable Google Calendar: List calendar events",
+    })
     await userEvent.click(enabled)
     await expect(enabled).not.toBeChecked()
-    await userEvent.keyboard("{Escape}")
+    await userEvent.click(
+      reopened.getByRole("button", { name: "Integrations" })
+    )
     await userEvent.click(canvas.getByRole("link", { name: "Actions" }))
     await expect(
       canvas.queryByText("Google Calendar: List calendar events")

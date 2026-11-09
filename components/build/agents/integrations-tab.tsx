@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { Plus, RefreshCw } from "lucide-react"
+import { ArrowLeft, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { IntegrationLogo } from "@/components/ui/integration-logo"
@@ -61,7 +61,6 @@ export function IntegrationsTab({
   beforeToolChange?: () => Promise<void>
   onCatalogChanged?: () => void
 }) {
-  const trigger = React.useRef<HTMLButtonElement | null>(null)
   const connections = useRemote(
     (signal) =>
       buildApi.call<IntegrationCatalog>(
@@ -72,13 +71,26 @@ export function IntegrationsTab({
     [agentId],
     { enabled: active }
   )
-  const [mcpDialog, setMcpDialog] = React.useState<string | null>(null)
-  const oauthResult = useSearchParams().get("mcpOAuth")
+  const searchParams = useSearchParams()
+  const mcpDialog = searchParams.get("mcp")
+  const appSlug = searchParams.get("integration")
+  const oauthResult = searchParams.get("mcpOAuth")
+  function navigateIntegration(kind?: "integration" | "mcp", id?: string) {
+    const url = new URL(window.location.href)
+    url.searchParams.delete("integration")
+    url.searchParams.delete("mcp")
+    url.searchParams.delete("mcpOAuth")
+    if (kind && id) url.searchParams.set(kind, id)
+    window.history.pushState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`
+    )
+  }
   const customConnections =
     connections.data?.connections.filter(
       (item) => item.toolkit === "custom_mcp"
     ) ?? []
-  const [appSlug, setAppSlug] = React.useState<string | null>(null)
   const [disconnectId, setDisconnectId] = React.useState<string | null>(null)
   const disconnectTrigger = React.useRef<HTMLButtonElement | null>(null)
   const cancelDisconnectButton = React.useRef<HTMLButtonElement | null>(null)
@@ -199,7 +211,6 @@ export function IntegrationsTab({
             connectionLabel={account.label}
             onChanged={onDefinitionDirty}
             onEdit={(action) => {
-              setAppSlug(null)
               onEditAction?.(action)
             }}
           />
@@ -209,6 +220,236 @@ export function IntegrationsTab({
             <ShopifyChatSetup connectionId={account.id} />
           )}
       </div>
+    )
+  }
+
+  if (appSlug || mcpDialog) {
+    const custom = customConnections.find((item) => item.id === mcpDialog)
+    return (
+      <section
+        aria-label="App integrations"
+        className="@container w-full min-w-0 px-4 py-6 sm:px-6"
+      >
+        {oauthResult && (
+          <div className="mx-auto mb-4 max-w-4xl">
+            <Notice
+              variant={oauthResult === "success" ? "success" : "error"}
+              role={oauthResult === "success" ? "status" : "alert"}
+            >
+              {oauthResult === "success"
+                ? "MCP account connected. Its tools are available to this agent."
+                : oauthResult === "tools_error"
+                  ? "MCP account connected, but its tools could not be enabled. Choose tools below."
+                  : "MCP sign-in was not completed. Try again."}
+            </Notice>
+          </div>
+        )}
+        {connections.isLoading ? (
+          <p role="status" className="text-sm text-foreground-muted">
+            Loading integration…
+          </p>
+        ) : connections.error ? (
+          <Notice variant="error" role="alert">
+            {connections.error.message}{" "}
+            <Button size="sm" variant="outline" onClick={connections.refresh}>
+              Retry connections
+            </Button>
+          </Notice>
+        ) : mcpDialog && (mcpDialog === "new" || custom) ? (
+          <CustomMcpDialog
+            key={mcpDialog}
+            connection={custom}
+            agentId={agentId}
+            beforeSave={beforeToolChange}
+            onBack={() => navigateIntegration()}
+            onSaved={(result) => {
+              connections.refresh()
+              if (result?.toolsReady === false)
+                setError(
+                  "MCP connected, but its tools could not be enabled. Open the connection to choose tools."
+                )
+              if (result?.agentRevision) onCatalogChanged?.()
+            }}
+            onDefinitionDirty={onDefinitionDirty}
+            onEditAction={onEditAction}
+          />
+        ) : app ? (
+          <section
+            aria-label={app.name}
+            className="mx-auto w-full max-w-4xl space-y-5"
+          >
+            <Button
+              variant="ghost-muted"
+              size="sm"
+              disabled={pending}
+              onClick={() => navigateIntegration()}
+            >
+              <ArrowLeft aria-hidden /> Integrations
+            </Button>
+            <header className="flex items-start gap-4 border-b border-border pb-5">
+              <IntegrationLogo slug={app.slug} />
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">{app.name}</h2>
+                <p className="text-sm text-foreground-muted">
+                  {appDescription(app)}
+                </p>
+              </div>
+            </header>
+            {error && !disconnectId && (
+              <Notice variant="error" role="alert">
+                {error}
+              </Notice>
+            )}
+            {app.available === false ? (
+              <Notice>
+                This integration needs administrator setup before you can
+                connect an account.
+              </Notice>
+            ) : app.connectionMethod === "shopify" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-foreground-muted">
+                  Choose your store and review Datool’s requested access in
+                  Shopify. Your existing Datool billing stays in place.
+                </p>
+                {authorization ? (
+                  <Button asChild>
+                    <a href={authorization.url}>Continue to Shopify</a>
+                  </Button>
+                ) : (
+                  <Button
+                    loading={busy}
+                    disabled={busy}
+                    onClick={() => void connect(app.slug)}
+                  >
+                    Connect store
+                  </Button>
+                )}
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-3">
+              <h3
+                ref={accountSection}
+                tabIndex={-1}
+                className="text-sm font-medium"
+              >
+                Accounts
+              </h3>
+              {visibleAccounts.length > 0 &&
+                !app.connectionMethod &&
+                app.available !== false && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => connect(app.slug)}
+                  >
+                    <Plus aria-hidden /> Add account
+                  </Button>
+                )}
+            </div>
+            {visibleAccounts.length > 0 ? (
+              <div className="space-y-3">
+                {visibleAccounts.map(renderAccount)}
+              </div>
+            ) : !app.connectionMethod && app.available !== false ? (
+              <Card className="space-y-4 p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    Connect your first account
+                  </p>
+                  <p className="text-sm text-foreground-muted">
+                    Securely authorize {app.name} to make its tools available to
+                    your agents.
+                  </p>
+                </div>
+                <Button loading={busy} onClick={() => connect(app.slug)}>
+                  <Plus aria-hidden /> Connect account
+                </Button>
+              </Card>
+            ) : null}
+            <p className="text-xs text-foreground-muted">
+              Accounts are shared across agents in this project.
+            </p>
+            {otherAccounts.length > 0 && (
+              <InspectorSection
+                label={`Other connections (${otherAccounts.length})`}
+                defaultOpen={false}
+              >
+                <div className="space-y-3">
+                  {otherAccounts.map(renderAccount)}
+                </div>
+              </InspectorSection>
+            )}
+            <Dialog
+              open={Boolean(disconnectAccount)}
+              onOpenChange={(open) => {
+                if (!open && !pending) cancelDisconnect()
+              }}
+            >
+              <DialogContent role="alertdialog" showCloseButton={false}>
+                <DialogHeader>
+                  <DialogTitle>Disconnect {app.name}?</DialogTitle>
+                  <DialogDescription>
+                    Every agent in this project will lose access to this
+                    account. Actions using it will stop working until you
+                    connect an account again.
+                  </DialogDescription>
+                </DialogHeader>
+                {error && (
+                  <Notice variant="error" role="alert">
+                    {error}
+                  </Notice>
+                )}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    ref={cancelDisconnectButton}
+                    variant="outline"
+                    disabled={pending}
+                    onClick={cancelDisconnect}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    loading={pending}
+                    onClick={() =>
+                      void run(async () => {
+                        if (!disconnectAccount) return
+                        try {
+                          await buildApi.call("build_disconnect_app", {
+                            connectionId: disconnectAccount.id,
+                          })
+                          if (authorization?.id === disconnectAccount.id)
+                            setAuthorization(null)
+                          setDisconnectId(null)
+                          requestAnimationFrame(() =>
+                            accountSection.current?.focus()
+                          )
+                        } finally {
+                          connections.refresh()
+                        }
+                      })
+                    }
+                  >
+                    Disconnect account
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </section>
+        ) : (
+          <div className="space-y-4">
+            <Button
+              variant="ghost-muted"
+              size="sm"
+              onClick={() => navigateIntegration()}
+            >
+              <ArrowLeft aria-hidden /> Integrations
+            </Button>
+            <Notice>Integration not found.</Notice>
+          </div>
+        )}
+      </section>
     )
   }
 
@@ -239,7 +480,7 @@ export function IntegrationsTab({
           <Button
             size="sm"
             disabled={connections.isLoading || Boolean(connections.error)}
-            onClick={() => setMcpDialog("new")}
+            onClick={() => navigateIntegration("mcp", "new")}
           >
             <Plus aria-hidden /> Add custom MCP
           </Button>
@@ -315,7 +556,6 @@ export function IntegrationsTab({
                         >
                           {item.mcpUrl}
                         </p>
-
                       </div>
                       <BuildStatus
                         state={item.status === "failed" ? "error" : item.status}
@@ -331,11 +571,10 @@ export function IntegrationsTab({
                         size="sm"
                         variant="outline"
                         disabled={busy}
-                        onClick={() => setMcpDialog(item.id)}
+                        onClick={() => navigateIntegration("mcp", item.id)}
                       >
                         Manage
                       </Button>
-
                     </div>
                   </div>
                 ))}
@@ -404,9 +643,8 @@ export function IntegrationsTab({
                           variant="outline"
                           size="sm"
                           disabled={busy}
-                          onClick={(event) => {
-                            trigger.current = event.currentTarget
-                            setAppSlug(item.slug)
+                          onClick={() => {
+                            navigateIntegration("integration", item.slug)
                             setError(null)
                             if (
                               !appAccounts.some(
@@ -433,222 +671,6 @@ export function IntegrationsTab({
           </section>
         </>
       )}
-      {mcpDialog && (
-        <CustomMcpDialog
-          key={mcpDialog}
-          open={active}
-          connection={customConnections.find((item) => item.id === mcpDialog)}
-          agentId={agentId}
-          beforeSave={beforeToolChange}
-          onOpenChange={(open) => {
-            if (!open) setMcpDialog(null)
-          }}
-          onSaved={(result) => {
-            connections.refresh()
-            if (result?.toolsReady === false)
-              setError(
-                "MCP connected, but its tools could not be enabled. Open the connection to choose tools."
-              )
-            if (result?.agentRevision) onCatalogChanged?.()
-          }}
-          onDefinitionDirty={onDefinitionDirty}
-          onEditAction={(action) => {
-            setMcpDialog(null)
-            onEditAction?.(action)
-          }}
-        />
-      )}
-      <Dialog
-        open={active && Boolean(app)}
-        onOpenChange={(open) => {
-          if (!open && !pending && !disconnectId) setAppSlug(null)
-        }}
-      >
-        <DialogContent
-          className="gap-0 bg-background p-0"
-          role={disconnectAccount ? "alertdialog" : "dialog"}
-          showCloseButton={!pending && !disconnectAccount}
-          onCloseAutoFocus={(event) => {
-            if (active && trigger.current?.isConnected) {
-              event.preventDefault()
-              trigger.current.focus()
-            }
-          }}
-          onEscapeKeyDown={(event) => {
-            if (pending || disconnectId) event.preventDefault()
-            if (disconnectId && !pending) cancelDisconnect()
-          }}
-          onInteractOutside={(event) => {
-            if (pending || disconnectId) event.preventDefault()
-          }}
-        >
-          {app && (
-            <>
-              <DialogHeader className="gap-4 border-b border-border p-6">
-                <div className="flex items-center gap-4 pr-6">
-                  <IntegrationLogo slug={app.slug} />
-                  <div className="min-w-0 space-y-1">
-                    <DialogTitle className="pr-0 text-lg">
-                      {disconnectAccount ? `Disconnect ${app.name}?` : app.name}
-                    </DialogTitle>
-                    <p className="text-xs text-foreground-muted">
-                      App integration
-                    </p>
-                  </div>
-                </div>
-                <DialogDescription className="leading-relaxed">
-                  {disconnectAccount
-                    ? "Every agent in this project will lose access to this account. Actions using it will stop working until you connect an account again."
-                    : appDescription(app)}
-                </DialogDescription>
-              </DialogHeader>
-              <div hidden={Boolean(disconnectAccount)}>
-                <div className="space-y-4 p-6">
-                  {error && !disconnectId && (
-                    <Notice variant="error" role="alert">
-                      {error}
-                    </Notice>
-                  )}
-                  {connections.error && (
-                    <Notice variant="error" role="alert">
-                      {connections.error.message}{" "}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={connections.refresh}
-                      >
-                        Retry connections
-                      </Button>
-                    </Notice>
-                  )}
-                  {app.available === false ? (
-                    <Notice>
-                      This integration needs administrator setup before you can
-                      connect an account.
-                    </Notice>
-                  ) : app.connectionMethod === "shopify" ? (
-                    <div className="space-y-3">
-                      <p className="text-sm text-foreground-muted">
-                        Choose your store and review Datool’s requested access
-                        in Shopify. Your existing Datool billing stays in place.
-                      </p>
-                      {authorization ? (
-                        <Button asChild>
-                          <a href={authorization.url}>Continue to Shopify</a>
-                        </Button>
-                      ) : (
-                        <Button
-                          loading={busy}
-                          disabled={busy}
-                          onClick={() => void connect(app.slug)}
-                        >
-                          Connect store
-                        </Button>
-                      )}
-                    </div>
-                  ) : null}
-                  <div className="flex items-center justify-between gap-3">
-                    <h3
-                      ref={accountSection}
-                      tabIndex={-1}
-                      className="text-sm font-medium"
-                    >
-                      Accounts
-                    </h3>
-                    {visibleAccounts.length > 0 &&
-                      !app.connectionMethod &&
-                      app.available !== false && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => connect(app.slug)}
-                        >
-                          <Plus aria-hidden /> Add account
-                        </Button>
-                      )}
-                  </div>
-                  {visibleAccounts.length > 0 ? (
-                    <div className="space-y-3">
-                      {visibleAccounts.map(renderAccount)}
-                    </div>
-                  ) : !app.connectionMethod && app.available !== false ? (
-                    <Card className="space-y-4 p-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium">
-                          Connect your first account
-                        </p>
-                        <p className="text-sm leading-relaxed text-foreground-muted">
-                          Securely authorize {app.name} to make its tools
-                          available to your agents.
-                        </p>
-                      </div>
-                      <Button loading={busy} onClick={() => connect(app.slug)}>
-                        <Plus aria-hidden /> Connect account
-                      </Button>
-                    </Card>
-                  ) : null}
-                  <p className="text-xs leading-relaxed text-foreground-muted">
-                    Accounts are shared across agents in this project.
-                  </p>
-                  {otherAccounts.length > 0 && (
-                    <InspectorSection
-                      label={`Other connections (${otherAccounts.length})`}
-                      defaultOpen={false}
-                    >
-                      <div className="space-y-3">
-                        {otherAccounts.map(renderAccount)}
-                      </div>
-                    </InspectorSection>
-                  )}
-                </div>
-              </div>
-              {disconnectAccount && (
-                <div className="space-y-4 p-6">
-                  {error && (
-                    <Notice variant="error" role="alert">
-                      {error}
-                    </Notice>
-                  )}
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button
-                      ref={cancelDisconnectButton}
-                      variant="outline"
-                      disabled={pending}
-                      onClick={cancelDisconnect}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      loading={pending}
-                      onClick={() => {
-                        void run(async () => {
-                          try {
-                            await buildApi.call("build_disconnect_app", {
-                              connectionId: disconnectAccount.id,
-                            })
-                            if (authorization?.id === disconnectAccount.id)
-                              setAuthorization(null)
-                            setDisconnectId(null)
-                            requestAnimationFrame(() =>
-                              accountSection.current?.focus()
-                            )
-                          } finally {
-                            connections.refresh()
-                          }
-                        })
-                      }}
-                    >
-                      Disconnect account
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </section>
   )
 }
