@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
-import { expect, fn, userEvent, waitFor, within } from "storybook/test"
+import { expect, userEvent, waitFor, within } from "storybook/test"
 import { IntegrationsTab } from "./integrations-tab"
 import { appIntegrationScenario } from "@/.storybook/scenarios/app-integrations"
 
@@ -13,7 +13,7 @@ const shopify = appIntegrationScenario("shopify")
 const meta = {
   title: "Build/AgentIntegrations",
   component: IntegrationsTab,
-  args: { onOpenActions: fn() },
+  args: { agentId: "calendar-agent" },
   parameters: { layout: "fullscreen", msw: { handlers: active.handlers } },
 } satisfies Meta<typeof IntegrationsTab>
 export default meta
@@ -60,8 +60,8 @@ export const Connected: Story = {
     )
     await expect(dialog.getByText("Connected", { exact: true })).toBeVisible()
     await expect(
-      dialog.getByRole("button", { name: "Open Actions" })
-    ).toBeVisible()
+      dialog.findByRole("switch", { name: "Enable List calendar events" })
+    ).resolves.toBeVisible()
     await userEvent.click(dialog.getByRole("button", { name: /Options for/ }))
     await expect(
       page.getByRole("menuitem", { name: "Check connection" })
@@ -113,13 +113,13 @@ export const Pending: Story = {
     )
     await expect(dialog.getByText("Awaiting authorization")).toBeVisible()
     await expect(
-      dialog.queryByRole("button", { name: "Open Actions" })
+      dialog.queryByRole("switch", { name: "Enable List calendar events" })
     ).not.toBeInTheDocument()
     await userEvent.click(
       dialog.getByRole("button", { name: "Check connection" })
     )
     await expect(
-      dialog.findByRole("button", { name: "Open Actions" })
+      dialog.findByRole("switch", { name: "Enable List calendar events" })
     ).resolves.toBeVisible()
   },
 }
@@ -231,7 +231,7 @@ export const DisconnectAccount: Story = {
       dialog.findByRole("button", { name: "Connect account" })
     ).resolves.toBeVisible()
     await expect(
-      dialog.queryByRole("button", { name: "Open Actions" })
+      dialog.queryByRole("switch", { name: "Enable List calendar events" })
     ).not.toBeInTheDocument()
   },
 }

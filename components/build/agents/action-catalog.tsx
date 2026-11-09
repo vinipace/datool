@@ -55,13 +55,6 @@ const catalog: {
   actions: { preset: ActionPreset; label: string }[]
 }[] = [
   {
-    id: "integration",
-    title: "Connected app",
-    description:
-      "Let your agent use apps such as Google Calendar through a connected account.",
-    actions: [{ preset: "integration", label: "Use connected app" }],
-  },
-  {
     id: "handoff",
     title: "Escalations",
     description:

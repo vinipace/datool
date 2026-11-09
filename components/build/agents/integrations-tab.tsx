@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { ArrowRight, Plus, RefreshCw, Zap } from "lucide-react"
+import { Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { IntegrationLogo } from "@/components/ui/integration-logo"
@@ -16,6 +16,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { InspectorSection } from "@/components/ui/inspector-section"
+import { IntegrationTools } from "./integration-tools"
+import type { ActionRecord } from "@/src/lib/build/contracts"
 import { CustomMcpDialog } from "./custom-mcp-dialog"
 import { ShopifyChatSetup } from "./shopify-chat-setup"
 import { IntegrationAccount } from "./integration-account"
@@ -46,13 +48,15 @@ function appDescription(app: { slug: string; name: string }) {
 
 export function IntegrationsTab({
   active = true,
-  onOpenActions,
+  onEditAction,
+  onDefinitionDirty,
   agentId,
   beforeToolChange,
   onCatalogChanged,
 }: {
   active?: boolean
-  onOpenActions?: () => void
+  onEditAction?: (action: ActionRecord) => void
+  onDefinitionDirty?: () => void
   agentId?: string
   beforeToolChange?: () => Promise<void>
   onCatalogChanged?: () => void
@@ -188,6 +192,18 @@ export function IntegrationsTab({
             setDisconnectId(account.id)
           }}
         />
+        {agentId && account.status === "active" && (
+          <IntegrationTools
+            agentId={agentId}
+            connectionId={account.id}
+            connectionLabel={account.label}
+            onChanged={onDefinitionDirty}
+            onEdit={(action) => {
+              setAppSlug(null)
+              onEditAction?.(action)
+            }}
+          />
+        )}
         {account.toolkit === "shopify_native" &&
           account.status === "active" && (
             <ShopifyChatSetup connectionId={account.id} />
@@ -205,8 +221,8 @@ export function IntegrationsTab({
         <div className="max-w-2xl space-y-2">
           <h2 className="text-lg font-semibold">Integrations</h2>
           <p className="text-sm leading-relaxed text-foreground-muted">
-            Connect apps and custom MCP servers. Custom MCP tools are added
-            to this agent automatically. Manage individual tools in Actions.
+            Connect apps and custom MCP servers. Custom MCP tools are added to
+            this agent automatically. Choose tools in each integration.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -239,7 +255,7 @@ export function IntegrationsTab({
           {oauthResult === "success"
             ? "MCP account connected. Its tools are available to this agent."
             : oauthResult === "tools_error"
-              ? "MCP account connected, but its tools could not be enabled. Select Enable tools to try again."
+              ? "MCP account connected, but its tools could not be enabled. Open the connection to choose tools."
               : "MCP sign-in was not completed. Open the connection and try again."}
         </Notice>
       )}
@@ -299,13 +315,7 @@ export function IntegrationsTab({
                         >
                           {item.mcpUrl}
                         </p>
-                        {agentId && item.status === "active" && (
-                          <p className="text-xs text-foreground-muted">
-                            {item.agentToolCount
-                              ? `${item.agentToolCount} tools enabled for this agent`
-                              : "Tools not enabled for this agent"}
-                          </p>
-                        )}
+
                       </div>
                       <BuildStatus
                         state={item.status === "failed" ? "error" : item.status}
@@ -325,28 +335,7 @@ export function IntegrationsTab({
                       >
                         Manage
                       </Button>
-                      {agentId &&
-                        item.status === "active" &&
-                        !item.agentToolCount && (
-                          <Button
-                            size="sm"
-                            loading={pending}
-                            disabled={busy}
-                            onClick={() =>
-                              void run(async () => {
-                                await beforeToolChange?.()
-                                await buildApi.call("build_enable_mcp_tools", {
-                                  agentId,
-                                  connectionId: item.id,
-                                })
-                                connections.refresh()
-                                onCatalogChanged?.()
-                              })
-                            }
-                          >
-                            Enable tools
-                          </Button>
-                        )}
+
                     </div>
                   </div>
                 ))}
@@ -458,11 +447,15 @@ export function IntegrationsTab({
             connections.refresh()
             if (result?.toolsReady === false)
               setError(
-                "MCP connected, but its tools could not be enabled. Select Enable tools to try again."
+                "MCP connected, but its tools could not be enabled. Open the connection to choose tools."
               )
             if (result?.agentRevision) onCatalogChanged?.()
           }}
-          onOpenActions={onOpenActions}
+          onDefinitionDirty={onDefinitionDirty}
+          onEditAction={(action) => {
+            setMcpDialog(null)
+            onEditAction?.(action)
+          }}
         />
       )}
       <Dialog
@@ -609,35 +602,6 @@ export function IntegrationsTab({
                     </InspectorSection>
                   )}
                 </div>
-                {connected.length > 0 && onOpenActions && (
-                  <div className="space-y-4 border-t border-border bg-muted p-6">
-                    <div className="flex gap-3">
-                      <Zap
-                        aria-hidden
-                        className="mt-0.5 size-4 shrink-0 text-foreground-muted"
-                      />
-                      <div className="space-y-1">
-                        <h3 className="text-sm font-medium">
-                          Choose what your agent can do
-                        </h3>
-                        <p className="text-sm leading-relaxed text-foreground-muted">
-                          Add tools from {app.name} in Actions. You control
-                          which tools this agent can use.
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      className="w-full"
-                      disabled={busy}
-                      onClick={() => {
-                        setAppSlug(null)
-                        onOpenActions()
-                      }}
-                    >
-                      Open Actions <ArrowRight aria-hidden />
-                    </Button>
-                  </div>
-                )}
               </div>
               {disconnectAccount && (
                 <div className="space-y-4 p-6">

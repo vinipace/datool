@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ArrowRight, ChevronDown, RefreshCw, Unplug } from "lucide-react"
+import { ChevronDown, RefreshCw, Unplug } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,6 +16,8 @@ import { Select } from "@/components/ui/select"
 import { Notice } from "@/components/ui/notice"
 import { BuildStatus } from "@/components/build/shared/build-layout"
 import { buildApi } from "@/components/build/operations/build-api"
+import { IntegrationTools } from "./integration-tools"
+import type { ActionRecord } from "@/src/lib/build/contracts"
 import type { AppConnection } from "@/src/lib/build/integrations"
 
 export function CustomMcpDialog({
@@ -23,7 +25,8 @@ export function CustomMcpDialog({
   open,
   onOpenChange,
   onSaved,
-  onOpenActions,
+  onEditAction,
+  onDefinitionDirty,
   agentId,
   beforeSave,
 }: {
@@ -31,7 +34,8 @@ export function CustomMcpDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: (result?: { toolsReady?: boolean; agentRevision?: number }) => void
-  onOpenActions?: () => void
+  onEditAction?: (action: ActionRecord) => void
+  onDefinitionDirty?: () => void
   agentId?: string
   beforeSave?: () => Promise<void>
 }) {
@@ -125,7 +129,9 @@ export function CustomMcpDialog({
           <DialogDescription>
             {confirmDisconnect
               ? "Every agent in this project will lose access to this account. Actions using it will stop working until you reconnect it."
-              : agentId ? "Connect an MCP server to add its tools to this agent. Manage individual tools in Actions." : "Connect an MCP server by URL, then choose its tools in Actions. Connections are shared across agents in this project."}
+              : agentId
+                ? "Connect an MCP server to add its tools to this agent. Manage individual tools here."
+                : "Connect an MCP server by URL, then choose its tools here. Connections are shared across agents in this project."}
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -459,17 +465,14 @@ export function CustomMcpDialog({
                 </Button>
               </div>
             </form>
-            {status === "active" && onOpenActions && (
-              <Button
-                variant="ghost-muted"
-                disabled={Boolean(pending)}
-                onClick={() => {
-                  onOpenChange(false)
-                  onOpenActions()
-                }}
-              >
-                Open Actions <ArrowRight aria-hidden />
-              </Button>
+            {status === "active" && connection && agentId && (
+              <IntegrationTools
+                agentId={agentId}
+                connectionId={connection.id}
+                connectionLabel={connection.label}
+                onChanged={onDefinitionDirty}
+                onEdit={onEditAction}
+              />
             )}
           </>
         )}

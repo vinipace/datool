@@ -20,6 +20,7 @@ export function appIntegrationScenario(
   let status: AppConnection["status"] | null = null
   let custom: AppConnection | null = null
   let connectAttempts = 0
+  let actions: Array<Record<string, unknown>> = []
   const reset = () => {
     status =
       initial === "catalog" || initial === "shopify-active"
@@ -39,6 +40,7 @@ export function appIntegrationScenario(
           }
         : null
     connectAttempts = 0
+    actions = []
   }
   reset()
   return {
@@ -214,7 +216,29 @@ export function appIntegrationScenario(
           status = "active"
         if (params.operation === "build_disconnect_app") status = "disconnected"
         if (params.operation === "build_list_actions")
-          return HttpResponse.json({ data: [] })
+          return HttpResponse.json({ data: actions })
+        if (params.operation === "build_save_action") {
+          const input = (await request.json()) as {
+            id: string
+            slug: string
+            agentId: string
+            definition: Record<string, unknown>
+          }
+          const previous = actions.find((action) => action.id === input.id)
+          const action = {
+            ...input,
+            projectId: "storybook-project",
+            revision: previous ? Number(previous.revision) + 1 : 1,
+            definition: {
+              enabled: true,
+              channels: [],
+              procedureOnly: false,
+              ...input.definition,
+            },
+          }
+          actions = [...actions.filter((item) => item.id !== input.id), action]
+          return HttpResponse.json({ data: action })
+        }
         return HttpResponse.json({ data: {} })
       }),
     ],
