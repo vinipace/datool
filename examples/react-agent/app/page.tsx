@@ -1,76 +1,23 @@
 "use client"
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import { DatoolChat } from "@datool/react"
-import type { AgentTask, FileEntry } from "@datool/sdk/agents"
+import { useDemoWorkspace } from "../lib/use-demo-workspace"
 
-const starter = `# Company context\n\nAcme Studio builds software for independent teams.\nOur priority this week is launching the customer portal.\n\n## Current work\n- Finish onboarding and invite the first 10 customers.\n- Collect feedback from the pilot group.\n- Prepare a short weekly progress update.\n`
 export default function Page() {
-  const [workspace, setWorkspace] = useState("acme")
-  const [ready, setReady] = useState(false)
-  const [context, setContext] = useState(starter)
-  const [tasks, setTasks] = useState<AgentTask[]>([])
-  const [files, setFiles] = useState<FileEntry[] | null>(null)
-  const [pending, setPending] = useState(false)
-  const [notice, setNotice] = useState("")
-  const [error, setError] = useState("")
+  const {
+    workspace,
+    ready,
+    context,
+    setContext,
+    savedContext,
+    tasks,
+    files,
+    pending,
+    notice,
+    error,
+    action,
+  } = useDemoWorkspace()
   const [tab, setTab] = useState<"context" | "tasks">("context")
-  const refresh = useCallback(async () => {
-    const response = await fetch("/api/demo", { cache: "no-store" })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data.error)
-    setWorkspace(data.workspace)
-    setTasks(data.tasks)
-    setReady(true)
-  }, [])
-  useEffect(() => {
-    let active = true
-    const load = () => {
-      if (active)
-        void refresh().catch((reason) => {
-          if (active) setError(reason.message)
-        })
-    }
-    load()
-    const timer = setInterval(load, 5000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [refresh])
-  async function action(input: Record<string, unknown>) {
-    setPending(true)
-    setNotice("")
-    setError("")
-    try {
-      const response = await fetch("/api/demo", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error)
-      if (typeof data.content === "string") setContext(data.content)
-      if (data.files) setFiles(data.files)
-      if (input.action === "workspace") {
-        setContext("")
-        setFiles(null)
-        setReady(false)
-      }
-      setNotice(
-        data.message ??
-          "Workspace switched. This workspace has its own files and chat."
-      )
-      await refresh()
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Could not complete that action."
-      )
-    } finally {
-      setPending(false)
-    }
-  }
   return (
     <main className="workspace">
       <header className="topbar">
@@ -142,11 +89,19 @@ export default function Page() {
               </div>
               <label className="file-label" htmlFor="context">
                 <span>context/company.md</span>
-                <span>Markdown</span>
+                <span aria-live="polite">
+                  {!ready
+                    ? "Loading…"
+                    : context !== savedContext
+                      ? "Unsaved changes"
+                      : "Saved to drive"}
+                </span>
               </label>
               <textarea
                 id="context"
                 className="context-editor"
+                disabled={pending || !ready}
+                placeholder="Loading this workspace’s company context…"
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 maxLength={20_000}
@@ -290,6 +245,16 @@ export default function Page() {
               role={error ? "alert" : "status"}
             >
               {error || notice}
+              {error && !ready && (
+                <div className="button-row">
+                  <button
+                    disabled={pending}
+                    onClick={() => void action({ action: "load" })}
+                  >
+                    Retry loading workspace
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <footer className="panel-footer">
@@ -315,7 +280,11 @@ export default function Page() {
               welcomeMessage="What are we working on today?"
             />
           ) : (
-            <div className="chat-loading">Connecting to your agent…</div>
+            <div className="chat-loading" role="status">
+              {error
+                ? "Load the workspace to reconnect your chat."
+                : "Loading your workspace…"}
+            </div>
           )}
         </section>
       </div>

@@ -1,8 +1,12 @@
 import { DatoolError } from "@datool/sdk/agents"
-import { agentFor, demoAuth, workspaces } from "../../../lib/datool"
+import { agentFor, demoAuth, options, workspaces } from "../../../lib/datool"
+import {
+  companyContextPath as path,
+  createCompanyContextLoader,
+} from "../../../lib/company-context"
 
 export const runtime = "nodejs"
-const path = "context/company.md"
+const loadCompanyContext = createCompanyContextLoader()
 export async function GET(req: Request) {
   try {
     const auth = demoAuth(req)
@@ -25,7 +29,7 @@ export async function POST(req: Request) {
   if (origin && origin !== new URL(req.url).origin)
     return Response.json({ error: "Invalid origin." }, { status: 403 })
   try {
-    demoAuth(req)
+    const auth = demoAuth(req)
     const input = await req.json()
     if (input.action === "workspace") {
       if (!(input.workspace === "acme" || input.workspace === "orbit"))
@@ -39,7 +43,32 @@ export async function POST(req: Request) {
         }
       )
     }
+    if (input.expectedWorkspace && input.expectedWorkspace !== auth.orgId)
+      return Response.json(
+        { error: "Your workspace changed. Reload it before continuing." },
+        { status: 409 }
+      )
     const agent = agentFor(req)
+    if (input.action === "load") {
+      const [content, tasks] = await Promise.all([
+        loadCompanyContext(
+          JSON.stringify([
+            options.projectId,
+            options.connectionId,
+            auth.userId,
+            auth.drive,
+          ]),
+          agent.files,
+          auth.orgId
+        ),
+        agent.tasks.list(),
+      ])
+      return Response.json({
+        workspace: auth.orgId,
+        content,
+        tasks: tasks.items,
+      })
+    }
     if (input.action === "save") {
       if (typeof input.content !== "string" || input.content.length > 20_000)
         throw new Error("Use up to 20,000 characters.")
