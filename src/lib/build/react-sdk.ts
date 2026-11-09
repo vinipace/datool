@@ -5,6 +5,7 @@ export const sdkScopeSchema = z.object({
   connectionId: z.string().uuid(),
   userId: z.string().trim().min(1).max(200),
   drive: z.string().trim().min(1).max(120).optional(),
+  workspaceName: z.string().trim().min(1).max(120).optional(),
 })
 export type SdkScope = z.infer<typeof sdkScopeSchema>
 const conversation = z.string().min(1).max(200)

@@ -5,7 +5,7 @@ export const runtime = "nodejs"
 export const POST = createDatoolHandler({
   ...options,
   config({ req }) {
-    const { userId, drive } = demoAuth(req)
-    return { userId, drive }
+    const { userId, drive, workspaceName } = demoAuth(req)
+    return { userId, drive, workspaceName }
   },
 })

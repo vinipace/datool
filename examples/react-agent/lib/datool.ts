@@ -27,13 +27,15 @@ export function demoAuth(req: Request) {
     orgId,
     userId: `demo_owner_${orgId}`,
     drive: `${process.env.DATOOL_DEMO_DRIVE_PREFIX ?? "react_sdk_demo"}_${orgId}`,
+    workspaceName: workspaces[orgId],
   }
 }
 export function agentFor(req: Request) {
-  const { userId, drive } = demoAuth(req)
+  const { userId, drive, workspaceName } = demoAuth(req)
   return createDatoolClient(options).agent({
     connectionId: options.connectionId,
     userId,
     drive,
+    workspaceName,
   })
 }

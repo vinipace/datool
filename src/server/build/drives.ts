@@ -15,6 +15,7 @@ type DriveRow = {
   provider: AgentDrive["provider"]
   created_at: Date | string
   provisioned_at: Date | string | null
+  sdk_context: AgentDrive["sdkContext"]
 }
 const driveModel = (row: DriveRow): AgentDrive => ({
   id: row.id,
@@ -22,16 +23,18 @@ const driveModel = (row: DriveRow): AgentDrive => ({
   description: row.description,
   provider: row.provider,
   createdAt: new Date(row.created_at).toISOString(),
+  sdkContext: row.sdk_context ?? null,
 })
 
 export async function listDrives(
   context: BuildContext,
-  input: { after?: string; limit?: number } = {}
+  input: { after?: string; limit?: number; agentId?: string } = {}
 ) {
   await assertBuildProject(context)
   const limit = Math.max(1, Math.min(input.limit ?? 100, 200))
   const rows = await context.database.execute<DriveRow>(sql`
     SELECT * FROM build_drives WHERE project_id = ${context.projectId}
+    ${input.agentId ? sql`AND (sdk_context IS NULL OR sdk_context->>'agentId'=${input.agentId})` : sql``}
     ${input.after ? sql`AND id > ${input.after}::uuid` : sql``}
     ORDER BY id LIMIT ${limit + 1}
   `)

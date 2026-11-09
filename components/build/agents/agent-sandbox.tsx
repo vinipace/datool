@@ -59,19 +59,27 @@ export function AgentSandbox({
   active = true,
 }: Props & { agentId?: string; active?: boolean }) {
   const sandbox = configuration.sandbox
-  const drives = useRemote(async (signal) => {
-    const items: AgentDrive[] = []
-    let after: string | undefined
-    do {
-      const page = await buildCall<{
-        items: AgentDrive[]
-        nextCursor: string | null
-      }>(buildOperations.listDrives, { after, limit: 200 }, { signal })
-      items.push(...page.items)
-      after = page.nextCursor ?? undefined
-    } while (after)
-    return items
-  }, [])
+  const drives = useRemote(
+    async (signal) => {
+      const items: AgentDrive[] = []
+      let after: string | undefined
+      do {
+        const page = await buildCall<{
+          items: AgentDrive[]
+          nextCursor: string | null
+        }>(
+          buildOperations.listDrives,
+          { after, limit: 200, agentId },
+          { signal }
+        )
+        items.push(...page.items)
+        after = page.nextCursor ?? undefined
+      } while (after)
+      return items
+    },
+    [agentId],
+    { enabled: active, intervalMs: 5000 }
+  )
   const [added, setAdded] = React.useState<AgentDrive[]>([])
   const [search, setSearch] = React.useState("")
   const [open, setOpen] = React.useState(false)
@@ -87,20 +95,43 @@ export function AgentSandbox({
   const available = catalog.filter(
     (drive, index) =>
       drive.provider === sandbox.provider &&
+      !drive.sdkContext &&
       !sandbox.drives.some((mount) => mount.driveId === drive.id) &&
       catalog.findIndex((item) => item.id === drive.id) === index
   )
-  const rows = sandbox.drives
-    .map((mount) => ({
+  const rows = [
+    ...sandbox.drives.map((mount) => ({
       ...mount,
       id: mount.driveId,
       drive: catalog.find((drive) => drive.id === mount.driveId),
-    }))
-    .filter((row) =>
-      [row.id, row.drive?.name, row.drive?.description, row.mountPath].some(
-        (value) => value?.toLowerCase().includes(search.trim().toLowerCase())
+      managed: false,
+    })),
+    ...catalog
+      .filter(
+        (drive, index) =>
+          drive.sdkContext?.agentId === agentId &&
+          drive.sdkContext &&
+          !sandbox.drives.some((mount) => mount.driveId === drive.id) &&
+          catalog.findIndex((item) => item.id === drive.id) === index
       )
+      .map((drive) => ({
+        id: drive.id,
+        driveId: drive.id,
+        mountPath: "/workspace",
+        drive,
+        managed: true,
+      })),
+  ].filter((row) =>
+    [
+      row.id,
+      row.drive?.name,
+      row.drive?.description,
+      row.mountPath,
+      row.drive?.sdkContext?.workspaceName,
+    ].some((value) =>
+      value?.toLowerCase().includes(search.trim().toLowerCase())
     )
+  )
 
   function update(value: Partial<AgentSandboxConfiguration>) {
     onChange({ ...configuration, sandbox: { ...sandbox, ...value } })
@@ -247,9 +278,10 @@ export function AgentSandbox({
           <CollectionTable
             fillHeight
             enableCardView={false}
-            widths={[280, 360, 300, 180, 170, 48]}
+            widths={[280, 240, 360, 220, 180, 170, 48]}
             columnIds={[
               "name",
+              "workspace",
               "driveId",
               "mountPath",
               "provider",
@@ -263,6 +295,7 @@ export function AgentSandbox({
               <tr>
                 <th className={collectionTable.heading} aria-hidden />
                 <th className={collectionTable.heading}>Name</th>
+                <th className={collectionTable.heading}>Workspace</th>
                 <th className={collectionTable.heading}>Drive ID</th>
                 <th className={collectionTable.heading}>Mount path</th>
                 <th className={collectionTable.heading}>Provider</th>
@@ -277,7 +310,7 @@ export function AgentSandbox({
               empty={
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-3 py-10 text-center text-sm text-foreground-muted"
                   >
                     {search ? "No matching drives" : "No drives mounted"}
@@ -286,25 +319,52 @@ export function AgentSandbox({
               }
             >
               {(row, index) => (
-                <CollectionRow onClick={() => edit(row.id)}>
+                <CollectionRow
+                  onClick={row.managed ? undefined : () => edit(row.id)}
+                >
                   <td className={collectionTable.cell}>
                     <span className="text-foreground-muted">{index + 1}</span>
                   </td>
                   <td className={collectionTable.cell}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="max-w-full justify-start px-0"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        edit(row.id)
-                      }}
-                    >
-                      <HardDrive className="size-4 text-foreground-muted" />
-                      <span className="truncate">
-                        {row.drive?.name ?? "Unavailable drive"}
+                    {row.managed ? (
+                      <span
+                        className="flex min-w-0 items-center gap-2"
+                        title={row.drive?.name}
+                      >
+                        <HardDrive className="size-4 shrink-0 text-foreground-muted" />
+                        <span className="truncate">{row.drive?.name}</span>
                       </span>
-                    </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="max-w-full justify-start px-0"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          edit(row.id)
+                        }}
+                      >
+                        <HardDrive className="size-4 text-foreground-muted" />
+                        <span className="truncate">
+                          {row.drive?.name ?? "Unavailable drive"}
+                        </span>
+                      </Button>
+                    )}
+                  </td>
+                  <td className={collectionTable.cell}>
+                    {row.managed ? (
+                      <span
+                        className="flex items-center gap-2"
+                        title={row.drive?.sdkContext?.workspace}
+                      >
+                        <span className="truncate">
+                          {row.drive?.sdkContext?.workspaceName}
+                        </span>
+                        <span className="shrink-0 text-xs text-foreground-muted">SDK-managed</span>
+                      </span>
+                    ) : (
+                      <span className="text-foreground-muted">Shared</span>
+                    )}
                   </td>
                   <td className={collectionTable.cell}>
                     <span
@@ -340,18 +400,20 @@ export function AgentSandbox({
                     </span>
                   </td>
                   <td className={collectionTable.cell}>
-                    <Button
-                      variant="ghost-muted"
-                      size="icon-sm"
-                      aria-label={`Unmount ${row.drive?.name ?? "drive"}`}
-                      title="Unmount drive"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        unmount(row.id)
-                      }}
-                    >
-                      <X />
-                    </Button>
+                    {!row.managed && (
+                      <Button
+                        variant="ghost-muted"
+                        size="icon-sm"
+                        aria-label={`Unmount ${row.drive?.name ?? "drive"}`}
+                        title="Unmount drive"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          unmount(row.id)
+                        }}
+                      >
+                        <X />
+                      </Button>
+                    )}
                   </td>
                 </CollectionRow>
               )}

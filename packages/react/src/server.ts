@@ -11,7 +11,11 @@ import {
   type ChatRequest,
 } from "@datool/sdk/agents"
 
-export type DatoolRequestConfig = { userId?: string; drive?: string }
+export type DatoolRequestConfig = {
+  userId?: string
+  drive?: string
+  workspaceName?: string
+}
 export type DatoolHandlerOptions = DatoolClientOptions & {
   connectionId: string
   config: (input: {
@@ -146,6 +150,7 @@ export function createDatoolHandler(options: DatoolHandlerOptions) {
           connectionId: options.connectionId,
           userId,
           drive: config.drive,
+          workspaceName: config.workspaceName,
         })
         .chat(request)
       return reply({ data })

@@ -7,6 +7,10 @@ import { assertBuildProject, type BuildContext } from "./context"
 import { getAgent } from "./agents"
 import { getChannelConnection } from "./channels/service"
 import { ConversationService } from "./conversations"
+import {
+  savedSdkTaskContextSchema,
+  type SavedSdkTaskContext,
+} from "@/src/lib/build/sdk-context"
 
 const hash = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex")
@@ -60,9 +64,11 @@ export async function resolveSdkDrive(
   ])
   const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`
   await context.database
-    .execute(sql`INSERT INTO build_drives(id,project_id,name,description,provider)
-    VALUES(${id}::uuid,${context.projectId},${scope.drive},'React SDK application drive',${config.provider})
-    ON CONFLICT(id) DO NOTHING`)
+    .execute(sql`INSERT INTO build_drives(id,project_id,name,description,provider,sdk_context)
+    SELECT ${id}::uuid,${context.projectId},${scope.drive},'React SDK application drive',${config.provider},
+      jsonb_build_object('agentId',c.agent_id,'connectionId',c.id,'workspace',${scope.drive}::text,'workspaceName',${scope.workspaceName ?? scope.drive}::text)
+    FROM build_channel_connection c WHERE c.project_id=${context.projectId} AND c.id=${scope.connectionId}::uuid
+    ON CONFLICT(id) DO UPDATE SET sdk_context=EXCLUDED.sdk_context || jsonb_build_object('workspaceName',COALESCE(${scope.workspaceName ?? null}::text,build_drives.sdk_context->>'workspaceName',EXCLUDED.sdk_context->>'workspaceName'))`)
   return id
 }
 
@@ -123,7 +129,13 @@ export async function sdkSandboxConfiguration(
     SELECT s.drive_id,c.status FROM build_sdk_sessions s JOIN build_channel_connection c ON c.id=s.connection_id AND c.project_id=s.project_id
     WHERE s.project_id=${context.projectId} AND s.conversation_id=${conversationId}`)
   const session = result.rows[0]
-  if (!session) return config
+  if (!session) {
+    const conversation = await new ConversationService(context).require(
+      conversationId
+    )
+    if (conversation.externalConversationId?.startsWith("sdk:")) throw denied()
+    return config
+  }
   if (session.status !== "connected")
     throw new TracerError(
       "VALIDATION_ERROR",
@@ -146,19 +158,53 @@ export async function sdkSandboxConfiguration(
 export async function scheduledSdkConversation(
   context: BuildContext,
   taskId: string,
-  agentId: string
+  agentId: string,
+  expected?: SavedSdkTaskContext | null
 ) {
   const result = await context.database.execute<{
+    sdk_context: SavedSdkTaskContext | null
     conversation_id: string
     agent_id: string
     status: string
+    connection_id: string
+    scope_key: string
+    drive_id: string | null
   }>(sql`
-    SELECT s.conversation_id,c.agent_id,c.status FROM build_sdk_tasks t
-    JOIN build_sdk_sessions s ON s.project_id=t.project_id AND s.conversation_id=t.conversation_id
-    JOIN build_channel_connection c ON c.id=s.connection_id AND c.project_id=s.project_id
-    WHERE t.project_id=${context.projectId} AND t.task_id=${taskId}::uuid`)
+    SELECT a.sdk_context,s.conversation_id,c.agent_id,c.status,s.connection_id,s.scope_key,s.drive_id
+    FROM build_agent_schedules a
+    LEFT JOIN build_sdk_tasks t ON t.project_id=a.project_id AND t.task_id=a.id
+    LEFT JOIN build_sdk_sessions s ON s.project_id=t.project_id AND s.conversation_id=t.conversation_id
+    LEFT JOIN build_channel_connection c ON c.id=s.connection_id AND c.project_id=s.project_id
+    WHERE a.project_id=${context.projectId} AND a.id=${taskId}::uuid AND a.agent_id=${agentId}`)
   const row = result.rows[0]
-  if (!row) return null
+  if (!row?.sdk_context) {
+    if (expected || row?.conversation_id) throw denied()
+    return null
+  }
+  const saved = savedSdkTaskContextSchema.parse(row.sdk_context)
+  for (const key of [
+    "conversationId",
+    "connectionId",
+    "scopeKey",
+    "driveId",
+  ] as const)
+    if (expected && expected[key] !== saved[key]) throw denied()
+  if (
+    saved.conversationId !== row.conversation_id ||
+    saved.connectionId !== row.connection_id ||
+    saved.scopeKey !== row.scope_key ||
+    saved.driveId !== row.drive_id
+  )
+    throw denied()
   if (row.agent_id !== agentId || row.status !== "connected") throw denied()
-  return new ConversationService(context).require(row.conversation_id)
+  const conversation = await new ConversationService(context).require(
+    row.conversation_id
+  )
+  if (
+    conversation.agentId !== agentId ||
+    conversation.channel !== "api" ||
+    conversation.status === "blocked"
+  )
+    throw denied()
+  return conversation
 }

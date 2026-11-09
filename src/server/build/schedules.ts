@@ -17,6 +17,14 @@ import { enabledBuildProject } from "./access"
 import { ConversationService } from "./conversations"
 import { runAgentTurn } from "./runtime"
 import { EveExecutionPendingError } from "./eve/client"
+import {
+  savedSdkTaskContextSchema,
+  type SavedSdkTaskContext,
+} from "@/src/lib/build/sdk-context"
+
+const scheduledRunSnapshotSchema = scheduledTaskInputSchema.extend({
+  sdkContext: savedSdkTaskContextSchema.nullable().optional(),
+})
 
 type TaskRow = {
   id: string
@@ -34,6 +42,8 @@ type TaskRow = {
   created_at: unknown
   updated_at: unknown
   last_run?: RunRow | null
+  sdk_context?: SavedSdkTaskContext | null
+  sdk_workspace_name?: string | null
 }
 type RunRow = {
   id: string
@@ -41,7 +51,9 @@ type RunRow = {
   task_id: string
   source: ScheduledTaskRun["source"]
   request_key: string
-  snapshot_json: ScheduledTaskInput
+  snapshot_json: ScheduledTaskInput & {
+    sdkContext?: SavedSdkTaskContext | null
+  }
   status: ScheduledTaskRun["status"]
   scheduled_at: unknown
   started_at: unknown
@@ -88,6 +100,16 @@ function taskModel(row: TaskRow): ScheduledTask {
     lastRun: row.last_run ? runModel(row.last_run) : null,
     createdAt: asIsoDate(row.created_at)!,
     updatedAt: asIsoDate(row.updated_at)!,
+    sdkContext: row.sdk_context
+      ? {
+          connectionId: row.sdk_context.connectionId,
+          conversationId: row.sdk_context.conversationId,
+          driveId: row.sdk_context.driveId,
+          workspace: row.sdk_context.workspace,
+          workspaceName:
+            row.sdk_workspace_name ?? row.sdk_context.workspaceName,
+        }
+      : null,
   }
 }
 
@@ -157,12 +179,14 @@ export async function listScheduledTasks(
   await getAgent(context, input.agentId)
   const limit = Math.min(100, Math.max(1, input.limit ?? 50))
   const rows = await context.database.execute<TaskRow>(sql`
-    SELECT s.*, (SELECT row_to_json(r) FROM build_agent_schedule_runs r WHERE r.project_id=s.project_id AND r.task_id=s.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) AS last_run
-    FROM build_agent_schedules s WHERE s.project_id=${context.projectId} AND s.agent_id=${input.agentId} AND s.deleted_at IS NULL
+    SELECT s.*, d.sdk_context->>'workspaceName' AS sdk_workspace_name,
+      (SELECT row_to_json(r) FROM build_agent_schedule_runs r WHERE r.project_id=s.project_id AND r.task_id=s.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) AS last_run
+    FROM build_agent_schedules s LEFT JOIN build_drives d ON d.project_id=s.project_id AND d.id=(s.sdk_context->>'driveId')::uuid
+    WHERE s.project_id=${context.projectId} AND s.agent_id=${input.agentId} AND s.deleted_at IS NULL
       ${input.sdkSessionId ? sql`AND EXISTS (SELECT 1 FROM build_sdk_tasks t WHERE t.project_id=s.project_id AND t.task_id=s.id AND t.conversation_id=${input.sdkSessionId})` : sql``}
       ${input.id ? sql`AND s.id=${input.id}::uuid` : sql``}
       ${input.cursor ? sql`AND s.id>${input.cursor}::uuid` : sql``}
-      ${input.search ? sql`AND strpos(lower(s.name || ' ' || s.prompt), lower(${input.search}))>0` : sql``}
+      ${input.search ? sql`AND strpos(lower(s.name || ' ' || s.prompt || ' ' || COALESCE(s.sdk_context->>'workspace','') || ' ' || COALESCE(d.sdk_context->>'workspaceName',s.sdk_context->>'workspaceName','')), lower(${input.search}))>0` : sql``}
     ORDER BY s.id LIMIT ${limit + 1}`)
   return {
     items: rows.rows.slice(0, limit).map(taskModel),
@@ -172,14 +196,15 @@ export async function listScheduledTasks(
 
 export async function createScheduledTask(
   context: BuildContext,
-  value: unknown
+  value: unknown,
+  sdkContext: SavedSdkTaskContext | null = null
 ) {
   await assertBuildProject(context)
   const { input, next } = await validateInput(context, value)
   const rows = await context.database
     .execute<TaskRow>(sql`INSERT INTO build_agent_schedules
-    (id,project_id,agent_id,name,prompt,channel,schedule_json,timezone,status,next_run_at)
-    VALUES (${crypto.randomUUID()}::uuid,${context.projectId},${input.agentId},${input.name},${input.prompt},${input.channel},${JSON.stringify(input.schedule)}::jsonb,${input.timezone},${input.enabled ? "active" : "paused"},${input.enabled ? next?.toISOString() : null}::timestamptz) RETURNING *`)
+    (id,project_id,agent_id,name,prompt,channel,schedule_json,timezone,status,next_run_at,sdk_context)
+    VALUES (${crypto.randomUUID()}::uuid,${context.projectId},${input.agentId},${input.name},${input.prompt},${input.channel},${JSON.stringify(input.schedule)}::jsonb,${input.timezone},${input.enabled ? "active" : "paused"},${input.enabled ? next?.toISOString() : null}::timestamptz,${sdkContext ? JSON.stringify(savedSdkTaskContextSchema.parse(sdkContext)) : null}::jsonb) RETURNING *`)
   return taskModel(rows.rows[0])
 }
 
@@ -200,6 +225,10 @@ export async function updateScheduledTask(
     const old = previous.rows[0]
     if (!old) throw new TracerError("NOT_FOUND", "Scheduled task not found.")
     if (old.revision !== expectedRevision) throw conflict()
+    if (old.sdk_context && value.channel !== "api")
+      throw invalid(
+        "SDK-managed tasks keep their original workspace and React SDK channel."
+      )
     const scheduleChanged =
       old.schedule_json.kind !== value.schedule.kind ||
       (old.schedule_json.kind === "cron" &&
@@ -242,7 +271,7 @@ export async function deleteScheduledTask(
   })
 }
 
-function snapshot(row: TaskRow): ScheduledTaskInput {
+function snapshot(row: TaskRow): RunRow["snapshot_json"] {
   return {
     agentId: row.agent_id,
     name: row.name,
@@ -251,6 +280,7 @@ function snapshot(row: TaskRow): ScheduledTaskInput {
     schedule: row.schedule_json,
     timezone: row.timezone,
     enabled: true,
+    sdkContext: row.sdk_context ?? null,
   }
 }
 
@@ -355,10 +385,15 @@ export async function processNextScheduledTask(
   let traceId: string | null = null
   let retry = false
   try {
-    const input = scheduledTaskInputSchema.parse(run.snapshot_json)
+    const input = scheduledRunSnapshotSchema.parse(run.snapshot_json)
     const service = new ConversationService(context)
     const conversation =
-      (await scheduledSdkConversation(context, run.task_id, input.agentId)) ??
+      (await scheduledSdkConversation(
+        context,
+        run.task_id,
+        input.agentId,
+        input.sdkContext
+      )) ??
       (await service.getOrCreate({
         agentId: input.agentId,
         channel: input.channel,

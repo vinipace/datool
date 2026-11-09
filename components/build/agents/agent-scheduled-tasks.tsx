@@ -355,9 +355,10 @@ export function AgentScheduledTasks({
           <CollectionTable
             fillHeight
             enableCardView={false}
-            widths={[280, 130, 220, 200, 180, 190, 48]}
+            widths={[280, 240, 130, 220, 200, 180, 190, 48]}
             columnIds={[
               "name",
+              "workspace",
               "status",
               "schedule",
               "timezone",
@@ -373,6 +374,7 @@ export function AgentScheduledTasks({
                 <th className={collectionTable.heading} aria-hidden />
                 {[
                   "Name",
+                  "Workspace",
                   "Status",
                   "Schedule",
                   "Time zone",
@@ -393,7 +395,7 @@ export function AgentScheduledTasks({
               empty={
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-3 py-12 text-center text-sm text-foreground-muted"
                   >
                     {search
@@ -419,6 +421,22 @@ export function AgentScheduledTasks({
                       <CalendarClock className="size-4 text-foreground-muted" />
                       <span className="truncate">{task.name}</span>
                     </Button>
+                  </td>
+                  <td className={collectionTable.cell}>
+                    {task.sdkContext ? (
+                      <span
+                        className="flex items-center gap-2"
+                        title={task.sdkContext.workspace ?? undefined}
+                      >
+                        <span className="truncate">
+                          {task.sdkContext.workspaceName ??
+                            "No workspace drive"}
+                        </span>
+                        <span className="shrink-0 text-xs text-foreground-muted">SDK-managed</span>
+                      </span>
+                    ) : (
+                      <span className="text-foreground-muted">Shared</span>
+                    )}
                   </td>
                   <td className={collectionTable.cell}>
                     <span
@@ -580,6 +598,31 @@ export function AgentScheduledTasks({
               </Notice>
             ) : null}
             <div className="min-h-0 flex-1 overflow-y-auto">
+              {editing?.sdkContext && (
+                <Notice variant="info" layout="banner">
+                  <p>
+                    <strong>
+                      {editing.sdkContext.workspaceName ?? "No workspace drive"}
+                    </strong>{" "}
+                    · SDK-managed
+                  </p>
+                  <p>
+                    This task keeps its original workspace, drive and
+                    conversation for every run.
+                  </p>
+                  <p className="font-mono text-xs break-all">
+                    {editing.sdkContext.driveId
+                      ? `Drive: ${editing.sdkContext.workspace} · /workspace`
+                      : "No drive attached"}
+                  </p>
+                  <Link
+                    className="underline"
+                    href={conversationHref(editing.sdkContext.conversationId)}
+                  >
+                    Open workspace conversation
+                  </Link>
+                </Notice>
+              )}
               <FormRow
                 label="Name"
                 htmlFor={`${fields}-name`}
@@ -728,10 +771,15 @@ export function AgentScheduledTasks({
                   label="Channel settings"
                   htmlFor={`${fields}-channel`}
                   layout="vertical"
-                  description="Uses this channel's instructions, tools and guardrails. Each run starts a fresh conversation."
+                  description={
+                    editing?.sdkContext
+                      ? "Uses the original React SDK conversation and workspace drive."
+                      : "Uses this channel's instructions, tools and guardrails. Each run starts a fresh conversation."
+                  }
                 >
                   <Select
                     id={`${fields}-channel`}
+                    disabled={Boolean(editing?.sdkContext)}
                     value={draft.channel}
                     onChange={(event) =>
                       update("channel", event.target.value as BuildChannel)

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { buildChannelSchema } from "./contracts"
+import type { SdkTaskContext } from "./sdk-context"
 
 export const taskScheduleSchema = z.discriminatedUnion("kind", [
   z
@@ -58,6 +59,7 @@ export type ScheduledTask = Omit<ScheduledTaskInput, "enabled"> & {
   lastRun: ScheduledTaskRun | null
   createdAt: string
   updatedAt: string
+  sdkContext?: SdkTaskContext | null
 }
 
 export const taskRunStatusLabels: Record<ScheduledTaskRun["status"], string> = {

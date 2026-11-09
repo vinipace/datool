@@ -38,6 +38,8 @@ The callback runs for every request, including message polling. Return a stable 
 
 A drive is created on demand, scoped to the connection and sandbox provider, and mounted at `/workspace`. Users with the same drive share files. Their conversations and scheduled tasks remain private to each user and thread. Other drives attached to the agent are excluded from SDK sessions. Omit `drive` for chat without an application drive.
 
+SDK-managed drives appear on the agent's **Sandbox** page with their workspace. Return an optional `workspaceName` from your server callback, or pass it to `datool.agent()`, to show a friendly name such as `Acme Studio`. This label does not change access or identity; the authenticated `drive` value selects the workspace.
+
 ## Embed the chat
 
 ```tsx
@@ -84,6 +86,8 @@ await agent.tasks.runNow(task.id)
 ```
 
 Datool's Build worker and agent runtime execute tasks even while the user is offline. Results are saved in the same conversation and appear on the next chat poll or reconnect. Pause or delete a user's tasks when your application revokes their access. Pausing the channel prevents future SDK runs.
+
+The agent's **Scheduled tasks** page shows each task's workspace and a link to its original conversation. Tasks and queued runs save their original connection, user scope, conversation, and drive. Editing a task or switching workspaces cannot redirect it. If that binding is missing or changed, execution is rejected instead of falling back to shared agent drives. Runs read the current files on the saved drive; file contents are not frozen when the task is created.
 
 | Area     | Methods                                                                   |
 | -------- | ------------------------------------------------------------------------- |

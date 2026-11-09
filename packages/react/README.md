@@ -32,7 +32,7 @@ export const POST = createDatoolHandler({
 
 The handler is a standard `(Request) => Promise<Response>` function, usable with other Node servers. Next.js App Router uses a named `POST` export. For self-hosted Datool, pass `baseUrl` (HTTPS, or HTTP on localhost).
 
-`config` runs on every request, including polling. Authenticate there and derive identity from your session, never from untrusted request fields. A drive name creates a persistent drive scoped to this connection and sandbox provider. Users with the same drive share files, while their conversations and tasks stay separate. Files are mounted at `/workspace`. Other static drives configured on the agent are excluded from SDK conversations.
+`config` runs on every request, including polling. Authenticate there and derive identity from your session, never from untrusted request fields. An optional `workspaceName` in the server config gives that workspace a readable label in Datool’s Sandbox and Scheduled tasks pages. It is a display label and does not change authorization. A drive name creates a persistent drive scoped to this connection and sandbox provider. Users with the same drive share files, while their conversations and tasks stay separate. Files are mounted at `/workspace`. Other static drives configured on the agent are excluded from SDK conversations.
 
 Returning only `{ drive: \`drive_${orgId}\` }`is supported: a signed, HttpOnly cookie supplies a browser-local visitor identity. Return a stable`userId`for continuity across devices and for server-created proactive tasks. Omitting`drive` creates a chat without an application drive.
 

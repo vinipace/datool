@@ -5,6 +5,8 @@ export type AgentScope = {
   connectionId: string
   userId: string
   drive?: string
+  /** Display label in Datool. Authorization still uses userId and drive. */
+  workspaceName?: string
   threadId?: string
 }
 export type DatoolClientOptions = {

@@ -230,10 +230,10 @@ function register(
 
 register(
   "build_list_drives",
-  "List persistent drives in the current project. Mount up to four in an agent sandbox.",
+  "List persistent project drives and SDK-managed workspace drives. Filter by agent to include its SDK drives alongside shared drives.",
   ["build:read"],
-  z.object({ after: z.string().uuid().optional(), limit: z.number().int().min(1).max(200).optional() }),
-  (context, input) => listDrives(context, input as { after?: string; limit?: number })
+  z.object({ after: z.string().uuid().optional(), limit: z.number().int().min(1).max(200).optional(), agentId: z.string().min(1).max(200).optional() }),
+  (context, input) => listDrives(context, input as Parameters<typeof listDrives>[1])
 )
 register(
   "build_create_drive",

@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm"
 import { sdkTaskInputSchema } from "@/src/lib/build/react-sdk"
 import type { BuildContext } from "./context"
 import { TracerError } from "@/src/server/tracer/errors"
-import { requireSdkSession } from "./sdk-scope"
+import { requireSdkSession, sdkScopeKey } from "./sdk-scope"
 import {
   createScheduledTask,
   deleteScheduledTask,
@@ -14,7 +14,7 @@ import {
 
 export async function sdkTasks(context: BuildContext, value: unknown) {
   const input = sdkTaskInputSchema.parse(value)
-  const { connection } = await requireSdkSession(
+  const { connection, driveId } = await requireSdkSession(
     context,
     input,
     input.conversationId
@@ -34,11 +34,22 @@ export async function sdkTasks(context: BuildContext, value: unknown) {
         ...context,
         database: database as unknown as BuildContext["database"],
       }
-      const task = await createScheduledTask(scoped, {
-        ...request.task,
-        agentId,
-        channel: "api",
-      })
+      const task = await createScheduledTask(
+        scoped,
+        {
+          ...request.task,
+          agentId,
+          channel: "api",
+        },
+        {
+          connectionId: connection.id,
+          conversationId: input.conversationId,
+          driveId,
+          scopeKey: sdkScopeKey(input),
+          workspace: input.drive ?? null,
+          workspaceName: input.workspaceName ?? input.drive ?? null,
+        }
+      )
       await database.execute(
         sql`INSERT INTO build_sdk_tasks(project_id,task_id,conversation_id) VALUES(${context.projectId},${task.id}::uuid,${input.conversationId})`
       )

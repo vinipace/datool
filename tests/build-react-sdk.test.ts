@@ -1,5 +1,8 @@
 import { rejects } from "node:assert/strict"
 import { expect, test } from "bun:test"
+import { configureBuildTestEnvironment } from "./helpers/build-env"
+
+configureBuildTestEnvironment()
 import { sql } from "drizzle-orm"
 import { randomUUID } from "node:crypto"
 import { execFileSync } from "node:child_process"
@@ -33,7 +36,11 @@ import {
   invokeTool,
   toolOutputs,
 } from "./helpers/eve-fixture"
-import { processNextScheduledTask } from "@/src/server/build/schedules"
+import {
+  processNextScheduledTask,
+  enqueueDueScheduledTasks,
+  runScheduledTaskNow,
+} from "@/src/server/build/schedules"
 
 async function setup(
   context: Parameters<typeof createAgent>[0],
@@ -289,7 +296,9 @@ test("a scheduled SDK task uses the same drive and delivers a proactive reply in
       status: "completed",
       text: "I reviewed your company context.",
     })
-    expect(JSON.stringify(fixture.requests.flatMap(toolOutputs))).toContain("Company context")
+    expect(JSON.stringify(fixture.requests.flatMap(toolOutputs))).toContain(
+      "Company context"
+    )
     fixture.provider((body) =>
       eveResponse(body, "Here is your proactive briefing.")
     )
@@ -340,6 +349,92 @@ test("a scheduled SDK task uses the same drive and delivers a proactive reply in
       expect(row.plan_json.configuration.sandbox.drives).toEqual([
         { driveId: drive, mountPath: "/workspace" },
       ])
+  } finally {
+    await removeVolumes(context)
+    await fixture.close()
+  }
+}, 120_000)
+
+test("scheduled and dashboard-triggered SDK runs read only their saved workspace drive", async () => {
+  const fixture = await createEveFixture()
+  const { context } = fixture
+  try {
+    const { agent, connection } = await setup(context, true)
+    fixture.provider((body) =>
+      invokeTool(
+        body,
+        { command: "cat /workspace/company.md", timeout: 10 },
+        "Workspace briefing ready.",
+        "bash shell command"
+      )
+    )
+    const workspaces = []
+    for (const name of ["ACME", "ORBIT"]) {
+      const scope = {
+        connectionId: connection.id,
+        userId: "owner",
+        drive: name,
+        workspaceName: name,
+      }
+      const session = await createSdkSession(context, scope)
+      await sdkFiles(context, {
+        ...scope,
+        request: {
+          action: "write",
+          path: "company.md",
+          content: Buffer.from(`${name}_PRIVATE_CONTEXT`).toString("base64"),
+        },
+      })
+      const task = await sdkTasks(context, {
+        ...scope,
+        ...session,
+        request: {
+          action: "create",
+          task: {
+            name: `${name} briefing`,
+            prompt: "Read company.md",
+            schedule: { kind: "cron", expression: "0 9 * * *" },
+            timezone: "UTC",
+          },
+        },
+      })
+      if (!("id" in task)) throw new Error("Task missing")
+      workspaces.push({ name, scope, session, task })
+    }
+    for (const [index, item] of workspaces.entries()) {
+      const requestStart = fixture.requests.length
+      if (index === 0) {
+        await context.database.execute(
+          sql`UPDATE build_agent_schedules SET next_run_at=now()-interval '1 minute' WHERE id=${item.task.id}::uuid`
+        )
+        expect(await enqueueDueScheduledTasks(context.database)).toBe(1)
+      } else {
+        await runScheduledTaskNow(
+          { ...context, idempotencyKey: randomUUID() },
+          { agentId: agent.id, id: item.task.id }
+        )
+      }
+      expect(
+        await processNextScheduledTask(context.database, () => context)
+      ).toBe(true)
+      const outputs = JSON.stringify(
+        fixture.requests.slice(requestStart).flatMap(toolOutputs)
+      )
+      expect(outputs).toContain(`${item.name}_PRIVATE_CONTEXT`)
+      expect(outputs).not.toContain(
+        `${workspaces[1 - index].name}_PRIVATE_CONTEXT`
+      )
+      const runs = await context.database.execute<{
+        conversation_id: string
+        status: string
+      }>(
+        sql`SELECT conversation_id,status FROM build_agent_schedule_runs WHERE task_id=${item.task.id}::uuid`
+      )
+      expect(runs.rows[0]).toMatchObject({
+        status: "completed",
+        conversation_id: item.session.conversationId,
+      })
+    }
   } finally {
     await removeVolumes(context)
     await fixture.close()
