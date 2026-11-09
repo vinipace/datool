@@ -6,7 +6,7 @@ import { join } from "node:path"
 const root = fileURLToPath(new URL("..", import.meta.url))
 const destination = join(root, "artifacts", "npm")
 await mkdir(destination, { recursive: true })
-for (const name of ["sdk", "cli"]) {
+for (const name of ["sdk", "cli", "react"]) {
   const cwd = join(root, "packages", name)
   const [packed] = JSON.parse(
     execFileSync(
@@ -17,7 +17,7 @@ for (const name of ["sdk", "cli"]) {
   )
   for (const file of packed.files) {
     if (
-      !/^(dist\/[^/]+\.(js|d\.ts)|package\.json|README\.md|LICENSE)$/.test(
+      !/^(dist\/[^/]+\.(js|d\.ts|css)|package\.json|README\.md|LICENSE)$/.test(
         file.path
       )
     ) {

@@ -1,3 +1,4 @@
+import { scheduledSdkConversation } from "./sdk-scope"
 import { CronExpressionParser } from "cron-parser"
 import { sql } from "drizzle-orm"
 import {
@@ -143,7 +144,14 @@ async function validateInput(context: BuildContext, value: unknown) {
 
 export async function listScheduledTasks(
   context: BuildContext,
-  input: { agentId: string; cursor?: string; limit?: number; search?: string }
+  input: {
+    agentId: string
+    cursor?: string
+    limit?: number
+    search?: string
+    sdkSessionId?: string
+    id?: string
+  }
 ) {
   await assertBuildProject(context)
   await getAgent(context, input.agentId)
@@ -151,6 +159,8 @@ export async function listScheduledTasks(
   const rows = await context.database.execute<TaskRow>(sql`
     SELECT s.*, (SELECT row_to_json(r) FROM build_agent_schedule_runs r WHERE r.project_id=s.project_id AND r.task_id=s.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) AS last_run
     FROM build_agent_schedules s WHERE s.project_id=${context.projectId} AND s.agent_id=${input.agentId} AND s.deleted_at IS NULL
+      ${input.sdkSessionId ? sql`AND EXISTS (SELECT 1 FROM build_sdk_tasks t WHERE t.project_id=s.project_id AND t.task_id=s.id AND t.conversation_id=${input.sdkSessionId})` : sql``}
+      ${input.id ? sql`AND s.id=${input.id}::uuid` : sql``}
       ${input.cursor ? sql`AND s.id>${input.cursor}::uuid` : sql``}
       ${input.search ? sql`AND strpos(lower(s.name || ' ' || s.prompt), lower(${input.search}))>0` : sql``}
     ORDER BY s.id LIMIT ${limit + 1}`)
@@ -347,22 +357,24 @@ export async function processNextScheduledTask(
   try {
     const input = scheduledTaskInputSchema.parse(run.snapshot_json)
     const service = new ConversationService(context)
-    const conversation = await service.getOrCreate({
-      agentId: input.agentId,
-      channel: input.channel,
-      externalConversationId: `scheduled-task:${run.id}`,
-      metadata: {
-        scheduledTaskId: run.task_id,
-        scheduledTaskRunId: run.id,
-        scheduledTaskName: input.name,
-      },
-    })
+    const conversation =
+      (await scheduledSdkConversation(context, run.task_id, input.agentId)) ??
+      (await service.getOrCreate({
+        agentId: input.agentId,
+        channel: input.channel,
+        externalConversationId: `scheduled-task:${run.id}`,
+        metadata: {
+          scheduledTaskId: run.task_id,
+          scheduledTaskRunId: run.id,
+          scheduledTaskName: input.name,
+        },
+      }))
     await database.execute(
       sql`UPDATE build_agent_schedule_runs SET conversation_id=${conversation.id} WHERE id=${run.id}::uuid AND lease_token=${token}::uuid`
     )
     const result = await runAgentTurn(context, {
       agentId: input.agentId,
-      channel: input.channel,
+      channel: conversation.channel,
       conversationId: conversation.id,
       requestKey: `scheduled-task:${run.id}`,
       message: input.prompt,

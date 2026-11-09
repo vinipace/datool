@@ -11,6 +11,8 @@ COPY package.json bun.lock ./
 COPY patches ./patches
 COPY packages/eve-bridge/package.json ./packages/eve-bridge/
 COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/react/package.json ./packages/react/
+COPY examples/react-agent/package.json ./examples/react-agent/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/chatgpt-trace-explorer/package.json ./packages/chatgpt-trace-explorer/
 # Keep dependency installation reusable when only application source changes.

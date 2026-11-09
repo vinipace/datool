@@ -103,6 +103,7 @@ import type { BuildContext } from "../context"
 // bypass the shared Build operation metadata and transport registration.
 import "./conversations"
 import "./schedules"
+import "./react-sdk"
 import {
   addTicketNote,
   assignTicket,

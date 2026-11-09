@@ -16,7 +16,10 @@ import { assertBuildProject, type BuildContext } from "./context"
 import { resolveSandboxDrives } from "./drives"
 
 const executeFile = promisify(execFile)
-export const images = { node: "node:22-bookworm-slim", python: "python:3.13-slim" }
+export const images = {
+  node: "node:22-bookworm-slim",
+  python: "python:3.13-slim",
+}
 export const RATE = 39_420 + 6_670 / 2 // 1 CPU + 512 MiB; observed allocated time.
 export const RATE_VERSION = "datool-agent-modal-1cpu-512mib-2026-11-08"
 type Mount = { id: string; mountPath: string; provisioned: boolean }
@@ -33,8 +36,10 @@ export function volumeName(projectId: string, driveId: string) {
   return `datool-drive-${createHash("sha256").update(`${projectId}:${driveId}`).digest("hex").slice(0, 40)}`
 }
 
-function collector() {
-  let remaining = 32 * 1024
+type CommandIO = { stdin?: string; maxOutputBytes?: number }
+
+function collector(limit = 32 * 1024) {
+  let remaining = Math.min(limit, 1024 * 1024)
   let truncated = false
   const parts: Record<"stdout" | "stderr", Buffer[]> = {
     stdout: [],
@@ -93,7 +98,8 @@ async function localCommand(
   command: string,
   timeout: number,
   stopped: () => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  io: CommandIO = {}
 ) {
   const docker = process.env.DATOOL_SANDBOX_DOCKER_BINARY?.trim() || "docker"
   const projectId = context.projectId
@@ -150,13 +156,14 @@ async function localCommand(
     )
   }
   const name = `datool-agent-${randomUUID()}`
-  const output = collector()
+  const output = collector(io.maxOutputBytes)
   try {
     return await new Promise<SandboxCommandResult>((resolve, reject) => {
       const child = spawn(
         /* turbopackIgnore: true */ docker,
         [
           "run",
+          ...(io.stdin !== undefined ? ["-i"] : []),
           "--rm",
           "--pull=never",
           "--name",
@@ -172,10 +179,12 @@ async function localCommand(
           "--memory-swap=512m",
           "--pids-limit=128",
           "--tmpfs=/tmp:rw,nosuid,size=128m,mode=1777",
-          "--tmpfs=/workspace:rw,nosuid,size=128m,mode=1777",
+          ...(names.some((mount) => mount.mountPath === "/workspace")
+            ? []
+            : ["--tmpfs=/workspace:rw,nosuid,size=128m,mode=1777"]),
           ...names.flatMap((mount) => [
             "--mount",
-            `type=volume,src=${mount.volume},dst=${mount.mountPath}`,
+            `type=volume,src=${mount.volume},dst=${mount.mountPath},volume-nocopy`,
           ]),
           "--env=HOME=/tmp",
           "--workdir=/workspace",
@@ -188,8 +197,10 @@ async function localCommand(
           `${timeout}s`,
           command,
         ],
-        { stdio: ["ignore", "pipe", "pipe"], signal }
+        { stdio: ["pipe", "pipe", "pipe"], signal }
       )
+      child.stdin.on("error", () => undefined)
+      child.stdin.end(io.stdin)
       const timer = setTimeout(
         () => child.kill("SIGKILL"),
         (timeout + 20) * 1000
@@ -219,7 +230,8 @@ async function modalCommand(
   command: string,
   timeout: number,
   stopped: () => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  io: CommandIO = {}
 ) {
   let operation: string | undefined
   let sandbox: Sandbox | undefined
@@ -295,7 +307,7 @@ async function modalCommand(
         allocationStartedAt: new Date().toISOString(),
       })
     signal?.throwIfAborted()
-    const output = collector()
+    const output = collector(io.maxOutputBytes)
     const commandProcess = await sandbox.exec(
       [
         "/bin/sh",
@@ -308,6 +320,11 @@ async function modalCommand(
       ],
       { timeoutMs: (timeout + 5) * 1000 }
     )
+    if (io.stdin !== undefined) {
+      const writer = commandProcess.stdin.getWriter()
+      await writer.write(io.stdin)
+      await writer.close()
+    }
     const abort = () => {
       void sandbox?.terminate().catch(() => undefined)
     }
@@ -363,8 +380,11 @@ export async function runAgentSandboxCommand(
   context: BuildContext,
   configuration: AgentSandboxConfiguration,
   input: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  io: CommandIO = {}
 ): Promise<SandboxCommandResult> {
+  if (io.stdin && Buffer.byteLength(io.stdin) > 512 * 1024)
+    throw new Error("File input is too large.")
   const config = agentSandboxSchema.parse(configuration)
   const { command, timeoutSeconds } = sandboxCommandSchema.parse(input)
   if (!config.enabled) throw new Error("Sandbox is disabled for this agent.")
@@ -409,7 +429,8 @@ export async function runAgentSandboxCommand(
         () => {
           stopped = true
         },
-        signal
+        signal,
+        io
       )
     return await modalCommand(
       context,
@@ -420,7 +441,8 @@ export async function runAgentSandboxCommand(
       () => {
         stopped = true
       },
-      signal
+      signal,
+      io
     )
   } finally {
     if (stopped && mounts.length)

@@ -211,3 +211,47 @@ configuration and awaits its provenance span write. HTTP applications import
 to install Datool's invocation scope. `connect` installs it automatically.
 
 Connected evaluations can install prompt overrides automatically; see [managed prompts](https://github.com/vinpac/datool/blob/main/docs/managed-prompts.md) for frozen run configuration, scopes, and provenance.
+
+## Application agents and proactive tasks
+
+Use the server-only `@datool/sdk/agents` entry point for embedded agents. In the agent's **Channels → React SDK**, enable a connection and copy its ID. Set `build:run` on the API key for chat; files also need `build:write`, and task management needs `build:read`, `build:write`, and `build:run`. Enable the agent's Sandbox before using a drive.
+
+```ts
+import { createDatoolClient } from "@datool/sdk/agents"
+
+const datool = createDatoolClient({
+  apiKey: process.env.DATOOL_API_KEY!,
+  projectId: process.env.DATOOL_PROJECT_ID!,
+})
+
+// Derive orgId/userId from your authenticated server context.
+const agent = datool.agent({
+  connectionId: process.env.DATOOL_CONNECTION_ID!,
+  userId,
+  drive: `drive_${orgId}`,
+})
+
+await agent.files.write("context/company.md", "Company context…")
+const context = await agent.files.read("context/company.md")
+const reply = await agent.messages.send("Review our company context.")
+
+const task = await agent.tasks.create({
+  name: "Morning briefing",
+  prompt: "Review our files and send a useful briefing.",
+  schedule: { kind: "cron", expression: "0 9 * * 1-5" },
+  timezone: "America/Sao_Paulo",
+})
+await agent.tasks.runNow(task.id)
+const paused = await agent.tasks.pause(task)
+await agent.tasks.resume(paused)
+```
+
+The same connection, user, drive, and optional `threadId` (default `default`) resolve the same conversation as `@datool/react`. Users sharing a drive share files, but not conversation history or scheduled tasks. Drives are created on demand and mounted at `/workspace`; static agent drives are excluded. API keys and trusted identity belong only on your server.
+
+- `files.list(path?)`, `read(path)`, `readBytes(path)`, `write(path, string | Uint8Array)`, `mkdir(path)`, `delete(path)`: paths are relative to the drive; writes create parent directories. Transfers are limited to 256 KiB and directory listings to 500 entries. Symbolic links and traversal are rejected. Delete removes a file or an empty directory, never a directory tree.
+- `messages.send(text, { requestId? })`, `messages.list({ before? })`: send can return `pending`; read messages until `pending` is false. Reuse a UUID `requestId` when retrying the same logical message.
+- `tasks.list({ cursor?, limit? })`, `create(definition, { requestId? })`, `update(current, changes)`, `pause(current)`, `resume(current)`, `delete(current)`, `runNow(id, { requestId? })`, `runs(id, { cursor?, limit? })`: collections return `{ items, nextCursor }`. Updates use the returned task's revision to prevent overwriting concurrent changes. For a one-time task, use `schedule: { kind: "once", at: "2027-01-01T12:00:00Z" }`.
+
+Scheduled tasks execute in the same conversation with the same drive. Datool's Build worker and agent runtime must be running. The embedded chat receives results by polling, including after reconnecting; no browser needs to stay open for execution. Pause or delete tasks when your app revokes a user's access. Pausing the React SDK channel prevents future SDK runs. Changing a sandbox provider requires a new session because drives belong to their provider.
+
+The client does not automatically retry mutations. Preserve request IDs for message/task-create/run retries; fetch the current task after an ambiguous update before changing it again. `DatoolError` exposes `status` and `code`. Use `baseUrl` for self-hosted Datool and `fetch` to supply a custom transport. Never import this entry point in browser code.

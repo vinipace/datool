@@ -1,0 +1,98 @@
+---
+title: React SDK and proactive agents
+description: Embed a Datool chat in your application, select an authenticated drive, and manage files and scheduled tasks from your server.
+---
+
+The React SDK channel connects a Datool agent to your application through your own server. The server authenticates each request and selects the user's identity and organization drive. Datool runs the agent, stores conversations, and executes scheduled tasks.
+
+## Connect the channel
+
+Open your agent's **Channels**, select **React SDK**, and enable the connection. Copy the connection ID and project ID from its setup page. Create a server API key with `build:run`. Add `build:write` for files, and `build:read`, `build:write`, and `build:run` for scheduled task management. Enable **Sandbox** on the agent to use persistent files.
+
+```sh
+npm install @datool/react @datool/sdk
+```
+
+## Authenticate on your server
+
+```ts
+// app/api/datool/route.ts
+import { createDatoolHandler } from "@datool/react/server"
+import { auth } from "@/lib/auth" // Your authentication implementation
+
+export const POST = createDatoolHandler({
+  apiKey: process.env.DATOOL_API_KEY!,
+  projectId: process.env.DATOOL_PROJECT_ID!,
+  connectionId: process.env.DATOOL_CONNECTION_ID!,
+  async config({ req }) {
+    const { orgId, userId } = await auth(req)
+    if (!orgId || !userId) return new Response(null, { status: 401 })
+    return { userId, drive: `drive_${orgId}` }
+  },
+})
+```
+
+Next.js App Router uses a named `POST` export. An optional catch-all route at `app/api/datool/[[...datool]]/route.ts` also works. Other Node servers can call the returned standard Request/Response handler. For self-hosting, pass `baseUrl` pointing to your Datool installation.
+
+The callback runs for every request, including message polling. Return a stable `userId` for conversations that follow the user across devices and for server-created proactive tasks. If you return only a drive, the handler supplies a signed browser visitor cookie instead. Derive the identity and drive from your authenticated session; never trust browser-supplied organization or user IDs.
+
+A drive is created on demand, scoped to the connection and sandbox provider, and mounted at `/workspace`. Users with the same drive share files. Their conversations and scheduled tasks remain private to each user and thread. Other drives attached to the agent are excluded from SDK sessions. Omit `drive` for chat without an application drive.
+
+## Embed the chat
+
+```tsx
+"use client"
+import { DatoolChat } from "@datool/react"
+import "@datool/react/styles.css"
+
+export function Assistant() {
+  return <DatoolChat endpoint="/api/datool" title="Your assistant" />
+}
+```
+
+Use an endpoint on the application's origin. The browser receives no Datool API key. The component restores history, sends messages, and polls for replies and proactive updates. Earlier messages load on demand. Text replies are supported; token streaming, widgets, attachments, and push notifications are not included.
+
+Optional props include `threadId`, `welcomeMessage`, `placeholder`, `className`, `style`, and `pollingInterval` (3000 ms by default, minimum 1000 ms). The default thread ID is `default`. Change it to open another conversation. When users switch accounts or organizations without a full page navigation, set a React `key` from that authenticated identity to clear the previous view immediately.
+
+## Control the agent from your app
+
+Use the same connection, user, drive, and thread on your server:
+
+```ts
+import { createDatoolClient } from "@datool/sdk/agents"
+
+const datool = createDatoolClient({
+  apiKey: process.env.DATOOL_API_KEY!,
+  projectId: process.env.DATOOL_PROJECT_ID!,
+})
+const agent = datool.agent({
+  connectionId: process.env.DATOOL_CONNECTION_ID!,
+  userId,
+  drive: `drive_${orgId}`,
+})
+
+await agent.files.write("context/company.md", companyContext)
+await agent.messages.send("Review our context and suggest next steps.")
+
+const task = await agent.tasks.create({
+  name: "Morning briefing",
+  prompt: "Review our files and send a useful morning briefing.",
+  schedule: { kind: "cron", expression: "0 9 * * 1-5" },
+  timezone: "America/Sao_Paulo",
+})
+await agent.tasks.runNow(task.id)
+```
+
+Datool's Build worker and agent runtime execute tasks even while the user is offline. Results are saved in the same conversation and appear on the next chat poll or reconnect. Pause or delete a user's tasks when your application revokes their access. Pausing the channel prevents future SDK runs.
+
+| Area     | Methods                                                                   |
+| -------- | ------------------------------------------------------------------------- |
+| Files    | `list`, `read`, `readBytes`, `write`, `mkdir`, `delete`                   |
+| Messages | `list`, `send`                                                            |
+| Tasks    | `list`, `create`, `update`, `pause`, `resume`, `delete`, `runNow`, `runs` |
+
+File paths are relative to the drive. Writes create parent directories. Transfers support text or binary files up to 256 KiB; directory listings return at most 500 entries. Traversal and symbolic links are rejected, and directory deletion requires an empty directory.
+
+Task collections return `items` and `nextCursor`. `update`, `pause`, `resume`, and `delete` take the current task, including its revision, to detect conflicting edits. One-time schedules use `schedule: { kind: "once", at: "2027-01-01T12:00:00Z" }`.
+
+Messages may complete asynchronously: `send` can return a `pending` status; use `messages.list` until its `pending` flag clears. The client does not automatically retry writes. Reuse a UUID `requestId` when retrying message sends, task creation, or `runNow` after an uncertain network response. Fetch the latest task after an uncertain update before retrying a change.

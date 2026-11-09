@@ -1,0 +1,487 @@
+/* The example owns its theme; SDK colors inherit through --datool-* tokens. */
+:root {
+  color-scheme: light;
+  --page: #f5f4f0;
+  --surface: #fff;
+  --ink: #242b28;
+  --muted: #798079;
+  --line: #e5e7df;
+  --accent: #294f42;
+  --accent-soft: #eef2ec;
+  --error: #b13c31;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+button:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+.workspace {
+  max-width: 1440px;
+  margin: auto;
+  padding: 0 48px;
+}
+.topbar {
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.7px;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 31px;
+  color: var(--surface);
+  background: var(--accent);
+  border-radius: 8px 8px 8px 2px;
+  font-size: 25px;
+}
+.brand-divider {
+  height: 20px;
+  width: 1px;
+  margin: 0 10px;
+  background: var(--line);
+}
+.brand-caption {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.local-badge {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 7px 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.local-badge i,
+.status-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+}
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 32px;
+  padding: 52px 0 34px;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+h1 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 38px;
+  letter-spacing: -1.4px;
+  margin: 0 0 13px;
+}
+.page-heading p:not(.eyebrow) {
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.6;
+}
+.workspace-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 235px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.workspace-picker select {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  height: 40px;
+  padding: 0 12px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.workspace-picker small {
+  font-size: 10px;
+}
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.workbench,
+.chat-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.panel-heading {
+  min-height: 72px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panel-heading > div {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.section-number {
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 11px;
+}
+h2 {
+  font-size: 14px;
+  margin: 0;
+  font-weight: 600;
+}
+.server-label,
+.panel-heading code {
+  color: var(--muted);
+  font-size: 10px;
+}
+.tabs {
+  display: flex;
+  gap: 24px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 16px 0 14px;
+  font-size: 12px;
+}
+.tabs button[aria-selected="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.tabs button span {
+  margin-left: 5px;
+  font-size: 10px;
+  background: var(--page);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.panel-body {
+  padding: 24px;
+}
+h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.section-intro p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 22px;
+}
+.file-label {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 12px;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 8px 8px 0 0;
+  font: 11px monospace;
+}
+.file-label span:last-child {
+  font-size: 10px;
+  color: var(--muted);
+}
+.context-editor {
+  display: block;
+  width: 100%;
+  min-height: 234px;
+  resize: vertical;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  font: 12px/1.7 monospace;
+  color: var(--ink);
+  background: var(--surface);
+}
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.button-row button,
+.task-actions button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  padding: 9px 11px;
+}
+.button-row button.primary {
+  background: var(--accent);
+  color: var(--surface);
+  border-color: var(--accent);
+}
+.button-row button.primary span {
+  margin-left: 12px;
+}
+.next-step {
+  margin-top: 25px;
+  padding: 16px;
+  background: var(--accent-soft);
+  border-radius: 8px;
+}
+.next-step span {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+.next-step p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.panel-footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  padding: 16px 24px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.feedback {
+  padding: 12px 24px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.feedback.error {
+  color: var(--error);
+}
+.file-list {
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+.file-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.schedule-options {
+  display: grid;
+  gap: 10px;
+}
+.schedule-card {
+  padding: 16px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.schedule-card:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.schedule-time {
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+}
+.empty-state {
+  padding: 34px 8px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+.task-row {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.task-row h4 {
+  font-size: 12px;
+  margin: 0 0 5px;
+}
+.task-row p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.task-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.task-actions button.quiet {
+  border-color: transparent;
+  color: var(--muted);
+}
+.chat-loading {
+  display: grid;
+  place-items: center;
+  min-height: 560px;
+  color: var(--muted);
+}
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 24px 0 32px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.chat-panel .datool-chat {
+  --datool-accent: var(--accent);
+  --datool-accent-foreground: var(--surface);
+  --datool-border: var(--line);
+  --datool-surface: var(--page);
+  --datool-text: var(--ink);
+  --datool-muted: var(--muted);
+  height: 610px;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: 13px;
+}
+.chat-panel .datool-chat-header {
+  padding: 18px 24px;
+  border-bottom: 0;
+}
+.chat-panel .datool-chat-header strong {
+  font-size: 12px;
+}
+.chat-panel .datool-chat-header span {
+  font-size: 9px;
+}
+.chat-panel .datool-chat-welcome {
+  max-width: 270px;
+  font-family: Georgia, serif;
+  font-size: 26px;
+  letter-spacing: -0.5px;
+  line-height: 1.4;
+  color: var(--accent);
+}
+.chat-panel .datool-chat-messages {
+  padding: 18px 24px;
+}
+.chat-panel .datool-chat-composer {
+  margin: 16px;
+}
+@media (max-width: 1000px) {
+  .workspace {
+    padding: 0 24px;
+  }
+  h1 {
+    font-size: 31px;
+  }
+  .workspace-grid {
+    gap: 16px;
+  }
+  .panel-heading,
+  .panel-body {
+    padding: 20px;
+  }
+  .panel-heading code {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .workspace {
+    padding: 0 16px;
+  }
+  .topbar {
+    height: 70px;
+  }
+  .brand-caption {
+    display: none;
+  }
+  .brand-divider {
+    display: none;
+  }
+  .page-heading {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 30px 0 24px;
+    gap: 24px;
+  }
+  h1 {
+    font-size: 32px;
+  }
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+  .chat-panel {
+    grid-row: 1;
+  }
+  .chat-panel .datool-chat {
+    height: 520px;
+  }
+  .page-footer {
+    gap: 16px;
+    line-height: 1.5;
+  }
+}

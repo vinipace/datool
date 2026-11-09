@@ -1,3 +1,4 @@
+import { sdkSandboxConfiguration } from "../sdk-scope"
 import { createEveExecution, getEveExecution, assertEveOwnership, patchEveState } from "../eve/store"
 import { waitForEveExecution } from "../eve/client"
 import type { EveExecution } from "../eve/contracts"
@@ -1749,6 +1750,12 @@ export async function runAgentTurn(
       "Conversation does not belong to this agent/channel."
     )
 
+  const effectiveConfiguration = runtimeConfiguration(agent, parsed.channel)
+  if (parsed.channel === "api")
+    effectiveConfiguration.sandbox = await sdkSandboxConfiguration(
+      context as BuildContext, conversation.id, effectiveConfiguration.sandbox
+    )
+
   let admission: Awaited<ReturnType<ConversationService["startTurn"]>>
   try {
     admission = await service.startTurn(conversation.id, {
@@ -1759,7 +1766,7 @@ export async function runAgentTurn(
       snapshot: {
         agentId: agent.id,
         agentRevision: agent.appliedRevision || agent.currentRevision,
-        configuration: runtimeSnapshotConfiguration(agent, parsed.channel),
+        configuration: { ...runtimeSnapshotConfiguration(agent, parsed.channel), sandbox: effectiveConfiguration.sandbox },
         channel: parsed.channel,
       },
     })
@@ -1865,7 +1872,7 @@ export async function runAgentTurn(
   }
   try {
     assertNotCancelled(options.signal)
-    const configuration = runtimeConfiguration(agent, parsed.channel)
+    const configuration = effectiveConfiguration
     const sandboxEnabled = configuration.sandbox.enabled &&
       !configuration.guardrails.requireHumanForActions &&
       !dependencies.mockExternalActions

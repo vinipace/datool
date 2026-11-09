@@ -352,9 +352,9 @@ export const CHANNEL_DESCRIPTORS: Record<ChannelId, ChannelDescriptor> = {
   },
   api: {
     id: "api",
-    label: "API",
-    capabilities: [],
-    connectionSchema: z.record(z.string(), z.unknown()),
+    label: "React SDK",
+    capabilities: ["receive_text", "send_text", "polling"],
+    connectionSchema: z.object({}).strict(),
   },
   helpdesk: {
     id: "helpdesk",

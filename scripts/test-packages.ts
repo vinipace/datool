@@ -12,7 +12,7 @@ try {
     JSON.stringify({ private: true, type: "module" })
   )
   const tarballs = await Promise.all(
-    ["sdk", "cli"].map(async (name) => {
+    ["sdk", "cli", "react"].map(async (name) => {
       const manifest = JSON.parse(
         await readFile(join(root, "packages", name, "package.json"), "utf8")
       )
@@ -34,6 +34,10 @@ try {
       ...tarballs,
       "typescript@5.9.3",
       "@types/node@24",
+      "react@19",
+      "react-dom@19",
+      "@types/react@19",
+      "@types/react-dom@19",
     ],
     { cwd, stdio: "pipe" }
   )

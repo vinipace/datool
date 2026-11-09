@@ -174,3 +174,12 @@ try {
   server.closeAllConnections()
   await new Promise((resolve) => server.close(resolve))
 }
+
+const { createDatoolClient: agentClient } = await import("@datool/sdk/agents")
+const { createDatoolHandler } = await import("@datool/react/server")
+const { DatoolChat } = await import("@datool/react")
+const { createElement } = await import("react")
+const { renderToString } = await import("react-dom/server")
+assert.ok(agentClient({ apiKey: "fixture", projectId: "project" }).agent({ connectionId: "app", userId: "user" }).tasks)
+assert.equal(typeof createDatoolHandler({ apiKey: "fixture", projectId: "project", connectionId: "app", config: () => ({}) }), "function")
+assert.match(renderToString(createElement(DatoolChat)), /Opening chat/)

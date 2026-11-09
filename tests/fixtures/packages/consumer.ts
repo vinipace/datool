@@ -100,3 +100,13 @@ function inspectEvaluation(run: EvalRunDetail) {
   return { recordedJudges, stalled, stage, failure }
 }
 void [nextEvaluation, cancelledEvaluation, inspectEvaluation]
+
+// These imports must resolve from the packed packages, without repo aliases.
+import { createDatoolClient as createAgentClient } from "@datool/sdk/agents"
+import { createDatoolHandler } from "@datool/react/server"
+import { DatoolChat } from "@datool/react"
+import { createElement } from "react"
+const agentClient = createAgentClient({ apiKey: "fixture", projectId: "project" })
+const applicationAgent = agentClient.agent({ connectionId: "connection", userId: "user", drive: "org" })
+const handler = createDatoolHandler({ apiKey: "fixture", projectId: "project", connectionId: "connection", config: () => ({ drive: "org" }) })
+void [applicationAgent, handler, createElement(DatoolChat, { endpoint: "/api/datool" })]

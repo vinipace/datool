@@ -214,10 +214,12 @@ export async function openDatoolSandbox(
           "--memory-swap=512m",
           "--pids-limit=128",
           "--tmpfs=/tmp:rw,nosuid,size=128m,mode=1777",
-          "--tmpfs=/workspace:rw,nosuid,size=128m,mode=1777",
+          ...(mounts.some((mount) => mount.mountPath === "/workspace")
+            ? []
+            : ["--tmpfs=/workspace:rw,nosuid,size=128m,mode=1777"]),
           ...mounts.flatMap((mount) => [
             "--mount",
-            `type=volume,src=${volumeName(context.projectId, mount.id)},dst=${mount.mountPath}`,
+            `type=volume,src=${volumeName(context.projectId, mount.id)},dst=${mount.mountPath},volume-nocopy`,
           ]),
           "--env=HOME=/tmp",
           "--env=AI_AGENT=eve",
