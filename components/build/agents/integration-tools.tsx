@@ -1,6 +1,12 @@
 "use client"
 
 import * as React from "react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react"
 import { buildApi, asList } from "@/components/build/operations/build-api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,12 +49,16 @@ export function IntegrationTools({
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
+  const [filter, setFilter] = React.useState<"all" | "enabled" | "disabled">(
+    "all"
+  )
+  const [page, setPage] = React.useState(0)
   const records = (actions.data ?? []).filter(
     (item) =>
       item.definition.type === "integration" &&
       item.definition.connectionId === connectionId
   )
-  const rows = [
+  const allRows = [
     ...records.map((record) => ({
       key: record.id,
       record,
@@ -68,11 +78,27 @@ export function IntegrationTools({
           )
       )
       .map((tool) => ({ key: tool.slug, record: undefined, tool })),
-  ].filter(({ record, tool }) =>
-    `${record?.definition.name ?? tool?.name ?? ""} ${record?.definition.description ?? tool?.description ?? ""}`
+  ]
+  const enabledCount = allRows.filter(
+    ({ record }) => record?.definition.enabled
+  ).length
+  const rows = allRows.filter(({ record, tool }) => {
+    const enabled = record?.definition.enabled ?? false
+    if (filter === "enabled" && !enabled) return false
+    if (filter === "disabled" && enabled) return false
+    return `${record?.definition.name ?? tool?.name ?? ""} ${record?.definition.description ?? tool?.description ?? ""}`
       .toLowerCase()
       .includes(search.trim().toLowerCase())
+  })
+  const pageSize = 12
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize))
+  const currentPage = Math.min(page, pages - 1)
+  const visibleRows = rows.slice(
+    currentPage * pageSize,
+    (currentPage + 1) * pageSize
   )
+  const loaded =
+    !actions.isLoading && !tools.isLoading && !actions.error && !tools.error
 
   async function setEnabled(
     record: ActionRecord | undefined,
@@ -116,23 +142,65 @@ export function IntegrationTools({
   }
 
   return (
-    <section
-      aria-label={`Tools for ${connectionLabel}`}
-      className="space-y-3 border-t border-border pt-4"
-    >
-      <div className="space-y-1">
-        <h3 className="text-sm font-medium">Tools for this agent</h3>
-        <p className="text-xs text-foreground-muted">
-          Choose which tools this agent can use. Changes are saved with the
-          agent.
-        </p>
+    <section aria-label={`Tools for ${connectionLabel}`} className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold">Tools</h3>
+          <p className="text-sm text-foreground-muted">
+            Choose what this agent can use.
+          </p>
+        </div>
+        {loaded && (
+          <p className="text-sm text-foreground-muted" role="status">
+            <span className="font-medium text-foreground">{enabledCount}</span>{" "}
+            of {allRows.length} enabled
+          </p>
+        )}
       </div>
-      <Input
-        aria-label={`Search tools for ${connectionLabel}`}
-        placeholder="Search tools…"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-48 flex-1">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-foreground-muted"
+          />
+          <Input
+            aria-label={`Search tools for ${connectionLabel}`}
+            placeholder="Search tools"
+            className="pl-9"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setPage(0)
+            }}
+          />
+        </div>
+        <div
+          role="group"
+          aria-label="Filter tools"
+          className="flex items-center gap-1 rounded-md bg-muted p-1"
+        >
+          {(
+            [
+              ["all", "All"],
+              ["enabled", "Enabled"],
+              ["disabled", "Disabled"],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={filter === value ? "secondary" : "ghost-muted"}
+              aria-pressed={filter === value}
+              onClick={() => {
+                setFilter(value)
+                setPage(0)
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
       {error && (
         <Notice role="alert" variant="error">
           {error}
@@ -154,40 +222,54 @@ export function IntegrationTools({
         </Notice>
       )}
       {(actions.isLoading || tools.isLoading) && (
-        <p role="status" className="text-sm text-foreground-muted">
+        <p role="status" className="py-4 text-sm text-foreground-muted">
           Loading tools…
         </p>
       )}
-      {!actions.isLoading && !actions.error && rows.length === 0 && (
-        <p className="text-sm text-foreground-muted">
-          {search ? "No matching tools." : "No tools available."}
-        </p>
+      {loaded && rows.length === 0 && (
+        <div className="rounded-md bg-surface-row px-4 py-8 text-center text-sm text-foreground-muted">
+          {search || filter !== "all"
+            ? "No tools match your search or filter."
+            : "No tools available for this connection."}
+        </div>
       )}
-      <div className="max-h-80 space-y-1 overflow-y-auto">
-        {rows.map(({ key, record, tool }) => {
+      <ul aria-label="Integration tools" className="space-y-0.5">
+        {visibleRows.map(({ key, record, tool }) => {
           const name = record?.definition.name ?? tool?.name ?? "Tool"
+          const prefix = `${connectionLabel}: `
+          const displayName = name.startsWith(prefix)
+            ? name.slice(prefix.length)
+            : name
           const description =
             record?.definition.description ?? tool?.description
           return (
-            <div
+            <li
               key={key}
-              className="flex items-start gap-3 rounded-md bg-surface-row p-3"
+              className="flex min-w-0 items-center gap-3 rounded-md bg-surface-row px-3 py-2.5 transition-colors hover:bg-surface-row-hover"
             >
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="text-sm font-medium break-words">{name}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium" title={displayName}>
+                  {displayName}
+                </p>
                 {description && (
-                  <p className="line-clamp-2 text-xs text-foreground-muted">
+                  <p
+                    className="truncate text-xs text-foreground-muted"
+                    title={description}
+                  >
                     {description}
                   </p>
                 )}
               </div>
               {record && onEdit && (
                 <Button
-                  size="sm"
-                  variant="outline"
+                  size="icon-sm"
+                  variant="ghost-muted"
+                  aria-label={`Settings for ${name}`}
+                  title={`Settings for ${displayName}`}
+                  disabled={pending}
                   onClick={() => onEdit(record)}
                 >
-                  Settings
+                  <SlidersHorizontal aria-hidden />
                 </Button>
               )}
               <Switch
@@ -203,10 +285,42 @@ export function IntegrationTools({
                   void setEnabled(record, tool, enabled)
                 }
               />
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
+      {rows.length > pageSize && (
+        <div className="flex items-center justify-between gap-3 text-xs text-foreground-muted">
+          <span>
+            Showing {currentPage * pageSize + 1}–
+            {Math.min((currentPage + 1) * pageSize, rows.length)} of{" "}
+            {rows.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon-sm"
+              variant="ghost-muted"
+              aria-label="Previous tools"
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              <ChevronLeft aria-hidden />
+            </Button>
+            <span>
+              Page {currentPage + 1} of {pages}
+            </span>
+            <Button
+              size="icon-sm"
+              variant="ghost-muted"
+              aria-label="Next tools"
+              disabled={currentPage >= pages - 1}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              <ChevronRight aria-hidden />
+            </Button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

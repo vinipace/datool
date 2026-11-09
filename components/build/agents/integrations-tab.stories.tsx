@@ -341,43 +341,37 @@ export const CustomMcp: Story = {
     dialog = within(
       await page.findByRole("region", { name: "Customer records" })
     )
-    await expect(dialog.getByLabelText("Access token")).toHaveValue("")
+    await expect(
+      dialog.queryByLabelText("Access token")
+    ).not.toBeInTheDocument()
     await userEvent.click(
       dialog.getByRole("button", { name: "Check connection" })
     )
-    await expect(dialog.findByRole("status")).resolves.toHaveTextContent(
-      "Connection checked"
+    await expect(dialog.findByText(/Connection checked/)).resolves.toBeVisible()
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Connection settings" })
     )
+    await expect(dialog.getByLabelText("Access token")).toHaveValue("")
     await userEvent.clear(dialog.getByLabelText("Name"))
     await userEvent.type(dialog.getByLabelText("Name"), "Sales records")
     await userEvent.click(
       dialog.getByRole("button", { name: "Save connection" })
     )
-    await waitFor(() =>
-      expect(
-        canvas.queryByRole("group", { name: "Sales records" })
-      ).toBeInTheDocument()
-    )
-    await userEvent.click(
-      within(
-        await canvas.findByRole("group", { name: "Sales records" })
-      ).getByRole("button", { name: "Manage" })
-    )
     dialog = within(await page.findByRole("region", { name: "Sales records" }))
+    await expect(dialog.queryByLabelText("Name")).not.toBeInTheDocument()
     await userEvent.click(
-      dialog.getByRole("button", { name: "Disconnect MCP account" })
+      dialog.getByRole("button", { name: "Connection settings" })
     )
+    await userEvent.click(dialog.getByRole("button", { name: "Disconnect" }))
     let confirmation = within(await page.findByRole("alertdialog"))
     await waitFor(() =>
       expect(confirmation.getByRole("button", { name: "Cancel" })).toHaveFocus()
     )
     await userEvent.keyboard("{Escape}")
     await expect(
-      dialog.getByRole("button", { name: "Disconnect MCP account" })
+      dialog.getByRole("button", { name: "Disconnect" })
     ).toHaveFocus()
-    await userEvent.click(
-      dialog.getByRole("button", { name: "Disconnect MCP account" })
-    )
+    await userEvent.click(dialog.getByRole("button", { name: "Disconnect" }))
     confirmation = within(await page.findByRole("alertdialog"))
     await userEvent.click(
       confirmation.getByRole("button", { name: "Disconnect account" })

@@ -131,7 +131,11 @@ export const ManageTools: Story = {
         name: "Enable Google Calendar: List calendar events",
       })
     ).resolves.toBeChecked()
-    await userEvent.click(dialog.getByRole("button", { name: "Settings" }))
+    await userEvent.click(
+      dialog.getByRole("button", {
+        name: "Settings for Google Calendar: List calendar events",
+      })
+    )
     const editor = within(await page.findByRole("dialog"))
     await expect(
       editor.getByLabelText("Name", { selector: "input" })
