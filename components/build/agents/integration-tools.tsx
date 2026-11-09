@@ -1,20 +1,18 @@
 "use client"
 
 import * as React from "react"
-import {
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  SlidersHorizontal,
-} from "lucide-react"
+import { Search, SlidersHorizontal } from "lucide-react"
 import { buildApi, asList } from "@/components/build/operations/build-api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Notice } from "@/components/ui/notice"
 import { Switch } from "@/components/ui/switch"
 import { useRemote } from "@/components/tracer/hooks"
+import { InfiniteScroll } from "@/components/tracer/infinite-scroll"
 import type { ActionRecord } from "@/src/lib/build/contracts"
 import type { IntegrationTool } from "@/src/lib/build/integrations"
+
+const TOOL_BATCH_SIZE = 12
 
 /** The stored action remains the runtime owner; this is its integration-facing control. */
 export function IntegrationTools({
@@ -52,7 +50,7 @@ export function IntegrationTools({
   const [filter, setFilter] = React.useState<"all" | "enabled" | "disabled">(
     "all"
   )
-  const [page, setPage] = React.useState(0)
+  const [visibleCount, setVisibleCount] = React.useState(TOOL_BATCH_SIZE)
   const records = (actions.data ?? []).filter(
     (item) =>
       item.definition.type === "integration" &&
@@ -90,13 +88,7 @@ export function IntegrationTools({
       .toLowerCase()
       .includes(search.trim().toLowerCase())
   })
-  const pageSize = 12
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize))
-  const currentPage = Math.min(page, pages - 1)
-  const visibleRows = rows.slice(
-    currentPage * pageSize,
-    (currentPage + 1) * pageSize
-  )
+  const visibleRows = rows.slice(0, visibleCount)
   const loaded =
     !actions.isLoading && !tools.isLoading && !actions.error && !tools.error
 
@@ -170,7 +162,7 @@ export function IntegrationTools({
             value={search}
             onChange={(event) => {
               setSearch(event.target.value)
-              setPage(0)
+              setVisibleCount(TOOL_BATCH_SIZE)
             }}
           />
         </div>
@@ -193,7 +185,7 @@ export function IntegrationTools({
               aria-pressed={filter === value}
               onClick={() => {
                 setFilter(value)
-                setPage(0)
+                setVisibleCount(TOOL_BATCH_SIZE)
               }}
             >
               {label}
@@ -289,37 +281,23 @@ export function IntegrationTools({
           )
         })}
       </ul>
-      {rows.length > pageSize && (
-        <div className="flex items-center justify-between gap-3 text-xs text-foreground-muted">
-          <span>
-            Showing {currentPage * pageSize + 1}–
-            {Math.min((currentPage + 1) * pageSize, rows.length)} of{" "}
-            {rows.length}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon-sm"
-              variant="ghost-muted"
-              aria-label="Previous tools"
-              disabled={currentPage === 0}
-              onClick={() => setPage(currentPage - 1)}
-            >
-              <ChevronLeft aria-hidden />
-            </Button>
-            <span>
-              Page {currentPage + 1} of {pages}
-            </span>
-            <Button
-              size="icon-sm"
-              variant="ghost-muted"
-              aria-label="Next tools"
-              disabled={currentPage >= pages - 1}
-              onClick={() => setPage(currentPage + 1)}
-            >
-              <ChevronRight aria-hidden />
-            </Button>
-          </div>
-        </div>
+      <InfiniteScroll
+        key={`${connectionId}:${filter}:${search}:${visibleRows.length}`}
+        canLoadMore={loaded && visibleRows.length < rows.length}
+        isLoadingMore={false}
+        isFetching={actions.isRefreshing || tools.isRefreshing}
+        loadMoreError={null}
+        loadMore={() =>
+          setVisibleCount((count) =>
+            Math.min(count + TOOL_BATCH_SIZE, rows.length)
+          )
+        }
+        itemLabel="tools"
+      />
+      {loaded && rows.length > TOOL_BATCH_SIZE && (
+        <p role="status" className="text-xs text-foreground-muted">
+          Showing {visibleRows.length} of {rows.length} tools
+        </p>
       )}
     </section>
   )
