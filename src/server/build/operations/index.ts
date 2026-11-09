@@ -5,6 +5,8 @@ import { evolutionEnabled } from "../channels/evolution-api"
 import { EVOLUTION_ACCEPTANCE_VERSION } from "@/src/lib/build/evolution"
 import { getWhatsAppDelivery, getWhatsAppMedia } from "../channels/whatsapp"
 import { z } from "zod"
+import { createDriveSchema } from "@/src/lib/build/sandbox"
+import { createDrive, listDrives } from "../drives"
 import { metaIdSchema, whatsappModeSchema, whatsappRecipientSchema, whatsappTemplateSchema } from "@/src/lib/build/whatsapp"
 import { getWhatsAppSetup, getWhatsAppConnection, beginWhatsAppSignup, getWhatsAppSignup, authorizeWhatsAppSignup, activateWhatsAppSignup, refreshWhatsAppConnection, disconnectWhatsApp, listWhatsAppTemplates, createWhatsAppTemplate, deleteWhatsAppTemplate, getWhatsAppRecipient, setWhatsAppConsent, sendWhatsAppTemplate, syncWhatsAppApp } from "../channels/whatsapp"
 import { chatBubbleOverridesSchema } from "@/src/lib/build/chat-bubble"
@@ -100,6 +102,7 @@ import type { BuildContext } from "../context"
 // Keep the conversation/runtime registry split by feature so additions do not
 // bypass the shared Build operation metadata and transport registration.
 import "./conversations"
+import "./schedules"
 import {
   addTicketNote,
   assignTicket,
@@ -224,6 +227,21 @@ function register(
   })
 }
 
+register(
+  "build_list_drives",
+  "List persistent drives in the current project. Mount up to four in an agent sandbox.",
+  ["build:read"],
+  z.object({ after: z.string().uuid().optional(), limit: z.number().int().min(1).max(200).optional() }),
+  (context, input) => listDrives(context, input as { after?: string; limit?: number })
+)
+register(
+  "build_create_drive",
+  "Create a persistent project drive. Contents are retained when sandboxes stop or agents unmount the drive.",
+  ["build:write"],
+  createDriveSchema,
+  (context, input) => createDrive(context, input),
+  { idempotency: "required" }
+)
 register(
   "build_list_agents",
   "List active managed customer-experience agents in the current project.",

@@ -337,9 +337,10 @@ export async function listConversationMessages(
     where u.id in (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
   `) : { rows: [] }
   const authors = new Map(profiles.rows.map(profile => [profile.id, profile]))
-  const agentResult = await ctx.database.execute<{ id: string; name: string; appearance: unknown }>(sql`
-    select a.id,a.name,a.current_config_json->'appearance' as appearance
+  const agentResult = await ctx.database.execute<{ id: string; name: string; appearance: unknown; contact_name: string | null }>(sql`
+    select a.id,a.name,a.current_config_json->'appearance' as appearance,contact.display_name as contact_name
     from build_conversations c join build_agents a on a.id=c.agent_id and a.project_id=c.project_id
+    left join build_contacts contact on contact.project_id=c.project_id and contact.id=c.metadata_json->>'contactId'
     where c.project_id=${ctx.projectId} and c.id=${conversationId}
   `)
   const agent = agentResult.rows[0]
@@ -358,7 +359,10 @@ export async function listConversationMessages(
     ...page,
     items: page.items.map(message => ({
       ...message,
-      author: message.role === "assistant" && message.metadata.source !== "human"
+      isViewer: Boolean(ctx.actorId && senderId(message) === ctx.actorId),
+      author: message.role === "user"
+        ? { name: agent?.contact_name?.trim() || "Customer", image: null }
+        : message.role === "assistant" && message.metadata.source !== "human"
         ? agentAuthor
         : authors.get(senderId(message) ?? "") ?? null,
     })),

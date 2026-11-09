@@ -101,10 +101,13 @@ presence here; the real login verifies that they work.
 6. Build is disabled by default. To deploy customer-facing agents, set
    `DATOOL_BUILD_ENABLED=true` in `.env`, or keep it false and set
    `DATOOL_BUILD_ORGANIZATION_IDS` to a comma-separated list of organization IDs.
-   Recreate `app` and `build-worker` after changing either value.
+   Generate `DATOOL_EVE_SECRET` (32+ random characters), then recreate `app`,
+   `build-worker`, and `eve` after changing either value.
    Follow the [Build setup guide](build.md).
    The `build-worker` service processes hosted conversations, Telegram messages,
-   knowledge indexing, simulations, and campaigns.
+   knowledge indexing, simulations, campaigns, and Eve execution recovery.
+   The private `eve` service runs the agent engine; see
+   [Eve runtime setup](agent-eve-runtime.md).
 
 The application has no pre-created admin, sample account, or default password.
 A `/sign-in` health response proves the web process is responding; it does not

@@ -18,6 +18,8 @@ import {
 } from "@/src/lib/build/contracts"
 import type { AppliedAgentDefinitions } from "./definitions"
 import type { BuildContext } from "./context"
+import { resolveSandboxDrives } from "./drives"
+import { getSandboxProviderCredentials, SandboxSettingsValidationError } from "../sandbox/providers-store"
 import {
   REDACTED_ACTION_HEADER,
   decryptActionHeaders,
@@ -605,12 +607,24 @@ export async function getAgent(
   return agentModel(rows[0])
 }
 
+async function validatePublishedSandbox(context: BuildContext, configuration: AgentConfiguration) {
+  if (!configuration.sandbox.enabled) return
+  try {
+    await getSandboxProviderCredentials(context.projectId, configuration.sandbox.provider, context.database)
+  } catch (error) {
+    if (error instanceof SandboxSettingsValidationError) throw new AgentValidationError(error.message)
+    throw new AgentValidationError("The sandbox provider credentials are unavailable. Update them in Project settings → Sandbox providers.")
+  }
+}
+
 export async function createAgent(
   context: BuildContext,
   input: CreateAgentInput
 ): Promise<ManagedAgent> {
   const name = requireName(input.name)
   const config = parseConfiguration(input.configuration ?? {})
+  await resolveSandboxDrives(context, config.sandbox)
+  await validatePublishedSandbox(context, config)
   if (config.testing.requirePassingJourneys)
     throw new AgentValidationError("Create the agent first, then enable required journeys in Tests after adding its cases.")
   const now = new Date().toISOString()
@@ -695,7 +709,12 @@ export async function updateAgent(
         ? parseConfiguration(existing.currentConfigJson)
         : parseConfiguration(input.configuration)
     const nextRevision = existing.currentRevision + 1
+    await resolveSandboxDrives(
+      { ...context, database: tx as unknown as BuildContext["database"] },
+      config.sandbox
+    )
     const apply = input.apply !== false
+    if (apply) await validatePublishedSandbox({ ...context, database: tx as unknown as BuildContext["database"] }, config)
     let validatedCatalog: AppliedAgentDefinitions | undefined
     if (apply && config.testing.requirePassingJourneys) {
       const { requirePassingJourneys } = await import("./testing/journey-gate")

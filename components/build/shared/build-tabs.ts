@@ -2,6 +2,7 @@ import {
   BookOpen,
   FlaskConical,
   ChartNoAxesCombined,
+  CalendarClock,
   ContactRound,
   FileText,
   Database,
@@ -13,6 +14,7 @@ import {
   Plug,
   Radio,
   Settings,
+  Terminal,
   ShieldCheck,
   Wrench,
   type LucideIcon,
@@ -61,6 +63,13 @@ export const agentBuildTabs: BuildTab[] = [
     group: "Build",
   },
   {
+    id: "sandbox",
+    label: "Sandbox",
+    icon: Terminal,
+    description: "Execution environment and persistent drives",
+    group: "Build",
+  },
+  {
     id: "integrations",
     label: "Integrations",
     icon: Plug,
@@ -94,6 +103,13 @@ export const agentBuildTabs: BuildTab[] = [
     icon: MessagesSquare,
     description: "Conversations with this agent",
     group: "Activity",
+  },
+  {
+    id: "schedules",
+    label: "Scheduled tasks",
+    icon: CalendarClock,
+    description: "Automations and scheduled agent runs",
+    group: "Manage",
   },
   {
     id: "leads",

@@ -19,6 +19,13 @@ import {
 } from "./shopify"
 import { shopifyTools } from "./shopify-tools"
 import {
+  CUSTOM_MCP_TOOLKIT,
+  callCustomMcpTool,
+  checkCustomMcpConnection,
+  listCustomMcpTools,
+} from "./custom-mcp"
+import { McpRuntimeError } from "./mcp-errors"
+import {
   authorizeSession,
   executeSession,
   composioClient,
@@ -37,12 +44,23 @@ type ConnectionRow = {
   provider_user_id: string
   auth_config_id: string
   connected_account_id: string | null
+  mcp_config_encrypted: string | null
+  mcp_url: string | null
+  mcp_has_token: boolean
+  mcp_auth_type: "none" | "token" | "oauth"
 }
 const publicConnection = (row: ConnectionRow): AppConnection => ({
   id: row.id,
   toolkit: row.toolkit,
   label: row.label,
   status: row.status,
+  ...(row.toolkit === CUSTOM_MCP_TOOLKIT
+    ? {
+        mcpUrl: row.mcp_url ?? undefined,
+        hasToken: row.mcp_has_token,
+        authType: row.mcp_auth_type,
+      }
+    : {}),
 })
 const unavailable = () =>
   new TracerError(
@@ -64,10 +82,28 @@ async function ownedConnection(context: BuildContext, id: string) {
   return row
 }
 export async function listAppConnections(
-  context: BuildContext
+  context: BuildContext,
+  agentId?: string
 ): Promise<IntegrationCatalog> {
   await assertBuildProject(context)
   const config = integrationConfig()
+  const toolCounts = new Map<string, number>()
+  if (agentId) {
+    const { getAgent } = await import("../agents")
+    const { getRuntimeAppliedDefinitions } = await import("../definitions")
+    const agent = await getAgent(context, agentId)
+    const catalog = await getRuntimeAppliedDefinitions(
+      context,
+      agentId,
+      agent.appliedRevision ?? undefined
+    )
+    for (const item of catalog.actions)
+      if (item.definition.type === "integration" && item.definition.enabled)
+        toolCounts.set(
+          item.definition.connectionId,
+          (toolCounts.get(item.definition.connectionId) ?? 0) + 1
+        )
+  }
   const { rows } = await context.database.execute<ConnectionRow>(
     sql`SELECT * FROM build_app_connections WHERE project_id=${context.projectId} ORDER BY created_at DESC LIMIT 100`
   )
@@ -87,7 +123,12 @@ export async function listAppConnections(
         available: Boolean(process.env.COMPOSIO_API_KEY),
       })),
     ],
-    connections: rows.map(publicConnection),
+    connections: rows.map((row) => ({
+      ...publicConnection(row),
+      ...(agentId && row.toolkit === CUSTOM_MCP_TOOLKIT
+        ? { agentToolCount: toolCounts.get(row.id) ?? 0 }
+        : {}),
+    })),
   }
 }
 export async function connectApp(
@@ -165,6 +206,25 @@ export async function connectApp(
 }
 export async function refreshAppConnection(context: BuildContext, id: string) {
   const row = await ownedConnection(context, id)
+  if (row.toolkit === CUSTOM_MCP_TOOLKIT) {
+    if (row.status === "disconnected") return publicConnection(row)
+    if (row.status === "pending" && row.mcp_auth_type === "oauth")
+      return publicConnection(row)
+    let status: AppConnection["status"] = "active"
+    try {
+      await checkCustomMcpConnection(row, context.database)
+    } catch {
+      status = "failed"
+    }
+    const updated = await context.database.execute<ConnectionRow>(sql`
+      UPDATE build_app_connections SET status=${status},updated_at=now()
+      WHERE id=${id}::uuid AND project_id=${context.projectId} AND status<>'disconnected'
+        AND mcp_config_encrypted=${row.mcp_config_encrypted} RETURNING *
+    `)
+    return publicConnection(
+      updated.rows[0] ?? (await ownedConnection(context, id))
+    )
+  }
   if (row.toolkit === SHOPIFY_TOOLKIT) {
     if (row.status === "active") await refreshShopifyConnection(context, id)
     return publicConnection(await ownedConnection(context, id))
@@ -203,6 +263,20 @@ export async function refreshAppConnection(context: BuildContext, id: string) {
 }
 export async function disconnectApp(context: BuildContext, id: string) {
   const row = await ownedConnection(context, id)
+  if (row.toolkit === CUSTOM_MCP_TOOLKIT) {
+    await context.database.execute(
+      sql`DELETE FROM build_mcp_oauth_requests WHERE connection_id=${id}::uuid AND project_id=${context.projectId}`
+    )
+    await context.database.execute(sql`
+      UPDATE build_app_connections SET status='disconnected',mcp_config_encrypted=NULL,mcp_has_token=false,updated_at=now()
+      WHERE id=${id}::uuid AND project_id=${context.projectId}
+    `)
+    return {
+      ...publicConnection(row),
+      status: "disconnected" as const,
+      hasToken: false,
+    }
+  }
   // Revoke local authorization first, even when the upstream API is unavailable.
   await context.database.execute(
     sql`UPDATE build_app_connections SET status='disconnected',updated_at=now() WHERE id=${id}::uuid AND project_id=${context.projectId}`
@@ -234,6 +308,8 @@ export async function listAppTools(
 ): Promise<IntegrationTool[]> {
   const row = await ownedConnection(context, connectionId)
   if (row.status !== "active") throw unavailable()
+  if (row.toolkit === CUSTOM_MCP_TOOLKIT)
+    return listCustomMcpTools(row, context.database)
   if (row.toolkit === SHOPIFY_TOOLKIT) {
     if (!shopifyConfigured()) throw unavailable()
     return shopifyTools
@@ -305,18 +381,27 @@ export async function executeAppAction(
   const ctx = await assertBuildProject(context)
   const connection = await ownedConnection(ctx, input.connectionId)
   const native = connection.toolkit === SHOPIFY_TOOLKIT
+  const customMcp = connection.toolkit === CUSTOM_MCP_TOOLKIT
   if (
     connection.status !== "active" ||
-    (!native && !connection.connected_account_id)
+    (!native && !customMcp && !connection.connected_account_id)
   )
     throw unavailable()
-  const app = native
+  const app = customMcp
     ? {
-        authConfigId: "shopify-native-v1",
-        tools: shopifyTools.map((tool) => tool.slug),
+        authConfigId: "custom-mcp-v1",
+        tools: (await listCustomMcpTools(connection, ctx.database)).map(
+          (tool) => tool.slug
+        ),
         costNanoUsd: 0,
       }
-    : integrationApp(connection.toolkit)
+    : native
+      ? {
+          authConfigId: "shopify-native-v1",
+          tools: shopifyTools.map((tool) => tool.slug),
+          costNanoUsd: 0,
+        }
+      : integrationApp(connection.toolkit)
   if (
     app.authConfigId !== connection.auth_config_id ||
     !app.tools.includes(input.toolSlug)
@@ -369,13 +454,59 @@ export async function executeAppAction(
   const id = randomUUID()
   const admitted = await ctx.database
     .execute(sql`INSERT INTO build_usage_event(id,organization_id,project_id,agent_id,conversation_id,turn_id,event_key,kind,provider,toolkit,tool_slug,connection_id,status,cost_source)
-    VALUES(${id}::uuid,${ctx.organizationId},${ctx.projectId},${input.agentId},${input.conversationId},${input.turnId},${`integration:${input.turnId}:${input.toolCallId}`},'integration',${native ? "shopify" : "composio"},${connection.toolkit},${input.toolSlug},${connection.id}::uuid,'pending','configured')
+    VALUES(${id}::uuid,${ctx.organizationId},${ctx.projectId},${input.agentId},${input.conversationId},${input.turnId},${`integration:${input.turnId}:${input.toolCallId}`},'integration',${customMcp ? "mcp" : native ? "shopify" : "composio"},${connection.toolkit},${input.toolSlug},${connection.id}::uuid,'pending','configured')
     ON CONFLICT(project_id,event_key) DO NOTHING RETURNING id`)
   if (!admitted.rows.length)
     throw new TracerError(
       "VALIDATION_ERROR",
       "This app action was already attempted. Inspect its result before retrying."
     )
+  if (customMcp) {
+    let dispatched = false
+    try {
+      const output = await callCustomMcpTool(
+        connection,
+        input.toolSlug,
+        input.arguments,
+        async () => {
+          const latest = await ownedConnection(ctx, connection.id)
+          if (
+            latest.status !== "active" ||
+            latest.mcp_config_encrypted !== connection.mcp_config_encrypted
+          )
+            throw unavailable()
+          dispatched = true
+        },
+        input.signal,
+        ctx.database
+      )
+      const status = output.isError
+        ? ("failed" as const)
+        : ("completed" as const)
+      await ctx.database.execute(
+        sql`UPDATE build_usage_event SET status=${status},cost_nano_usd=0 WHERE id=${id}::uuid`
+      )
+      return { output, status }
+    } catch (cause) {
+      await ctx.database.execute(
+        sql`UPDATE build_usage_event SET status=${dispatched ? "uncertain" : "blocked"},cost_nano_usd=0 WHERE id=${id}::uuid`
+      )
+      if (!dispatched && cause instanceof McpRuntimeError) throw cause
+      throw new McpRuntimeError(
+        dispatched ? "ACTION_UNCERTAIN" : "MCP_ACTION_NOT_STARTED",
+        dispatched
+          ? "The MCP action outcome is uncertain. Check the connected app before retrying."
+          : "The MCP action could not start. Check its connection in Integrations.",
+        {
+          stage: dispatched ? "execution" : "preflight",
+          connectionId: connection.id,
+          toolSlug: input.toolSlug,
+          retryable: !dispatched,
+        },
+        cause
+      )
+    }
+  }
   const commerceQuote = input.shopifyOrderQuote ?? input.shopifyReturnQuote
   if (native && commerceQuote)
     await ctx.database.execute(sql`

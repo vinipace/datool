@@ -179,6 +179,12 @@ describe("Build conversation ledger", () => {
       channel: "web",
       metadata: {},
     })
+    await service.appendMessage(otherConversation.id, {
+      role: "user",
+      content: "Hello",
+      status: "completed",
+      metadata: {},
+    })
     await archiveAgent({ database, projectId }, "agent-b", 1)
     const agentFirst = await service.list({ agentId: "agent-a", limit: 1 })
     const agentSecond = await service.list({

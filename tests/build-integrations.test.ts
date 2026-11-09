@@ -1,8 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import assert from "node:assert/strict"
 import { Pool } from "pg"
-import { generateText } from "ai"
-import { MockLanguageModelV4 } from "ai/test"
+import { createEveFixture, eveResponse, invokeTool } from "./helpers/eve-fixture"
 import { createAgent, updateAgent } from "@/src/server/build/agents"
 import { saveAction } from "@/src/server/build/definitions"
 import { ConversationService } from "@/src/server/build/conversations"
@@ -75,7 +74,7 @@ async function fixture(costNanoUsd = 2_000_000_000, connectionCostNanoUsd = 0) {
   const agent = await createAgent(context, {
     id: "agent-calendar",
     name: "Calendar assistant",
-    configuration: { model: "test-model", provider: "openai" },
+    configuration: { model: "gpt-4.1-mini", provider: "openai", guardrails: { jevCheckEnabled: false } },
   })
   const service = new ConversationService(context)
   const requests: { path: string; body: Record<string, unknown> }[] = []
@@ -89,6 +88,7 @@ async function fixture(costNanoUsd = 2_000_000_000, connectionCostNanoUsd = 0) {
     const url = new URL(
       request instanceof Request ? request.url : String(request)
     )
+    if (url.hostname === "127.0.0.1" || url.hostname === "localhost") return originalFetch(request, init)
     assert.equal(
       url.hostname,
       "backend.composio.dev",
@@ -364,42 +364,10 @@ test("real agent tool loop records each model call and integration with agent/co
     expectedRevision: f.agent.currentRevision,
     apply: true,
   })
-  const model = new MockLanguageModelV4({
-    modelId: "test-model",
-    doGenerate: [
-      {
-        content: [
-          {
-            type: "tool-call",
-            toolCallId: "calendar-1",
-            toolName: "calendar",
-            input: '{"calendar_id":"primary"}',
-          },
-        ],
-        finishReason: { unified: "tool-calls", raw: "tool_calls" },
-        usage: {
-          inputTokens: { total: 20, noCache: 16, cacheRead: 4, cacheWrite: 0 },
-          outputTokens: { total: 6, text: 4, reasoning: 2 },
-        },
-        warnings: [],
-      },
-      {
-        content: [{ type: "text", text: "No events." }],
-        finishReason: { unified: "stop", raw: "stop" },
-        usage: {
-          inputTokens: { total: 30, noCache: 25, cacheRead: 5, cacheWrite: 0 },
-          outputTokens: { total: 3, text: 3, reasoning: 0 },
-        },
-        warnings: [],
-      },
-    ],
-  })
-  const options = {
-    dependencies: {
-      generateText: ((options) =>
-        generateText({ ...options, model })) as typeof generateText,
-    },
-  }
+  const eve = await createEveFixture({ target: f.target, upstream: globalThis.fetch })
+  cleanup.push(() => eve.close())
+  eve.provider(body => invokeTool(body, { calendar_id: "primary" }, "No events.", "Calendar"))
+  const options = {}
   const input = {
     agentId: f.agent.id,
     channel: "api" as const,
@@ -410,12 +378,12 @@ test("real agent tool loop records each model call and integration with agent/co
   expect(result.status).toBe("completed")
   expect(f.requests.filter((r) => r.path.endsWith("/execute"))).toHaveLength(1)
   const usage = await getAgentUsage(f.target.organizationId, {}, f.pool)
-  expect(usage.totals.inputTokens).toBe(50)
-  expect(usage.totals.outputTokens).toBe(9)
-  expect(usage.totals.cachedInputTokens).toBe(9)
-  expect(usage.totals.reasoningTokens).toBe(2)
-  expect(usage.totals.modelCalls).toBe(2)
-  expect(usage.totals.unpricedModelCalls).toBe(2)
+  expect(usage.totals.inputTokens).toBe(60)
+  expect(usage.totals.outputTokens).toBe(24)
+  expect(usage.totals.cachedInputTokens).toBe(0)
+  expect(usage.totals.reasoningTokens).toBe(0)
+  expect(usage.totals.modelCalls).toBe(3)
+  expect(usage.totals.unpricedModelCalls).toBe(3)
   expect(usage.conversations[0].conversationId).toBe(result.conversation.id)
   await runAgentTurn(
     f.context,
@@ -424,35 +392,16 @@ test("real agent tool loop records each model call and integration with agent/co
   )
   expect(
     (await getAgentUsage(f.target.organizationId, {}, f.pool)).totals.modelCalls
-  ).toBe(2)
+  ).toBe(3)
   expect(f.requests.filter((r) => r.path.endsWith("/execute"))).toHaveLength(1)
 }, 30000)
 
 test("a later model failure preserves earlier token usage and exposes the missing report", async () => {
   const f = await fixture()
   let calls = 0
-  const model = new MockLanguageModelV4({
-    modelId: "test-model",
-    doGenerate: async () => {
-      if (++calls === 2) throw new Error("provider unavailable")
-      return {
-        content: [
-          {
-            type: "tool-call",
-            toolCallId: "unknown-tool",
-            toolName: "missing",
-            input: "{}",
-          },
-        ],
-        finishReason: { unified: "tool-calls", raw: "tool_calls" },
-        usage: {
-          inputTokens: { total: 17, noCache: 17, cacheRead: 0, cacheWrite: 0 },
-          outputTokens: { total: 4, text: 4, reasoning: 0 },
-        },
-        warnings: [],
-      }
-    },
-  })
+  const eve = await createEveFixture({ target: f.target })
+  cleanup.push(() => eve.close())
+  eve.provider(body => ++calls === 1 ? eveResponse(body, "", { name: "missing", input: {} }) : Response.json({ error: { message: "provider unavailable" } }, { status: 403 }))
   await assert.rejects(
     runAgentTurn(
       f.context,
@@ -462,18 +411,14 @@ test("a later model failure preserves earlier token usage and exposes the missin
         requestKey: "partial-failure",
         message: "Check the calendar.",
       },
-      {
-        dependencies: {
-          generateText: (options) => generateText({ ...options, model }),
-        },
-      }
+      {}
     ),
-    /model request failed/
+    /did not complete/
   )
   const usage = await getAgentUsage(f.target.organizationId, {}, f.pool)
   expect(usage.totals.modelCalls).toBe(2)
-  expect(usage.totals.inputTokens).toBe(17)
-  expect(usage.totals.outputTokens).toBe(4)
+  expect(usage.totals.inputTokens).toBe(20)
+  expect(usage.totals.outputTokens).toBe(8)
   expect(usage.totals.missingTokenCalls).toBe(1)
   expect(usage.totals.pendingCalls).toBe(1)
 }, 30000)

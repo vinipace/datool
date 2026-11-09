@@ -1,6 +1,6 @@
 import { createGateway } from "@ai-sdk/gateway"
 import { createOpenAI } from "@ai-sdk/openai"
-import { generateObject, generateText, type LanguageModel } from "ai"
+import { generateObject, type LanguageModel } from "ai"
 import { z } from "zod"
 
 import {
@@ -89,7 +89,6 @@ export type RuntimeSimulationJudgeInput = {
 
 export type RuntimeSimulationExecutorOptions = {
   /** Injected model functions are intended for deterministic contract tests. */
-  generateText?: typeof generateText
   generateObject?: typeof generateObject
   fetch?: typeof fetch
   resolveModel?: (
@@ -567,6 +566,7 @@ async function executeRuntimeSimulationCase(
     return { status: "completed", output: toolCall.response ?? null }
   }
   const dependencies: RuntimeDependencies = {
+    simulation: { runId: input.run.id, caseId: input.testCase.id, leaseOwner: input.leaseOwner, toolMocks: input.toolMocks, actions, procedures },
     mockExternalActions: true,
     resolveActions: async () => actions,
     resolveProcedures: async () => procedures,
@@ -574,7 +574,6 @@ async function executeRuntimeSimulationCase(
     executeAction: async ({ action, input: actionInput, signal }) =>
       actionExecutor({ action, input: actionInput, signal }),
   }
-  if (options.generateText) dependencies.generateText = options.generateText
   const heartbeatIntervalMs = Math.max(
     1_000,
     Math.floor((input.leaseSeconds * 1_000) / 3)

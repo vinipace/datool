@@ -235,3 +235,103 @@ export const DisconnectAccount: Story = {
     ).not.toBeInTheDocument()
   },
 }
+
+const customMcp = appIntegrationScenario("custom-mcp")
+export const CustomMcp: Story = {
+  parameters: { msw: { handlers: customMcp.handlers } },
+  beforeEach: customMcp.reset,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const page = within(canvasElement.ownerDocument.body)
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("button", { name: "Add custom MCP" })
+      ).toBeEnabled()
+    )
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Add custom MCP" })
+    )
+    let dialog = within(
+      await page.findByRole("dialog", { name: "Add custom MCP" })
+    )
+    await expect(dialog.getByLabelText("Authentication")).toHaveValue("oauth")
+    await expect(
+      dialog.getByRole("button", { name: "Continue with OAuth" })
+    ).toBeVisible()
+    await expect(
+      dialog.queryByLabelText("Access token")
+    ).not.toBeInTheDocument()
+    await userEvent.type(dialog.getByLabelText("Name"), "Customer records")
+    await userEvent.type(
+      dialog.getByLabelText("Server URL"),
+      "https://records.example.com/mcp"
+    )
+    await userEvent.selectOptions(
+      dialog.getByLabelText("Authentication"),
+      "token"
+    )
+    await userEvent.type(
+      dialog.getByLabelText("Access token"),
+      "fixture-secret"
+    )
+    await userEvent.click(dialog.getByRole("button", { name: "Connect MCP" }))
+    await waitFor(() =>
+      expect(page.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+    const row = within(
+      await canvas.findByRole("group", { name: "Customer records" })
+    )
+    await expect(row.getByText("https://records.example.com/mcp")).toBeVisible()
+    await userEvent.click(row.getByRole("button", { name: "Manage" }))
+    dialog = within(
+      await page.findByRole("dialog", { name: "Customer records" })
+    )
+    await expect(dialog.getByLabelText("Access token")).toHaveValue("")
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Check connection" })
+    )
+    await expect(dialog.findByRole("status")).resolves.toHaveTextContent(
+      "Connection checked"
+    )
+    await userEvent.clear(dialog.getByLabelText("Name"))
+    await userEvent.type(dialog.getByLabelText("Name"), "Sales records")
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Save connection" })
+    )
+    await waitFor(() =>
+      expect(page.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+    await userEvent.click(
+      within(
+        await canvas.findByRole("group", { name: "Sales records" })
+      ).getByRole("button", { name: "Manage" })
+    )
+    dialog = within(await page.findByRole("dialog", { name: "Sales records" }))
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Disconnect MCP account" })
+    )
+    let confirmation = within(await page.findByRole("alertdialog"))
+    await waitFor(() =>
+      expect(confirmation.getByRole("button", { name: "Cancel" })).toHaveFocus()
+    )
+    await userEvent.keyboard("{Escape}")
+    await expect(
+      dialog.getByRole("button", { name: "Disconnect MCP account" })
+    ).toHaveFocus()
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Disconnect MCP account" })
+    )
+    confirmation = within(await page.findByRole("alertdialog"))
+    await userEvent.click(
+      confirmation.getByRole("button", { name: "Disconnect account" })
+    )
+    await waitFor(() =>
+      expect(page.queryByRole("alertdialog")).not.toBeInTheDocument()
+    )
+    await expect(
+      within(canvas.getByRole("group", { name: "Sales records" })).getByText(
+        "Disconnected"
+      )
+    ).toBeVisible()
+  },
+}

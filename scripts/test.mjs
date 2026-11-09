@@ -10,6 +10,10 @@ const batches = [
     ? [
         {
           command: process.versions.bun ? process.execPath : "bun",
+          args: ["run", "eve:build"],
+        },
+        {
+          command: process.versions.bun ? process.execPath : "bun",
           args: ["--no-env-file", "test", "tests", ...forwarded],
         },
       ]
@@ -28,6 +32,6 @@ let failed = false
 for (const batch of batches) {
   const result = spawnSync(batch.command, batch.args, { stdio: "inherit" })
   if (result.error) console.error(result.error.message)
-  if (result.status !== 0) failed = true
+  if (result.status !== 0) { failed = true; break }
 }
 process.exitCode = failed ? 1 : 0

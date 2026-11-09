@@ -4,6 +4,7 @@ import type { AppConnection } from "@/src/lib/build/integrations"
 export const connectionId = "e35e42aa-f025-4a7e-90af-bb53fe130d79"
 export function appIntegrationScenario(
   initial:
+    | "custom-mcp"
     | "active"
     | "pending"
     | "empty"
@@ -17,6 +18,7 @@ export function appIntegrationScenario(
     | "connect-error" = "active"
 ) {
   let status: AppConnection["status"] | null = null
+  let custom: AppConnection | null = null
   let connectAttempts = 0
   const reset = () => {
     status =
@@ -25,13 +27,24 @@ export function appIntegrationScenario(
         : initial === "active" || initial === "pending"
           ? initial
           : null
+    custom =
+      initial === "custom-mcp"
+        ? {
+            id: "mcp-fixture",
+            toolkit: "custom_mcp",
+            label: "Team knowledge",
+            status: "active",
+            mcpUrl: "https://knowledge.example.com/mcp",
+            hasToken: true,
+          }
+        : null
     connectAttempts = 0
   }
   reset()
   return {
     reset,
     handlers: [
-      http.post("*/api/build/:operation", async ({ params }) => {
+      http.post("*/api/build/:operation", async ({ params, request }) => {
         if (initial === "loading") await delay("infinite")
         if (initial === "error")
           return HttpResponse.json(
@@ -63,38 +76,79 @@ export function appIntegrationScenario(
                         ]
                       : []),
                   ],
-              connections: status
-                ? [
-                    {
-                      id: connectionId,
-                      toolkit: initial.startsWith("shopify")
-                        ? "shopify_native"
-                        : "googlecalendar",
-                      label: initial.startsWith("shopify")
-                        ? "sample.myshopify.com"
-                        : "Google Calendar",
-                      status,
-                    },
-                    ...(initial === "catalog"
-                      ? [
-                          {
-                            id: "previous-attempt",
-                            toolkit: "googlecalendar",
-                            label: "Google Calendar",
-                            status: "pending",
-                          },
-                          {
-                            id: "slack-connection",
-                            toolkit: "slack",
-                            label: "Slack",
-                            status: "pending",
-                          },
-                        ]
-                      : []),
-                  ]
-                : [],
+              connections: [
+                ...(custom ? [custom] : []),
+                ...(status
+                  ? [
+                      {
+                        id: connectionId,
+                        toolkit: initial.startsWith("shopify")
+                          ? "shopify_native"
+                          : "googlecalendar",
+                        label: initial.startsWith("shopify")
+                          ? "sample.myshopify.com"
+                          : "Google Calendar",
+                        status,
+                      },
+                      ...(initial === "catalog"
+                        ? [
+                            {
+                              id: "previous-attempt",
+                              toolkit: "googlecalendar",
+                              label: "Google Calendar",
+                              status: "pending",
+                            },
+                            {
+                              id: "slack-connection",
+                              toolkit: "slack",
+                              label: "Slack",
+                              status: "pending",
+                            },
+                          ]
+                        : []),
+                    ]
+                  : []),
+              ],
             },
           })
+        if (params.operation === "build_save_mcp_connection") {
+          const input = (await request.json()) as {
+            connectionId?: string
+            name: string
+            url?: string
+            token?: string
+          }
+          custom = {
+            id: input.connectionId ?? "mcp-fixture",
+            toolkit: "custom_mcp",
+            label: input.name,
+            status: "active",
+            mcpUrl: input.url ?? custom?.mcpUrl,
+            hasToken:
+              input.token === undefined
+                ? custom?.hasToken
+                : Boolean(input.token),
+          }
+          return HttpResponse.json({ data: custom })
+        }
+        if (
+          params.operation === "build_refresh_app_connection" ||
+          params.operation === "build_disconnect_app"
+        ) {
+          const input = (await request.clone().json()) as {
+            connectionId: string
+          }
+          if (custom?.id === input.connectionId) {
+            custom = {
+              ...custom,
+              status:
+                params.operation === "build_disconnect_app"
+                  ? "disconnected"
+                  : "active",
+            }
+            return HttpResponse.json({ data: custom })
+          }
+        }
         if (params.operation === "build_list_app_tools")
           return HttpResponse.json({
             data:

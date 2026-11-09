@@ -34,7 +34,10 @@ import {
 } from "@/src/lib/build/chat-bubble"
 import { bubbleStyle } from "./bubble-style"
 import { localizeBubble } from "@/src/lib/build/bubble-localization"
-import { buildApi } from "@/components/build/operations/build-api"
+import {
+  buildApi,
+  BuildApiError,
+} from "@/components/build/operations/build-api"
 import {
   isPublicReplyPending,
   type PublicChatThread,
@@ -277,6 +280,11 @@ export function PublicChat({
   const readSequence = React.useRef(0)
   const sessionSequence = React.useRef(0)
   const sendingRef = React.useRef(false)
+  const reconcileUntil = React.useRef(0)
+  const initialRefresh = React.useRef<string | null>(null)
+  const pollFailures = React.useRef(0)
+  const pollingConversation = React.useRef<string | null>(null)
+  const previousFrameVisible = React.useRef(frameVisible)
   const cartCleanupAttempts = React.useRef(new Set<string>())
   const [cartCleanupWarningFor, setCartCleanupWarningFor] = React.useState<
     string | null
@@ -334,6 +342,11 @@ export function PublicChat({
   const followLatest = React.useRef(true)
   const [hasNewMessage, setHasNewMessage] = React.useState(false)
   const previewConversationKey = React.useRef(crypto.randomUUID())
+  const pendingPreview = React.useRef<{
+    conversationId: string
+    requestKey: string
+    notice: string
+  } | null>(null)
   const waitingReply =
     sending ||
     isPublicReplyPending(
@@ -464,6 +477,25 @@ export function PublicChat({
           active,
           incoming
         )
+      const pending = pendingPreview.current
+      if (previewAgentId && pending?.conversationId === active.conversationId) {
+        const inbound = incoming.findIndex(
+          (message) =>
+            message.direction === "inbound" &&
+            message.metadata?.clientMessageId === pending.requestKey
+        )
+        if (inbound >= 0) {
+          if (
+            incoming
+              .slice(inbound + 1)
+              .some((message) => message.direction === "outbound")
+          ) {
+            pendingPreview.current = null
+            setError((current) => (current === pending.notice ? null : current))
+          } else
+            incoming[inbound] = { ...incoming[inbound], pendingReply: true }
+        }
+      }
       setMessages((current) => [
         ...incoming,
         ...current.filter((message) => {
@@ -534,17 +566,12 @@ export function PublicChat({
             }
           }
           if (reset) previewConversationKey.current = crypto.randomUUID()
+          else if (threadId) previewConversationKey.current = threadId
           const conversation = threadId
             ? { id: threadId }
-            : await buildApi.call<{ id: string }>("build_create_conversation", {
-                agentId: previewAgentId,
-                channel: "web",
-                externalConversationId: `bubble-preview:${channelId}:${previewConversationKey.current}`,
-                metadata: {
-                  source: "channel-preview",
-                  connectionId: channelId,
-                },
-              })
+            : !reset && sessionRef.current
+              ? { id: sessionRef.current.conversationId }
+              : { id: `pending:${previewConversationKey.current}` }
           const active = {
             conversationId: conversation.id,
             visitorToken: "",
@@ -554,7 +581,8 @@ export function PublicChat({
           activeConversationId.current = active.conversationId
           sessionRef.current = active
           setSession(active)
-          await loadConversation(active)
+          if (active.conversationId.startsWith("pending:")) setMessages([])
+          else await loadConversation(active)
           return
         }
         let stored = sessionRef.current
@@ -664,6 +692,7 @@ export function PublicChat({
           sessionRef.current?.visitorId !== active.visitorId ||
           activeConversationId.current !== active.conversationId
         if (newConversation) {
+          initialRefresh.current = active.conversationId
           saveTranscriptSnapshot(key, active, [])
           setMessages([])
         } else if (changedSession) {
@@ -872,27 +901,62 @@ export function PublicChat({
   }, [startSession])
 
   React.useEffect(() => {
+    const opening =
+      managedEmbed && frameVisible && !previousFrameVisible.current
+    if (!frameVisible) previousFrameVisible.current = false
+    if (pollingConversation.current !== session?.conversationId) {
+      pollingConversation.current = session?.conversationId ?? null
+      pollFailures.current = 0
+      reconcileUntil.current = 0
+    }
     if (
       !session ||
-      previewAgentId ||
+      session.conversationId.startsWith("pending:") ||
       loading ||
       (managedEmbed && !frameVisible)
     )
       return
+    previousFrameVisible.current = frameVisible
     const controller = new AbortController()
     let polling = false
-    const timer = window.setInterval(() => {
-      if (
-        polling ||
-        sendingRef.current ||
-        loading ||
-        document.visibilityState === "hidden"
-      )
+    let timer: number | undefined
+    const schedule = () => {
+      if (controller.signal.aborted) return
+      const active =
+        waitingReply ||
+        Date.now() < reconcileUntil.current ||
+        initialRefresh.current === session.conversationId
+      const base = pollFailures.current
+        ? Math.min(60_000, 2_000 * 2 ** Math.min(pollFailures.current - 1, 5))
+        : active
+          ? 1_000
+          : 15_000
+      // Spread idle reads and retries across clients instead of synchronizing them.
+      const delay =
+        active && !pollFailures.current
+          ? base
+          : base * (0.8 + Math.random() * 0.4)
+      timer = window.setTimeout(refresh, delay)
+    }
+    const refresh = () => {
+      window.clearTimeout(timer)
+      if (controller.signal.aborted || polling) return
+      if (sendingRef.current || document.visibilityState === "hidden") {
+        schedule()
         return
+      }
       polling = true
       void loadConversation(session, controller.signal)
+        .then(() => {
+          if (!controller.signal.aborted) {
+            pollFailures.current = 0
+            if (initialRefresh.current === session.conversationId)
+              initialRefresh.current = null
+          }
+        })
         .catch((reason) => {
           if (controller.signal.aborted) return
+          pollFailures.current++
           if (shopifyIdentity) {
             setMessages([])
             setThreads([])
@@ -906,11 +970,20 @@ export function PublicChat({
         })
         .finally(() => {
           polling = false
+          schedule()
         })
-    }, 1_000)
+    }
+    const onVisibilityChange = () => {
+      // Shopify separately revalidates its host identity on return.
+      if (document.visibilityState !== "hidden" && !shopifyIdentity) refresh()
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    if (opening && !shopifyIdentity) refresh()
+    else schedule()
     return () => {
       controller.abort()
-      window.clearInterval(timer)
+      window.clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [
     loadConversation,
@@ -921,6 +994,7 @@ export function PublicChat({
     startSession,
     managedEmbed,
     frameVisible,
+    waitingReply,
   ])
 
   const scrollToLatest = React.useCallback(() => {
@@ -1117,16 +1191,34 @@ export function PublicChat({
         ),
       ])
     }
+    const adoptPreviewConversation = (conversationId: string) => {
+      const previousId = activeSession.conversationId
+      if (previousId === conversationId) return
+      activeSession = { ...activeSession, conversationId }
+      activeConversationId.current = conversationId
+      sessionRef.current = activeSession
+      setSession(activeSession)
+      setThreads((current) =>
+        current.map((thread) =>
+          thread.id === previousId ? { ...thread, id: conversationId } : thread
+        )
+      )
+    }
     try {
       const messageContext = { ...activeSession.context, ...context }
       if (previewAgentId) {
         await onBeforeSend?.()
-        await buildApi.call(
+        const pending = activeSession.conversationId.startsWith("pending:")
+        const result = await buildApi.call<{ conversation: { id: string } }>(
           "build_run_agent_turn",
           {
             agentId: previewAgentId,
             channel: "web",
-            conversationId: activeSession.conversationId,
+            ...(pending
+              ? {
+                  externalConversationId: `bubble-preview:${channelId}:${activeSession.conversationId.slice("pending:".length)}`,
+                }
+              : { conversationId: activeSession.conversationId }),
             message: text,
             metadata: {
               source: "channel-preview",
@@ -1137,6 +1229,9 @@ export function PublicChat({
           },
           { idempotencyKey: requestKey }
         )
+        if (pending) {
+          adoptPreviewConversation(result.conversation.id)
+        }
       } else {
         await requestJson(
           `/api/build-public/${encodeURIComponent(channelId)}/conversation/${encodeURIComponent(activeSession.conversationId)}`,
@@ -1159,6 +1254,31 @@ export function PublicChat({
         )
       }
     } catch (reason) {
+      const details =
+        reason instanceof BuildApiError
+          ? (reason.details as
+              { reason?: string; conversationId?: string } | undefined)
+          : undefined
+      if (
+        previewAgentId &&
+        reason instanceof BuildApiError &&
+        details?.reason === "EXECUTION_PENDING" &&
+        typeof details.conversationId === "string"
+      ) {
+        adoptPreviewConversation(details.conversationId)
+        pendingPreview.current = {
+          conversationId: activeSession.conversationId,
+          requestKey,
+          notice: reason.message,
+        }
+        setError(reason.message)
+        sendingRef.current = false
+        setSending(false)
+        // The server explicitly acknowledged persistence. Keep waiting for its
+        // reply and poll the real conversation instead of offering to resend.
+        await loadConversation(activeSession).catch(() => undefined)
+        return
+      }
       if (interaction) {
         undoOptimistic()
         setError(
@@ -1169,6 +1289,7 @@ export function PublicChat({
       } else {
         // A missing acknowledgement can mean the server accepted the message.
         // Keep its key for retries; history reconciles it by the provider ID.
+        reconcileUntil.current = Date.now() + 30_000
         setMessages((current) =>
           current.map((message) =>
             message.id === localMessageId && message.localSend
@@ -1669,7 +1790,11 @@ export function PublicChat({
                   }
                 >
                   <MessageTranscript
-                    key={session?.conversationId}
+                    key={
+                      previewAgentId
+                        ? previewConversationKey.current
+                        : session?.conversationId
+                    }
                     getMessageKey={(message) =>
                       messageKeys.get(message.id ?? "")
                     }

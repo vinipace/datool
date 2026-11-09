@@ -39,6 +39,9 @@ import {
 } from "../src/server/build/operations/campaigns"
 import type { AgentTurnRunner } from "../src/lib/build/channels"
 import { buildAvailable } from "../lib/build/config"
+import { reconcileEveExecutions } from "../src/server/build/eve/recovery"
+import { cleanupDatoolSandboxes } from "../src/server/build/eve/sandbox"
+import { enqueueDueScheduledTasks, processNextScheduledTask } from "../src/server/build/schedules"
 
 // Stay healthy under process supervisors without admitting or processing jobs.
 if (!buildAvailable()) {
@@ -322,6 +325,24 @@ console.info(
   "[build-worker] starting channels, knowledge, simulations, and campaigns"
 )
 await Promise.all([
+  loop("environment cleanup failed", async () => {
+    const rows = await workerDatabase.execute<{ project_id: string }>(sql`SELECT DISTINCT s.project_id FROM build_agent_sandboxes s JOIN build_eve_executions e ON e.turn_id=s.turn_id WHERE s.status<>'closed' AND (s.expires_at<=now() OR e.status IN ('completed','failed','cancelled')) LIMIT 50`)
+    for (const row of rows.rows) await cleanupDatoolSandboxes(projectContext(row.project_id))
+    return false
+  }, 5000),
+  loop("scheduled task admission failed", async () => (await enqueueDueScheduledTasks(workerDatabase)) > 0, 5000),
+  ...Array.from({ length: 2 }, (_, index) =>
+    loop("scheduled task consumer " + (index + 1), () => processNextScheduledTask(workerDatabase, projectContext), 1000)
+  ),
+  loop("Eve execution recovery failed", async () => {
+    const rows = await workerDatabase.execute<{ project_id: string }>(sql`SELECT DISTINCT project_id FROM build_eve_executions WHERE status IN ('pending','running') AND updated_at<now()-interval '15 seconds' LIMIT 50`)
+    for (const row of rows.rows) {
+      if (stopped) break
+      try { await reconcileEveExecutions(projectContext(row.project_id)) }
+      catch (error) { reportWorkerError("Eve project recovery failed", error) }
+    }
+    return false
+  }, 5000),
   loop(
     "Telegram polling admission failed",
     async () => {

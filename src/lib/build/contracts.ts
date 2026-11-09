@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { widgetTranslationsSchema } from "./widget-i18n"
 import { shopifyActionSettingsSchema } from "./shopify"
+import { agentSandboxSchema } from "./sandbox"
 
 import type { JsonValue } from "@/src/lib/tracer/contracts"
 import { safeHttpUrlSchema } from "@/src/lib/build/urls"
@@ -29,6 +30,8 @@ export const agentChannelOverrideSchema = z.object({
   provider: agentProviderSchema.optional(),
   model: z.string().min(1).max(200).optional(),
   temperature: z.number().min(0).max(2).optional(),
+  /** A channel can opt out while the agent-wide Jev switch is enabled. */
+  jevCheckEnabled: z.boolean().optional(),
 })
 export type AgentChannelOverride = z.infer<typeof agentChannelOverrideSchema>
 
@@ -63,6 +66,7 @@ export const agentAppearanceSchema = z.object({
 export type AgentAppearance = z.infer<typeof agentAppearanceSchema>
 
 export const agentGuardrailsSchema = z.object({
+  jevCheckEnabled: z.boolean().default(true),
   maxInputCharacters: z.number().int().min(1).max(100_000).default(20_000),
   maxOutputTokens: z.number().int().min(1).max(64_000).default(4_000),
   maxTurns: z.number().int().min(1).max(200).default(50),
@@ -129,6 +133,7 @@ export const agentConfigurationSchema = z.object({
     primaryColor: "#111111",
   }),
   guardrails: agentGuardrailsSchema.default({
+    jevCheckEnabled: true,
     maxInputCharacters: 20_000,
     maxOutputTokens: 4_000,
     maxTurns: 50,
@@ -141,7 +146,16 @@ export const agentConfigurationSchema = z.object({
     dailyTurnLimit: null,
     dailyBudgetUsd: null,
   }),
-  testing: z.object({ requirePassingJourneys: z.boolean().default(false) }).default({ requirePassingJourneys: false }),
+  testing: z
+    .object({ requirePassingJourneys: z.boolean().default(false) })
+    .default({ requirePassingJourneys: false }),
+  sandbox: agentSandboxSchema.prefault({}),
+  web: z
+    .object({
+      fetchEnabled: z.boolean().default(false),
+      searchEnabled: z.boolean().default(false),
+    })
+    .prefault({}),
   metadata: z.record(z.string().max(120), z.json()).default({}),
 })
 export type AgentConfiguration = z.infer<typeof agentConfigurationSchema>
@@ -222,6 +236,7 @@ export const actionDefinitionSchema = z.discriminatedUnion("type", [
   actionBaseSchema.extend({
     type: z.literal("integration"),
     connectionId: z.string().uuid(),
+    mcpToolName: z.string().min(1).max(256).optional(),
     toolSlug: z
       .string()
       .regex(/^[A-Z][A-Z0-9_]+$/)

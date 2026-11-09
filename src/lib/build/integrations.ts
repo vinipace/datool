@@ -3,6 +3,10 @@ export type AppConnection = {
   toolkit: string
   label: string
   status: "pending" | "active" | "disconnected" | "failed"
+  mcpUrl?: string
+  hasToken?: boolean
+  authType?: "none" | "token" | "oauth"
+  agentToolCount?: number
 }
 export type IntegrationCatalog = {
   configured: boolean
@@ -17,6 +21,7 @@ export type IntegrationCatalog = {
 export type IntegrationTool = {
   slug: string
   name: string
+  originalName?: string
   description: string
   inputSchema: Record<string, unknown>
 }

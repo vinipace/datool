@@ -8,7 +8,7 @@ import {
   type ReactViewSource,
 } from "@/src/lib/tracer/react-views"
 import { workspaceIdentity } from "@/src/server/auth/context"
-import { requireScopes } from "@/src/server/auth/request"
+import { requireScopes } from "@/src/server/auth/scopes"
 import { getTracerProjectId, type TracerDatabase } from "./db"
 import { tracerEffect } from "./effect"
 import { notFound, TracerError, validation } from "./errors"

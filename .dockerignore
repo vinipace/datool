@@ -28,3 +28,7 @@ public/widget-runtime.js
 public/widget-runtime.css
 public/mcp-apps
 public/licenses
+
+.eve
+.output
+packages/eve-bridge/dist

@@ -604,6 +604,8 @@ export type SimulationExecutorInput = {
   abort: () => void
   isCancelled: () => Promise<boolean>
   leaseSeconds: number
+  /** Durable worker identity; prevents an old Eve execution using a new lease. */
+  leaseOwner: string
 }
 
 export type SimulationExecutorResult = {
@@ -1170,6 +1172,7 @@ export async function executeSimulationCase(
       abort: () => abortController.abort(),
       isCancelled: () => isSimulationRunCancelled(context, runId),
       leaseSeconds,
+      leaseOwner: owner,
     })
     caseCancelled =
       result.cancelled === true ||

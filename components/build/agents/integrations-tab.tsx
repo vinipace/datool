@@ -1,15 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { ArrowRight, Plus, Zap } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { ArrowRight, Plus, RefreshCw, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { IntegrationLogo } from "@/components/ui/integration-logo"
 import { Notice } from "@/components/ui/notice"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -21,6 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { InspectorSection } from "@/components/ui/inspector-section"
+import { CustomMcpDialog } from "./custom-mcp-dialog"
 import { ShopifyChatSetup } from "./shopify-chat-setup"
 import { IntegrationAccount } from "./integration-account"
 import { BuildStatus } from "@/components/build/shared/build-layout"
@@ -51,21 +47,33 @@ function appDescription(app: { slug: string; name: string }) {
 export function IntegrationsTab({
   active = true,
   onOpenActions,
+  agentId,
+  beforeToolChange,
+  onCatalogChanged,
 }: {
   active?: boolean
   onOpenActions?: () => void
+  agentId?: string
+  beforeToolChange?: () => Promise<void>
+  onCatalogChanged?: () => void
 }) {
   const trigger = React.useRef<HTMLButtonElement | null>(null)
   const connections = useRemote(
     (signal) =>
       buildApi.call<IntegrationCatalog>(
         "build_list_app_connections",
-        {},
+        agentId ? { agentId } : {},
         signal
       ),
-    [],
+    [agentId],
     { enabled: active }
   )
+  const [mcpDialog, setMcpDialog] = React.useState<string | null>(null)
+  const oauthResult = useSearchParams().get("mcpOAuth")
+  const customConnections =
+    connections.data?.connections.filter(
+      (item) => item.toolkit === "custom_mcp"
+    ) ?? []
   const [appSlug, setAppSlug] = React.useState<string | null>(null)
   const [disconnectId, setDisconnectId] = React.useState<string | null>(null)
   const disconnectTrigger = React.useRef<HTMLButtonElement | null>(null)
@@ -193,26 +201,71 @@ export function IntegrationsTab({
       aria-label="App integrations"
       className="@container w-full min-w-0 space-y-6 px-4 py-6 sm:px-6"
     >
-      <div className="max-w-2xl space-y-2">
-        <h2 className="text-lg font-semibold">Integrations</h2>
-        <p className="text-sm leading-relaxed text-foreground-muted">
-          Connect the apps your agent can use. Manage accounts here, then choose
-          the tools available to this agent in Actions.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl space-y-2">
+          <h2 className="text-lg font-semibold">Integrations</h2>
+          <p className="text-sm leading-relaxed text-foreground-muted">
+            Connect apps and custom MCP servers. Custom MCP tools are added
+            to this agent automatically. Manage individual tools in Actions.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="icon-sm"
+            variant="ghost-muted"
+            aria-label="Refresh integrations"
+            loading={connections.isRefreshing}
+            disabled={connections.isLoading || pending}
+            onClick={connections.refresh}
+          >
+            <RefreshCw aria-hidden />
+          </Button>
+          <Button
+            size="sm"
+            disabled={connections.isLoading || Boolean(connections.error)}
+            onClick={() => setMcpDialog("new")}
+          >
+            <Plus aria-hidden /> Add custom MCP
+          </Button>
+        </div>
       </div>
+      {(oauthResult === "success" ||
+        oauthResult === "error" ||
+        oauthResult === "tools_error") && (
+        <Notice
+          variant={oauthResult === "success" ? "success" : "error"}
+          role={oauthResult === "success" ? "status" : "alert"}
+        >
+          {oauthResult === "success"
+            ? "MCP account connected. Its tools are available to this agent."
+            : oauthResult === "tools_error"
+              ? "MCP account connected, but its tools could not be enabled. Select Enable tools to try again."
+              : "MCP sign-in was not completed. Open the connection and try again."}
+        </Notice>
+      )}
+      {error && !appSlug && (
+        <Notice variant="error" role="alert">
+          {error}
+        </Notice>
+      )}
       {connections.isLoading ? (
         <div
           role="status"
           aria-label="Loading app connections"
-          className="grid gap-4 @min-[40rem]:grid-cols-2 @min-[64rem]:grid-cols-3"
+          className="space-y-2"
         >
           {[0, 1, 2].map((item) => (
-            <Card key={item} className="space-y-5 p-6">
-              <Skeleton className="size-14 rounded-xl bg-border" />
-              <Skeleton className="h-5 w-32 bg-border" />
-              <Skeleton className="h-10 w-full bg-border" />
-              <Skeleton className="h-9 w-full bg-border" />
-            </Card>
+            <div
+              key={item}
+              className="flex items-center gap-3 rounded-md bg-surface-row p-4"
+            >
+              <Skeleton className="size-9 shrink-0 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+              <Skeleton className="h-8 w-20" />
+            </div>
           ))}
         </div>
       ) : connections.error ? (
@@ -222,85 +275,195 @@ export function IntegrationsTab({
             Retry connections
           </Button>
         </Notice>
-      ) : !connections.data?.configured ? (
-        <Notice>
-          App integrations need administrator setup before you can connect an
-          account.
-        </Notice>
-      ) : connections.data.apps.length === 0 ? (
-        <Notice>No apps are available to connect yet.</Notice>
       ) : (
-        <div className="grid gap-4 @min-[40rem]:grid-cols-2 @min-[64rem]:grid-cols-3">
-          {connections.data.apps.map((item) => {
-            const appAccounts = connections.data!.connections.filter(
-              (account) => account.toolkit === item.slug
-            )
-            const connected = appAccounts.filter(
-              (account) => account.status === "active"
-            )
-            const waiting = appAccounts.some(
-              (account) => account.status === "pending"
-            )
-            const failed = appAccounts.some(
-              (account) => account.status === "failed"
-            )
-            const manage = connected.length > 0 || waiting || failed
-            return (
-              <Card
-                key={item.slug}
-                role="group"
-                aria-label={item.name}
-                className="flex min-w-0 flex-col"
-              >
-                <CardHeader className="gap-5 px-6 pt-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <IntegrationLogo slug={item.slug} />
-                    {connected.length > 0 ? (
+        <>
+          {customConnections.length > 0 && (
+            <section aria-label="Custom MCP servers" className="space-y-3">
+              <h3 className="text-sm font-medium">Custom MCP servers</h3>
+              <div role="list" className="space-y-0.5">
+                {customConnections.map((item) => (
+                  <div role="listitem" key={item.id}>
+                    <div
+                      role="group"
+                      aria-label={item.label}
+                      className="flex min-w-0 flex-wrap items-center gap-3 rounded-md bg-surface-row px-4 py-3"
+                    >
+                      <IntegrationLogo slug="custom-mcp" size="sm" />
+                      <div className="min-w-0 flex-1 basis-32 space-y-1">
+                        <p className="text-sm font-medium break-words">
+                          {item.label}
+                        </p>
+                        <p
+                          className="truncate text-xs text-foreground-muted"
+                          title={item.mcpUrl}
+                        >
+                          {item.mcpUrl}
+                        </p>
+                        {agentId && item.status === "active" && (
+                          <p className="text-xs text-foreground-muted">
+                            {item.agentToolCount
+                              ? `${item.agentToolCount} tools enabled for this agent`
+                              : "Tools not enabled for this agent"}
+                          </p>
+                        )}
+                      </div>
                       <BuildStatus
-                        state="connected"
+                        state={item.status === "failed" ? "error" : item.status}
                         label={
-                          connected.length === 1
+                          item.status === "active"
                             ? "Connected"
-                            : `${connected.length} connected`
+                            : item.status === "disconnected"
+                              ? "Disconnected"
+                              : "Needs attention"
                         }
                       />
-                    ) : waiting ? (
-                      <BuildStatus state="pending" label="Pending" />
-                    ) : failed ? (
-                      <BuildStatus state="error" label="Needs attention" />
-                    ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setMcpDialog(item.id)}
+                      >
+                        Manage
+                      </Button>
+                      {agentId &&
+                        item.status === "active" &&
+                        !item.agentToolCount && (
+                          <Button
+                            size="sm"
+                            loading={pending}
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await beforeToolChange?.()
+                                await buildApi.call("build_enable_mcp_tools", {
+                                  agentId,
+                                  connectionId: item.id,
+                                })
+                                connections.refresh()
+                                onCatalogChanged?.()
+                              })
+                            }
+                          >
+                            Enable tools
+                          </Button>
+                        )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <CardTitle>{item.name}</CardTitle>
-                    <CardDescription className="leading-relaxed">
-                      {appDescription(item)}
-                    </CardDescription>
-                  </div>
-                </CardHeader>
-                <CardFooter className="mt-auto px-6 pt-6 pb-6">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    disabled={busy}
-                    onClick={(event) => {
-                      trigger.current = event.currentTarget
-                      setAppSlug(item.slug)
-                      setError(null)
-                      if (
-                        !manage &&
-                        !item.connectionMethod &&
-                        item.available !== false
-                      )
-                        void connect(item.slug)
-                    }}
-                  >
-                    {manage ? "Manage" : "Connect"}
-                  </Button>
-                </CardFooter>
-              </Card>
-            )
-          })}
-        </div>
+                ))}
+              </div>
+            </section>
+          )}
+          <section aria-label="Available apps" className="space-y-3">
+            {customConnections.length > 0 && (
+              <h3 className="text-sm font-medium">Apps</h3>
+            )}
+            {!connections.data?.configured ? (
+              <Notice>
+                App integrations need administrator setup before you can connect
+                an account. You can still add a custom MCP server.
+              </Notice>
+            ) : connections.data.apps.length === 0 ? (
+              <Notice>
+                No apps are available yet. Add a custom MCP server by URL to
+                connect your own tools.
+              </Notice>
+            ) : (
+              <div role="list" className="space-y-0.5">
+                {connections.data.apps.map((item) => {
+                  const appAccounts = connections.data!.connections.filter(
+                    (account) => account.toolkit === item.slug
+                  )
+                  const connected = appAccounts.filter(
+                    (account) => account.status === "active"
+                  )
+                  const waiting = appAccounts.some(
+                    (account) => account.status === "pending"
+                  )
+                  const failed = appAccounts.some(
+                    (account) => account.status === "failed"
+                  )
+                  const manage = appAccounts.length > 0
+                  return (
+                    <div role="listitem" key={item.slug}>
+                      <div
+                        role="group"
+                        aria-label={item.name}
+                        className="flex min-w-0 flex-wrap items-center gap-3 rounded-md bg-surface-row px-4 py-3"
+                      >
+                        <IntegrationLogo slug={item.slug} size="sm" />
+                        <div className="min-w-0 flex-1 basis-48 space-y-1">
+                          <p className="text-sm font-medium">{item.name}</p>
+                          <p className="text-xs leading-relaxed text-foreground-muted">
+                            {appDescription(item)}
+                          </p>
+                        </div>
+                        {connected.length > 0 ? (
+                          <BuildStatus
+                            state="connected"
+                            label={
+                              connected.length === 1
+                                ? "Connected"
+                                : `${connected.length} connected`
+                            }
+                          />
+                        ) : waiting ? (
+                          <BuildStatus state="pending" label="Pending" />
+                        ) : failed ? (
+                          <BuildStatus state="error" label="Needs attention" />
+                        ) : null}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          onClick={(event) => {
+                            trigger.current = event.currentTarget
+                            setAppSlug(item.slug)
+                            setError(null)
+                            if (
+                              !appAccounts.some(
+                                (account) => account.id === authorization?.id
+                              )
+                            )
+                              setAuthorization(null)
+                            if (
+                              !manage &&
+                              !item.connectionMethod &&
+                              item.available !== false
+                            )
+                              void connect(item.slug)
+                          }}
+                        >
+                          {manage ? "Manage" : "Connect"}
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+      {mcpDialog && (
+        <CustomMcpDialog
+          key={mcpDialog}
+          open={active}
+          connection={customConnections.find((item) => item.id === mcpDialog)}
+          agentId={agentId}
+          beforeSave={beforeToolChange}
+          onOpenChange={(open) => {
+            if (!open) setMcpDialog(null)
+          }}
+          onSaved={(result) => {
+            connections.refresh()
+            if (result?.toolsReady === false)
+              setError(
+                "MCP connected, but its tools could not be enabled. Select Enable tools to try again."
+              )
+            if (result?.agentRevision) onCatalogChanged?.()
+          }}
+          onOpenActions={onOpenActions}
+        />
       )}
       <Dialog
         open={active && Boolean(app)}

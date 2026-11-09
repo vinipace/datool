@@ -11,6 +11,7 @@ export type InspectorMessage = {
   id?: string
   createdAt?: string
   status?: string
+  isViewer?: boolean
   metadata?: Record<string, unknown>
   author?: {
     key?: string

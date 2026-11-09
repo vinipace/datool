@@ -77,7 +77,7 @@ test("TypeSafe uses its own key and direct endpoint, preserving the resolved mod
       const body = JSON.parse(String(init?.body))
       expect(body.model).toBe("jev-latest")
       expect(body.questions.verdict.criteria.choice_1).toBe("Yes / refunded")
-      expect(body.state[0].content).toContain(trace.output)
+      expect(body.state.messages[0].content).toContain(trace.output)
       return directResponse()
     },
   })
@@ -178,24 +178,24 @@ test("native evaluation uses the SDK Gateway protocol and preserves choice score
     fetch: async (url, init) => {
       calls++
       expect(String(url)).toBe(
-        "https://ai-gateway.vercel.sh/v4/ai/evaluation-model"
+        "https://ai-gateway.vercel.sh/v4/ai/decision-model"
       )
       const headers = new Headers(init?.headers)
       expect(headers.get("authorization")).toBe("Bearer project-specific-key")
       expect(headers.get("ai-model-id")).toBe("typesafe-ai/jev")
-      expect(headers.get("ai-evaluation-model-specification-version")).toBe("4")
+      expect(headers.get("ai-decision-model-specification-version")).toBe("4")
       expect(init?.redirect).toBe("error")
       const body = JSON.parse(String(init?.body))
       expect(body.questions.verdict).toMatchObject({
         type: "choice",
         criteria: { choice_0: "Não", choice_1: "Yes / refunded" },
       })
-      expect(body.state).toEqual([
+      expect(body.stateParts).toEqual([{ type: "json", value: { messages: [
         {
           role: "user",
           content: `Was a refund issued? Evidence: "${trace.output}"`,
         },
-      ])
+      ] } }])
       expect(body.messages).toBeUndefined()
       return response("choice_1", { choice_0: 0.04, choice_1: 0.96 })
     },

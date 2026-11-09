@@ -91,6 +91,8 @@ import { WidgetsTab } from "./widgets-tab"
 import { ActionWidgetPicker } from "./action-widget-picker"
 import { AgentPlayground } from "./agent-playground"
 import { AgentGuardrails } from "./agent-guardrails"
+import { AgentSandbox, AgentSandboxSettings } from "./agent-sandbox"
+import { AgentScheduledTasks } from "./agent-scheduled-tasks"
 import { SkillsTab } from "./skills-tab"
 import { IntegrationActionFields } from "./integration-action-fields"
 import { IntegrationsTab } from "./integrations-tab"
@@ -135,7 +137,7 @@ import {
   knowledgeSourceStatusMessage,
 } from "@/src/lib/build/knowledge"
 
-type AgentEditorProps = { agent?: ManagedAgent; initialTab?: string }
+type AgentEditorProps = { agent?: ManagedAgent; initialTab?: string; onReload?: () => void }
 
 const supportedChannelOptions: BuildChannel[] = ["web", "telegram"]
 
@@ -205,6 +207,7 @@ export function BuildAgentDetailPage({
       key={`${agentId}:${state.data.currentRevision}`}
       agent={state.data}
       initialTab={initialTab}
+      onReload={state.refresh}
     />
   )
 }
@@ -220,6 +223,7 @@ export function BuildAgentEditor(props: AgentEditorProps) {
 function BuildAgentEditorContent({
   agent,
   initialTab = agent ? "overview" : "settings",
+  onReload,
 }: AgentEditorProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -502,11 +506,14 @@ function BuildAgentEditorContent({
           ref={mainRef}
           role="region"
           aria-label="Agent editor"
-          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" || active === "contacts" ? "overflow-hidden" : "overflow-y-auto"}`}
+          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" || active === "contacts" || active === "schedules" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
           {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} requireJourneys={draft.configuration.testing.requirePassingJourneys} onRequireJourneys={required => updateDraft("configuration", { ...draft.configuration, testing: { requirePassingJourneys: required } })} onPublish={() => store.apply()} pending={pending} unpublished={saved.currentRevision !== saved.appliedRevision} /> : null}
           {active === "overview" && saved ? (
             <AgentOverview key={saved.id} agentId={saved.id} />
+          ) : null}
+          {active === "schedules" && saved ? (
+            <AgentScheduledTasks agentId={saved.id} configuration={saved.appliedConfiguration ?? saved.configuration} />
           ) : null}
           {visitedTabs.has("settings") || (!saved && active === "overview") ? (
             <div
@@ -535,6 +542,11 @@ function BuildAgentEditorContent({
                   updateDraft("configuration", configuration)
                 }
               />
+            </div>
+          ) : null}
+          {visitedTabs.has("sandbox") && saved ? (
+            <div className="h-full" hidden={active !== "sandbox"} aria-hidden={active !== "sandbox"}>
+              <AgentSandbox active={active === "sandbox"} agentId={saved.id} configuration={draft.configuration} onChange={(configuration) => updateDraft("configuration", configuration)} />
             </div>
           ) : null}
           {visitedTabs.has("guardrails") ? (
@@ -575,8 +587,11 @@ function BuildAgentEditorContent({
               aria-hidden={active !== "integrations"}
             >
               <IntegrationsTab
+                agentId={saved.id}
                 active={active === "integrations"}
                 onOpenActions={() => selectTab("actions")}
+                beforeToolChange={store.flush}
+                onCatalogChanged={onReload}
               />
             </div>
           ) : null}
@@ -721,6 +736,10 @@ function SettingsTab({
         </FormRow>
         <AgentAppearanceFields
           config={draft.configuration}
+          onChange={(configuration) => onChange("configuration", configuration)}
+        />
+        <AgentSandboxSettings
+          configuration={draft.configuration}
           onChange={(configuration) => onChange("configuration", configuration)}
         />
       </div>

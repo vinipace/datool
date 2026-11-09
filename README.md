@@ -53,7 +53,7 @@ the application host when a sandbox is unavailable.
 
 For UI development, follow [Shared product patterns](docs/shared-product-patterns.md). New collection pages should compose `CollectionPage`, `CollectionTable`, and the existing filter, saved-view, and inspector components. The guide identifies each behavior's owner and its verification contract.
 
-Install Node.js 22.18+ (CI also tests Node 24), Bun 1.3.14, and Docker with Compose v2. Create a local environment file from the example:
+Install Node.js 24+ (published SDK and CLI packages also support Node 22.18+), Bun 1.3.14, and Docker with Compose v2. Create a local environment file from the example:
 
 ```bash
 bun install --frozen-lockfile

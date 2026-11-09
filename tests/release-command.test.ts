@@ -13,7 +13,7 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true })
 })
 
-function release(failCommand = "", cms = "true") {
+function release(failCommand = "", cms = "true", build = "false") {
   const directory = mkdtempSync(join(tmpdir(), "datool-release-test-"))
   directories.push(directory)
   const log = join(directory, "commands.log")
@@ -35,6 +35,8 @@ function release(failCommand = "", cms = "true") {
       ...process.env,
       PATH: `${directory}:${process.env.PATH}`,
       DATOOL_CMS_ENABLED: cms,
+      DATOOL_BUILD_ENABLED: build,
+      DATOOL_BUILD_ORGANIZATION_IDS: "",
       PAYLOAD_SECRET: "test-only-payload-secret-at-least-thirty-two-characters",
       RELEASE_TEST_LOG: log,
       RELEASE_TEST_FAIL: failCommand,
@@ -46,7 +48,7 @@ function release(failCommand = "", cms = "true") {
 test("the Procfile release process runs both application and CMS migrations", () => {
   const { result, commands } = release()
   expect(result.status).toBe(0)
-  expect(commands).toEqual(["run db:migrate", "run cms:migrate"])
+  expect(commands).toEqual(["run db:migrate", "run scripts/check-encryption-key.ts", "run db:validate-invariants", "run cms:migrate"])
 })
 
 test("failed application migrations stop the release before CMS migrations", () => {
@@ -58,13 +60,26 @@ test("failed application migrations stop the release before CMS migrations", () 
 test("failed CMS migrations fail the release", () => {
   const { result, commands } = release("run cms:migrate")
   expect(result.status).toBe(7)
-  expect(commands).toEqual(["run db:migrate", "run cms:migrate"])
+  expect(commands).toEqual(["run db:migrate", "run scripts/check-encryption-key.ts", "run db:validate-invariants", "run cms:migrate"])
 })
 
 for (const cms of ["", "false"]) {
   test(`CMS migrations are skipped when disabled (${cms || "unset"})`, () => {
     const { result, commands } = release("", cms)
     expect(result.status).toBe(0)
-    expect(commands).toEqual(["run db:migrate"])
+    expect(commands).toEqual(["run db:migrate", "run scripts/check-encryption-key.ts", "run db:validate-invariants"])
   })
 }
+
+
+test("Build releases initialize Eve storage after application and credential checks", () => {
+  const { result, commands } = release("", "false", "true")
+  expect(result.status).toBe(0)
+  expect(commands).toEqual(["run db:migrate", "run scripts/check-encryption-key.ts", "run db:validate-invariants", "run eve:bootstrap"])
+})
+
+test("an Eve bootstrap failure stops the release before CMS migrations", () => {
+  const { result, commands } = release("run eve:bootstrap", "true", "true")
+  expect(result.status).toBe(7)
+  expect(commands).toEqual(["run db:migrate", "run scripts/check-encryption-key.ts", "run db:validate-invariants", "run eve:bootstrap"])
+})

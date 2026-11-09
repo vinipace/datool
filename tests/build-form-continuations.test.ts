@@ -1,56 +1,27 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
+import { createHash } from "node:crypto"
+import { createEveFixture, eveResponse, toolOutputs } from "./helpers/eve-fixture"
 import { sql } from "drizzle-orm"
 
 import { createAgent, getAgent, updateAgent } from "@/src/server/build/agents"
 import { saveAction, saveWidget } from "@/src/server/build/definitions"
 import type { ActionRecord } from "@/src/lib/build/contracts"
 import {
-  closeTracerDatabase,
-  createTracerDatabase,
-  type TracerDatabase,
-} from "@/src/server/tracer/db"
-import {
   ConversationService,
   type ConversationContext,
 } from "@/src/server/build/conversations"
 import { runAgentTurn } from "@/src/server/build/runtime"
-import {
-  createIsolatedPostgres,
-  migrateIsolatedPostgres,
-  seedTestWorkspace,
-  type IsolatedPostgres,
-} from "@/tests/helpers/postgres"
+
 
 const databaseEnabled = Boolean(process.env.DATOOL_TEST_DATABASE_URL)
-const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> =
-  []
-
-afterEach(async () => {
-  for (const { database, target } of resources.splice(0)) {
-    await closeTracerDatabase(database)
-    await target.close()
-  }
-})
-
+const resources: Array<Awaited<ReturnType<typeof createEveFixture>>> = []
+afterEach(async () => { for (const resource of resources.splice(0)) await resource.close() })
 async function makeContext() {
-  const target = await createIsolatedPostgres()
-  await migrateIsolatedPostgres(target)
-  await seedTestWorkspace(target)
-  const database = createTracerDatabase(target.databaseUrl, {
-    projectId: target.projectId,
-    schema: target.schema,
-  })
-  resources.push({ database, target })
-  const context: ConversationContext = {
-    database,
-    projectId: target.projectId,
-  }
-  await createAgent(context, {
-    id: "agent-a",
-    name: "Forms agent",
-    slug: "forms-agent",
-  })
+  const resource = await createEveFixture()
+  resources.push(resource)
+  const context = resource.context
+  await createAgent(context, { id: "agent-a", name: "Forms agent", slug: "forms-agent", configuration: { provider: "openai", model: "gpt-4.1-mini", guardrails: { jevCheckEnabled: false }, channelAllowlist: ["web"] } })
   return { context, service: new ConversationService(context) }
 }
 
@@ -86,24 +57,15 @@ function httpAction(
   }
 }
 
-const modelTool = (actionId: string, toolCallId: string) =>
-  (async (options: {
-    tools: Record<
-      string,
-      {
-        execute: (
-          input: Record<string, unknown>,
-          options: { toolCallId: string }
-        ) => Promise<unknown>
-      }
-    >
-  }) => {
-    await options.tools[actionId].execute({}, { toolCallId })
-    return {
-      text: "The form is ready.",
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-    }
-  }) as never
+const modelTool = (actionId: string) => {
+  const resource = resources.at(-1)!
+  resource.provider(body => {
+    if (!toolOutputs(body).length) return eveResponse(body, "", { name: "eve__search", input: { query: `action_${createHash("sha256").update(actionId).digest("hex").slice(0,32)}` } })
+    if (toolOutputs(body).length === 1) return eveResponse(body, "", { name: "eve__tool", input: { name: `action_${createHash("sha256").update(actionId).digest("hex").slice(0,32)}`, input: {} } })
+    return eveResponse(body, "The form is ready.")
+  })
+  return {}
+}
 
 async function applyCatalog(context: ConversationContext) {
   const current = await getAgent(context, "agent-a")
@@ -132,15 +94,16 @@ describe("Build customer form continuations", () => {
     } })
     await applyCatalog(context)
     const opened = await runAgentTurn(context, { agentId: "agent-a", channel: "web", externalConversationId: "failed-followup", requestKey: "open-failed-followup", message: "Quero uma demonstração", metadata: {} }, {
-      conversationService: service, dependencies: { generateText: modelTool(form.id, "open-failed-followup") },
+      conversationService: service, dependencies: { ...modelTool(form.id) },
     })
     expect(opened.continuations[0]?.translations?.["pt-BR"]?.["Demo request"]).toBe("Solicitar demonstração")
     const continuationId = opened.continuations[0]!.continuationId!
+    resources.at(-1)!.provider(() => Response.json({ error: { message: "Provider unavailable" } }, { status: 403 }))
     await rejects(runAgentTurn(context, {
       agentId: "agent-a", channel: "web", conversationId: opened.conversation.id, requestKey: "submit-failed-followup", message: "Enviar",
       metadata: { widgetInteraction: { actionId: form.id, continuationId, input: { email: "synthetic@example.test" } } },
-    }, { conversationService: service, dependencies: { generateText: (async () => { throw new Error("Provider unavailable") }) as never } }),
-      error => errorCode(error) === "MODEL_REQUEST_FAILED")
+    }, { conversationService: service }),
+      error => errorCode(error) === "EVE_EXECUTION_FAILED")
     const messages = await service.getMessagesForModel(opened.conversation.id)
     expect(messages.some(message => message.metadata.internalFormReceipt === true && message.metadata.completedContinuationId === continuationId)).toBe(true)
     const leads = await context.database.execute(sql`SELECT id FROM build_leads WHERE project_id=${context.projectId} AND conversation_id=${opened.conversation.id}`)
@@ -193,7 +156,7 @@ describe("Build customer form continuations", () => {
         {
           conversationService: service,
           dependencies: {
-            generateText: modelTool(form.id, "form-open-1"),
+            ...modelTool(form.id),
           },
         }
       )
@@ -232,6 +195,7 @@ describe("Build customer form continuations", () => {
         actionId: string
         input: Record<string, unknown>
       }> = []
+      resources.at(-1)!.provider(body => eveResponse(body, "Your order was accepted."))
       const resumed = await runAgentTurn(
         context,
         {
@@ -251,7 +215,7 @@ describe("Build customer form continuations", () => {
         {
           conversationService: service,
           dependencies: {
-            generateText: (async () => ({ text: "Your order was accepted.", usage: {} })) as never,
+
             executeAction: async ({
               action,
               input,
@@ -334,7 +298,7 @@ describe("Build customer form continuations", () => {
           {
             conversationService: service,
             dependencies: {
-              generateText: modelTool(opener.id, "widget-open-1"),
+              ...modelTool(opener.id),
             },
           }
         )
@@ -485,7 +449,7 @@ describe("Build customer form continuations", () => {
         {
           conversationService: service,
           dependencies: {
-            generateText: modelTool(opener.id, "standalone-form-open-1"),
+            ...modelTool(opener.id),
           },
         }
       )
@@ -513,13 +477,14 @@ describe("Build customer form continuations", () => {
 
       let followupCalls = 0
       const reply = "Thanks! Your demo request is saved and the team can follow up."
-      const followup = (async (options: { system: string; messages: Array<{ content: string }> }) => {
+      resources.at(-1)!.provider(body => {
         followupCalls++
-        expect(options.system).toContain("processing has finished")
-        expect(options.system).toContain('"saved":true')
-        expect(options.messages.some(message => message.content.includes("customer@example.test"))).toBe(true)
-        return { text: reply, usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 } }
-      }) as never
+        const prompt = JSON.stringify(body.input)
+        expect(prompt).toContain("processing has finished")
+        expect(prompt).toContain("saved")
+        expect(prompt).toContain("customer@example.test")
+        return eveResponse(body, reply)
+      })
       const resumed = await runAgentTurn(
         context,
         {
@@ -536,7 +501,7 @@ describe("Build customer form continuations", () => {
             },
           } as never,
         },
-        { conversationService: service, dependencies: { generateText: followup } }
+        { conversationService: service }
       )
 
       expect(resumed.status).toBe("completed")
@@ -559,7 +524,7 @@ describe("Build customer form continuations", () => {
         { conversationService: service }
       )
       expect(resumed.text).toBe(reply)
-      expect(resumed.usage.totalTokens).toBe(8)
+      expect(resumed.usage.totalTokens).toBe(28)
       expect(followupCalls).toBe(1)
       expect(replay.status).toBe("replayed")
       expect(resumed.message?.metadata.completedContinuationId).toBe(

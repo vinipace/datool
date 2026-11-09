@@ -361,6 +361,8 @@ export class ConversationService {
         ) as subject
       ) preview on true
       where c.project_id=${this.projectId}
+        and (exists (select 1 from build_conversation_messages m where m.project_id=c.project_id and m.conversation_id=c.id)
+          or exists (select 1 from build_channel_message m where m.project_id=c.project_id and m.conversation_id=c.id))
         ${input.agentId ? sql`and c.agent_id=${input.agentId}` : sql``}
         ${cursor ? sql`and (c.updated_at,c.id)<(${cursor[0]}::timestamptz,${cursor[1]})` : sql``}
         ${input.status ? sql`and c.status=${input.status}` : sql``}

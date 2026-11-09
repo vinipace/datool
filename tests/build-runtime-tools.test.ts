@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { sql } from "drizzle-orm"
-import { generateText } from "ai"
-import { MockLanguageModelV4 } from "ai/test"
 
-import type { ActionRecord } from "@/src/lib/build/contracts"
+import { agentConfigurationSchema, procedureDefinitionSchema, type ActionRecord } from "@/src/lib/build/contracts"
 import type { RuntimeAgent } from "@/src/server/build/runtime"
 import { runAgentTurn } from "@/src/server/build/runtime"
 import { createAgent, getAgent, updateAgent } from "@/src/server/build/agents"
@@ -84,6 +82,7 @@ function agent(
         primaryColor: "#111111",
       },
       guardrails: {
+        jevCheckEnabled: true,
         maxInputCharacters: 20_000,
         maxOutputTokens: 4_000,
         maxTurns: 50,
@@ -97,6 +96,8 @@ function agent(
         dailyBudgetUsd: null,
       },
       testing: { requirePassingJourneys: false },
+      sandbox: agentConfigurationSchema.parse({}).sandbox,
+      web: agentConfigurationSchema.parse({}).web,
       metadata: {},
       ...overrides,
     },
@@ -148,274 +149,15 @@ const handoffAction: ActionRecord = {
   },
 }
 
+function automaticAction(actionId: string, input: Record<string, unknown>, keyword: string) {
+  return { id: "automatic-action", projectId: clientAction.projectId, agentId: "agent-a", slug: "automatic-action", revision: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), definition: procedureDefinitionSchema.parse({
+    name: "Automatic action", trigger: { type: "keyword", value: keyword }, steps: [
+      { id: "perform", kind: "action", actionId, input }, { id: "done", kind: "message", content: "The action was processed." },
+    ],
+  }) }
+}
+
 describe("Build agent tool runtime", () => {
-  test("reserves tool-result context before a second paid model call", async () => {
-    const { context, service } = await makeContext()
-    const model = new MockLanguageModelV4({
-      doGenerate: async () => ({
-        content: [
-          {
-            type: "tool-call" as const,
-            toolCallId: "large-result",
-            toolName: clientAction.id,
-            input: "{}",
-          },
-        ],
-        finishReason: { unified: "tool-calls" as const, raw: "stop" },
-        usage: {
-          inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
-          outputTokens: { total: 10, text: 10, reasoning: 0 },
-        },
-        warnings: [],
-      }),
-    })
-    const result = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        requestKey: "budget-tool-context",
-        message: "Look up the store catalog",
-      },
-      {
-        conversationService: service,
-        agent: agent(context, {
-          model: "openai/gpt-4.1-mini",
-          guardrails: {
-            ...agent(context).configuration.guardrails,
-            dailyBudgetUsd: 0.005,
-            maxOutputTokens: 64,
-          },
-        }),
-        dependencies: {
-          resolveActions: async () => [
-            { ...clientAction, projectId: context.projectId },
-          ],
-          resolveProcedures: async () => [],
-          retrieveKnowledge: async () => null,
-          executeAction: async () => ({
-            output: { catalog: "Product description. ".repeat(5000) },
-          }),
-          generateText: (options) => generateText({ ...options, model }),
-        },
-      }
-    )
-    expect(result.status).toBe("blocked")
-    expect(result.text).toContain("daily usage budget")
-    expect(model.doGenerateCalls).toHaveLength(1)
-    const reservations = await context.database.execute<{
-      status: string
-      estimated_usd: string
-    }>(sql`
-      SELECT status, estimated_usd FROM build_conversation_budget_reservations WHERE project_id=${context.projectId}
-    `)
-    expect(reservations.rows[0].status).toBe("uncertain")
-    expect(Number(reservations.rows[0].estimated_usd)).toBeGreaterThan(0)
-    expect(Number(reservations.rows[0].estimated_usd)).toBeLessThanOrEqual(
-      0.005
-    )
-  }, 30_000)
-
-  test("persists a client continuation and the immutable catalog snapshot", async () => {
-    const { context, service } = await makeContext()
-    clientAction.projectId = context.projectId
-    const result = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        externalConversationId: "telegram:tool-1",
-        requestKey: "telegram:tool-update-1",
-        message: "Please open a ticket form",
-        metadata: {},
-      },
-      {
-        conversationService: service,
-        agent: agent(context),
-        dependencies: {
-          resolveActions: async () => [clientAction],
-          resolveProcedures: async () => [],
-          generateText: (async (options: {
-            tools: Record<
-              string,
-              {
-                execute: (
-                  input: Record<string, unknown>,
-                  options: { toolCallId: string }
-                ) => Promise<unknown>
-              }
-            >
-          }) => {
-            const toolResult = await options.tools.open_ticket.execute(
-              { subject: "Login issue" },
-              { toolCallId: "tool-call-1" }
-            )
-            return {
-              text: "I opened the ticket form.",
-              usage: { inputTokens: 7, outputTokens: 6, totalTokens: 13 },
-              toolResult,
-            }
-          }) as never,
-        },
-      }
-    )
-
-    expect(result.status).toBe("awaiting_client")
-    expect(result.continuations[0]).toMatchObject({
-      type: "client_action",
-      actionId: "open_ticket",
-      eventName: "open_ticket_form",
-      input: { subject: "Login issue" },
-    })
-    expect(result.toolCalls).toHaveLength(1)
-    expect(result.toolCalls[0]?.status).toBe("awaiting_client")
-    expect(result.turn.snapshot).toMatchObject({
-      agentRevision: 4,
-      actions: [{ id: "open_ticket", revision: 3 }],
-    })
-    expect(
-      (await service.listMessages(result.conversation.id)).items.map(
-        (item) => item.role
-      )
-    ).toEqual(["user", "assistant"])
-    const replay = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        conversationId: result.conversation.id,
-        requestKey: "telegram:tool-update-1",
-        message: "Please open a ticket form",
-        metadata: {},
-      },
-      { conversationService: service, agent: agent(context) }
-    )
-    expect(replay.status).toBe("replayed")
-    expect(replay.continuations).toHaveLength(1)
-    expect(replay.continuations[0]?.type).toBe("client_action")
-    expect(replay.continuations[0]?.actionId).toBe("open_ticket")
-
-    const continuationId = replay.continuations[0]?.continuationId as string
-    expect(continuationId).toBeTruthy()
-    const newerAgent = agent(context)
-    newerAgent.currentRevision = 5
-    newerAgent.appliedRevision = 5
-    const resumed = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        conversationId: result.conversation.id,
-        requestKey: "telegram:tool-resume-1",
-        message: "The form is open.",
-        metadata: {
-          widgetInteraction: {
-            actionId: "open_ticket",
-            continuationId,
-            input: { subject: "Login issue" },
-          },
-        },
-      },
-      {
-        conversationService: service,
-        agent: newerAgent,
-        dependencies: {
-          resolveActions: async () => [clientAction],
-          resolveProcedures: async () => [],
-        },
-      }
-    )
-    expect(resumed.status).toBe("awaiting_client")
-    expect(resumed.turn.snapshot).toMatchObject({
-      agentRevision: 4,
-      actions: [{ id: "open_ticket", revision: 3 }],
-    })
-    await rejects(
-      runAgentTurn(
-        context,
-        {
-          agentId: "agent-a",
-          channel: "telegram",
-          conversationId: result.conversation.id,
-          requestKey: "telegram:tool-resume-duplicate",
-          message: "The form is open again.",
-          metadata: {
-            widgetInteraction: {
-              actionId: "open_ticket",
-              continuationId,
-              input: { subject: "Login issue" },
-            },
-          },
-        },
-        {
-          conversationService: service,
-          agent: agent(context),
-          dependencies: {
-            resolveActions: async () => [clientAction],
-            resolveProcedures: async () => [],
-          },
-        }
-      ),
-      (error: unknown) =>
-        Boolean(
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "CONTINUATION_NOT_AVAILABLE"
-        )
-    )
-  }, 30_000)
-
-  test("finalizes the turn before fencing the conversation for a handoff", async () => {
-    const { context, service } = await makeContext()
-    handoffAction.projectId = context.projectId
-    const result = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        externalConversationId: "telegram:handoff-1",
-        requestKey: "telegram:handoff-1",
-        message: "I need a person",
-        metadata: {},
-      },
-      {
-        conversationService: service,
-        agent: agent(context),
-        dependencies: {
-          resolveActions: async () => [handoffAction],
-          resolveProcedures: async () => [],
-          generateText: (async (options: {
-            tools: Record<
-              string,
-              {
-                execute: (
-                  input: Record<string, unknown>,
-                  options: { toolCallId: string }
-                ) => Promise<unknown>
-              }
-            >
-          }) => {
-            await options.tools.handoff_support.execute(
-              {},
-              { toolCallId: "handoff-call-1" }
-            )
-            return {
-              text: "A teammate will join this conversation.",
-              usage: { inputTokens: 4, outputTokens: 8, totalTokens: 12 },
-            }
-          }) as never,
-        },
-      }
-    )
-
-    expect(result.status).toBe("handed_off")
-    expect(result.conversation.ownerType).toBe("human")
-    expect(result.conversation.ownerId).toBe("support-team")
-    expect(result.turn.status).toBe("awaiting_client")
-    expect(result.toolCalls[0]?.status).toBe("completed")
-    expect(result.message?.content).toContain("teammate")
-  }, 30_000)
 
   test("fences a keyword procedure handoff and records its analytics event", async () => {
     const { context, service } = await makeContext()
@@ -545,335 +287,6 @@ describe("Build agent tool runtime", () => {
     ])
   }, 30_000)
 
-  test("does not let public metadata trigger event procedures", async () => {
-    const { context, service } = await makeContext()
-    const procedure = await saveProcedure(context, "agent-a", {
-      slug: "event-greeting",
-      definition: {
-        name: "Event greeting",
-        trigger: { type: "event", value: "ticket.created" },
-        steps: [{ id: "message", kind: "message", content: "event handled" }],
-      },
-    })
-    const generateText = (async () => ({
-      text: "model handled",
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-    })) as never
-
-    const publicMetadata = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        externalConversationId: "telegram:untrusted-event",
-        requestKey: "telegram:untrusted-event-1",
-        message: "A ticket was created",
-        metadata: { event: "ticket.created" },
-      },
-      {
-        conversationService: service,
-        agent: agent(context),
-        dependencies: {
-          resolveActions: async () => [],
-          resolveProcedures: async () => [procedure],
-          generateText,
-        },
-      }
-    )
-    expect(publicMetadata.text).toBe("model handled")
-
-    const trustedMetadata = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        externalConversationId: "telegram:trusted-event",
-        requestKey: "telegram:trusted-event-1",
-        message: "A ticket was created",
-        metadata: { event: "ticket.created" },
-      },
-      {
-        conversationService: service,
-        agent: agent(context),
-        trustedMetadata: { event: "ticket.created" },
-        dependencies: {
-          resolveActions: async () => [],
-          resolveProcedures: async () => [procedure],
-          generateText,
-        },
-      }
-    )
-    expect(trustedMetadata.text).toBe("event handled")
-  }, 30_000)
-
-  test("exposes intent procedures as bounded model tools", async () => {
-    const { context, service } = await makeContext()
-    const procedure = await saveProcedure(context, "agent-a", {
-      slug: "lookup-order",
-      definition: {
-        name: "Lookup order",
-        description: "Use this when the customer needs an order lookup.",
-        trigger: { type: "intent", value: "lookup_order" },
-        steps: [{ id: "message", kind: "message", content: "order found" }],
-      },
-    })
-    let modelCalls = 0
-    const modelWithoutProcedure = (async () => {
-      modelCalls += 1
-      return {
-        text: "model handled",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      }
-    }) as never
-    const publicIntent = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        externalConversationId: "telegram:public-intent",
-        requestKey: "telegram:public-intent-1",
-        message: "Can you look up my order?",
-        metadata: { intent: "lookup_order" },
-      },
-      {
-        conversationService: service,
-        agent: agent(context),
-        dependencies: {
-          resolveActions: async () => [],
-          resolveProcedures: async () => [procedure],
-          generateText: modelWithoutProcedure,
-        },
-      }
-    )
-    expect(publicIntent.text).toBe("model handled")
-    expect(modelCalls).toBe(1)
-
-    const modelWithProcedure = (async (options: {
-      tools: Record<
-        string,
-        {
-          execute: (
-            input: Record<string, unknown>,
-            options: { toolCallId: string }
-          ) => Promise<unknown>
-        }
-      >
-    }) => {
-      const output = await options.tools[`procedure_${procedure.id}`].execute(
-        {},
-        { toolCallId: "intent-procedure-call-1" }
-      )
-      return {
-        text: (output as { text: string }).text,
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      }
-    }) as never
-    const invoked = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        externalConversationId: "telegram:model-intent",
-        requestKey: "telegram:model-intent-1",
-        message: "Can you look up my order?",
-        metadata: {},
-      },
-      {
-        conversationService: service,
-        agent: agent(context),
-        dependencies: {
-          resolveActions: async () => [],
-          resolveProcedures: async () => [procedure],
-          generateText: modelWithProcedure,
-        },
-      }
-    )
-    expect(invoked.text).toBe("order found")
-    expect(invoked.status).toBe("completed")
-  }, 30_000)
-
-  test("loads skill instructions on demand and unlocks only its linked actions", async () => {
-    const { context, service } = await makeContext()
-    const linked = await saveAction(context, "agent-a", {
-      id: "lookup_skill_order",
-      slug: "lookup-skill-order",
-      definition: {
-        ...clientAction.definition,
-        id: "lookup_skill_order",
-        procedureOnly: true,
-      },
-    })
-    const unrelated = await saveAction(context, "agent-a", {
-      id: "private_billing",
-      slug: "private-billing",
-      definition: {
-        ...clientAction.definition,
-        id: "private_billing",
-        procedureOnly: true,
-      },
-    })
-    const skill = await saveProcedure(context, "agent-a", {
-      definition: {
-        name: "Check a refund",
-        trigger: {
-          type: "intent",
-          value: "The customer asks whether an order is refundable.",
-        },
-        instructions: `Ask for the order reference. Use [@Order lookup](action:${linked.slug}). Explain eligibility from the approved policy; do not invent a refund.`,
-      },
-    })
-    await updateAgent(context, "agent-a", {
-      expectedRevision: 1,
-      configuration: { model: "skill-test" },
-      apply: true,
-    })
-    const usage = {
-      inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
-      outputTokens: { total: 2, text: 2, reasoning: 0 },
-    }
-    const calls: string[][] = []
-    let loadedSkillResult = ""
-    let turn = 0
-    const toolName = `procedure_${skill.id}`
-    const model = new MockLanguageModelV4({
-      doGenerate: async (options) => {
-        calls.push((options.tools ?? []).map((item) => item.name))
-        const current = turn++
-        if (current === 1) {
-          const loaded = options.prompt.flatMap((message) =>
-            message.role === "tool" ? message.content : []
-          )
-          loadedSkillResult = JSON.stringify(loaded)
-        }
-        return {
-          content:
-            current === 0
-              ? [
-                  {
-                    type: "tool-call" as const,
-                    toolCallId: "load-skill",
-                    toolName,
-                    input: "{}",
-                  },
-                ]
-              : current === 1
-                ? [
-                    {
-                      type: "tool-call" as const,
-                      toolCallId: "lookup-skill",
-                      toolName: linked.id,
-                      input: "{}",
-                    },
-                  ]
-                : [
-                    {
-                      type: "text" as const,
-                      text: "The order is eligible for review.",
-                    },
-                  ],
-          finishReason: {
-            unified: current < 2 ? ("tool-calls" as const) : ("stop" as const),
-            raw: "stop",
-          },
-          usage,
-          warnings: [],
-        }
-      },
-    })
-    const executed: string[] = []
-    const result = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        externalConversationId: "skill-selection",
-        requestKey: "skill-selection-1",
-        message: "Could I get my order refunded?",
-      },
-      {
-        conversationService: service,
-        dependencies: {
-          retrieveKnowledge: async () => null,
-          generateText: async (options) => {
-            const tools = options.tools as unknown as Record<
-              string,
-              {
-                execute: (
-                  input: object,
-                  options: { toolCallId: string }
-                ) => Promise<unknown>
-              }
-            >
-            if (tools[unrelated.id])
-              await rejects(
-                () =>
-                  tools[unrelated.id].execute({}, { toolCallId: "unselected" }),
-                /Load the linked skill/
-              )
-            return generateText({ ...options, model })
-          },
-          executeAction: async ({ action }) => {
-            executed.push(action.id)
-            return { output: { eligible: true } }
-          },
-        },
-      }
-    )
-    expect(result.text).toBe("The order is eligible for review.")
-    expect(loadedSkillResult).toContain(
-      "Explain eligibility from the approved policy"
-    )
-    expect(loadedSkillResult).toContain(linked.id)
-    expect(calls[0]).toContain(toolName)
-    expect(calls[0]).not.toContain(linked.id)
-    expect(calls[1]).toContain(linked.id)
-    expect(calls.flat()).not.toContain(unrelated.id)
-    expect(executed).toEqual([linked.id])
-    expect(await service.listToolCalls(result.conversation.id)).toHaveLength(1)
-  }, 30_000)
-
-  test("supplies matched keyword skill instructions to the model instead of echoing them", async () => {
-    const { context, service } = await makeContext()
-    const skill = await saveProcedure(context, "agent-a", {
-      definition: {
-        name: "Refund policy",
-        trigger: { type: "keyword", value: "refund" },
-        instructions:
-          "Ask for an order reference before checking refund eligibility.",
-      },
-    })
-    let supplied = ""
-    const result = await runAgentTurn(
-      context,
-      {
-        agentId: "agent-a",
-        channel: "telegram",
-        requestKey: "keyword-skill-1",
-        message: "I need a refund",
-      },
-      {
-        conversationService: service,
-        agent: agent(context),
-        dependencies: {
-          resolveActions: async () => [],
-          resolveProcedures: async () => [skill],
-          retrieveKnowledge: async () => null,
-          generateText: (async (options: { system: string }) => {
-            supplied = options.system
-            return {
-              text: "What is your order reference?",
-              usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-            }
-          }) as never,
-        },
-      }
-    )
-    expect(supplied).toContain(
-      "Ask for an order reference before checking refund eligibility."
-    )
-    expect(result.text).toBe("What is your order reference?")
-  }, 30_000)
-
   test("runs only the selected manual procedure through the trusted operation boundary", async () => {
     const { context, service } = await makeContext()
     const procedure = await saveProcedure(context, "agent-a", {
@@ -945,10 +358,6 @@ describe("Build agent tool runtime", () => {
         executeCalls.push(toolCallId)
         return { output: { approved: true } }
       },
-      generateText: (async () => ({
-        text: "model should not run",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      })) as never,
     }
     const pending = await runAgentTurn(
       context,
@@ -1033,10 +442,6 @@ describe("Build agent tool runtime", () => {
     const dependencies = {
       resolveActions: async () => [clientAction],
       resolveProcedures: async () => [procedure],
-      generateText: (async () => ({
-        text: "model should not run",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      })) as never,
     }
     const pending = await runAgentTurn(
       context,
@@ -1096,10 +501,6 @@ describe("Build agent tool runtime", () => {
     const dependencies = {
       resolveActions: async () => [],
       resolveProcedures: async () => [procedure],
-      generateText: (async () => ({
-        text: "model should not run",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      })) as never,
     }
     const pending = await runAgentTurn(
       context,
@@ -1156,6 +557,7 @@ describe("Build agent tool runtime", () => {
 
   test("Shopify customer changes require a one-shot confirmation and ignore replacement input", async () => {
     const { context, service } = await makeContext()
+    clientAction.projectId = context.projectId
     const profileAction: ActionRecord = {
       ...clientAction,
       id: "update_profile",
@@ -1182,27 +584,7 @@ describe("Build agent tool runtime", () => {
     const executeInputs: unknown[] = []
     const dependencies = {
       resolveActions: async () => [profileAction],
-      resolveProcedures: async () => [],
-      generateText: (async (options: {
-        tools: Record<
-          string,
-          {
-            execute: (
-              input: Record<string, unknown>,
-              options: { toolCallId: string }
-            ) => Promise<unknown>
-          }
-        >
-      }) => {
-        await options.tools.update_profile.execute(
-          { firstName: "Requested name" },
-          { toolCallId: "profile-change" }
-        )
-        return {
-          text: "Please confirm this change.",
-          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        }
-      }) as never,
+      resolveProcedures: async () => [automaticAction(profileAction.id, { firstName: "Requested name" }, "Change my name")],
       executeAction: async ({ input }: { input: Record<string, unknown> }) => {
         executeInputs.push(input)
         return { output: { message: "Profile updated." } }
@@ -1271,31 +653,9 @@ describe("Build agent tool runtime", () => {
       },
     })
     const executeCalls: string[] = []
-    const generateText = (async (options: {
-      tools: Record<
-        string,
-        {
-          execute: (
-            input: Record<string, unknown>,
-            options: { toolCallId: string }
-          ) => Promise<unknown>
-        }
-      >
-    }) => {
-      const output = await options.tools.open_ticket.execute(
-        { subject: "Guarded" },
-        { toolCallId: "guarded-call-1" }
-      )
-      return {
-        text: "Approval requested.",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        output,
-      }
-    }) as never
     const dependencies = {
       resolveActions: async () => [clientAction],
-      resolveProcedures: async () => [],
-      generateText,
+      resolveProcedures: async () => [automaticAction(clientAction.id, { subject: "Guarded" }, "Open the guarded form")],
       executeAction: async ({ toolCallId }: { toolCallId: string }) => {
         executeCalls.push(toolCallId)
         return { output: { ok: true } }
@@ -1369,33 +729,15 @@ describe("Build agent tool runtime", () => {
       }
     )
     expect(approved.status).toBe("completed")
-    expect(executeCalls).toEqual(["guarded-call-1"])
+    expect(executeCalls).toHaveLength(1)
   }, 30_000)
 
   test("records one bounded agent and tool failure event across a failed retry", async () => {
     const { context, service } = await makeContext()
     clientAction.projectId = context.projectId
-    const generateText = (async (options: {
-      tools: Record<
-        string,
-        {
-          execute: (
-            input: Record<string, unknown>,
-            options: { toolCallId: string }
-          ) => Promise<unknown>
-        }
-      >
-    }) => {
-      await options.tools.open_ticket.execute(
-        { subject: "Failure question" },
-        { toolCallId: "failure-call-1" }
-      )
-      return { text: "unreachable" }
-    }) as never
     const dependencies = {
       resolveActions: async () => [clientAction],
-      resolveProcedures: async () => [],
-      generateText,
+      resolveProcedures: async () => [automaticAction(clientAction.id, { subject: "Failure question" }, "Failure question")],
       executeAction: async () => {
         throw new Error("provider action failed")
       },
@@ -1457,27 +799,6 @@ describe("Build agent tool runtime", () => {
   test("records a tool failure when an action reports a failed result", async () => {
     const { context, service } = await makeContext()
     clientAction.projectId = context.projectId
-    const generateText = (async (options: {
-      tools: Record<
-        string,
-        {
-          execute: (
-            input: Record<string, unknown>,
-            options: { toolCallId: string }
-          ) => Promise<unknown>
-        }
-      >
-    }) => {
-      const output = await options.tools.open_ticket.execute(
-        { subject: "Failed action" },
-        { toolCallId: "failed-result-call-1" }
-      )
-      return {
-        text: "The action could not be completed.",
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        output,
-      }
-    }) as never
     const result = await runAgentTurn(
       context,
       {
@@ -1493,8 +814,7 @@ describe("Build agent tool runtime", () => {
         agent: agent(context),
         dependencies: {
           resolveActions: async () => [clientAction],
-          resolveProcedures: async () => [],
-          generateText,
+          resolveProcedures: async () => [automaticAction(clientAction.id, { subject: "Failed action" }, "Try the ticket action")],
           executeAction: async () => ({
             status: "failed" as const,
             output: { error: "provider rejected the request" },

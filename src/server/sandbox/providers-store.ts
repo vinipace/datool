@@ -10,6 +10,7 @@ import {
   sandboxCredentialsSchema,
   sandboxExecutionOrder,
   sandboxProviderIds,
+  sandboxProviderNames,
   type SandboxCredentials,
   type SandboxProviderId,
   type SandboxProviderInput,
@@ -105,6 +106,20 @@ export async function getSandboxExecutionProviders(
     id,
     credentials: () => credentials(projectId, row, id),
   }))
+}
+
+/** Persistent workloads select one provider explicitly and never fall back to empty storage. */
+export async function getSandboxProviderCredentials(
+  projectId: string,
+  provider: SandboxProviderId,
+  database?: TracerDatabase
+): Promise<SandboxCredentials> {
+  const row = await readSettings(projectId, database)
+  if (!Object.hasOwn(row.providers, provider))
+    throw new SandboxSettingsValidationError(
+      `${sandboxProviderNames[provider]} is not configured for this project. Configure it in Project settings → Sandbox providers, or select a configured provider for this agent.`
+    )
+  return credentials(projectId, row, provider)
 }
 
 export async function updateSandboxProviderSettings(

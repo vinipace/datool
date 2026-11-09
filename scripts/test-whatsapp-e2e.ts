@@ -4,12 +4,10 @@
 import assert from "node:assert/strict"
 import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
-import { createHmac, randomUUID } from "node:crypto"
+import { createHash, createHmac, randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { generateText } from "ai"
-import { MockLanguageModelV4 } from "ai/test"
 import {
   createIsolatedPostgres,
   migrateIsolatedPostgres,
@@ -17,6 +15,7 @@ import {
 } from "../tests/helpers/postgres"
 
 const target = await createIsolatedPostgres()
+let eve: Awaited<ReturnType<typeof import("../tests/helpers/eve-fixture").createEveFixture>> | undefined
 let pools: typeof import("../lib/db") | undefined
 let server: ReturnType<typeof createServer> | undefined
 const clients: Client[] = []
@@ -41,6 +40,7 @@ try {
     DATOOL_PUBLIC_URL: "https://datool.example.test",
     DATOOL_META_GRAPH_VERSION: "v23.0",
   })
+  const { createEveFixture, eveResponse, toolOutputs } = await import("../tests/helpers/eve-fixture")
   pools = await import("../lib/db")
   const { createTracerDatabase } = await import("../src/server/tracer/db")
   const { createMcpServer } = await import("../src/server/mcp/server")
@@ -345,9 +345,9 @@ try {
       configuration: {
         instructions:
           "Answer refund and order questions using knowledge and order lookup.",
-        model: "openai/gpt-4.1-mini",
+        provider: "openai", model: "gpt-4.1-mini",
         channelAllowlist: ["whatsapp"],
-        guardrails: { blockedTopics: ["forbidden-secret-topic"] },
+        guardrails: { jevCheckEnabled: false, blockedTopics: ["forbidden-secret-topic"] },
       },
     }
   )
@@ -546,38 +546,12 @@ try {
   )
   passed("Cross-project signup isolation and global phone ownership")
 
-  const usage = {
-    inputTokens: { total: 12, noCache: 12, cacheRead: 0, cacheWrite: 0 },
-    outputTokens: { total: 8, text: 8, reasoning: 0 },
-  }
-  const model = new MockLanguageModelV4({
-    modelId: "whatsapp-fixture",
-    doGenerate: [
-      {
-        content: [
-          {
-            type: "tool-call",
-            toolCallId: "order-lookup-1",
-            toolName: "lookup_order",
-            input: '{"orderId":"synthetic-whatsapp-order-42"}',
-          },
-        ],
-        finishReason: { unified: "tool-calls", raw: "tool_calls" },
-        usage,
-        warnings: [],
-      },
-      {
-        content: [
-          {
-            type: "text",
-            text: "Your refund window is seven days. Order synthetic-whatsapp-order-42 was checked.",
-          },
-        ],
-        finishReason: { unified: "stop", raw: "stop" },
-        usage,
-        warnings: [],
-      },
-    ],
+  const providerFetch = globalThis.fetch
+  globalThis.fetch = ((input, init) => new URL(input instanceof Request ? input.url : String(input)).hostname === "127.0.0.1" ? originalFetch(input, init) : providerFetch(input, init)) as typeof fetch
+  eve = await createEveFixture({ target, upstream: providerFetch })
+  eve.provider(body => {
+    assert(JSON.stringify(body.input).includes("seven days"))
+    return toolOutputs(body).length ? eveResponse(body, "Your refund window is seven days. Order synthetic-whatsapp-order-42 was checked.") : eveResponse(body, "", { name: "eve__tool", input: { name: `action_${createHash("sha256").update("lookup_order").digest("hex").slice(0,32)}`, input: { orderId: "synthetic-whatsapp-order-42" } } })
   })
   const runtimeResults: Array<Awaited<ReturnType<typeof runAgentTurn>>> = []
   const runner: import("../src/lib/build/channels").AgentTurnRunner = async (
@@ -592,11 +566,7 @@ try {
         requestKey: String(input.metadata.requestKey),
         message: input.messages.at(-1)!.content,
       },
-      {
-        dependencies: {
-          generateText: (options) => generateText({ ...options, model }),
-        },
-      }
+      {}
     )
     runtimeResults.push(result)
     return {
@@ -636,7 +606,7 @@ try {
       "synthetic-whatsapp-order-42"
     )
   )
-  assert(JSON.stringify(model.doGenerateCalls[0].prompt).includes("seven days"))
+  assert(JSON.stringify(eve.requests[0].input).includes("seven days"))
   receiptDuringSend = true
   await processNext()
   receiptDuringSend = false
@@ -681,7 +651,7 @@ try {
     inbound("wamid.guardrail", "forbidden-secret-topic", "5511999990002")
   )
   await processNext()
-  assert.equal(model.doGenerateCalls.length, 2)
+  assert.equal(eve.requests.length, 2)
   assert.equal(runtimeResults[1].status, "blocked")
   if (
     await database
@@ -1097,6 +1067,7 @@ try {
     `WhatsApp E2E: ${checkpoints.length} checkpoints passed. Meta and model were simulated; no live WhatsApp delivery claimed.`
   )
 } finally {
+  await eve?.close()
   globalThis.fetch = originalFetch
   for (const client of clients) await client.close().catch(() => {})
   for (const mcp of servers) await mcp.close().catch(() => {})

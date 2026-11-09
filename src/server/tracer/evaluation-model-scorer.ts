@@ -1,5 +1,5 @@
 import { judgeTransport, diagnosticResult } from "./runtime-diagnostics"
-import { APICallError, experimental_evaluate as evaluate } from "ai"
+import { APICallError, experimental_decide as evaluate } from "ai"
 import { createGateway, GatewayError } from "@ai-sdk/gateway"
 import { createTypeSafeAi } from "@ai-sdk/typesafe-ai"
 import { TYPESAFE_PROVIDER, modelProviders } from "@/src/lib/model-providers"
@@ -71,8 +71,8 @@ export async function runEvaluationModelScorer(
   let result: Awaited<ReturnType<typeof evaluate<typeof questions>>>
   try {
     result = await evaluate({
-      model: provider.evaluationModel(config.model),
-      state: messages,
+      model: provider.decisionModel(config.model),
+      state: { messages },
       questions,
       abortSignal: signal,
       maxRetries: 0,

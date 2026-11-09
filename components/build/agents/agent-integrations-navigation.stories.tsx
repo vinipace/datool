@@ -45,6 +45,7 @@ const meta = {
     nextjs: { navigation: { pathname: "/p/demo/build/agents/calendar-agent" } },
     msw: {
       handlers: [
+        http.get("*/api/custom-fields", () => HttpResponse.json({ data: [] })),
         http.get(
           "https://logos.composio.dev/api/:app",
           () => new HttpResponse(null, { status: 404 })
@@ -131,7 +132,7 @@ export const ManageFromAction: Story = {
     ).resolves.toBeVisible()
     await userEvent.click(canvas.getByRole("link", { name: "Actions" }))
     await userEvent.click(
-      await canvas.findByRole("tab", { name: "Create Actions" })
+      await canvas.findByRole("tab", { name: "Templates" })
     )
     await userEvent.click(
       await canvas.findByRole("button", { name: "Use connected app" })

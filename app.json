@@ -2,6 +2,7 @@
   "formation": {
     "web": { "quantity": 1 },
     "worker": { "quantity": 1 },
-    "buildworker": { "quantity": 1 }
+    "buildworker": { "quantity": 1 },
+    "eve": { "quantity": 1 }
   }
 }
