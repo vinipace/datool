@@ -36,7 +36,7 @@ export async function enableMcpTools(
   if (tools.length > 1000)
     throw new TracerError(
       "VALIDATION_ERROR",
-      "This server has too many tools to enable at once. Choose individual tools in Actions."
+      "This server has too many tools to enable at once. Choose individual tools on its Integrations page."
     )
   return ctx.database.transaction(async (tx) => {
     const scoped = {

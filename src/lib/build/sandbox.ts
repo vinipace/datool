@@ -1,5 +1,5 @@
 import { z } from "zod"
-import type { SdkDriveContext } from "./sdk-context"
+import { sdkDriveContextSchema } from "./sdk-context"
 
 export const agentSandboxProviderSchema = z.enum(["datool", "local", "modal"])
 export type AgentSandboxProvider = z.infer<typeof agentSandboxProviderSchema>
@@ -61,11 +61,12 @@ export const createDriveSchema = z.object({
   description: z.string().trim().max(2000).default(""),
   provider: agentSandboxProviderSchema,
 })
-export type AgentDrive = z.infer<typeof createDriveSchema> & {
-  id: string
-  createdAt: string
-  sdkContext?: SdkDriveContext | null
-}
+export const agentDriveSchema = createDriveSchema.extend({
+  id: z.string().uuid(),
+  createdAt: z.string(),
+  sdkContext: sdkDriveContextSchema.nullable().optional(),
+})
+export type AgentDrive = z.infer<typeof agentDriveSchema>
 
 export const sandboxCommandSchema = z
   .object({

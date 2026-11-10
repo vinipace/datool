@@ -1,4 +1,4 @@
 interface:
   display_name: "Datool"
-  short_description: "Connect apps, author widgets and evaluate AI"
-  default_prompt: "Use $datool to investigate an AI regression and choose the relevant Datool workflows."
+  short_description: "Build proactive agents, connect apps and evaluate AI"
+  default_prompt: "Use $datool to configure a managed agent or investigate an AI workflow, discover the connected capabilities, and verify the requested result."

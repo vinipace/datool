@@ -163,6 +163,7 @@ export function buildOperationCatalog(scopes?: readonly string[]) {
       idempotency: operation.idempotency ?? "none",
       expectedRevision: operation.expectedRevision ?? "none",
       maxInputBytes: operation.maxInputBytes ?? 1024 * 1024,
+      ...(operation.outputSchema ? { outputSchema: z.toJSONSchema(z.object({ data: operation.outputSchema }), { io: "output", target: "draft-2020-12" }) } : {}),
       inputSchema: z.toJSONSchema(buildOperationInputSchema(operation), {
         io: "input",
       }),
@@ -467,7 +468,7 @@ async function executeAuthorizedBuildOperation(
 registerBuildOperation({
   name: "build_describe_operations",
   description:
-    "Discover Build operation names, required scopes, JSON input schemas and retry/revision policies available to the authorized project.",
+    "Discover Build operation names, required scopes, JSON input schemas, available structured output schemas and retry/revision policies available to the authorized project.",
   scopes: ["build:read"],
   schema: z.object({
     name: z

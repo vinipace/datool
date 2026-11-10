@@ -16,7 +16,9 @@ export function createMcpServer(
   service: TracerService,
   scopes: readonly string[]
 ) {
-  const server = new McpServer({ name: "datool", version: "1.1.0" })
+  const server = new McpServer({ name: "datool", version: "1.1.0" }, {
+    instructions: "Use describe_agent_operations for Observe operations and build_describe_operations for managed agents when Build tools are available. build_get_authoring_guide covers agent, action, skill, widget, sandbox, integration, react-sdk and scheduled-task. Read current IDs/revisions before editing and honor retry keys. Integration tools are managed within their connection, while Actions shows custom tools. For per-user proactive tasks use build_sdk_tasks so the original workspace drive and conversation are saved; build_create_scheduled_task creates shared agent work. Derive SDK user/drive identity from trusted application authentication, never visitor text. Listing tools or queuing a run does not prove permission, completion or deployment.",
+  })
   const describeTools: (() => Tool)[] = []
   for (const op of agentOperations) {
     if (!op.scopes.every((scope) => scopes.includes(scope))) continue

@@ -25,9 +25,9 @@ export const POST = createDatoolHandler({
   projectId: process.env.DATOOL_PROJECT_ID!,
   connectionId: process.env.DATOOL_CONNECTION_ID!,
   async config({ req }) {
-    const { orgId, userId } = await auth(req)
+    const { orgId, userId, orgName } = await auth(req)
     if (!orgId || !userId) return new Response(null, { status: 401 })
-    return { userId, drive: `drive_${orgId}` }
+    return { userId, drive: `drive_${orgId}`, workspaceName: orgName }
   },
 })
 ```
@@ -100,3 +100,14 @@ File paths are relative to the drive. Writes create parent directories. Transfer
 Task collections return `items` and `nextCursor`. `update`, `pause`, `resume`, and `delete` take the current task, including its revision, to detect conflicting edits. One-time schedules use `schedule: { kind: "once", at: "2027-01-01T12:00:00Z" }`.
 
 Messages may complete asynchronously: `send` can return a `pending` status; use `messages.list` until its `pending` flag clears. The client does not automatically retry writes. Reuse a UUID `requestId` when retrying message sends, task creation, or `runNow` after an uncertain network response. Fetch the latest task after an uncertain update before retrying a change.
+
+
+## Local example and workspace checks
+
+The source repository includes `examples/react-agent`, a Next.js app with simulated Acme and Orbit workspaces, context-file editing, embedded chat and scheduled briefings. Follow its README and ignored environment-file setup. Its workspace cookie deliberately simulates authentication for local testing; replace it with your auth provider before deploying an application.
+
+Each workspace loads its own saved `context/company.md` before opening chat. A missing file is initialized only on a confirmed not-found response; existing empty files and user edits are preserved. Switching workspaces resets the chat and loads the new files, tasks and conversation together. A drive file is available for the agent to read; it is not automatically injected into the system prompt. Include an instruction to read `/workspace/context/company.md` when relevant.
+
+If the agent reads the wrong context, verify that the endpoint and server client derive the same connection, user, drive and thread from authenticated state, and that the chat key changes when the workspace changes. Inspect the workspace column in **Sandbox** and **Scheduled tasks**, then the saved conversation. A display label alone never changes identity.
+
+For MCP setup, request `build_get_authoring_guide` with `topic: "react-sdk"`. Raw tools are `build_sdk_chat`, `build_sdk_files` and `build_sdk_tasks`; use [Build discovery](/docs/reference/build-operations) for schemas and retry keys. The React package and agent SDK require a compatible package build and server; source in a PR is not proof of an npm release. See [compatibility](/docs/reference/compatibility).

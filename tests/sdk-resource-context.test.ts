@@ -18,6 +18,7 @@ import {
   sdkSandboxConfiguration,
 } from "@/src/server/build/sdk-scope"
 import { sdkTasks } from "@/src/server/build/sdk-tasks"
+import { findBuildOperation } from "@/src/server/build/bootstrap"
 import {
   listScheduledTasks,
   updateScheduledTask,
@@ -85,6 +86,12 @@ test("drive catalog shows workspace ownership even before a chat exists and filt
       rows.push(...page.items)
       after = page.nextCursor ?? undefined
     } while (after)
+    expect(
+      findBuildOperation("build_list_drives")!.outputSchema!.parse({
+        items: rows,
+        nextCursor: null,
+      })
+    ).toEqual({ items: rows, nextCursor: null })
     expect(rows.map((d) => d.id).sort()).toEqual([shared.id, driveId!].sort())
     expect(rows.some((d) => d.id === otherDrive)).toBe(false)
     expect(rows.find((d) => d.id === driveId)?.sdkContext).toMatchObject({
@@ -137,6 +144,14 @@ test("SDK task context is saved, survives dashboard edits, and fails closed on a
       ...sa,
       request: { action: "create", task: definition },
     })) as ScheduledTask
+    expect(
+      findBuildOperation("build_sdk_tasks")!.outputSchema!.parse(task)
+    ).toEqual(task)
+    expect(
+      findBuildOperation("build_create_scheduled_task")!.outputSchema!.parse(
+        task
+      )
+    ).toEqual(task)
     const other = (await sdkTasks(context, {
       ...b,
       ...sb,

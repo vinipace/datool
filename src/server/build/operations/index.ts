@@ -5,7 +5,7 @@ import { evolutionEnabled } from "../channels/evolution-api"
 import { EVOLUTION_ACCEPTANCE_VERSION } from "@/src/lib/build/evolution"
 import { getWhatsAppDelivery, getWhatsAppMedia } from "../channels/whatsapp"
 import { z } from "zod"
-import { createDriveSchema } from "@/src/lib/build/sandbox"
+import { createDriveSchema, agentDriveSchema } from "@/src/lib/build/sandbox"
 import { createDrive, listDrives } from "../drives"
 import { metaIdSchema, whatsappModeSchema, whatsappRecipientSchema, whatsappTemplateSchema } from "@/src/lib/build/whatsapp"
 import { getWhatsAppSetup, getWhatsAppConnection, beginWhatsAppSignup, getWhatsAppSignup, authorizeWhatsAppSignup, activateWhatsAppSignup, refreshWhatsAppConnection, disconnectWhatsApp, listWhatsAppTemplates, createWhatsAppTemplate, deleteWhatsAppTemplate, getWhatsAppRecipient, setWhatsAppConsent, sendWhatsAppTemplate, syncWhatsAppApp } from "../channels/whatsapp"
@@ -215,6 +215,7 @@ function register(
     openWorld?: boolean
     expectedRevision?: "none" | "optional" | "required"
     idempotency?: "none" | "optional" | "required"
+    outputSchema?: z.ZodTypeAny
     maxInputBytes?: number
   } = {}
 ) {
@@ -233,7 +234,8 @@ register(
   "List persistent project drives and SDK-managed workspace drives. Filter by agent to include its SDK drives alongside shared drives.",
   ["build:read"],
   z.object({ after: z.string().uuid().optional(), limit: z.number().int().min(1).max(200).optional(), agentId: z.string().min(1).max(200).optional() }),
-  (context, input) => listDrives(context, input as Parameters<typeof listDrives>[1])
+  (context, input) => listDrives(context, input as Parameters<typeof listDrives>[1]),
+  { outputSchema: z.object({ items: z.array(agentDriveSchema), nextCursor: z.string().nullable() }) }
 )
 register(
   "build_create_drive",
@@ -241,7 +243,7 @@ register(
   ["build:write"],
   createDriveSchema,
   (context, input) => createDrive(context, input),
-  { idempotency: "required" }
+  { idempotency: "required", outputSchema: agentDriveSchema }
 )
 register(
   "build_list_agents",

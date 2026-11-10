@@ -1,11 +1,12 @@
 import { z } from "zod"
 
-export type SdkDriveContext = {
-  agentId: string
-  connectionId: string
-  workspace: string
-  workspaceName: string
-}
+export const sdkDriveContextSchema = z.object({
+  agentId: z.string(),
+  connectionId: z.string().uuid(),
+  workspace: z.string(),
+  workspaceName: z.string(),
+})
+export type SdkDriveContext = z.infer<typeof sdkDriveContextSchema>
 
 // Authenticated server state, never accepted from task authoring inputs.
 export const savedSdkTaskContextSchema = z
@@ -19,4 +20,7 @@ export const savedSdkTaskContextSchema = z
   })
   .strict()
 export type SavedSdkTaskContext = z.infer<typeof savedSdkTaskContextSchema>
-export type SdkTaskContext = Omit<SavedSdkTaskContext, "scopeKey">
+export const sdkTaskContextSchema = savedSdkTaskContextSchema.omit({
+  scopeKey: true,
+})
+export type SdkTaskContext = z.infer<typeof sdkTaskContextSchema>

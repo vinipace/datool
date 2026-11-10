@@ -1,6 +1,6 @@
 # Datool skills
 
-Agent skills for investigating AI traces, building scorers, curating datasets, running evaluations and querying Datool analytics.
+Agent skills for configuring managed agents and proactive application chat, investigating AI traces, building scorers, curating datasets, running evaluations and querying Datool analytics.
 
 This pack contains workflows for Datool users and synthetic examples. Maintainer deployment, server administration, private runbooks, credentials and captured application data do not belong in this repository.
 
@@ -38,7 +38,7 @@ If you installed from `vinpac/datool-skills` or `vinipace/datool-skills`, run th
 
 | Skill | Purpose |
 | --- | --- |
-| [datool](datool/SKILL.md) | Discover operations, author agent widgets, integrate managed prompts and combine workflows |
+| [datool](datool/SKILL.md) | Configure agents, integrations, workspace drives and proactive React chat; discover operations and combine workflows |
 | [datool-traces](datool-traces/SKILL.md) | Investigate traces, spans, sessions and scores |
 | [datool-scorers](datool-scorers/SKILL.md) | Develop, preview and version scorers |
 | [datool-datasets](datool-datasets/SKILL.md) | Curate cases, edit items atomically and freeze snapshots |
@@ -71,6 +71,8 @@ For interactive use, `npx datool auth login --datool <host>` opens browser organ
 For CLI workflows, version 0.1.0 does not include the advertised agent commands; use a CLI with `agent` commands and a server exposing `POST /api/agent/:operation`. If discovery is unavailable, check deployment compatibility and credential scopes through the configured transport. Doctor and CLI OAuth require server CLI protocol 1. Doctor distinguishes an old server from invalid credentials (401) and valid credentials with insufficient permissions (403). A missing MCP tool can also mean the token lacks the necessary consented scopes.
 
 A completed evaluation reports technical execution; use its quality gate to determine whether it passes. Connected app runs and LLM scorers can incur costs. Each skill documents its permissions, pagination, limits and reproducibility requirements.
+
+For managed agents, integrations, persistent workspace drives, React chat and scheduled tasks, follow [managed agents and workspace isolation](datool/references/agents.md). Discover Build schemas with `build_describe_operations`; a compatible CLI uses `datool build tools` and `datool build call`. Confirm the deployed server and installed package exports before using these features.
 
 For the native prompt SDK and connected prompt experiments, read [managed prompts](datool/references/prompts.md). Standalone fetching needs SDK support and `prompts:read`; connected experiments also need a compatible bridge or HTTP adapter, a server advertising `promptOverrides`, and the evaluation/trace permissions listed in the reference. Base CLI command support alone does not establish native prompt support.
 

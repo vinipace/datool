@@ -52,8 +52,32 @@ See the [official Claude Code MCP guide](https://code.claude.com/docs/en/mcp) fo
 - If you selected the wrong project, establish a new authorization for the intended project.
 - If a client cannot complete login, confirm that it supports the advertised OAuth flow and exact redirect registration.
 
-The [CLI](/docs/reference/cli) exposes the same operations through `datool agent tools` and `datool agent call`.
+The [CLI](/docs/reference/cli) uses `datool agent tools` / `datool agent call` for Observe and `datool build tools` / `datool build call` for Build on compatible versions.
 
 ## Datool agent skills
 
-The maintained [Datool skills repository](https://github.com/vinpac/datool-skills) provides task guidance for tracing, datasets, scorers, evaluations, and analytics. Follow its installation instructions for your agent. Skills guide tool use; they do not grant project access or replace MCP/CLI authentication.
+The maintained [Datool skills pack](https://github.com/vinipace/datool/tree/main/skills) provides workflows for managed agents, integration tools, workspace drives, proactive React chat, tracing, datasets, scorers, evaluations, and analytics. Follow its installation instructions for your agent. Skills guide tool use; they do not grant project access or replace MCP/CLI authentication.
+
+
+## Managed agents and proactive applications
+
+When Build is enabled, `build_describe_operations` lists the operations allowed by the current grant. `build_get_authoring_guide` accepts `agent`, `action`, `skill`, `widget`, `sandbox`, `integration`, `react-sdk`, and `scheduled-task`, returning JSON Schema, a valid example and semantic constraints. These are separate from `describe_agent_operations`, which catalogs Observe workflows.
+
+| Work | Operations | Required scopes |
+| --- | --- | --- |
+| Inspect agents and workspace drives | `build_get_agent`, `build_list_drives` | `build:read` |
+| Configure an agent or shared drive | `build_update_agent`, `build_create_drive` | `build:write` |
+| Inspect integration connections/tools | `build_list_app_connections`, `build_list_app_tools` | `build:read` |
+| Connect/import MCP tools | `build_save_mcp_connection`, `build_start_mcp_oauth`, `build_enable_mcp_tools` | `build:write` |
+| Open, poll, or send SDK chat | `build_sdk_chat` | `build:run` |
+| Read/write SDK workspace files | `build_sdk_files` | `build:write`, `build:run` |
+| Manage SDK workspace tasks | `build_sdk_tasks` | `build:read`, `build:write`, `build:run` |
+| Inspect all of an agent's tasks/runs | `build_list_scheduled_tasks`, `build_list_scheduled_task_runs` | `build:read` |
+| Create/edit shared scheduled tasks | `build_create_scheduled_task`, `build_update_scheduled_task` | `build:write`, `build:run` |
+| Trigger an existing task | `build_run_scheduled_task` | `build:run` |
+
+Drive, SDK and scheduled-task tools advertise typed result schemas for their `structuredContent.data` envelope. Workspace context is returned as `sdkContext`; the internal user scope key is never returned. SDK file/task tools are conservatively marked destructive because their request unions include deletion; read-only clients do not receive these mixed write tools.
+
+Integration tools are managed within their own connection page; they retain action records behind the API. Shared schedules start a fresh conversation each run. For a user-specific proactive agent, use `build_sdk_tasks` so the original authenticated scope, drive and conversation are saved and checked at execution. Never infer the user's workspace from visitor text or manually submit `sdkContext` as task configuration.
+
+See the [generated Build reference](/docs/reference/build-operations) for the complete catalog and retry/revision requirements. The [React SDK guide](/docs/guides/react-sdk) covers the authenticated server endpoint and embedded chat; [scheduled tasks](/docs/guides/scheduled-tasks) explains immutable context and status verification.

@@ -18,7 +18,7 @@ const id = z.string().uuid()
 registerBuildOperation({
   name: "build_enable_mcp_tools",
   description:
-    "Discover a connected custom MCP server's tools, add missing tools to this agent's Actions and publish the updated catalog. Preserves existing action settings and other agents. Requires project write access.",
+    "Discover a connected custom MCP server's tools, import missing tools for this agent and publish the updated catalog managed on the integration connection page. Preserves existing action settings and other agents. Requires project write access.",
   scopes: ["build:write"],
   schema: z.object({ agentId: z.string().min(1).max(200), connectionId: id }),
   idempotency: "required",
@@ -100,7 +100,7 @@ registerBuildOperation({
 registerBuildOperation({
   name: "build_list_app_tools",
   description:
-    "List approved actions and schemas for an active project app connection.",
+    "List available tools and input schemas for an active project app connection. Inspect build_list_actions to find this agent's saved definitions by connectionId/toolSlug; build_save_action changes enabled/settings while preserving its ID and revision. Apply the agent revision for runtime use. Integration tools are managed in Integrations, while Actions shows custom tools.",
   scopes: ["build:read"],
   schema: z.object({ connectionId: id }),
   openWorld: true,

@@ -1,5 +1,9 @@
 import { z } from "zod"
-import { scheduledTaskInputSchema } from "./schedules"
+import {
+  scheduledTaskInputSchema,
+  scheduledTaskSchema,
+  scheduledTaskRunSchema,
+} from "./schedules"
 
 export const sdkScopeSchema = z.object({
   connectionId: z.string().uuid(),
@@ -120,3 +124,54 @@ export const sdkTaskRequestSchema = z.discriminatedUnion("action", [
 export const sdkTaskInputSchema = sdkScopeSchema
   .extend({ conversationId: conversation, request: sdkTaskRequestSchema })
   .strict()
+
+export const sdkChatResultSchema = z.union([
+  z.object({
+    conversationId: z.string(),
+    messages: z.array(
+      z.object({
+        id: z.string(),
+        role: z.enum(["user", "assistant"]),
+        text: z.string(),
+        createdAt: z.string(),
+      })
+    ),
+    nextCursor: z.string().nullable(),
+    pending: z.boolean(),
+    failed: z.boolean(),
+  }),
+  z.object({
+    conversationId: z.string(),
+    status: z.string(),
+    text: z.string(),
+  }),
+  z.object({ conversationId: z.string() }).strict(),
+])
+export const sdkFileResultSchema = z.union([
+  z.object({
+    entries: z.array(
+      z.object({
+        name: z.string(),
+        type: z.enum(["file", "directory", "symlink"]),
+        size: z.number(),
+      })
+    ),
+  }),
+  z.object({ content: z.string().describe("Base64-encoded file bytes.") }),
+  z.object({ written: z.literal(true), size: z.number() }),
+  z.object({ created: z.literal(true) }),
+  z.object({ deleted: z.literal(true) }),
+])
+export const sdkTaskResultSchema = z.union([
+  scheduledTaskSchema,
+  scheduledTaskRunSchema,
+  z.object({
+    items: z.array(scheduledTaskSchema),
+    nextCursor: z.string().nullable(),
+  }),
+  z.object({
+    items: z.array(scheduledTaskRunSchema),
+    nextCursor: z.string().nullable(),
+  }),
+  z.object({ deleted: z.literal(true) }),
+])

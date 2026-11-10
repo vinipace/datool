@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { sdkFileInputSchema } from "@/src/lib/build/react-sdk"
+import { sdkFileInputSchema, sdkFileResultSchema } from "@/src/lib/build/react-sdk"
 import type { BuildContext } from "./context"
 import { resolveSdkDrive, sdkConnection } from "./sdk-scope"
 import { runAgentSandboxCommand } from "./sandbox-runtime"
@@ -45,21 +45,6 @@ try {
   console.log(JSON.stringify(result));
 } catch(e) { fail(e.code === 'ENOENT' ? 'File or directory not found.' : e.code === 'ENOTEMPTY' ? 'Directory is not empty.' : 'Could not complete the file operation.'); }
 `
-const fileResult = z.union([
-  z.object({
-    entries: z.array(
-      z.object({
-        name: z.string(),
-        type: z.enum(["file", "directory", "symlink"]),
-        size: z.number(),
-      })
-    ),
-  }),
-  z.object({ content: z.string() }),
-  z.object({ written: z.literal(true), size: z.number() }),
-  z.object({ created: z.literal(true) }),
-  z.object({ deleted: z.literal(true) }),
-])
 export async function sdkFiles(context: BuildContext, value: unknown) {
   const input = sdkFileInputSchema.parse(value)
   const { config } = await sdkConnection(context, input.connectionId)
@@ -104,5 +89,5 @@ export async function sdkFiles(context: BuildContext, value: unknown) {
       error.success ? error.data.error : "The file operation failed."
     )
   }
-  return fileResult.parse(parsed)
+  return sdkFileResultSchema.parse(parsed)
 }

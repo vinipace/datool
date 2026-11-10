@@ -138,6 +138,10 @@ test("MCP authoring schemas validate their examples and reject invalid author in
       ["action", { type: "unknown-action" }],
       ["skill", { trigger: { type: "unknown-trigger" } }],
       ["widget", { translations: { "pt-BR": { Name: 42 } } }],
+      ["sandbox", { provider: "unknown-provider" }],
+      ["integration", { connectionId: "not-a-uuid" }],
+      ["react-sdk", { workspaceName: 42 }],
+      ["scheduled-task", { schedule: { kind: "unknown" } }],
     ] as const) {
       const guide = z
         .object({
@@ -196,5 +200,104 @@ test("MCP authoring calls require read permission even for write-capable clients
         })
       ).isError
     ).toBe(true)
+  })
+})
+
+test("MCP advertises scoped workspace tools, typed results and conservative mutation hints", async () => {
+  await withClient(
+    ["build:read", "build:write", "build:run"],
+    async (client) => {
+      const tools = (await client.listTools()).tools
+      const ajv = new Ajv2020({ strict: false })
+      addFormats(ajv)
+      const catalog = (await call(
+        client,
+        "build_describe_operations"
+      )) as Array<{ name: string; outputSchema?: object }>
+      const names = [
+        "build_list_drives",
+        "build_create_drive",
+        "build_sdk_chat",
+        "build_sdk_files",
+        "build_sdk_tasks",
+        "build_list_scheduled_tasks",
+        "build_create_scheduled_task",
+        "build_update_scheduled_task",
+        "build_delete_scheduled_task",
+        "build_run_scheduled_task",
+        "build_list_scheduled_task_runs",
+      ]
+      for (const name of names) {
+        const tool = tools.find((item) => item.name === name)!
+        expect(tool).toBeDefined()
+        expect(tool.outputSchema).toBeDefined()
+        expect(tool.outputSchema).toEqual(
+          catalog.find((item) => item.name === name)?.outputSchema
+        )
+        ajv.compile(tool.outputSchema!)
+      }
+      for (const name of ["build_sdk_files", "build_sdk_tasks"]) {
+        const tool = tools.find((item) => item.name === name)!
+        expect(tool.annotations).toMatchObject({
+          readOnlyHint: false,
+          destructiveHint: true,
+        })
+        const validate = ajv.compile(tool.inputSchema)
+        expect(
+          validate({
+            connectionId: "11111111-1111-4111-8111-111111111111",
+            userId: "user",
+            drive: "drive_a",
+            conversationId: "conversation",
+            sdkContext: { driveId: "drive_b" },
+            request: { action: "list" },
+            idempotencyKey: "request",
+          })
+        ).toBe(false)
+      }
+      const files = tools.find((item) => item.name === "build_sdk_files")!
+      expect(
+        ajv.compile(files.outputSchema!)({ data: { content: "SGVsbG8=" } })
+      ).toBe(true)
+      expect(ajv.compile(files.outputSchema!)({ data: { content: 42 } })).toBe(
+        false
+      )
+      const chat = tools.find((item) => item.name === "build_sdk_chat")!
+      const validateChat = ajv.compile(chat.outputSchema!)
+      expect(
+        validateChat({
+          data: {
+            conversationId: "conversation",
+            messages: [],
+            nextCursor: null,
+            pending: false,
+            failed: false,
+          },
+        })
+      ).toBe(true)
+      expect(
+        validateChat({
+          data: { conversationId: "conversation", messages: "invalid" },
+        })
+      ).toBe(false)
+      expect(
+        JSON.stringify(
+          tools.find((item) => item.name === "build_list_scheduled_tasks")!
+            .outputSchema
+        )
+      ).not.toContain("scopeKey")
+      const sandboxGuide = await call(client, "build_get_authoring_guide", {
+        topic: "sandbox",
+      })
+      expect(JSON.stringify(sandboxGuide)).toContain("build_list_drives")
+    }
+  )
+  await withClient(["build:read"], async (client) => {
+    const names = (await client.listTools()).tools.map((tool) => tool.name)
+    expect(names).toContain("build_list_drives")
+    expect(names).toContain("build_list_scheduled_tasks")
+    expect(names).not.toContain("build_sdk_files")
+    expect(names).not.toContain("build_sdk_tasks")
+    expect(names).not.toContain("build_sdk_chat")
   })
 })

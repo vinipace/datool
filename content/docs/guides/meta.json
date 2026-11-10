@@ -1,6 +1,9 @@
 {
   "title": "Product guides",
   "pages": [
+    "agents",
+    "integrations",
+    "scheduled-tasks",
     "playground",
     "prompts",
     "dashboards",

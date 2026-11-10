@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { buildChannelSchema } from "./contracts"
-import type { SdkTaskContext } from "./sdk-context"
+import { sdkTaskContextSchema } from "./sdk-context"
 
 export const taskScheduleSchema = z.discriminatedUnion("kind", [
   z
@@ -31,36 +31,41 @@ export const scheduledTaskInputSchema = z
   .strict()
 export type ScheduledTaskInput = z.infer<typeof scheduledTaskInputSchema>
 
-export type ScheduledTaskRun = {
-  id: string
-  taskId: string
-  source: "schedule" | "manual"
-  status:
-    | "queued"
-    | "running"
-    | "completed"
-    | "blocked"
-    | "needs_attention"
-    | "failed"
-    | "cancelled"
-  scheduledAt: string
-  startedAt: string | null
-  finishedAt: string | null
-  conversationId: string | null
-  traceId: string | null
-  error: string | null
-}
+export const scheduledTaskRunSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  source: z.enum(["schedule", "manual"]),
+  status: z.enum([
+    "queued",
+    "running",
+    "completed",
+    "blocked",
+    "needs_attention",
+    "failed",
+    "cancelled",
+  ]),
+  scheduledAt: z.string(),
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+  conversationId: z.string().nullable(),
+  traceId: z.string().nullable(),
+  error: z.string().nullable(),
+})
+export type ScheduledTaskRun = z.infer<typeof scheduledTaskRunSchema>
 
-export type ScheduledTask = Omit<ScheduledTaskInput, "enabled"> & {
-  id: string
-  revision: number
-  status: "active" | "paused" | "completed"
-  nextRunAt: string | null
-  lastRun: ScheduledTaskRun | null
-  createdAt: string
-  updatedAt: string
-  sdkContext?: SdkTaskContext | null
-}
+export const scheduledTaskSchema = scheduledTaskInputSchema
+  .omit({ enabled: true })
+  .extend({
+    id: z.string().uuid(),
+    revision: z.number().int().positive(),
+    status: z.enum(["active", "paused", "completed"]),
+    nextRunAt: z.string().nullable(),
+    lastRun: scheduledTaskRunSchema.nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    sdkContext: sdkTaskContextSchema.nullable().optional(),
+  })
+export type ScheduledTask = z.infer<typeof scheduledTaskSchema>
 
 export const taskRunStatusLabels: Record<ScheduledTaskRun["status"], string> = {
   queued: "Queued",
