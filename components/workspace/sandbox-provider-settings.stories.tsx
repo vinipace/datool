@@ -7,11 +7,11 @@ import {
   type SandboxProviderSettings as Settings,
   type SandboxProviderId,
 } from "@/src/lib/sandbox-providers"
-import { StorybookProjectFrame } from "../../.storybook/component-frame"
+import { StorybookOrganizationFrame } from "../../.storybook/component-frame"
 import { modelProviderHandlers } from "../../.storybook/scenarios/model-providers"
 import { SandboxProviderSettings } from "./sandbox-provider-settings"
 
-const path = "/api/projects/sandbox-test/sandbox-providers"
+const path = "/api/organizations/sandbox-test/sandbox-providers"
 const initial = (): Settings => ({
   providers: sandboxProviderIds.map((id) => ({
     id,
@@ -84,15 +84,15 @@ const handlers = [
 const meta = {
   title: "Workspace/SandboxProviderSettings",
   component: SandboxProviderSettings,
-  args: { projectId: "sandbox-test", canManage: true },
+  args: { organizationId: "sandbox-test", canManage: true },
   beforeEach: () => {
     settings = initial()
   },
   parameters: { msw: { handlers } },
   render: (args) => (
-    <StorybookProjectFrame title="Sandbox providers">
+    <StorybookOrganizationFrame title="Sandbox providers">
       <SandboxProviderSettings {...args} />
-    </StorybookProjectFrame>
+    </StorybookOrganizationFrame>
   ),
 } satisfies Meta<typeof SandboxProviderSettings>
 export default meta

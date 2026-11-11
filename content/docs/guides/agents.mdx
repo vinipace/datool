@@ -3,7 +3,7 @@ title: Agents, tools, and persistent drives
 description: Configure a durable agent, connect tools, and choose shared or application workspace storage.
 ---
 
-Datool agents use saved configurations and published revisions. Create an agent, choose a configured model provider, write its instructions, and enable the channels your users need. Provider credentials belong in project settings; connected app credentials belong in **Integrations**.
+Datool agents use saved configurations and published revisions. Create an agent, choose a configured model provider, write its instructions, and enable the channels your users need. Provider credentials belong in organization settings; connected app credentials belong in **Integrations**.
 
 ## Draft, apply, and verify
 
@@ -46,6 +46,6 @@ For automation, read [scheduled tasks](/docs/guides/scheduled-tasks). To embed t
 
 Self-hosted installations can run Docker sandboxes with local named volumes and no cloud credentials. All workers must use the same daemon. PostgreSQL stores drive metadata; the named volume stores files. Back up both.
 
-Owners/admins can configure S3-compatible storage or Google Cloud Storage in **Project settings → Storage providers**. Choose that connection when adding a drive. Credentials remain encrypted on the server. Sandbox runs hydrate a native working volume and commit files after shutdown; failed synchronization retains pending files and blocks overwrites until recovery.
+Owners/admins can configure S3-compatible storage or Google Cloud Storage in **Organization settings → Storage providers**. Choose that connection when adding a drive. Credentials remain encrypted on the server. Sandbox runs hydrate a native working volume and commit files after shutdown; failed synchronization retains pending files and blocks overwrites until recovery.
 
 Object-backed drives support regular files and folders, with 16 MiB per file, 64 MiB total and 10,000 entries. Put symlinks and installed dependencies on a native volume. **Versions** lists saved snapshots and offers restore, export and import. Restoring creates a new version and requires the current revision. History and object data are retained indefinitely; back up both PostgreSQL and bucket contents. Existing SDK workspaces cannot be migrated in place by changing settings.

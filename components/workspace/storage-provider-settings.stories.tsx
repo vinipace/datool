@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { http, HttpResponse, delay } from "msw"
 import { expect, userEvent, waitFor, within } from "storybook/test"
-import { StorybookProjectFrame } from "../../.storybook/component-frame"
+import { StorybookOrganizationFrame } from "../../.storybook/component-frame"
 import { StorageProviderSettings } from "./storage-provider-settings"
 import type {
   StorageConnection,
   StorageConnectionInput,
 } from "@/src/lib/build/storage"
-const path = "/api/projects/storage-test/storage-connections"
+const path = "/api/organizations/storage-test/storage-connections"
 const connection: StorageConnection = {
   id: "00000000-0000-4000-8000-000000000011",
   name: "Customer files",
@@ -43,7 +43,7 @@ const handlers = [
 const meta = {
   title: "Workspace/Storage providers",
   component: StorageProviderSettings,
-  args: { projectId: "storage-test", canManage: true },
+  args: { organizationId: "storage-test", canManage: true },
   beforeEach: () => {
     items = []
     submitted = null
@@ -51,9 +51,9 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <StorybookProjectFrame projectId="storage-test" title="Storage providers">
+      <StorybookOrganizationFrame title="Storage providers">
         <Story />
-      </StorybookProjectFrame>
+      </StorybookOrganizationFrame>
     ),
   ],
   parameters: { layout: "fullscreen", msw: { handlers } },

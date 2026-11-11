@@ -97,7 +97,7 @@ export async function runEvaluationModelScorer(
         message: timedOut
           ? "Evaluation model request timed out."
           : status === 401 || status === 403
-            ? `${providerName} denied access to this evaluation model. Check the project's ${providerName} key and model access. (HTTP ${status})`
+            ? `${providerName} denied access to this evaluation model. Check the organization's ${providerName} key and model access. (HTTP ${status})`
             : status
               ? `Evaluation model request failed (HTTP ${status}).`
               : "Evaluation model returned an invalid response or could not be reached.",

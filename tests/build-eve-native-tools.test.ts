@@ -1,3 +1,5 @@
+import { updateOrganizationSandboxSettings } from "@/src/server/sandbox/providers-store"
+import { projectProviderContext } from "@/src/server/providers/context"
 import { expect, test } from "bun:test"
 import { randomUUID } from "node:crypto"
 import { execFile } from "node:child_process"
@@ -29,8 +31,9 @@ test("a removed sandbox provider produces an actionable file-tool failure", asyn
         sandbox: { enabled: true, provider: "local" },
       },
     })
-    await context.database.execute(
-      sql`INSERT INTO project_sandbox_settings(project_id,providers,default_provider) VALUES(${context.projectId},'{}'::jsonb,NULL) ON CONFLICT(project_id) DO UPDATE SET providers='{}'::jsonb,default_provider=NULL`
+    await updateOrganizationSandboxSettings(
+      await projectProviderContext(context.projectId, context.database),
+      { type: "remove", provider: "local" }
     )
     fixture.provider((body) =>
       toolOutputs(body).length
@@ -55,7 +58,7 @@ test("a removed sandbox provider produces an actionable file-tool failure", asyn
       status: "failed",
       output: {
         error:
-          "Local container is not configured for this project. Configure it in Project settings → Sandbox providers, or select a configured provider for this agent.",
+          "Local container is not configured for this organization. Configure it in Organization settings → Sandbox providers, or select a configured provider for this agent.",
       },
     })
     expect(

@@ -1,3 +1,4 @@
+import { projectProviderContext } from "../../src/server/providers/context"
 // Opt-in live provider check. The launcher supplies an isolated local schema;
 // no customer subscription, balance, or provider settings are modified.
 import { writeFile } from "node:fs/promises"
@@ -8,7 +9,7 @@ import { createTracerDatabase } from "../../src/server/tracer/db"
 import { runTracerEffect as run } from "../../src/server/tracer/effect"
 import { defaultScorer } from "../../src/lib/tracer/scorers"
 import { defaultLibraryScorer } from "../../src/lib/tracer/scorer-libraries"
-import { updateSandboxProviderSettings } from "../../src/server/sandbox/providers-store"
+import { updateOrganizationSandboxSettings } from "../../src/server/sandbox/providers-store"
 import { ModalClient } from "modal"
 
 const organizationId = process.env.TEST_ORGANIZATION_ID!
@@ -103,14 +104,20 @@ try {
       (report.library as { error?: unknown }).error ? "failed" : "passed"
     )
   }
-  await updateSandboxProviderSettings(projectId, {
-    type: "configure",
-    input: { provider: "datool" },
-  })
-  await updateSandboxProviderSettings(projectId, {
-    type: "default",
-    provider: "datool",
-  })
+  await updateOrganizationSandboxSettings(
+    await projectProviderContext(projectId),
+    {
+      type: "configure",
+      input: { provider: "datool" },
+    }
+  )
+  await updateOrganizationSandboxSettings(
+    await projectProviderContext(projectId),
+    {
+      type: "default",
+      provider: "datool",
+    }
+  )
   for (const type of ["javascript", "python"] as const) {
     const code =
       type === "javascript"

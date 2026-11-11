@@ -6,7 +6,7 @@ import {
   migrateIsolatedPostgres,
 } from "./helpers/postgres"
 
-test("project provider routes and every scorer path enforce credentials and tenant isolation", async () => {
+test("organization provider routes and every scorer path enforce credentials and tenant isolation", async () => {
   const target = await createIsolatedPostgres()
   try {
     await migrateIsolatedPostgres(target)

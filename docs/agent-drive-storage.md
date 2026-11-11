@@ -8,14 +8,14 @@ move or replace any volume.
 | --- | --- | --- |
 | Local volume | Local container (Docker) | Named volume on the configured Docker daemon |
 | Datool volume | Datool Sandbox | Managed Modal Volume |
-| Modal volume | Project's Modal sandbox | Modal Volume in that account |
-| S3-compatible storage | Docker, Datool or Modal | Objects in the selected bucket, with version manifests in PostgreSQL |
-| Google Cloud Storage | Docker, Datool or Modal | Objects in the selected bucket, with version manifests in PostgreSQL |
+| Modal volume | Organization's Modal sandbox | Modal Volume in that account |
+| S3-compatible storage | Docker, Datool, Modal or Boat | Objects in the selected bucket, with version manifests in PostgreSQL |
+| Google Cloud Storage | Docker, Datool, Modal or Boat | Objects in the selected bucket, with version manifests in PostgreSQL |
 
 ## Self-hosted Docker and local storage
 
 No AWS, Google or Modal credentials are required. Make Docker available to the
-Datool web and Eve workers, configure **Local container** in Project settings →
+Datool web and Eve workers, configure **Local container** in Organization settings →
 Sandbox providers, and choose it in the agent's Sandbox settings. Pre-pull
 `node:22-bookworm-slim` and `python:3.13-slim`. Add a drive with **Local volume**
 storage. All workers accessing that drive must use the same Docker daemon.
@@ -34,17 +34,24 @@ dependencies and symlinks. The cloud snapshot limits below do not apply to them.
 
 ## Bucket-backed drives
 
-An owner or admin adds a connection in **Project settings → Storage providers**.
+An owner or admin adds a connection in **Organization settings → Storage providers**.
 Choose S3-compatible storage (AWS S3 or a compatible endpoint), or GCS. Provide an
 existing bucket and prefix, then verify and save. Datool verifies object creation
 and reading, and attempts to remove its probe. It does not create buckets or
 change bucket access policies.
 
+Storage connections are shared by all projects in the organization. Migration
+`0090` preserves connection IDs, credentials, bucket paths and existing drive
+references. Drives, manifests, versions and file access remain project-scoped;
+sharing a bucket connection does not grant access to another project's drives.
+Deleting the original project keeps its organization-owned connection. A
+connection used by any drive in the organization cannot be removed.
+
 S3 takes region, access key ID, secret access key, optional session token, and an
 optional endpoint. GCS takes the Google project, service-account email and PEM
 private key. Give the identity access only to its intended prefix. Keys are
 encrypted using `DATOOL_PROVIDER_ENCRYPTION_KEY` (or the existing authentication
-secret fallback), bound to both project and connection, and never sent to the
+secret fallback), bound to both organization and connection, and never sent to the
 agent sandbox. Keep the encryption key with your database backup. Editing a
 connection rotates credentials or its label; moving buckets requires a new
 connection so existing drives cannot silently point at empty storage.
@@ -52,7 +59,7 @@ connection so existing drives cannot silently point at empty storage.
 Custom S3 endpoints must resolve to public addresses and use HTTPS by default.
 For a trusted self-hosted installation that needs an internal S3 service, set
 `DATOOL_STORAGE_ALLOW_PRIVATE_ENDPOINTS=true` on every Datool/Eve worker. This is
-an installation-wide opt-in that allows project admins' storage endpoints to
+an installation-wide opt-in that allows organization admins' storage endpoints to
 reach the server's private network; enable it only where those admins are trusted.
 It also permits HTTP for internal endpoints.
 
@@ -115,7 +122,7 @@ Bucket versioning and provider backups can add protection against external delet
 For S3/GCS, supply `storageConnectionId` from `build_list_storage_connections`.
 `build_list_drive_versions`, `build_restore_drive_version` and
 `build_recover_drive` operate within the authenticated project. Connection
-credential management uses the owner/admin-only project settings API.
+credential management uses the owner/admin-only organization settings API.
 
 `GET /api/projects/{projectId}/drives/{driveId}/archive` exports a cloud drive;
 optional `?revision=<id>` exports a particular version. An owner/admin can `PUT`

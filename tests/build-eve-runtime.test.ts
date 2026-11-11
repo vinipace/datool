@@ -1,3 +1,5 @@
+import { saveOrganizationProviderKey } from "@/src/server/model-providers/store"
+import { projectProviderContext } from "@/src/server/providers/context"
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { randomUUID } from "node:crypto"
@@ -7,7 +9,6 @@ import { createAgent, updateAgent } from "@/src/server/build/agents"
 import { saveAction, saveProcedure } from "@/src/server/build/definitions"
 import { runAgentTurn } from "@/src/server/build/runtime"
 import { ConversationService } from "@/src/server/build/conversations"
-import { encryptProviderKey } from "@/src/server/model-providers/secrets"
 
 // Owns the engine boundary: actual Eve server, PostgreSQL workflow checkpoints,
 // vendor HTTP protocol, DB-authored configuration, and real process termination.
@@ -195,8 +196,10 @@ test("guardrails deny model access before execution and enforce per-channel conf
 }, 60_000)
 
 test("Jev and approval guardrails apply to the real Eve tool boundary per channel", async () => {
-  await context.database.execute(
-    sql`INSERT INTO project_model_provider(project_id,provider,encrypted_api_key) VALUES(${context.projectId},'typesafe-ai',${encryptProviderKey("jev-project-key", context.projectId, "typesafe-ai")})`
+  await saveOrganizationProviderKey(
+    await projectProviderContext(context.projectId, context.database),
+    "typesafe-ai",
+    "jev-project-key"
   )
   let agent = await createAgent(context, {
     name: "Jev",

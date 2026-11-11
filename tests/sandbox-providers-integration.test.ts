@@ -6,7 +6,7 @@ import {
   migrateIsolatedPostgres,
 } from "./helpers/postgres"
 
-test("sandbox settings enforce permissions, encryption, defaults and project isolation", async () => {
+test("sandbox settings enforce permissions, encryption, defaults and organization isolation", async () => {
   const target = await createIsolatedPostgres()
   try {
     await migrateIsolatedPostgres(target)

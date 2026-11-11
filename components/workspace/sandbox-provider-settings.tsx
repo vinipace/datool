@@ -1,5 +1,6 @@
 "use client"
 
+import { ProviderConnections } from "./provider-connections"
 import { useCallback, useState } from "react"
 import { ArrowLeft, Box, Boxes, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ import { useRemote } from "@/components/tracer/hooks"
 import { workspaceRequest } from "@/lib/workspace-api"
 import {
   sandboxProviderIds,
+  sandboxProviderFields as fields,
   sandboxProviderNames,
   type SandboxProviderId,
   type SandboxProviderSettings as Settings,
@@ -38,20 +40,6 @@ const descriptions = {
   modal: "Run scorers in a Modal sandbox using your workspace credentials.",
   boat: "Run agents and scorers in isolated containers on Boat VMs. Persistent drives use S3 or GCS.",
 }
-const fields = {
-  boat: [{ key: "apiKey", label: "API key", secret: true }],
-  datool: [],
-  local: [],
-  vercel: [
-    { key: "apiKey", label: "API token", secret: true },
-    { key: "teamId", label: "Team ID", secret: false },
-    { key: "projectId", label: "Vercel project ID", secret: false },
-  ],
-  modal: [
-    { key: "tokenId", label: "Token ID", secret: true },
-    { key: "tokenSecret", label: "Token secret", secret: true },
-  ],
-} as const
 
 function ProviderIcon({ id }: { id: SandboxProviderId }) {
   if (id === "datool")
@@ -63,20 +51,20 @@ function ProviderIcon({ id }: { id: SandboxProviderId }) {
 }
 
 export function SandboxProviderSettings({
-  projectId,
+  organizationId,
   canManage,
 }: {
-  projectId: string
+  organizationId: string
   canManage: boolean
 }) {
-  const path = `/api/projects/${encodeURIComponent(projectId)}/sandbox-providers`
+  const path = `/api/organizations/${encodeURIComponent(organizationId)}/sandbox-providers`
   const load = useCallback(
     (signal: AbortSignal) => workspaceRequest<Settings>(path, { signal }),
     [path]
   )
-  const state = useRemote(load, [projectId])
+  const state = useRemote(load, [organizationId])
   return (
-    <ProviderSettingsLayout description="Configure sandboxes for agents and JavaScript/Python scorers in this project. Datool Sandbox uses execution credits. Your own providers use their configured fallback order.">
+    <ProviderSettingsLayout description="Configure sandboxes for agents and JavaScript/Python scorers in this organization. Datool Sandbox uses execution credits. Your own providers use their configured fallback order.">
       {state.error && (
         <Notice variant="error" role="alert">
           {state.error.message}{" "}
@@ -86,7 +74,7 @@ export function SandboxProviderSettings({
         </Notice>
       )}
       <ProviderEditor
-        key={`${projectId}:${JSON.stringify(state.data)}`}
+        key={`${organizationId}:${JSON.stringify(state.data)}`}
         initial={state.data}
         path={path}
         canManage={canManage}
@@ -335,6 +323,13 @@ function ProviderEditor({
         Scorer errors and timeouts stop the run. Credentials are encrypted;
         cloud providers receive the scorer code and trace being evaluated.
       </p>
+      <ProviderConnections
+        kind="sandbox"
+        path={path}
+        connections={settings?.connections ?? []}
+        canManage={canManage && !disabled}
+        onChange={setSettings}
+      />
       <Dialog
         open={removing !== null}
         onOpenChange={(open) => {

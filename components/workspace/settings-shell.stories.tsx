@@ -27,6 +27,9 @@ const meta = {
     layout: "fullscreen",
     msw: {
       handlers: [
+        http.get("/api/organizations/:organizationId/projects", () =>
+          HttpResponse.json({ projects: [], total: 0, page: 1, pageSize: 100 })
+        ),
         http.get("/api/auth/organization/list", () =>
           HttpResponse.json([organization, otherOrganization])
         ),
@@ -75,6 +78,16 @@ export const OrganizationSettings: Story = {
       "/billing"
     )
     await expect(canvas.getByRole("heading", { name: "Members" })).toBeVisible()
+    for (const [name, href] of [
+      ["AI providers", "/settings/ai-providers"],
+      ["Sandbox providers", "/settings/sandbox-providers"],
+      ["Storage providers", "/settings/storage-providers"],
+    ])
+      await expect(canvas.getByRole("link", { name })).toHaveAttribute(
+        "href",
+        href
+      )
+
     await expect(
       canvas.queryByRole("button", { name: /^Switch project:/ })
     ).not.toBeInTheDocument()
@@ -83,7 +96,7 @@ export const OrganizationSettings: Story = {
     )
     const body = within(canvasElement.ownerDocument.body)
     await expect(
-      body.findByRole("link", { name: organization.name })
+      body.findByRole("button", { name: `Projects in ${organization.name}` })
     ).resolves.toHaveAttribute("aria-current", "true")
     await userEvent.type(
       body.getByRole("textbox", { name: "Find organization" }),
@@ -96,18 +109,22 @@ export const OrganizationSettings: Story = {
     await userEvent.click(
       body.getByRole("button", { name: "Create organization" })
     )
-    const dialog = within(
-      await body.findByRole("dialog", { name: "Create organization" })
+    await expect(mocked(navigateWorkspace)).toHaveBeenLastCalledWith(
+      "/organizations/new"
     )
-    await userEvent.click(dialog.getByRole("button", { name: "Cancel" }))
+    // Navigation is mocked; reopen the current organization menu to switch.
     const trigger = canvas.getByRole("button", {
       name: "Switch organization: Datool demo",
     })
-    await expect(trigger).toHaveFocus()
     await userEvent.click(trigger)
     mocked(navigateWorkspace).mockClear()
     await userEvent.click(
-      await body.findByRole("link", { name: otherOrganization.name })
+      await body.findByRole("button", {
+        name: `Projects in ${otherOrganization.name}`,
+      })
+    )
+    await userEvent.click(
+      await body.findByRole("link", { name: "View organization" })
     )
     await waitFor(() =>
       expect(navigateWorkspace).toHaveBeenCalledWith("/members")
@@ -138,8 +155,13 @@ export const BillingNavigation: Story = {
     )
     mocked(navigateWorkspace).mockClear()
     await userEvent.click(
+      await within(canvasElement.ownerDocument.body).findByRole("button", {
+        name: `Projects in ${otherOrganization.name}`,
+      })
+    )
+    await userEvent.click(
       await within(canvasElement.ownerDocument.body).findByRole("link", {
-        name: otherOrganization.name,
+        name: "View organization",
       })
     )
     await waitFor(() =>

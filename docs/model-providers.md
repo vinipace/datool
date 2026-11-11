@@ -1,17 +1,38 @@
-# Project model providers
+# Organization model providers
 
-Project settings → AI providers (`/p/<projectSlug>/settings/ai-providers`) lets
+Organization settings → AI providers (`/settings/ai-providers`) lets
 organization owners/admins add, replace, or remove a Vercel AI Gateway API key,
 an OpenAI API key, or a TypeSafe AI API key. The table lists configured providers; **Add provider**
 opens the provider picker and credential dialog. Members can read
 configuration status, but cannot read or change credentials. A saved key means
 configured, not verified: a scorer request checks its validity and model access.
 
+AI, sandbox and storage connections belong to the organization. Configure them at
+`/settings/ai-providers`, `/settings/sandbox-providers` and
+`/settings/storage-providers`, even before creating a project. Management APIs are
+`/api/organizations/{organizationId}/providers`, `/sandbox-providers` and
+`/storage-connections`. Writes require an organization owner/admin session and a
+trusted origin. Project provider APIs remain readable but reject mutations.
+
+Migration `0090_organization_providers.sql` imports every old account separately,
+retaining its project assignment and the ciphertext needed to access existing
+native volumes. An **Imported connections** section lets admins edit credentials,
+make a connection the shared default, or switch its assigned projects to the
+shared default. Projects without an assignment inherit the shared default for
+that provider. Removing an assigned connection is rejected. New and rotated
+credentials use organization-bound encryption; imported ciphertext retains its
+original authenticated scope through an organization-bound origin record, which
+survives deletion of the original project. Keep the encryption secret unchanged
+while applying the migration.
+Pause the old web and Eve services for this upgrade, apply migration `0090`,
+then start both services on the new version. Older versions require the removed
+project credential tables and cannot run against the migrated schema.
+
 Apply migrations with `bun run db:migrate`. `0020_project_model_providers.sql`
 creates credential storage; `0028_typesafe_ai_provider.sql` adds TypeSafe AI to
 the provider constraint while retaining existing Gateway keys.
 `0031_openai_provider.sql` adds direct OpenAI credentials.
-Keys are stored in PostgreSQL encrypted with AES-256-GCM and bound to the project
+Keys are stored in PostgreSQL encrypted with AES-256-GCM and bound to the organization
 and provider. Encryption uses `DATOOL_PROVIDER_ENCRYPTION_KEY` when set, otherwise
 a domain-separated key derived from `BETTER_AUTH_SECRET`. Keep the encryption
 secret stable and shared across server processes. Rotating/changing that secret
@@ -19,11 +40,11 @@ requires admins to re-enter the provider keys. API responses contain only status
 and update time, never plaintext, ciphertext, or a key preview.
 
 Selecting a Gateway model persists `provider: "vercel-ai-gateway"` and a qualified
-model ID such as `openai/gpt-4.1-mini`. Execution uses only that project's saved
-key and the fixed Gateway endpoint; there is no server-wide Gateway fallback.
+model ID such as `openai/gpt-4.1-mini`. Execution uses only that project's effective organization
+connection and the fixed Gateway endpoint; there is no server-wide Gateway fallback.
 This applies to custom sample tests, recorded-trace tests, saved evaluations,
 and immutable scorer versions. Existing scorers without `provider` keep their
-server OpenAI configuration. Selecting a model in the editor selects its project provider and model together.
+server OpenAI configuration. Selecting a model in the editor selects its organization provider and model together.
 
 `components/ui/model-combobox.tsx` is a controlled reusable picker. Callers own
 fetching and credentials. It filters by model type (language by default), searches
@@ -38,7 +59,7 @@ strict structured output request; execution reports those failures.
 
 Scorers also offer Gateway models with type `evaluation`, including TypeSafe AI's
 `typesafe-ai/jev`. Datool uses AI SDK 7's experimental `evaluate` API with the
-project's saved Gateway key for these models. The scorer and its immutable
+organization's saved Gateway key for these models. The scorer and its immutable
 versions persist `modelType: "evaluation"`; existing versions without this field
 continue to use Chat Completions. Rendered messages become the shared evaluation
 state, and a typed Choice question maps the selected answer back to the configured
@@ -49,12 +70,12 @@ reason, support image evidence, or use the chain-of-thought option. Selecting on
 clears those unsupported settings. Prompt editors continue to offer language
 models only.
 
-For direct Jev access, choose **Add provider → TypeSafe AI** in project settings
+For direct Jev access, choose **Add provider → TypeSafe AI** in organization settings
 and save a TypeSafe API key. In the scorer's single **Model** combobox, choose
 **Jev** in the **TypeSafe AI** group (`jev-latest`). Gateway Jev appears in the
 same list under **Vercel AI Gateway**. The scorer and immutable versions
 persist `provider: "typesafe-ai"` and `modelType: "evaluation"`. Execution uses
-`@ai-sdk/typesafe-ai` with the project's TypeSafe key and the fixed endpoint
+`@ai-sdk/typesafe-ai` with the organization's TypeSafe connection and the fixed endpoint
 `https://api.typesafe.ai/v1/systemone`. It does not use Gateway or a server-wide
 `TYPESAFE_AI_API_KEY`. The direct model list uses the documented alias and remains
 available during Gateway catalog outages. Direct version IDs are accepted by the
@@ -62,7 +83,7 @@ scorer API and preserved by the picker when saved.
 
 Selecting a different model updates the provider and model atomically, including
 when switching between direct and Gateway Jev. Key updates/removals affect only the chosen
-provider in the chosen project, and executions never fall back to another key or
+connection and every project that uses it, and executions never fall back to another key or
 provider. Direct responses retain the resolved model ID, token usage, native
 probabilities, and separate TypeSafe confidence. As with Gateway, a saved key is
 configuration status; an evaluation request verifies access.
@@ -101,7 +122,7 @@ References: [authentication](https://vercel.com/docs/ai-gateway/authentication-a
 
 ## Direct OpenAI
 
-Choose **Add provider → OpenAI** and save the project's OpenAI API key.
+Choose **Add provider → OpenAI** and save the organization's OpenAI API key.
 Prompt and scorer model pickers include an **OpenAI** group derived from the
 same cached Gateway catalog: descriptions, prices, context/output limits,
 modalities, and tags are reused without a second metadata request. Prices shown

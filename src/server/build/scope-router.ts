@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm"
 import { GATEWAY_PROVIDER, TYPESAFE_PROVIDER } from "@/src/lib/model-providers"
 import { defaultScorer, type ScorerInput } from "@/src/lib/tracer/scorers"
 import type {
@@ -6,7 +5,10 @@ import type {
   JsonObject,
   TraceDetail,
 } from "@/src/lib/tracer/contracts"
-import { getProjectProviderKey } from "../model-providers/store"
+import {
+  getProjectProviderKey,
+  getProjectProviders,
+} from "../model-providers/store"
 import { runEvaluationModelScorer } from "../tracer/evaluation-model-scorer"
 import { runTracerEffect as run } from "../tracer/effect"
 import type { TracerService } from "../tracer/service"
@@ -89,17 +91,16 @@ export async function routeAgentRequest(
     options.signal?.throwIfAborted()
     if (!input.instructions.trim() || JSON.stringify(evidence).length > 64_000)
       throw new Error("Routing scope is missing or exceeds the evidence limit.")
-    const configured = await context.database.execute<{ provider: string }>(sql`
-      SELECT provider FROM project_model_provider WHERE project_id=${context.projectId}
-        AND provider IN (${TYPESAFE_PROVIDER}, ${GATEWAY_PROVIDER})`)
-    provider = configured.rows.some((row) => row.provider === TYPESAFE_PROVIDER)
-      ? TYPESAFE_PROVIDER
-      : configured.rows.some((row) => row.provider === GATEWAY_PROVIDER)
-        ? GATEWAY_PROVIDER
-        : undefined
+    const configured = await getProjectProviders(
+      context.projectId,
+      context.database
+    )
+    provider = [TYPESAFE_PROVIDER, GATEWAY_PROVIDER].find((id) =>
+      configured.some((row) => row.id === id && row.configured)
+    )
     if (!provider)
       throw new Error(
-        "Configure a project TypeSafe AI or AI Gateway key to enable routing."
+        "Configure an organization TypeSafe AI or AI Gateway key to enable routing."
       )
     model = provider === TYPESAFE_PROVIDER ? "jev-latest" : "typesafe-ai/jev"
     const apiKey = await getProjectProviderKey(

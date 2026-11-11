@@ -222,9 +222,15 @@ try {
   })
   pools = await import("../lib/db")
   if (liveModelKey) {
-    const { saveProjectProviderKey } =
+    const { projectProviderContext } =
+      await import("../src/server/providers/context")
+    const { saveOrganizationProviderKey } =
       await import("../src/server/model-providers/store")
-    await saveProjectProviderKey(target.projectId, "openai", liveModelKey)
+    await saveOrganizationProviderKey(
+      await projectProviderContext(target.projectId),
+      "openai",
+      liveModelKey
+    )
   }
   const { getAuth } = await import("../lib/auth")
   const auth = getAuth()
@@ -569,7 +575,9 @@ try {
   await page.waitForURL(/\/build\/agents\/(?!new)[^/?]+/, { timeout: 30_000 })
   const agentId = new URL(page.url()).pathname.split("/").at(-1)!
   await selectAgentSection(page, "Settings")
-  await page.getByRole("textbox", { name: "Workspace name", exact: true }).waitFor()
+  await page
+    .getByRole("textbox", { name: "Workspace name", exact: true })
+    .waitFor()
   await page.screenshot({
     path: join(evidence, "agent-settings.png"),
     fullPage: true,
@@ -801,7 +809,10 @@ try {
   await page
     .getByRole("switch", { name: "Require human for actions", exact: true })
     .check()
-  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor()
+  await page
+    .getByRole("status")
+    .filter({ hasText: /^Saved$/ })
+    .waitFor()
   const configured = await call("build_get_agent", { agentId })
   assert.equal(configured.configuration.guardrails.maxOutputTokens, 128)
   assert.deepEqual(configured.configuration.guardrails.blockedTopics, [

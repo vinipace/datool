@@ -26,7 +26,14 @@ export async function managedProjectAvailable(
     [projectId]
   )
   if (!rows[0]) return false
-  const billing = await getBilling(rows[0].organization_id)
+  return managedOrganizationAvailable(rows[0].organization_id, runtime)
+}
+export async function managedOrganizationAvailable(
+  organizationId: string,
+  runtime: "model" | "sandbox"
+) {
+  if (!managedRuntimeConfigured(runtime)) return false
+  const billing = await getBilling(organizationId)
   if (
     billing?.status !== "active" ||
     !billing.access_until ||
@@ -34,7 +41,7 @@ export async function managedProjectAvailable(
   )
     return false
   // Keep the option selectable when exhausted, so its funding source is visible.
-  return (await executionCredits.usage(rows[0].organization_id)).allowance > 0
+  return (await executionCredits.usage(organizationId)).allowance > 0
 }
 export async function assertManagedProject(
   projectId: string,

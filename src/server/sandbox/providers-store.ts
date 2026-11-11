@@ -1,11 +1,6 @@
-import { managedProjectAvailable } from "@/src/server/execution-credits/config"
-import { db } from "@/lib/db"
 import { sql } from "drizzle-orm"
+import { managedOrganizationAvailable } from "@/src/server/execution-credits/config"
 import type { TracerDatabase } from "@/src/server/tracer/db"
-import {
-  decryptProviderKey,
-  encryptProviderKey,
-} from "@/src/server/model-providers/secrets"
 import {
   sandboxCredentialsSchema,
   sandboxExecutionOrder,
@@ -16,187 +11,249 @@ import {
   type SandboxProviderInput,
   type SandboxProviderSettings,
 } from "@/src/lib/sandbox-providers"
+import {
+  projectProviderContext,
+  type OrganizationProviderContext,
+} from "../providers/context"
+import {
+  organizationConnections,
+  effectiveConnections,
+  connectionSecret,
+  connectionInfo,
+  saveConnection,
+  changeConnection,
+  ProviderConnectionError,
+  type ProviderConnectionRow,
+} from "../providers/connections"
 
-type SettingsRow = {
-  providers: Partial<Record<SandboxProviderId, string | null>>
-  default_provider: SandboxProviderId | null
+export class SandboxSettingsValidationError extends ProviderConnectionError {}
+type SettingsRow = { default_provider: SandboxProviderId | null }
+async function settings(context: OrganizationProviderContext) {
+  return (
+    await context.database.execute<SettingsRow>(
+      sql`SELECT default_provider FROM organization_sandbox_settings WHERE organization_id=${context.organizationId}`
+    )
+  ).rows[0]
 }
-const initialSettings = (): SettingsRow => ({
-  providers: { local: null },
-  default_provider: "local",
+const local = (organizationId: string): ProviderConnectionRow => ({
+  id: "",
+  organization_id: organizationId,
+  kind: "sandbox",
+  provider: "local",
+  name: "Local container",
+  encrypted_credentials: null,
+  legacy_project_id: null,
+  is_default: true,
+  updated_at: new Date(0),
 })
-export class SandboxSettingsValidationError extends Error {}
-
-function credentials(
-  projectId: string,
-  row: SettingsRow,
-  provider: SandboxProviderId
-): SandboxCredentials {
-  if (provider === "local" || provider === "datool") return { provider }
-  const encrypted = row.providers[provider]
-  if (!encrypted) throw new Error("Sandbox credentials are unavailable.")
+function credentials(row: ProviderConnectionRow): SandboxCredentials {
+  if (row.provider === "local" || row.provider === "datool")
+    return { provider: row.provider }
   const config = sandboxCredentialsSchema.parse(
-    JSON.parse(decryptProviderKey(encrypted, projectId, `sandbox:${provider}`))
+    JSON.parse(connectionSecret(row)!)
   )
-  if (config.provider !== provider)
+  if (config.provider !== row.provider)
     throw new Error("Sandbox credentials do not match the provider.")
   return config
 }
-
-async function readSettings(
-  projectId: string,
-  database?: TracerDatabase
-): Promise<SettingsRow> {
-  const result = database
-    ? await database.execute<SettingsRow>(
-        sql`SELECT providers, default_provider FROM project_sandbox_settings WHERE project_id = ${projectId}`
-      )
-    : await db.query<SettingsRow>(
-        "SELECT providers, default_provider FROM project_sandbox_settings WHERE project_id = $1",
-        [projectId]
-      )
-  return result.rows[0] ?? initialSettings()
-}
-
-function configuredProviders(row: SettingsRow) {
-  return sandboxProviderIds.filter((id) => Object.hasOwn(row.providers, id))
-}
-
-export async function getSandboxProviderSettings(
-  projectId: string
-): Promise<SandboxProviderSettings> {
-  const row = await readSettings(projectId)
+function publicSettings(
+  rows: ProviderConnectionRow[],
+  defaultProvider: SandboxProviderId | null
+): SandboxProviderSettings {
+  const configured = rows.map((row) => row.provider as SandboxProviderId)
   return {
-    defaultProvider: row.default_provider,
-    executionOrder: sandboxExecutionOrder(
-      configuredProviders(row),
-      row.default_provider
-    ),
+    defaultProvider,
+    executionOrder: sandboxExecutionOrder(configured, defaultProvider),
     providers: sandboxProviderIds.map((id) => {
-      const configured = Object.hasOwn(row.providers, id)
-      if (id === "vercel" && configured) {
-        // A rotated/unavailable encryption key must not prevent replacing credentials.
+      const row = rows.find((row) => row.provider === id)
+      if (row && id === "vercel")
         try {
-          const config = credentials(projectId, row, id)
+          const config = credentials(row)
           if (config.provider === "vercel")
             return {
               id,
-              configured,
+              configured: true,
               teamId: config.teamId,
               projectId: config.projectId,
             }
         } catch {
-          /* Keep the configured state, without exposing secrets or errors. */
+          /* Full replacement can recover unreadable credentials. */
         }
-      }
-      return { id, configured }
+      return { id, configured: !!row }
     }),
   }
 }
-
+export async function getOrganizationSandboxSettings(
+  context: OrganizationProviderContext
+) {
+  const config = await settings(context)
+  const rows = await organizationConnections(context, "sandbox")
+  const shared = rows.filter((row) => row.is_default)
+  if (!config && !shared.length) shared.push(local(context.organizationId))
+  const connections = await connectionInfo(context, rows)
+  for (const item of connections) {
+    const row = rows.find((row) => row.id === item.connectionId)!
+    if (row.provider === "vercel")
+      try {
+        const config = credentials(row)
+        if (config.provider === "vercel")
+          item.metadata = { teamId: config.teamId, projectId: config.projectId }
+      } catch {
+        /* Keep secrets hidden. */
+      }
+  }
+  return {
+    ...publicSettings(
+      shared,
+      config?.default_provider ?? (config ? null : "local")
+    ),
+    connections,
+  }
+}
+async function projectSettings(projectId: string, database?: TracerDatabase) {
+  const context = await projectProviderContext(projectId, database)
+  const config = await settings(context)
+  const rows = await effectiveConnections(context, "sandbox")
+  if (!config && !rows.length) rows.push(local(context.organizationId))
+  const preference = (
+    await context.database.execute<SettingsRow>(
+      sql`SELECT default_provider FROM project_sandbox_preferences WHERE project_id=${projectId}`
+    )
+  ).rows[0]
+  return {
+    rows: preference && preference.default_provider === null ? [] : rows,
+    defaultProvider: preference
+      ? preference.default_provider
+      : config
+        ? config.default_provider
+        : ("local" as const),
+  }
+}
+export async function getSandboxProviderSettings(projectId: string) {
+  const { rows, defaultProvider } = await projectSettings(projectId)
+  return publicSettings(rows, defaultProvider)
+}
 export async function getSandboxExecutionProviders(
   projectId: string,
   database?: TracerDatabase
 ) {
-  const row = await readSettings(projectId, database)
+  const { rows, defaultProvider } = await projectSettings(projectId, database)
   return sandboxExecutionOrder(
-    configuredProviders(row),
-    row.default_provider
+    rows.map((row) => row.provider as SandboxProviderId),
+    defaultProvider
   ).map((id) => ({
     id,
-    credentials: () => credentials(projectId, row, id),
+    credentials: () => credentials(rows.find((row) => row.provider === id)!),
   }))
 }
-
-/** Persistent workloads select one provider explicitly and never fall back to empty storage. */
 export async function getSandboxProviderCredentials(
   projectId: string,
   provider: SandboxProviderId,
   database?: TracerDatabase
-): Promise<SandboxCredentials> {
-  const row = await readSettings(projectId, database)
-  if (!Object.hasOwn(row.providers, provider))
+) {
+  const { rows } = await projectSettings(projectId, database)
+  const row = rows.find((row) => row.provider === provider)
+  if (!row)
     throw new SandboxSettingsValidationError(
-      `${sandboxProviderNames[provider]} is not configured for this project. Configure it in Project settings → Sandbox providers, or select a configured provider for this agent.`
+      `${sandboxProviderNames[provider]} is not configured for this organization. Configure it in Organization settings → Sandbox providers, or select a configured provider for this agent.`
     )
-  return credentials(projectId, row, provider)
+  return credentials(row)
 }
-
-export async function updateSandboxProviderSettings(
-  projectId: string,
+export async function updateOrganizationSandboxSettings(
+  context: OrganizationProviderContext,
   action:
-    | { type: "configure"; input: SandboxProviderInput }
-    | { type: "remove" | "default"; provider: SandboxProviderId }
+    | { type: "configure"; input: SandboxProviderInput; connectionId?: string }
+    | {
+        type: "remove" | "default"
+        provider: SandboxProviderId
+        connectionId?: string
+      }
 ) {
   const target =
     action.type === "configure" ? action.input.provider : action.provider
   if (
     target === "datool" &&
     action.type !== "remove" &&
-    !(await managedProjectAvailable(projectId, "sandbox"))
+    !(await managedOrganizationAvailable(context.organizationId, "sandbox"))
   )
     throw new SandboxSettingsValidationError(
       "Datool Sandbox requires an active paid plan and a configured managed runtime."
     )
-  const client = await db.connect()
-  try {
-    await client.query("BEGIN")
-    await client.query(
-      "INSERT INTO project_sandbox_settings (project_id) VALUES ($1) ON CONFLICT DO NOTHING",
-      [projectId]
+  await context.database.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT id FROM organization WHERE id=${context.organizationId} FOR UPDATE`
     )
-    const result = await client.query<SettingsRow>(
-      "SELECT providers, default_provider FROM project_sandbox_settings WHERE project_id = $1 FOR UPDATE",
-      [projectId]
+    const scoped = { ...context, database: tx as unknown as TracerDatabase }
+    if (!(await settings(scoped))) {
+      await tx.execute(
+        sql`INSERT INTO organization_sandbox_settings(organization_id,default_provider) VALUES(${context.organizationId},'local')`
+      )
+      await saveConnection(scoped, "sandbox", "local", null)
+    }
+    const rows = await organizationConnections(scoped, "sandbox")
+    const previous = rows.find(
+      (row) =>
+        row.provider === target &&
+        (action.connectionId ? row.id === action.connectionId : row.is_default)
     )
-    const row = result.rows[0]
     if (action.type === "configure") {
-      const provider = action.input.provider
-      let previous: SandboxCredentials | undefined
-      if (Object.hasOwn(row.providers, provider)) {
+      let prior: SandboxCredentials | undefined
+      if (previous)
         try {
-          previous = credentials(projectId, row, provider)
+          prior = credentials(previous)
         } catch {
-          /* Full replacement can recover an unreadable key. */
+          /* Replacing all fields repairs credentials. */
         }
-      }
       const parsed = sandboxCredentialsSchema.safeParse({
-        ...previous,
+        ...prior,
         ...action.input,
       })
       if (!parsed.success)
         throw new SandboxSettingsValidationError(
           "Provide all credentials to configure this sandbox provider."
         )
-      row.providers[provider] =
-        provider === "local" || provider === "datool"
+      await saveConnection(
+        scoped,
+        "sandbox",
+        target,
+        ["local", "datool"].includes(target)
           ? null
-          : encryptProviderKey(
-              JSON.stringify(parsed.data),
-              projectId,
-              `sandbox:${provider}`
-            )
-      row.default_provider ??= provider
+          : JSON.stringify(parsed.data),
+        action.connectionId
+      )
+      await tx.execute(
+        sql`UPDATE organization_sandbox_settings SET default_provider=coalesce(default_provider,${target}),updated_at=now() WHERE organization_id=${context.organizationId}`
+      )
     } else if (action.type === "default") {
-      if (!Object.hasOwn(row.providers, action.provider))
+      if (!previous?.is_default)
         throw new SandboxSettingsValidationError(
-          "Configure this provider before making it the default."
+          "Configure an organization provider before making it the default."
         )
-      row.default_provider = action.provider
-    } else {
-      delete row.providers[action.provider]
-      if (row.default_provider === action.provider)
-        row.default_provider = configuredProviders(row)[0] ?? null
+      await tx.execute(
+        sql`UPDATE organization_sandbox_settings SET default_provider=${target},updated_at=now() WHERE organization_id=${context.organizationId}`
+      )
+      await tx.execute(
+        sql`DELETE FROM project_sandbox_preferences WHERE project_id IN (SELECT id FROM project WHERE organization_id=${context.organizationId})`
+      )
+    } else if (previous) {
+      await changeConnection(scoped, "sandbox", previous.id, "remove")
+      const remaining = (await organizationConnections(scoped, "sandbox"))
+        .filter((row) => row.is_default)
+        .sort(
+          (a, b) =>
+            sandboxProviderIds.indexOf(a.provider as SandboxProviderId) -
+            sandboxProviderIds.indexOf(b.provider as SandboxProviderId)
+        )
+      if (!remaining.some((row) => row.provider === target))
+        await tx.execute(
+          sql`DELETE FROM project_sandbox_preferences p WHERE p.default_provider=${target}
+            AND p.project_id IN (SELECT id FROM project WHERE organization_id=${context.organizationId})
+            AND NOT EXISTS (SELECT 1 FROM project_provider_bindings b WHERE b.project_id=p.project_id AND b.organization_id=${context.organizationId} AND b.kind='sandbox' AND b.provider=${target})`
+        )
+      if (previous.is_default)
+        await tx.execute(
+          sql`UPDATE organization_sandbox_settings SET default_provider=${remaining[0]?.provider ?? null},updated_at=now() WHERE organization_id=${context.organizationId} AND default_provider=${target}`
+        )
     }
-    await client.query(
-      "UPDATE project_sandbox_settings SET providers = $2::jsonb, default_provider = $3, updated_at = now() WHERE project_id = $1",
-      [projectId, JSON.stringify(row.providers), row.default_provider]
-    )
-    await client.query("COMMIT")
-  } catch (error) {
-    await client.query("ROLLBACK")
-    throw error
-  } finally {
-    client.release()
-  }
+  })
 }

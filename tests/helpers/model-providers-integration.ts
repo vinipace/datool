@@ -1,3 +1,5 @@
+import { PATCH as changeProvider } from "../../app/api/organizations/[organizationId]/provider-connections/[connectionId]/route"
+import { PUT as retiredPUT } from "../../app/api/projects/[projectId]/providers/route"
 import { strict as assert } from "node:assert"
 import { makeSignature } from "better-auth/crypto"
 import { Effect } from "effect"
@@ -7,12 +9,15 @@ import {
   GET,
   PUT,
   DELETE,
-} from "../../app/api/projects/[projectId]/providers/route"
+} from "../../app/api/organizations/[organizationId]/providers/route"
 import { GET as modelsGET } from "../../app/api/projects/[projectId]/providers/models/route"
 import { POST as testScorer } from "../../app/api/scorers/test/route"
 import { defaultScorer } from "../../src/lib/tracer/scorers"
 import { defaultLibraryScorer } from "../../src/lib/tracer/scorer-libraries"
-import { GET as libraryCatalog, POST as selectLibrary } from "../../app/api/scorers/libraries/route"
+import {
+  GET as libraryCatalog,
+  POST as selectLibrary,
+} from "../../app/api/scorers/libraries/route"
 import {
   GATEWAY_PROVIDER,
   OPENAI_PROVIDER,
@@ -59,8 +64,22 @@ try {
     `INSERT INTO project (id, organization_id, name, slug) VALUES ('a', $1, 'A', 'a'), ('b', $1, 'B', 'b')`,
     [organization.id]
   )
+  const otherOrg = await getAuth().api.createOrganization({
+    headers: new Headers({ cookie: owner.cookie }),
+    body: { name: "Other organization", slug: "other-org" },
+  })
+  assert(otherOrg)
+  await db.query("UPDATE project SET organization_id=$1 WHERE id='b'", [
+    otherOrg.id,
+  ])
+  await db.query(
+    "INSERT INTO project(id,organization_id,name,slug) VALUES('c',$1,'C','c')",
+    [organization.id]
+  )
   const context = (projectId = "a") => ({
-    params: Promise.resolve({ projectId }),
+    params: Promise.resolve({
+      organizationId: projectId === "b" ? otherOrg.id : organization.id,
+    }),
   })
   function request(
     method: string,
@@ -78,12 +97,24 @@ try {
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
   }
+  assert.equal(
+    (
+      await retiredPUT(request("PUT", owner.cookie, { provider: "local" }), {
+        params: Promise.resolve({ projectId: "a" }),
+      })
+    ).status,
+    403
+  )
   const keyA = "test-gateway-project-a"
   const keyB = "test-gateway-project-b"
   const input = { provider: GATEWAY_PROVIDER, apiKey: keyA }
   assert.equal((await GET(request("GET", ""), context())).status, 401)
   assert.equal(
-    (await modelsGET(request("GET", outsider.cookie), context())).status,
+    (
+      await modelsGET(request("GET", outsider.cookie), {
+        params: Promise.resolve({ projectId: "a" }),
+      })
+    ).status,
     403
   )
   assert.equal(
@@ -132,10 +163,11 @@ try {
   assert.equal((await status.json()).providers[0].configured, true)
   const row = (
     await db.query(
-      "SELECT encrypted_api_key FROM project_model_provider WHERE project_id='a'"
+      "SELECT encrypted_credentials AS encrypted_api_key FROM organization_provider_connections WHERE kind='model' AND organization_id=(SELECT organization_id FROM project WHERE id='a')"
     )
   ).rows[0]
   assert(!row.encrypted_api_key.includes(keyA))
+  assert.equal(await getGatewayKey("c"), keyA)
   assert.equal(await getGatewayKey("a"), keyA)
   await assert.rejects(() => getGatewayKey("b"), /Configure Vercel/)
   assert.equal(
@@ -190,7 +222,7 @@ try {
   }
   const typeSafeRow = (
     await db.query(
-      "SELECT encrypted_api_key FROM project_model_provider WHERE project_id='a' AND provider=$1",
+      "SELECT encrypted_credentials AS encrypted_api_key FROM organization_provider_connections WHERE kind='model' AND organization_id=(SELECT organization_id FROM project WHERE id='a') AND provider=$1",
       [TYPESAFE_PROVIDER]
     )
   ).rows[0]
@@ -209,32 +241,101 @@ try {
   assert.equal(await getGatewayKey("b"), keyB)
 
   const openaiKeys = ["test-openai-project-a", "test-openai-project-b"] as const
-  const openaiConfig = { ...defaultScorer, provider: OPENAI_PROVIDER, model: "gpt-4.1-mini" }
-  await assert.rejects(() => resolveJudgeOptions(openaiConfig, "a"), /Configure OpenAI/)
+  const openaiConfig = {
+    ...defaultScorer,
+    provider: OPENAI_PROVIDER,
+    model: "gpt-4.1-mini",
+  }
+  await assert.rejects(
+    () => resolveJudgeOptions(openaiConfig, "a"),
+    /Configure OpenAI/
+  )
   for (const cookie of [member.cookie, outsider.cookie]) {
-    assert.equal((await PUT(request("PUT", cookie, { provider: OPENAI_PROVIDER, apiKey: openaiKeys[0] }), context())).status, 403)
-    assert.equal((await DELETE(request("DELETE", cookie, { provider: OPENAI_PROVIDER }), context())).status, 403)
+    assert.equal(
+      (
+        await PUT(
+          request("PUT", cookie, {
+            provider: OPENAI_PROVIDER,
+            apiKey: openaiKeys[0],
+          }),
+          context()
+        )
+      ).status,
+      403
+    )
+    assert.equal(
+      (
+        await DELETE(
+          request("DELETE", cookie, { provider: OPENAI_PROVIDER }),
+          context()
+        )
+      ).status,
+      403
+    )
   }
   for (const [index, projectId] of ["a", "b"].entries()) {
     const apiKey = openaiKeys[index]
-    const saved = await PUT(request("PUT", owner.cookie, { provider: OPENAI_PROVIDER, apiKey }), context(projectId))
+    const saved = await PUT(
+      request("PUT", owner.cookie, { provider: OPENAI_PROVIDER, apiKey }),
+      context(projectId)
+    )
     assert.equal(saved.status, 200)
     assert(!(await saved.text()).includes(apiKey))
     assert.deepEqual(await resolveJudgeOptions(openaiConfig, projectId), {
-      provider: OPENAI_PROVIDER, apiKey, baseUrl: "https://api.openai.com/v1",
+      provider: OPENAI_PROVIDER,
+      apiKey,
+      baseUrl: "https://api.openai.com/v1",
     })
-    const row = (await db.query("SELECT encrypted_api_key FROM project_model_provider WHERE project_id=$1 AND provider=$2", [projectId, OPENAI_PROVIDER])).rows[0]
+    const row = (
+      await db.query(
+        "SELECT encrypted_credentials AS encrypted_api_key FROM organization_provider_connections WHERE kind='model' AND organization_id=(SELECT organization_id FROM project WHERE id=$1) AND provider=$2",
+        [projectId, OPENAI_PROVIDER]
+      )
+    ).rows[0]
     assert(!row.encrypted_api_key.includes(apiKey))
-    assert.throws(() => decryptProviderKey(row.encrypted_api_key, projectId, GATEWAY_PROVIDER), /Unable to unlock/)
-    assert.throws(() => decryptProviderKey(row.encrypted_api_key, projectId === "a" ? "b" : "a", OPENAI_PROVIDER), /Unable to unlock/)
-    const preview = await previewPrompt({
-      config: { ...defaultPrompt, provider: OPENAI_PROVIDER, model: "gpt-4.1-mini" },
-      messages: [{ role: "user", content: "Hi" }],
-    }, projectId, { fetch: (async (url, init) => {
-      assert.equal(String(url), "https://api.openai.com/v1/responses")
-      assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${apiKey}`)
-      return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "Hello" }] }] })
-    }) as typeof fetch })
+    assert.throws(
+      () =>
+        decryptProviderKey(row.encrypted_api_key, projectId, GATEWAY_PROVIDER),
+      /Unable to unlock/
+    )
+    assert.throws(
+      () =>
+        decryptProviderKey(
+          row.encrypted_api_key,
+          projectId === "a" ? "b" : "a",
+          OPENAI_PROVIDER
+        ),
+      /Unable to unlock/
+    )
+    const preview = await previewPrompt(
+      {
+        config: {
+          ...defaultPrompt,
+          provider: OPENAI_PROVIDER,
+          model: "gpt-4.1-mini",
+        },
+        messages: [{ role: "user", content: "Hi" }],
+      },
+      projectId,
+      {
+        fetch: (async (url, init) => {
+          assert.equal(String(url), "https://api.openai.com/v1/responses")
+          assert.equal(
+            new Headers(init?.headers).get("authorization"),
+            `Bearer ${apiKey}`
+          )
+          return Response.json({
+            status: "completed",
+            output: [
+              {
+                type: "message",
+                content: [{ type: "output_text", text: "Hello" }],
+              },
+            ],
+          })
+        }) as typeof fetch,
+      }
+    )
     assert.equal(preview.content, "Hello")
   }
 
@@ -247,11 +348,25 @@ try {
       const body = JSON.parse(String(init?.body))
       assert.equal(body.text.format.strict, true)
       assert.equal(body.store, false)
-      calls.push({ authorization: new Headers(init?.headers).get("authorization"), model: body.model })
+      calls.push({
+        authorization: new Headers(init?.headers).get("authorization"),
+        model: body.model,
+      })
       return Response.json({
-        status: "completed", model: body.model,
+        status: "completed",
+        model: body.model,
         usage: { input_tokens: 20, output_tokens: 10 },
-        output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ choice: "Pass", reason: "Matches" }) }] }],
+        output: [
+          {
+            type: "message",
+            content: [
+              {
+                type: "output_text",
+                text: JSON.stringify({ choice: "Pass", reason: "Matches" }),
+              },
+            ],
+          },
+        ],
       })
     }
     if (String(url) === "https://api.typesafe.ai/v1/systemone") {
@@ -273,7 +388,7 @@ try {
         usage: { input_tokens: 20, output_tokens: 0 },
       })
     }
-    if (String(url) === "https://ai-gateway.vercel.sh/v4/ai/evaluation-model") {
+    if (String(url) === "https://ai-gateway.vercel.sh/v4/ai/decision-model") {
       const headers = new Headers(init?.headers)
       const body = JSON.parse(String(init?.body))
       assert.equal(body.questions.verdict.type, "choice")
@@ -296,7 +411,30 @@ try {
       authorization: new Headers(init?.headers).get("authorization"),
       model: body.model,
     })
-    if (body.tools) return Response.json({ model: body.model, usage: { prompt_tokens: 20, completion_tokens: 10 }, choices: [{ finish_reason: "tool_calls", message: { tool_calls: [{ type: "function", function: { name: "select_choice", arguments: JSON.stringify({ choice: "C", reasons: "The answers agree." }) } }] } }] })
+    if (body.tools)
+      return Response.json({
+        model: body.model,
+        usage: { prompt_tokens: 20, completion_tokens: 10 },
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              tool_calls: [
+                {
+                  type: "function",
+                  function: {
+                    name: "select_choice",
+                    arguments: JSON.stringify({
+                      choice: "C",
+                      reasons: "The answers agree.",
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      })
     return Response.json({
       model: body.model,
       usage: { prompt_tokens: 20, completion_tokens: 10 },
@@ -315,7 +453,12 @@ try {
   }) as typeof fetch
   try {
     for (const { provider, model, modelType, keys } of [
-      { provider: OPENAI_PROVIDER, model: "gpt-4.1-mini", modelType: "language", keys: openaiKeys },
+      {
+        provider: OPENAI_PROVIDER,
+        model: "gpt-4.1-mini",
+        modelType: "language",
+        keys: openaiKeys,
+      },
       {
         provider: GATEWAY_PROVIDER,
         model: "openai/gpt-4.1-mini",
@@ -368,7 +511,8 @@ try {
         assert(!JSON.stringify(body).includes(keyB))
         assert(!JSON.stringify(body).includes(typeSafeKeyA))
         assert(!JSON.stringify(body).includes(typeSafeKeyB))
-        for (const key of openaiKeys) assert(!JSON.stringify(body).includes(key))
+        for (const key of openaiKeys)
+          assert(!JSON.stringify(body).includes(key))
       }
       assert.deepEqual(
         calls.map((call) => call.authorization),
@@ -417,36 +561,88 @@ try {
       assert.equal(calls.at(-1)?.authorization, `Bearer ${keys[0]}`)
       assert(calls.every((call) => call.model === config.model))
     }
-    const discoveryRequest = (cookie: string) => new Request("http://localhost:3000/api/scorers/libraries", { headers: { cookie, "x-project-id": "a" } })
-    const selectionRequest = (cookie: string, projectId = "a") => new Request("http://localhost:3000/api/scorers/libraries", {
-      method: "POST",
-      headers: { cookie, "x-project-id": projectId, origin: "http://localhost:3000", "content-type": "application/json" },
-      body: JSON.stringify({ evaluator: "ValidJSON" }),
-    })
-    assert.equal((await selectLibrary(selectionRequest(outsider.cookie))).status, 403)
+    const discoveryRequest = (cookie: string) =>
+      new Request("http://localhost:3000/api/scorers/libraries", {
+        headers: { cookie, "x-project-id": "a" },
+      })
+    const selectionRequest = (cookie: string, projectId = "a") =>
+      new Request("http://localhost:3000/api/scorers/libraries", {
+        method: "POST",
+        headers: {
+          cookie,
+          "x-project-id": projectId,
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ evaluator: "ValidJSON" }),
+      })
+    assert.equal(
+      (await selectLibrary(selectionRequest(outsider.cookie))).status,
+      403
+    )
     assert.equal((await selectLibrary(selectionRequest(""))).status, 401)
-    const selectedA = await (await selectLibrary(selectionRequest(owner.cookie))).json()
-    const selectedB = await (await selectLibrary(selectionRequest(owner.cookie, "b"))).json()
-    assert.equal(selectedA.data.activeVersion.config.library.evaluator, "ValidJSON")
+    const selectedA = await (
+      await selectLibrary(selectionRequest(owner.cookie))
+    ).json()
+    const selectedB = await (
+      await selectLibrary(selectionRequest(owner.cookie, "b"))
+    ).json()
+    assert.equal(
+      selectedA.data.activeVersion.config.library.evaluator,
+      "ValidJSON"
+    )
     assert.notEqual(selectedA.data.id, selectedB.data.id)
-    assert.equal((await (await selectLibrary(selectionRequest(owner.cookie))).json()).data.id, selectedA.data.id)
-    assert.equal((await libraryCatalog(discoveryRequest(outsider.cookie))).status, 403)
+    assert.equal(
+      (await (await selectLibrary(selectionRequest(owner.cookie))).json()).data
+        .id,
+      selectedA.data.id
+    )
+    assert.equal(
+      (await libraryCatalog(discoveryRequest(outsider.cookie))).status,
+      403
+    )
     assert.equal((await libraryCatalog(discoveryRequest(""))).status, 401)
-    assert.equal((await (await libraryCatalog(discoveryRequest(owner.cookie))).json()).data.libraries[0].evaluators.length, 6)
+    assert.equal(
+      (await (await libraryCatalog(discoveryRequest(owner.cookie))).json()).data
+        .libraries[0].evaluators.length,
+      6
+    )
     calls.length = 0
     for (const projectId of ["a", "b"]) {
-      const config = { ...defaultScorer, type: "library", name: "Library Factuality", slug: "library-factuality", provider: GATEWAY_PROVIDER, model: "openai/gpt-4.1-mini", library: defaultLibraryScorer("Factuality") }
-      const response = await testScorer(new Request("http://localhost:3000/api/scorers/test", {
-        method: "POST", headers: { cookie: owner.cookie, origin: "http://localhost:3000", "content-type": "application/json", "x-project-id": projectId },
-        body: JSON.stringify({ config, sample: { input: "Question", output: "Answer", expected: "Answer" } }),
-      }))
+      const config = {
+        ...defaultScorer,
+        type: "library",
+        name: "Library Factuality",
+        slug: "library-factuality",
+        provider: GATEWAY_PROVIDER,
+        model: "openai/gpt-4.1-mini",
+        library: defaultLibraryScorer("Factuality"),
+      }
+      const response = await testScorer(
+        new Request("http://localhost:3000/api/scorers/test", {
+          method: "POST",
+          headers: {
+            cookie: owner.cookie,
+            origin: "http://localhost:3000",
+            "content-type": "application/json",
+            "x-project-id": projectId,
+          },
+          body: JSON.stringify({
+            config,
+            sample: { input: "Question", output: "Answer", expected: "Answer" },
+          }),
+        })
+      )
       assert.equal(response.status, 200)
       const result = await response.json()
       assert.equal(result.data.score, 1, JSON.stringify(result))
       assert(!JSON.stringify(result).includes(keyA))
       assert(!JSON.stringify(result).includes(keyB))
     }
-    assert.deepEqual(calls.map((call) => call.authorization), [keyA, keyB].map((key) => `Bearer ${key}`))
+    assert.deepEqual(
+      calls.map((call) => call.authorization),
+      [keyA, keyB].map((key) => `Bearer ${key}`)
+    )
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -497,6 +693,7 @@ try {
     200
   )
   assert.equal(await getGatewayKey("a"), "replacement-key")
+  assert.equal(await getGatewayKey("c"), "replacement-key")
   assert.equal(
     (
       await DELETE(
@@ -512,14 +709,111 @@ try {
     false
   )
   await assert.rejects(() => getGatewayKey("a"), /Configure Vercel/)
+  await assert.rejects(() => getGatewayKey("c"), /Configure Vercel/)
   assert.equal(await getGatewayKey("b"), keyB)
-  assert.equal((await PUT(request("PUT", owner.cookie, { provider: OPENAI_PROVIDER, apiKey: "replacement-openai-key" }), context())).status, 200)
-  assert.equal(await getProjectProviderKey("a", OPENAI_PROVIDER), "replacement-openai-key")
-  assert.equal((await DELETE(request("DELETE", owner.cookie, { provider: OPENAI_PROVIDER }), context())).status, 200)
-  await assert.rejects(() => resolveJudgeOptions(openaiConfig, "a"), /Configure OpenAI/)
+  assert.equal(
+    (
+      await PUT(
+        request("PUT", owner.cookie, {
+          provider: OPENAI_PROVIDER,
+          apiKey: "replacement-openai-key",
+        }),
+        context()
+      )
+    ).status,
+    200
+  )
+  assert.equal(
+    await getProjectProviderKey("a", OPENAI_PROVIDER),
+    "replacement-openai-key"
+  )
+  assert.equal(
+    (
+      await DELETE(
+        request("DELETE", owner.cookie, { provider: OPENAI_PROVIDER }),
+        context()
+      )
+    ).status,
+    200
+  )
+  await assert.rejects(
+    () => resolveJudgeOptions(openaiConfig, "a"),
+    /Configure OpenAI/
+  )
   assert.equal(await getProjectProviderKey("b", OPENAI_PROVIDER), openaiKeys[1])
-  assert.equal(await getProjectProviderKey("b", TYPESAFE_PROVIDER), typeSafeKeyB)
+  assert.equal(
+    await getProjectProviderKey("b", TYPESAFE_PROVIDER),
+    typeSafeKeyB
+  )
   assert.equal(await getGatewayKey("b"), keyB)
+  const emptyOrg = await getAuth().api.createOrganization({
+    headers: new Headers({ cookie: owner.cookie }),
+    body: { name: "No projects", slug: "no-projects" },
+  })
+  assert(emptyOrg)
+  const emptyContext = {
+    params: Promise.resolve({ organizationId: emptyOrg.id }),
+  }
+  const emptySaved = await PUT(
+    request("PUT", owner.cookie, {
+      provider: OPENAI_PROVIDER,
+      apiKey: "before-first-project",
+    }),
+    emptyContext
+  )
+  assert.equal(emptySaved.status, 200)
+  const connectionId = (await emptySaved.json()).connections[0].connectionId
+  for (const cookie of [member.cookie, outsider.cookie])
+    assert.equal(
+      (
+        await changeProvider(
+          request("PATCH", cookie, { kind: "model", action: "default" }),
+          {
+            params: Promise.resolve({
+              organizationId: emptyOrg.id,
+              connectionId,
+            }),
+          }
+        )
+      ).status,
+      403
+    )
+  assert.equal(
+    (
+      await changeProvider(
+        request("PATCH", owner.cookie, { kind: "model", action: "default" }),
+        {
+          params: Promise.resolve({
+            organizationId: organization.id,
+            connectionId,
+          }),
+        }
+      )
+    ).status,
+    400
+  )
+  assert.equal(
+    (
+      await changeProvider(
+        request("PATCH", owner.cookie, { kind: "model", action: "default" }),
+        {
+          params: Promise.resolve({
+            organizationId: emptyOrg.id,
+            connectionId,
+          }),
+        }
+      )
+    ).status,
+    200
+  )
+  await db.query(
+    'DELETE FROM member WHERE "userId"=$1 AND "organizationId"=$2',
+    [member.user.id, organization.id]
+  )
+  assert.equal(
+    (await GET(request("GET", member.cookie), context())).status,
+    403
+  )
   console.log(
     "PASS provider permissions, encryption, isolation, rotation, deletion, sample/trace/evaluation execution"
   )

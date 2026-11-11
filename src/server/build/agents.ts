@@ -613,7 +613,7 @@ async function validatePublishedSandbox(context: BuildContext, configuration: Ag
     await getSandboxProviderCredentials(context.projectId, configuration.sandbox.provider, context.database)
   } catch (error) {
     if (error instanceof SandboxSettingsValidationError) throw new AgentValidationError(error.message)
-    throw new AgentValidationError("The sandbox provider credentials are unavailable. Update them in Project settings → Sandbox providers.")
+    throw new AgentValidationError("The sandbox provider credentials are unavailable. Update them in Organization settings → Sandbox providers.")
   }
 }
 

@@ -19,24 +19,30 @@ const NAME = "credential-encryption"
 
 /** Returns how many sampled ciphertexts exist and how many this key opens. */
 async function probeStoredCiphertexts() {
+  // Releases may run this guard before or after the ownership migration.
+  const migrated =
+    (
+      await db.query(
+        "SELECT to_regclass('organization_provider_connections') AS relation"
+      )
+    ).rows[0].relation !== null
+  const providers = migrated
+    ? `(SELECT encrypted_credentials AS value, coalesce(legacy_project_id,'organization:' || organization_id) AS scope, CASE WHEN kind='model' THEN provider ELSE 'sandbox:' || provider END AS context FROM organization_provider_connections WHERE encrypted_credentials IS NOT NULL LIMIT 10)`
+    : `(SELECT encrypted_api_key AS value, project_id AS scope, provider AS context FROM project_model_provider LIMIT 5) UNION ALL (SELECT entry.value,p.project_id,'sandbox:' || entry.key FROM project_sandbox_settings p CROSS JOIN LATERAL jsonb_each_text(p.providers) entry WHERE entry.value IS NOT NULL LIMIT 5)`
+  const storageScope = migrated
+    ? "coalesce(legacy_project_id,'organization:' || organization_id)"
+    : "project_id"
   const samples = await db.query<{
     value: string
-    project_id: string
+    scope: string
     context: string
-  }>(
-    `(SELECT encrypted_api_key AS value, project_id, provider AS context
-        FROM project_model_provider LIMIT 5)
-     UNION ALL
-     (SELECT encrypted_credentials, project_id, 'build-channel:' || id::text
-        FROM build_channel_connection WHERE encrypted_credentials IS NOT NULL LIMIT 5)
-     UNION ALL
-     (SELECT encrypted_credentials, project_id, 'storage:' || id::text
-        FROM build_storage_connections LIMIT 5)`
-  )
+  }>(`${providers}
+    UNION ALL (SELECT encrypted_credentials, project_id, 'build-channel:' || id::text FROM build_channel_connection WHERE encrypted_credentials IS NOT NULL LIMIT 5)
+    UNION ALL (SELECT encrypted_credentials, ${storageScope}, 'storage:' || id::text FROM build_storage_connections LIMIT 5)`)
   let opened = 0
   for (const row of samples.rows) {
     try {
-      decryptProviderKey(row.value, row.project_id, row.context)
+      decryptProviderKey(row.value, row.scope, row.context)
       opened++
     } catch {
       /* Counted below. */

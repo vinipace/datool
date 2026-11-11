@@ -23,7 +23,7 @@ export async function resolveJudgeOptions(
   if (!config.provider) {
     if (managedExecutionEnabled())
       throw new Error(
-        "Select Datool Scorer Model or a configured project provider to run this scorer."
+        "Select Datool Scorer Model or a configured organization provider to run this scorer."
       )
     return {}
   }

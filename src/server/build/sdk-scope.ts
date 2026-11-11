@@ -72,6 +72,7 @@ async function resolveLockedSdkDrive(
   scope: SdkScope,
   config: AgentSandboxConfiguration
 ) {
+  const { organizationId } = await assertBuildProject(context)
   const connection = config.sdkStorageConnectionId
     ? await storageConnection(context, config.sdkStorageConnectionId)
     : null
@@ -111,8 +112,8 @@ async function resolveLockedSdkDrive(
     existing.rows[0]?.id ??
     `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`
   await context.database
-    .execute(sql`INSERT INTO build_drives(id,project_id,name,description,provider,storage_connection_id,sdk_context)
-    SELECT ${id}::uuid,${context.projectId},${scope.drive},'React SDK application drive',${provider},${config.sdkStorageConnectionId ?? null}::uuid,
+    .execute(sql`INSERT INTO build_drives(id,project_id,organization_id,name,description,provider,storage_connection_id,sdk_context)
+    SELECT ${id}::uuid,${context.projectId},${organizationId},${scope.drive},'React SDK application drive',${provider},${config.sdkStorageConnectionId ?? null}::uuid,
       jsonb_build_object('agentId',c.agent_id,'connectionId',c.id,'workspace',${scope.drive}::text,'workspaceName',${scope.workspaceName ?? scope.drive}::text)
     FROM build_channel_connection c WHERE c.project_id=${context.projectId} AND c.id=${scope.connectionId}::uuid
     ON CONFLICT(id) DO UPDATE SET sdk_context=EXCLUDED.sdk_context || jsonb_build_object('workspaceName',COALESCE(${scope.workspaceName ?? null}::text,build_drives.sdk_context->>'workspaceName',EXCLUDED.sdk_context->>'workspaceName'))`)

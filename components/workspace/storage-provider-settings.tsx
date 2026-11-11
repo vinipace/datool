@@ -30,18 +30,18 @@ import {
 
 type Settings = { items: StorageConnection[] }
 export function StorageProviderSettings({
-  projectId,
+  organizationId,
   canManage,
 }: {
-  projectId: string
+  organizationId: string
   canManage: boolean
 }) {
-  const path = `/api/projects/${encodeURIComponent(projectId)}/storage-connections`
+  const path = `/api/organizations/${encodeURIComponent(organizationId)}/storage-connections`
   const load = useCallback(
     (signal: AbortSignal) => workspaceRequest<Settings>(path, { signal }),
     [path]
   )
-  const state = useRemote(load, [projectId])
+  const state = useRemote(load, [organizationId])
   const [editing, setEditing] = useState<StorageConnection | "new" | null>(null)
   const [removing, setRemoving] = useState<StorageConnection | null>(null)
   const [pending, setPending] = useState(false)

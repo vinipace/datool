@@ -1,15 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { delay, http, HttpResponse } from "msw"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
-import { OPENAI_PROVIDER, TYPESAFE_PROVIDER, type ModelProvider } from "@/src/lib/model-providers"
-import { StorybookProjectFrame } from "../../.storybook/component-frame"
+import {
+  OPENAI_PROVIDER,
+  TYPESAFE_PROVIDER,
+  type ModelProvider,
+} from "@/src/lib/model-providers"
+import { StorybookOrganizationFrame } from "../../.storybook/component-frame"
 import {
   providerStatus,
   modelProviderHandlers,
 } from "../../.storybook/scenarios/model-providers"
 import { ModelProviderSettings } from "./model-provider-settings"
 
-const path = "/api/projects/provider-test/providers"
+const path = "/api/organizations/provider-test/providers"
 let configured = false
 let typesafeConfigured = false
 let openaiConfigured = false
@@ -17,7 +21,7 @@ const mutations = fn()
 const meta = {
   title: "Workspace/ModelProviderSettings",
   component: ModelProviderSettings,
-  args: { projectId: "provider-test", canManage: true },
+  args: { organizationId: "provider-test", canManage: true },
   beforeEach: () => {
     configured = false
     typesafeConfigured = false
@@ -28,9 +32,16 @@ const meta = {
     msw: {
       handlers: [
         modelProviderHandlers[0],
-        http.get(path, () => HttpResponse.json(providerStatus(configured, typesafeConfigured, openaiConfigured))),
+        http.get(path, () =>
+          HttpResponse.json(
+            providerStatus(configured, typesafeConfigured, openaiConfigured)
+          )
+        ),
         http.put(path, async ({ request }) => {
-          const body = (await request.json()) as { apiKey: string; provider: ModelProvider }
+          const body = (await request.json()) as {
+            apiKey: string
+            provider: ModelProvider
+          }
           if (!body.apiKey)
             return HttpResponse.json(
               { error: { message: "API key required." } },
@@ -40,23 +51,27 @@ const meta = {
           if (body.provider === TYPESAFE_PROVIDER) typesafeConfigured = true
           else if (body.provider === OPENAI_PROVIDER) openaiConfigured = true
           else configured = true
-          return HttpResponse.json(providerStatus(configured, typesafeConfigured, openaiConfigured))
+          return HttpResponse.json(
+            providerStatus(configured, typesafeConfigured, openaiConfigured)
+          )
         }),
         http.delete(path, async ({ request }) => {
-          const body = await request.json() as { provider: ModelProvider }
+          const body = (await request.json()) as { provider: ModelProvider }
           mutations("DELETE", body)
           if (body.provider === TYPESAFE_PROVIDER) typesafeConfigured = false
           else if (body.provider === OPENAI_PROVIDER) openaiConfigured = false
           else configured = false
-          return HttpResponse.json(providerStatus(configured, typesafeConfigured, openaiConfigured))
+          return HttpResponse.json(
+            providerStatus(configured, typesafeConfigured, openaiConfigured)
+          )
         }),
       ],
     },
   },
   render: (args) => (
-    <StorybookProjectFrame title="AI providers">
+    <StorybookOrganizationFrame title="AI providers">
       <ModelProviderSettings {...args} />
-    </StorybookProjectFrame>
+    </StorybookOrganizationFrame>
   ),
 } satisfies Meta<typeof ModelProviderSettings>
 export default meta
@@ -143,7 +158,9 @@ export const Configured: Story = {
   },
 }
 export const TypeSafeSaveReplaceRemove: Story = {
-  beforeEach: () => { configured = true },
+  beforeEach: () => {
+    configured = true
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const page = within(document.body)
@@ -157,28 +174,51 @@ export const TypeSafeSaveReplaceRemove: Story = {
     await userEvent.type(key, "test-typesafe-key")
     await userEvent.click(dialog.getByRole("button", { name: "Add provider" }))
     await expectClosed()
-    await expect(mutations).toHaveBeenLastCalledWith("PUT", { provider: TYPESAFE_PROVIDER, apiKey: "test-typesafe-key" })
+    await expect(mutations).toHaveBeenLastCalledWith("PUT", {
+      provider: TYPESAFE_PROVIDER,
+      apiKey: "test-typesafe-key",
+    })
     await expect(canvas.getByText("TypeSafe AI")).toBeVisible()
     await expect(canvas.getByText("Vercel AI Gateway")).toBeVisible()
-    await userEvent.click(canvas.getByRole("button", { name: "Edit TypeSafe AI" }))
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Edit TypeSafe AI" })
+    )
     dialog = within(await page.findByRole("dialog"))
     await expect(dialog.getByLabelText("TypeSafe AI API key")).toHaveValue("")
-    await userEvent.type(dialog.getByLabelText("TypeSafe AI API key"), "test-typesafe-replacement")
+    await userEvent.type(
+      dialog.getByLabelText("TypeSafe AI API key"),
+      "test-typesafe-replacement"
+    )
     await userEvent.click(dialog.getByRole("button", { name: "Save changes" }))
     await expectClosed()
-    await expect(mutations).toHaveBeenLastCalledWith("PUT", { provider: TYPESAFE_PROVIDER, apiKey: "test-typesafe-replacement" })
-    await userEvent.click(canvas.getByRole("button", { name: "Remove TypeSafe AI" }))
+    await expect(mutations).toHaveBeenLastCalledWith("PUT", {
+      provider: TYPESAFE_PROVIDER,
+      apiKey: "test-typesafe-replacement",
+    })
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Remove TypeSafe AI" })
+    )
     dialog = within(await page.findByRole("dialog"))
-    await expect(dialog.getByRole("heading")).toHaveTextContent("Remove TypeSafe AI?")
-    await userEvent.click(dialog.getByRole("button", { name: "Confirm removal" }))
+    await expect(dialog.getByRole("heading")).toHaveTextContent(
+      "Remove TypeSafe AI?"
+    )
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Confirm removal" })
+    )
     await expectClosed()
-    await expect(mutations).toHaveBeenLastCalledWith("DELETE", { provider: TYPESAFE_PROVIDER })
-    await expect(canvas.queryByText("TypeSafe AI", { exact: true })).not.toBeInTheDocument()
+    await expect(mutations).toHaveBeenLastCalledWith("DELETE", {
+      provider: TYPESAFE_PROVIDER,
+    })
+    await expect(
+      canvas.queryByText("TypeSafe AI", { exact: true })
+    ).not.toBeInTheDocument()
     await expect(canvas.getByText("Vercel AI Gateway")).toBeVisible()
   },
 }
 export const OpenAISaveReplaceRemove: Story = {
-  beforeEach: () => { configured = true },
+  beforeEach: () => {
+    configured = true
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const page = within(document.body)
@@ -192,28 +232,49 @@ export const OpenAISaveReplaceRemove: Story = {
     await userEvent.type(key, "test-openai-key")
     await userEvent.click(dialog.getByRole("button", { name: "Add provider" }))
     await expectClosed()
-    await expect(mutations).toHaveBeenLastCalledWith("PUT", { provider: OPENAI_PROVIDER, apiKey: "test-openai-key" })
+    await expect(mutations).toHaveBeenLastCalledWith("PUT", {
+      provider: OPENAI_PROVIDER,
+      apiKey: "test-openai-key",
+    })
     await expect(canvas.getByText("OpenAI")).toBeVisible()
     await expect(canvas.getByText("Vercel AI Gateway")).toBeVisible()
     await userEvent.click(canvas.getByRole("button", { name: "Edit OpenAI" }))
     dialog = within(await page.findByRole("dialog"))
     await expect(dialog.getByLabelText("OpenAI API key")).toHaveValue("")
-    await userEvent.type(dialog.getByLabelText("OpenAI API key"), "test-openai-replacement")
+    await userEvent.type(
+      dialog.getByLabelText("OpenAI API key"),
+      "test-openai-replacement"
+    )
     await userEvent.click(dialog.getByRole("button", { name: "Save changes" }))
     await expectClosed()
-    await expect(mutations).toHaveBeenLastCalledWith("PUT", { provider: OPENAI_PROVIDER, apiKey: "test-openai-replacement" })
+    await expect(mutations).toHaveBeenLastCalledWith("PUT", {
+      provider: OPENAI_PROVIDER,
+      apiKey: "test-openai-replacement",
+    })
     await userEvent.click(canvas.getByRole("button", { name: "Remove OpenAI" }))
     dialog = within(await page.findByRole("dialog"))
-    await expect(dialog.getByRole("heading")).toHaveTextContent("Remove OpenAI?")
-    await userEvent.click(dialog.getByRole("button", { name: "Confirm removal" }))
+    await expect(dialog.getByRole("heading")).toHaveTextContent(
+      "Remove OpenAI?"
+    )
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Confirm removal" })
+    )
     await expectClosed()
-    await expect(mutations).toHaveBeenLastCalledWith("DELETE", { provider: OPENAI_PROVIDER })
-    await expect(canvas.queryByText("OpenAI", { exact: true })).not.toBeInTheDocument()
+    await expect(mutations).toHaveBeenLastCalledWith("DELETE", {
+      provider: OPENAI_PROVIDER,
+    })
+    await expect(
+      canvas.queryByText("OpenAI", { exact: true })
+    ).not.toBeInTheDocument()
     await expect(canvas.getByText("Vercel AI Gateway")).toBeVisible()
   },
 }
 export const AllProviders: Story = {
-  beforeEach: () => { configured = true; typesafeConfigured = true; openaiConfigured = true },
+  beforeEach: () => {
+    configured = true
+    typesafeConfigured = true
+    openaiConfigured = true
+  },
 }
 export const ProviderPicker: Story = {
   play: async ({ canvasElement }) => {
@@ -299,5 +360,90 @@ export const SaveError: Story = {
     await expect(dialog.getByLabelText("AI Gateway API key")).toHaveValue(
       "test-only-key"
     )
+  },
+}
+
+export const ImportedConnection: Story = {
+  parameters: {
+    msw: {
+      handlers: (() => {
+        let assigned = true
+        const imported = {
+          connectionId: "00000000-0000-4000-8000-000000000021",
+          provider: "openai",
+          name: "Imported customer account",
+          isDefault: false,
+        }
+        const state = () => ({
+          ...providerStatus(false, false, true),
+          connections: [
+            {
+              ...imported,
+              projects: assigned
+                ? [{ id: "legacy", name: "Legacy project" }]
+                : [],
+            },
+          ],
+        })
+        return [
+          http.get(path, () => HttpResponse.json(state())),
+          http.put(path, async ({ request }) => {
+            const body = await request.json()
+            mutations("PUT", body)
+            return HttpResponse.json(state())
+          }),
+          http.patch(
+            "/api/organizations/provider-test/provider-connections/:id",
+            async ({ request, params }) => {
+              const body = await request.json()
+              mutations("PATCH", {
+                ...(body as object),
+                connectionId: params.id,
+              })
+              assigned = false
+              return HttpResponse.json({ updated: true })
+            }
+          ),
+        ]
+      })(),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const imported = await canvas.findByRole("row", {
+      name: /Imported customer account/,
+    })
+    await userEvent.click(
+      within(imported).getByRole("button", { name: "Edit" })
+    )
+    let dialog = await within(document.body).findByRole("dialog")
+    await userEvent.type(
+      within(dialog).getByLabelText("API key"),
+      "rotated-imported-key"
+    )
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" })
+    )
+    await expectClosed()
+    expect(mutations).toHaveBeenCalledWith("PUT", {
+      provider: "openai",
+      connectionId: "00000000-0000-4000-8000-000000000021",
+      apiKey: "rotated-imported-key",
+    })
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Use shared default" })
+    )
+    dialog = await within(document.body).findByRole("dialog")
+    expect(within(dialog).getByText(/Legacy project/)).toBeVisible()
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Confirm" })
+    )
+    await expectClosed()
+    expect(mutations).toHaveBeenCalledWith("PATCH", {
+      kind: "model",
+      action: "inherit",
+      connectionId: "00000000-0000-4000-8000-000000000021",
+    })
+    expect(await canvas.findByText("No assignments")).toBeVisible()
   },
 }

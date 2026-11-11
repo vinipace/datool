@@ -120,13 +120,21 @@ for (const provider of ["s3", "gcs"] as const)
       )
       const foreign = { database: foreignDb, projectId: foreignProject }
       try {
+        const shared = await createDrive(foreign, {
+          name: "Shared connection, separate files",
+          provider,
+          storageConnectionId: connection.id,
+        })
+        expect(shared.id).not.toBe(drive.id)
+        expect(
+          (await listStorageConnections(foreign)).items.map((row) => row.id)
+        ).toContain(connection.id)
         await rejects(
-          createDrive(foreign, {
-            name: "Denied",
-            provider,
-            storageConnectionId: connection.id,
+          cloudDriveFiles(foreign, shared.id, {
+            action: "read",
+            path: "notes/hello.txt",
           }),
-          /unavailable/
+          /not found/i
         )
         await rejects(
           cloudDriveFiles(foreign, drive.id, {

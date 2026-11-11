@@ -58,7 +58,7 @@ export async function createDrive(
   context: BuildContext,
   input: unknown
 ): Promise<AgentDrive> {
-  await assertBuildProject(context)
+  const { organizationId } = await assertBuildProject(context)
   const value = createDriveSchema.parse(input)
   if (cloudStorage(value.provider)) {
     if (!value.storageConnectionId)
@@ -81,8 +81,8 @@ export async function createDrive(
       "Local and Modal volumes do not use bucket connections."
     )
   const rows = await context.database.execute<DriveRow>(sql`
-    INSERT INTO build_drives (id, project_id, name, description, provider, storage_connection_id)
-    VALUES (${randomUUID()}, ${context.projectId}, ${value.name}, ${value.description}, ${value.provider},${value.storageConnectionId ?? null}::uuid)
+    INSERT INTO build_drives (id, project_id, organization_id, name, description, provider, storage_connection_id)
+    VALUES (${randomUUID()}, ${context.projectId}, ${organizationId}, ${value.name}, ${value.description}, ${value.provider},${value.storageConnectionId ?? null}::uuid)
     RETURNING *
   `)
   return driveModel(rows.rows[0])

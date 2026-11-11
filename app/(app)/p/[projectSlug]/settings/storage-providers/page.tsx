@@ -1,16 +1,6 @@
-import { headers } from "next/headers"
-import { notFound } from "next/navigation"
-import { StorageProviderSettings } from "@/components/workspace/storage-provider-settings"
-import { pageMetadata } from "@/lib/page-metadata"
-import {
-  canManageProject,
-  getProjectByOrganizationSlug,
-  requireProjectAccess,
-} from "@/lib/project-access"
+import { notFound, redirect } from "next/navigation"
+import { getProjectByOrganizationSlug } from "@/lib/project-access"
 import { requireActiveOrganization } from "@/lib/workspace-access"
-
-export const metadata = pageMetadata("storageProviders")
-
 export default async function Page({
   params,
 }: {
@@ -20,21 +10,7 @@ export default async function Page({
   const { organization } = await requireActiveOrganization(
     `/p/${encodeURIComponent(projectSlug)}/settings/storage-providers`
   )
-  const project = await getProjectByOrganizationSlug(
-    projectSlug,
-    organization.id
-  )
-  if (!project) notFound()
-  const authorization = await requireProjectAccess(
-    new Request("http://localhost", { headers: await headers() }),
-    project.id
-  )
-  if (authorization.kind !== "ok") notFound()
-  return (
-    <StorageProviderSettings
-      key={project.id}
-      projectId={project.id}
-      canManage={canManageProject(authorization.access.role)}
-    />
-  )
+  if (!(await getProjectByOrganizationSlug(projectSlug, organization.id)))
+    notFound()
+  redirect("/settings/storage-providers")
 }

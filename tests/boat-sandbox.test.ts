@@ -1,3 +1,5 @@
+import { updateOrganizationSandboxSettings } from "@/src/server/sandbox/providers-store"
+import { projectProviderContext } from "@/src/server/providers/context"
 import { expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { randomUUID } from "node:crypto"
@@ -11,7 +13,6 @@ import {
 } from "./helpers/eve-fixture"
 import { BoatClient, BoatDocker } from "@/src/server/sandbox/boat"
 import { executeSandboxProvider } from "@/src/server/sandbox/provider-runtime"
-import { encryptProviderKey } from "@/src/server/model-providers/secrets"
 import { saveStorageConnection } from "@/src/server/build/storage/connections"
 import {
   cloudDriveFiles,
@@ -76,14 +77,18 @@ test("Boat preserves bytes, isolation and pending drive recovery through fresh V
       expect(String(error)).not.toContain("boat_fixture_secret")
       return true
     })
-    const credentials = encryptProviderKey(
-      JSON.stringify({ provider: "boat", apiKey: "boat_fixture_secret" }),
+    const providerContext = await projectProviderContext(
       context.projectId,
-      "sandbox:boat"
+      context.database
     )
-    await context.database.execute(
-      sql`INSERT INTO project_sandbox_settings(project_id,providers,default_provider) VALUES(${context.projectId},${JSON.stringify({ boat: credentials })}::jsonb,'boat')`
-    )
+    await updateOrganizationSandboxSettings(providerContext, {
+      type: "configure",
+      input: { provider: "boat", apiKey: "boat_fixture_secret" },
+    })
+    await updateOrganizationSandboxSettings(providerContext, {
+      type: "default",
+      provider: "boat",
+    })
     const connection = await saveStorageConnection(context, storage.input)
     const drive = await createDrive(context, {
       name: "Boat files",

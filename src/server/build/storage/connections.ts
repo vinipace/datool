@@ -11,10 +11,18 @@ import {
   decryptProviderKey,
 } from "@/src/server/model-providers/secrets"
 import { TracerError } from "@/src/server/tracer/errors"
-import { assertBuildProject, type BuildContext } from "../context"
+import { type BuildContext } from "../context"
 import { objectStorage } from "./objects"
+import {
+  providerContext,
+  organizationCredentialScope,
+  type OrganizationProviderContext,
+} from "../../providers/context"
+type StorageContext = BuildContext | OrganizationProviderContext
 
 type Row = {
+  organization_id: string
+  legacy_project_id: string | null
   id: string
   name: string
   config_json: StorageConnection["config"]
@@ -29,39 +37,44 @@ const publicConnection = (row: Row): StorageConnection => ({
   revision: row.revision,
   createdAt: new Date(row.created_at).toISOString(),
 })
-export async function listStorageConnections(context: BuildContext) {
-  await assertBuildProject(context)
+export async function listStorageConnections(context: StorageContext) {
+  const { organizationId } = await providerContext(context)
   const rows = await context.database.execute<Row>(
-    sql`SELECT * FROM build_storage_connections WHERE project_id=${context.projectId} ORDER BY name,id LIMIT 200`
+    sql`SELECT * FROM build_storage_connections WHERE organization_id=${organizationId} ORDER BY name,id LIMIT 200`
   )
   return { items: rows.rows.map(publicConnection) }
 }
-export async function storageConnection(context: BuildContext, id: string) {
-  await assertBuildProject(context)
+export async function storageConnection(context: StorageContext, id: string) {
+  const { organizationId } = await providerContext(context)
   const rows = await context.database.execute<Row>(
-    sql`SELECT * FROM build_storage_connections WHERE project_id=${context.projectId} AND id=${id}::uuid`
+    sql`SELECT * FROM build_storage_connections WHERE organization_id=${organizationId} AND id=${id}::uuid`
   )
   if (!rows.rows[0])
     throw new TracerError(
       "NOT_FOUND",
-      "Storage connection is unavailable in this project."
+      "Storage connection is unavailable in this organization."
     )
   return rows.rows[0]
 }
-export function storageCredentials(context: BuildContext, row: Row) {
+export function storageCredentials(context: StorageContext, row: Row) {
+  if (context.organizationId && context.organizationId !== row.organization_id)
+    throw new TracerError(
+      "NOT_FOUND",
+      "Storage connection is unavailable in this organization."
+    )
   return JSON.parse(
     decryptProviderKey(
       row.encrypted_credentials,
-      context.projectId,
+      row.legacy_project_id ?? organizationCredentialScope(row.organization_id),
       `storage:${row.id}`
     )
   ) as Record<string, string>
 }
 export async function saveStorageConnection(
-  context: BuildContext,
+  context: StorageContext,
   raw: unknown
 ) {
-  await assertBuildProject(context)
+  const { organizationId } = await providerContext(context)
   const input = storageConnectionInputSchema.parse(raw)
   const previous = input.id
     ? await storageConnection(context, input.id)
@@ -105,15 +118,15 @@ export async function saveStorageConnection(
   }
   const encrypted = encryptProviderKey(
     JSON.stringify(credentials),
-    context.projectId,
+    organizationCredentialScope(organizationId),
     `storage:${id}`
   )
   const rows = previous
     ? await context.database.execute<Row>(
-        sql`UPDATE build_storage_connections SET name=${input.name},encrypted_credentials=${encrypted},revision=revision+1 WHERE project_id=${context.projectId} AND id=${id}::uuid AND revision=${input.expectedRevision} RETURNING *`
+        sql`UPDATE build_storage_connections SET name=${input.name},encrypted_credentials=${encrypted},legacy_project_id=NULL,revision=revision+1 WHERE organization_id=${organizationId} AND id=${id}::uuid AND revision=${input.expectedRevision} RETURNING *`
       )
     : await context.database.execute<Row>(
-        sql`INSERT INTO build_storage_connections(id,project_id,name,provider,config_json,encrypted_credentials) VALUES(${id}::uuid,${context.projectId},${input.name},${input.config.provider},${JSON.stringify(input.config)}::jsonb,${encrypted}) RETURNING *`
+        sql`INSERT INTO build_storage_connections(id,organization_id,name,provider,config_json,encrypted_credentials) VALUES(${id}::uuid,${organizationId},${input.name},${input.config.provider},${JSON.stringify(input.config)}::jsonb,${encrypted}) RETURNING *`
       )
   if (!rows.rows[0])
     throw new TracerError(
@@ -123,12 +136,13 @@ export async function saveStorageConnection(
   return publicConnection(rows.rows[0])
 }
 export async function removeStorageConnection(
-  context: BuildContext,
+  context: StorageContext,
   id: string
 ) {
+  const { organizationId } = await providerContext(context)
   await storageConnection(context, id)
   const rows = await context.database.execute(
-    sql`DELETE FROM build_storage_connections c WHERE c.project_id=${context.projectId} AND c.id=${id}::uuid AND NOT EXISTS(SELECT 1 FROM build_drives d WHERE d.project_id=c.project_id AND d.storage_connection_id=c.id) RETURNING id`
+    sql`DELETE FROM build_storage_connections c WHERE c.organization_id=${organizationId} AND c.id=${id}::uuid AND NOT EXISTS(SELECT 1 FROM build_drives d WHERE d.organization_id=c.organization_id AND d.storage_connection_id=c.id) RETURNING id`
   )
   if (!rows.rows.length)
     throw new TracerError(

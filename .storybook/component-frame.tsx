@@ -45,3 +45,8 @@ export function StorybookProjectFrame({
     </ProjectScopeProvider>
   )
 }
+
+/** Organization settings deliberately render without a project scope. */
+export function StorybookOrganizationFrame({children,title}:{children:React.ReactNode;title:string}) {
+ return <PageLayout title={title} className="h-[min(720px,100dvh)] min-h-96 overflow-hidden">{children}</PageLayout>
+}

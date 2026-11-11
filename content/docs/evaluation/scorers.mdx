@@ -73,11 +73,11 @@ def evaluate(trace, dataset_item=None):
     return {"score": 1 if passed else 0, "passed": passed}
 ```
 
-Available runtimes depend on your project's sandbox configuration. Ask an owner or admin to configure **Project settings → Sandbox providers** if execution is unavailable.
+Available runtimes depend on your organization's sandbox configuration. Ask an owner or admin to configure **Organization settings → Sandbox providers** if execution is unavailable.
 
 ## LLM scorers
 
-Configure **Project settings → AI providers**, choose a model, and write the judgment criteria. Choose the actual project provider and model: Gateway supports chat and native evaluation models; TypeSafe AI supports native evaluation models. Legacy scorer versions without a provider use the server OpenAI configuration. A configured key still needs access to the chosen model and the output format required by the scorer.
+Configure **Organization settings → AI providers**, choose a model, and write the judgment criteria. Choose the configured organization provider and model: Gateway supports chat and native evaluation models; TypeSafe AI supports native evaluation models. Legacy scorer versions without a provider use the server OpenAI configuration. A configured key still needs access to the chosen model and the output format required by the scorer.
 
 Prompt templates can refer to `{{trace}}`, `{{input}}`, `{{output}}`, and `{{expected}}`. Use a small sample to check the rubric before running it over a dataset. Model calls consume provider usage.
 

@@ -75,7 +75,7 @@ export function decryptProviderKey(
     ]).toString("utf8")
   } catch {
     throw new Error(
-      "Unable to unlock the provider API key. Ask a project admin to replace it in project settings."
+      "Unable to unlock the provider API key. Ask an administrator to replace it in settings."
     )
   }
 }

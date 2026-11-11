@@ -5,7 +5,7 @@ Datool Sandbox, a project-configured Modal or Boat account, or Local container. 
 Node.js 22 or Python 3.13, and enable network access when downloads or dependency
 installation are needed. The feature is off for existing agents.
 
-Configure the selected provider in **Project settings → Sandbox providers**
+Configure the selected provider in **Organization settings → Sandbox providers**
 before publishing an agent with its sandbox enabled. Drafts can be saved while
 setup is incomplete. If a provider becomes unavailable later, file and command
 tools report the configuration error in their history; they do not switch to a

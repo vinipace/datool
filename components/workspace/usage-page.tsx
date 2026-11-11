@@ -227,7 +227,7 @@ export function UsageDetails({ data }: { data: OrganizationUsage }) {
         <Notice role="status">
           Your execution credits are fully used or reserved. Funded runs resume
           with the next paid period. You can also select your own provider in
-          project settings.
+          organization settings.
         </Notice>
       )}
       {credits.pendingRuns > 0 && (

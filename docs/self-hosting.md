@@ -133,8 +133,8 @@ fails with a saved configuration error and no score; it never falls back to
 executing code directly on the application host.
 
 For an installation shared with untrusted users, configure **Modal** or
-**Vercel Sandbox** in the project's **Project settings → Sandbox providers**, test the
-connection, and make it the default. Each project supplies its own credentials;
+**Vercel Sandbox** in **Organization settings → Sandbox providers**, test the
+connection, and make it the default. Each organization supplies shared credentials;
 self-hosting does not require Datool Cloud billing. Only configure providers
 whose infrastructure and execution costs you control.
 

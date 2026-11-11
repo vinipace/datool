@@ -1,7 +1,14 @@
+import { saveOrganizationProviderKey } from "@/src/server/model-providers/store"
+import { projectProviderContext } from "@/src/server/providers/context"
 import { test, expect } from "bun:test"
 import { randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
-import { createEveFixture, eveResponse, invokeTool, toolOutputs } from "./helpers/eve-fixture"
+import {
+  createEveFixture,
+  eveResponse,
+  invokeTool,
+  toolOutputs,
+} from "./helpers/eve-fixture"
 import { saveAction } from "@/src/server/build/definitions"
 import {
   actionDefinitionSchema,
@@ -11,8 +18,6 @@ import {
 } from "@/src/lib/build/contracts"
 import { createAgent, getAgent, updateAgent } from "@/src/server/build/agents"
 import { runAgentTurn } from "@/src/server/build/runtime"
-import { encryptProviderKey } from "@/src/server/model-providers/secrets"
-
 
 // Owns Jev admission at the real agent runtime: provider calls, immutable applied
 // settings, the generation/tool boundary, and persisted routing decisions.
@@ -21,13 +26,16 @@ test("Jev routing honors agent/channel switches and restricts redirect/clarify t
   const { context } = fixture
   const database = context.database
   try {
-    await database.execute(
-      sql`INSERT INTO project_model_provider (project_id, provider, encrypted_api_key) VALUES (${context.projectId}, 'typesafe-ai', ${encryptProviderKey("project-jev-key", context.projectId, "typesafe-ai")})`
+    await saveOrganizationProviderKey(
+      await projectProviderContext(context.projectId, database),
+      "typesafe-ai",
+      "project-jev-key"
     )
     let agent = await createAgent(context, {
       name: "Store assistant",
       configuration: {
-        provider: "openai", model: "gpt-4.1-mini",
+        provider: "openai",
+        model: "gpt-4.1-mini",
         instructions: "Help with this store's products and order status.",
         channelAllowlist: ["web", "telegram"],
         channelOverrides: {
@@ -56,8 +64,14 @@ test("Jev routing honors agent/channel switches and restricts redirect/clarify t
         channels: ["web", "telegram"],
       }),
     }
-    await saveAction(context, agent.id, { id: action.id, definition: action.definition })
-    agent = await updateAgent(context, agent.id, { expectedRevision: agent.currentRevision, apply: true })
+    await saveAction(context, agent.id, {
+      id: action.id,
+      definition: action.definition,
+    })
+    agent = await updateAgent(context, agent.id, {
+      expectedRevision: agent.currentRevision,
+      apply: true,
+    })
     let route: "answer" | "redirect" | "clarify" = "answer"
     let routingCalls = 0
     let generationCalls = 0
@@ -65,9 +79,14 @@ test("Jev routing honors agent/channel switches and restricts redirect/clarify t
     let keywordProcedure = false
     const events: string[] = []
     const run = async (channel: BuildChannel) => {
-      fixture.provider(body => {
-        if (!toolOutputs(body).length) { generationCalls++; events.push("generate") }
-        return (body.tools as unknown[] | undefined)?.length ? invokeTool(body, {}, "A reply.", "Lookup") : eveResponse(body, "A reply.")
+      fixture.provider((body) => {
+        if (!toolOutputs(body).length) {
+          generationCalls++
+          events.push("generate")
+        }
+        return (body.tools as unknown[] | undefined)?.length
+          ? invokeTool(body, {}, "A reply.", "Lookup")
+          : eveResponse(body, "A reply.")
       })
       const result = await runAgentTurn(
         context,
@@ -137,11 +156,12 @@ test("Jev routing honors agent/channel switches and restricts redirect/clarify t
               text: "Approved store reference",
               documents: [],
             }),
-
           },
         }
       )
-      actionCalls += result.toolCalls.filter(call => call.actionId === action.id).length
+      actionCalls += result.toolCalls.filter(
+        (call) => call.actionId === action.id
+      ).length
       return result
     }
     expect(agent.configuration.guardrails.jevCheckEnabled).toBe(true)

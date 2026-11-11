@@ -124,7 +124,7 @@ export async function runSandboxScorer(
       "sandbox",
       providers.length
         ? `No sandbox provider is available (${providers.map(({ id }) => sandboxProviderNames[id]).join(", ")}). Check sandbox provider settings.`
-        : "Configure a sandbox provider in project settings to run code scorers."
+        : "Configure a sandbox provider in organization settings to run code scorers."
     ),
     metadata: { sandboxAttempts: attempts },
   }

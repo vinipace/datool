@@ -33,7 +33,6 @@ import {
 } from "@/components/tracer/collection-table"
 import { collectionTable } from "@/components/tracer/collection-table-styles"
 import { useRemote } from "@/components/tracer/hooks"
-import { useWorkspaceHref } from "@/components/tracer/workspace-path"
 import {
   buildCall,
   buildOperations,
@@ -667,7 +666,6 @@ export function AgentSandbox({
 /** Sandbox configuration lives with the agent's other settings. */
 export function AgentSandboxSettings({ configuration, onChange }: Props) {
   const sandbox = configuration.sandbox
-  const workspaceHref = useWorkspaceHref()
   const storage = useRemote(
     (signal) =>
       buildCall<{ items: StorageConnection[] }>(
@@ -799,7 +797,7 @@ export function AgentSandboxSettings({ configuration, onChange }: Props) {
           )}
         </FormRow>
         <Button asChild variant="link" size="sm">
-          <Link href={workspaceHref("/settings/storage-providers")}>
+          <Link href={"/settings/storage-providers"}>
             Configure storage providers
           </Link>
         </Button>
@@ -841,7 +839,7 @@ export function AgentSandboxSettings({ configuration, onChange }: Props) {
           />
         </FormRow>
         <Button asChild variant="link" size="sm">
-          <Link href={workspaceHref("/settings/sandbox-providers")}>
+          <Link href={"/settings/sandbox-providers"}>
             Configure sandbox providers
           </Link>
         </Button>

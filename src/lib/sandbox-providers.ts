@@ -1,3 +1,4 @@
+import type { ProviderConnectionInfo } from "./provider-connections"
 import { z } from "zod"
 
 export const sandboxProviderIds = [
@@ -77,6 +78,7 @@ export type SandboxProviderStatus = {
   projectId?: string
 }
 export type SandboxProviderSettings = {
+  connections?: ProviderConnectionInfo[]
   providers: SandboxProviderStatus[]
   defaultProvider: SandboxProviderId | null
   executionOrder: SandboxProviderId[]
@@ -98,3 +100,18 @@ export function sandboxExecutionOrder(
     ),
   ]
 }
+
+export const sandboxProviderFields = {
+  boat: [{ key: "apiKey", label: "API key", secret: true }],
+  datool: [],
+  local: [],
+  vercel: [
+    { key: "apiKey", label: "API token", secret: true },
+    { key: "teamId", label: "Team ID", secret: false },
+    { key: "projectId", label: "Vercel project ID", secret: false },
+  ],
+  modal: [
+    { key: "tokenId", label: "Token ID", secret: true },
+    { key: "tokenSecret", label: "Token secret", secret: true },
+  ],
+} as const

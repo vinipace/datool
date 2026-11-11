@@ -281,10 +281,12 @@ try {
   console.log(
     "PASS inbound image runs the agent and delivers its reply through the worker"
   )
-  const { saveProjectProviderKey } =
+  const { projectProviderContext } =
+    await import("../src/server/providers/context")
+  const { saveOrganizationProviderKey } =
     await import("../src/server/model-providers/store")
-  await saveProjectProviderKey(
-    target.projectId,
+  await saveOrganizationProviderKey(
+    await projectProviderContext(target.projectId),
     "vercel-ai-gateway",
     "project-gateway-key"
   )

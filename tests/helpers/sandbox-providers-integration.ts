@@ -1,3 +1,4 @@
+import { PUT as retiredPUT } from "../../app/api/projects/[projectId]/sandbox-providers/route"
 import { strict as assert } from "node:assert"
 import { makeSignature } from "better-auth/crypto"
 import { Effect } from "effect"
@@ -8,14 +9,21 @@ import {
   PUT,
   PATCH,
   DELETE,
-} from "../../app/api/projects/[projectId]/sandbox-providers/route"
+} from "../../app/api/organizations/[organizationId]/sandbox-providers/route"
 import { POST as testScorer } from "../../app/api/scorers/test/route"
 import { getSandboxExecutionProviders } from "../../src/server/sandbox/providers-store"
 import { defaultScorer } from "../../src/lib/tracer/scorers"
 import { createTestTracerService } from "../../src/server/tracer/service"
 
-import { GET as getStorage,PUT as putStorage,DELETE as deleteStorage } from "../../app/api/projects/[projectId]/storage-connections/route"
-import { GET as exportDrive,PUT as importDrive } from "../../app/api/projects/[projectId]/drives/[driveId]/archive/route"
+import {
+  GET as getStorage,
+  PUT as putStorage,
+  DELETE as deleteStorage,
+} from "../../app/api/organizations/[organizationId]/storage-connections/route"
+import {
+  GET as exportDrive,
+  PUT as importDrive,
+} from "../../app/api/projects/[projectId]/drives/[driveId]/archive/route"
 
 try {
   const auth = await getAuth().$context
@@ -47,8 +55,22 @@ try {
     "INSERT INTO project (id, organization_id, name, slug) VALUES ('a', $1, 'A', 'a'), ('b', $1, 'B', 'b')",
     [org.id]
   )
+  const otherOrg = await getAuth().api.createOrganization({
+    headers: new Headers({ cookie: owner.cookie }),
+    body: { name: "Other organization", slug: "other-org" },
+  })
+  assert(otherOrg)
+  await db.query("UPDATE project SET organization_id=$1 WHERE id='b'", [
+    otherOrg.id,
+  ])
+  await db.query(
+    "INSERT INTO project(id,organization_id,name,slug) VALUES('c',$1,'C','c')",
+    [org.id]
+  )
   const context = (projectId = "a") => ({
-    params: Promise.resolve({ projectId }),
+    params: Promise.resolve({
+      organizationId: projectId === "b" ? otherOrg.id : org.id,
+    }),
   })
   const request = (
     method: string,
@@ -64,18 +86,72 @@ try {
   const settings = async (project = "a") =>
     (await GET(request("GET"), context(project))).json()
   // Storage settings and backups use the same authenticated project boundary.
-  assert.equal((await getStorage(request("GET",undefined,""),context())).status,401)
-  assert.equal((await getStorage(request("GET",undefined,outsider.cookie),context())).status,403)
-  assert.equal((await getStorage(request("GET",undefined,member.cookie),context())).status,200)
-  for(const handler of [putStorage,deleteStorage]) {
-    assert.equal((await handler(request("PUT",{},member.cookie),context())).status,403)
-    assert.equal((await handler(request("PUT",{},owner.cookie,"https://untrusted.test"),context())).status,403)
+  assert.equal(
+    (await getStorage(request("GET", undefined, ""), context())).status,
+    401
+  )
+  assert.equal(
+    (await getStorage(request("GET", undefined, outsider.cookie), context()))
+      .status,
+    403
+  )
+  assert.equal(
+    (await getStorage(request("GET", undefined, member.cookie), context()))
+      .status,
+    200
+  )
+  for (const handler of [putStorage, deleteStorage]) {
+    assert.equal(
+      (await handler(request("PUT", {}, member.cookie), context())).status,
+      403
+    )
+    assert.equal(
+      (
+        await handler(
+          request("PUT", {}, owner.cookie, "https://untrusted.test"),
+          context()
+        )
+      ).status,
+      403
+    )
   }
-  const driveContext={params:Promise.resolve({projectId:"a",driveId:crypto.randomUUID()})}
-  assert.equal((await exportDrive(request("GET",undefined,outsider.cookie),driveContext)).status,403)
-  assert.equal((await importDrive(request("PUT",{},member.cookie),driveContext)).status,403)
-  assert.equal((await importDrive(request("PUT",{},owner.cookie,"https://untrusted.test"),driveContext)).status,403)
-  assert.equal((await importDrive(request("PUT",{},owner.cookie),driveContext)).status,400)
+  const driveContext = {
+    params: Promise.resolve({ projectId: "a", driveId: crypto.randomUUID() }),
+  }
+  assert.equal(
+    (
+      await exportDrive(
+        request("GET", undefined, outsider.cookie),
+        driveContext
+      )
+    ).status,
+    403
+  )
+  assert.equal(
+    (await importDrive(request("PUT", {}, member.cookie), driveContext)).status,
+    403
+  )
+  assert.equal(
+    (
+      await importDrive(
+        request("PUT", {}, owner.cookie, "https://untrusted.test"),
+        driveContext
+      )
+    ).status,
+    403
+  )
+  assert.equal(
+    (await importDrive(request("PUT", {}, owner.cookie), driveContext)).status,
+    400
+  )
+  assert.equal(
+    (
+      await retiredPUT(request("PUT", { provider: "local" }), {
+        params: Promise.resolve({ projectId: "a" }),
+      })
+    ).status,
+    403
+  )
   const vercel = {
     provider: "vercel",
     apiKey: "sandbox-secret-a",
@@ -149,8 +225,12 @@ try {
     "modal",
   ])
   assert.deepEqual((await settings("b")).executionOrder, ["local"])
+  assert.deepEqual(
+    (await getSandboxExecutionProviders("c")).map((row) => row.id),
+    ["vercel", "local", "modal"]
+  )
   const stored = await db.query(
-    "SELECT providers::text FROM project_sandbox_settings WHERE project_id = 'a'"
+    "SELECT string_agg(encrypted_credentials,',') AS providers FROM organization_provider_connections WHERE organization_id=(SELECT organization_id FROM project WHERE id='a') AND kind='sandbox'"
   )
   for (const secret of [vercel.apiKey, modal.tokenId, modal.tokenSecret]) {
     assert(!stored.rows[0].providers.includes(secret))
@@ -202,7 +282,7 @@ try {
   )
   assert(!JSON.stringify(await settings()).includes("boat-test-secret"))
   const boatEncrypted = await db.query(
-    "SELECT providers->>'boat' AS secret FROM project_sandbox_settings WHERE project_id='a'"
+    "SELECT encrypted_credentials AS secret FROM organization_provider_connections WHERE organization_id=(SELECT organization_id FROM project WHERE id='a') AND provider='boat' AND kind='sandbox'"
   )
   assert(!boatEncrypted.rows[0].secret.includes("boat-test-secret"))
   assert.equal(
@@ -223,11 +303,16 @@ try {
   await DELETE(request("DELETE", { provider: "boat" }), context())
   // Copying ciphertext to another project cannot unlock it.
   await db.query(
-    "INSERT INTO project_sandbox_settings (project_id, providers, default_provider) SELECT 'b', providers, default_provider FROM project_sandbox_settings WHERE project_id = 'a'"
+    "INSERT INTO organization_provider_connections(organization_id,kind,provider,name,encrypted_credentials,is_default) SELECT (SELECT organization_id FROM project WHERE id='b'),kind,provider,name,encrypted_credentials,true FROM organization_provider_connections WHERE organization_id=(SELECT organization_id FROM project WHERE id='a') AND kind='sandbox' AND provider='vercel'"
   )
   const copied = await getSandboxExecutionProviders("b")
-  assert.throws(() => copied[0].credentials(), /Unable to unlock/)
-  await db.query("DELETE FROM project_sandbox_settings WHERE project_id = 'b'")
+  assert.throws(
+    () => copied.find((row) => row.id === "vercel")!.credentials(),
+    /Unable to unlock/
+  )
+  await db.query(
+    "DELETE FROM organization_provider_connections WHERE organization_id=(SELECT organization_id FROM project WHERE id='b')"
+  )
   await DELETE(request("DELETE", { provider: "vercel" }), context())
   assert.equal((await settings()).defaultProvider, "local")
   await DELETE(request("DELETE", { provider: "modal" }), context())
