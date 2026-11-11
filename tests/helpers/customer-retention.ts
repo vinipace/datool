@@ -53,12 +53,14 @@ try {
       [id, project]
     )
     await q(
-      `INSERT INTO build_conversations(id,project_id,agent_id,channel,status,metadata_json,created_at,updated_at,last_message_at)
-      VALUES($1,$2,'agent','web',$3,$4,$5,$5,$5)`,
+      `INSERT INTO build_conversations(id,project_id,agent_id,channel,status,owner_type,owner_id,metadata_json,created_at,updated_at,last_message_at)
+      VALUES($1,$2,'agent','web',$3,$4,$5,$6,$7,$7,$7)`,
       [
         id,
         project,
         id === "handoff" ? "handed_off" : "active",
+        id === "handoff" ? "human" : "ai",
+        id === "handoff" ? "retention-test-owner" : null,
         JSON.stringify({ contactId: id }),
         date,
       ]
