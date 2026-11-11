@@ -215,6 +215,7 @@ jobs:
             bunx playwright install --with-deps chromium
             bun run build:monaco
             bun run eve:build
+            bun run build:packages
             bun --no-env-file scripts/test.mjs --journeys-only
             bun --no-env-file test tests/build-agent-autosave.test.ts
             bunx vitest run --project=storybook components/build/agents/agent-journey-editor.stories.tsx components/tracer/dataset-item-inspector.stories.tsx
@@ -227,7 +228,6 @@ jobs:
       - run:
           name: Verify source and release contracts in parallel
           command: |
-            bun run build:packages
             logs="$(mktemp -d)"
             trap 'rm -rf "$logs"' EXIT
             (bun run lint && bun run check:styles) > "$logs/lint" 2>&1 &
