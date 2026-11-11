@@ -47,7 +47,9 @@ const meta = {
     nextjs: { navigation: { pathname: "/p/demo/build/agents/research" } },
     msw: {
       handlers: [
-        http.post("*/api/build/build_list_storage_connections", () => HttpResponse.json({data:{items:[]}})),
+        http.post("*/api/build/build_list_storage_connections", () =>
+          HttpResponse.json({ data: { items: [] } })
+        ),
         http.post("*/api/build/build_list_drives", () =>
           HttpResponse.json({ data: { items: savedDrives, nextCursor: null } })
         ),
@@ -138,5 +140,28 @@ export const SdkWorkspaceDrives: Story = {
     const dialog = within(await within(document.body).findByRole("dialog"))
     await expect(dialog.queryByText("drive_acme")).not.toBeInTheDocument()
     await expect(dialog.queryByText("drive_orbit")).not.toBeInTheDocument()
+  },
+}
+
+export const BoatRequiresStorage: Story = {
+  args: {
+    configuration: agentConfigurationSchema.parse({
+      sandbox: { enabled: true, provider: "boat" },
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Add drive" })
+    )
+    const dialog = within(await within(document.body).findByRole("dialog"))
+    await expect(dialog.getByLabelText("Storage")).toHaveDisplayValue(
+      "Select S3 or GCS"
+    )
+    await userEvent.type(dialog.getByLabelText("Name"), "Boat research")
+    await userEvent.click(dialog.getByRole("button", { name: "Add drive" }))
+    await expect(dialog.findByRole("alert")).resolves.toHaveTextContent(
+      "Select S3 or GCS storage for a persistent drive on Boat."
+    )
   },
 }

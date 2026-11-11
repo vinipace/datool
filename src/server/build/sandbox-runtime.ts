@@ -1,3 +1,5 @@
+import { boatDocker, stopBoatSandbox } from "./boat"
+import type { BoatDocker } from "../sandbox/boat"
 import { execFile, spawn } from "node:child_process"
 import { createHash, randomUUID } from "node:crypto"
 import { promisify } from "node:util"
@@ -20,7 +22,7 @@ import {
   checkpointCloudDrives,
   recoverCloudDrives,
 } from "./storage/sync"
-import { assertDriveLease } from "./storage/files"
+import { assertDriveLease, loadCloudDrive } from "./storage/files"
 import { maxArchiveBytes } from "./storage/archive"
 
 const executeFile = promisify(execFile)
@@ -44,7 +46,11 @@ export function volumeName(projectId: string, driveId: string) {
   return `datool-drive-${createHash("sha256").update(`${projectId}:${driveId}`).digest("hex").slice(0, 40)}`
 }
 
-type CommandIO = { stdin?: string; maxOutputBytes?: number }
+type CommandIO = {
+  stdin?: string
+  maxOutputBytes?: number
+  docker?: BoatDocker
+}
 
 function collector(limit = 32 * 1024) {
   let remaining = Math.min(limit, Math.ceil((maxArchiveBytes * 4) / 3) + 4096)
@@ -110,6 +116,15 @@ async function localCommand(
   io: CommandIO = {}
 ) {
   const docker = process.env.DATOOL_SANDBOX_DOCKER_BINARY?.trim() || "docker"
+  const execute = (
+    binary: string,
+    args: string[],
+    options: { timeout?: number; signal?: AbortSignal }
+  ) =>
+    io.docker
+      ? io.docker.exec(args, options)
+      : executeFile(binary, args, options)
+  if (io.docker) await io.docker.prepare(images[config.environment])
   const projectId = context.projectId
   const image = images[config.environment]
   const names = mounts.map((mount) => ({
@@ -119,12 +134,12 @@ async function localCommand(
   for (const mount of names) {
     if (mount.provisioned) {
       // A missing drive is an error, never a new empty directory after host loss.
-      await executeFile(docker, ["volume", "inspect", mount.volume], {
+      await execute(docker, ["volume", "inspect", mount.volume], {
         timeout: 10_000,
         signal,
       })
     } else {
-      await executeFile(
+      await execute(
         docker,
         [
           "volume",
@@ -142,7 +157,7 @@ async function localCommand(
       await markProvisioned(context, mount.id)
     }
     // Initialize the managed volume's root for the unprivileged sandbox user.
-    await executeFile(
+    await execute(
       docker,
       [
         "run",
@@ -166,47 +181,89 @@ async function localCommand(
   const name = `datool-agent-${randomUUID()}`
   const output = collector(io.maxOutputBytes)
   try {
+    const args = [
+      "run",
+      ...(io.stdin !== undefined ? ["-i"] : []),
+      "--rm",
+      "--pull=never",
+      "--name",
+      name,
+      "--init",
+      ...(config.networkAccess ? [] : ["--network=none"]),
+      "--read-only",
+      "--cap-drop=ALL",
+      "--security-opt=no-new-privileges",
+      "--user=65534:65534",
+      "--cpus=1",
+      "--memory=512m",
+      "--memory-swap=512m",
+      "--pids-limit=128",
+      "--tmpfs=/tmp:rw,nosuid,size=128m,mode=1777",
+      ...(names.some((mount) => mount.mountPath === "/workspace")
+        ? []
+        : ["--tmpfs=/workspace:rw,nosuid,size=128m,mode=1777"]),
+      ...names.flatMap((mount) => [
+        "--mount",
+        `type=volume,src=${mount.volume},dst=${mount.mountPath},volume-nocopy`,
+      ]),
+      "--env=HOME=/tmp",
+      "--workdir=/workspace",
+      image,
+      "/bin/sh",
+      "-c",
+      'mkdir -p "$1" && cd "$1" && exec timeout --signal=TERM --kill-after=2s "$2" /bin/sh -c "$3"',
+      "datool",
+      config.workingDirectory,
+      `${timeout}s`,
+      command,
+    ]
+    if (io.docker) {
+      const child = io.docker.spawn(args, io.stdin !== undefined)
+      const abort = () => {
+        void Promise.resolve(child.kill()).catch(() => undefined)
+      }
+      signal?.addEventListener("abort", abort, { once: true })
+      if (signal?.aborted) abort()
+      try {
+        const writing =
+          io.stdin === undefined
+            ? Promise.resolve()
+            : (async () => {
+                const writer = child.stdin!.getWriter()
+                await writer.write(Buffer.from(io.stdin!))
+                await writer.close()
+              })()
+        const collect = async (
+          stream: ReadableStream<Uint8Array>,
+          name: "stdout" | "stderr"
+        ) => {
+          const reader = stream.getReader()
+          try {
+            while (true) {
+              const next = await reader.read()
+              if (next.done) return
+              output.add(name, Buffer.from(next.value))
+            }
+          } finally {
+            reader.releaseLock()
+          }
+        }
+        const [result] = await Promise.all([
+          child.wait(),
+          collect(child.stdout, "stdout"),
+          collect(child.stderr, "stderr"),
+          writing,
+        ])
+        return output.result(result.exitCode)
+      } finally {
+        signal?.removeEventListener("abort", abort)
+      }
+    }
     return await new Promise<SandboxCommandResult>((resolve, reject) => {
-      const child = spawn(
-        /* turbopackIgnore: true */ docker,
-        [
-          "run",
-          ...(io.stdin !== undefined ? ["-i"] : []),
-          "--rm",
-          "--pull=never",
-          "--name",
-          name,
-          "--init",
-          ...(config.networkAccess ? [] : ["--network=none"]),
-          "--read-only",
-          "--cap-drop=ALL",
-          "--security-opt=no-new-privileges",
-          "--user=65534:65534",
-          "--cpus=1",
-          "--memory=512m",
-          "--memory-swap=512m",
-          "--pids-limit=128",
-          "--tmpfs=/tmp:rw,nosuid,size=128m,mode=1777",
-          ...(names.some((mount) => mount.mountPath === "/workspace")
-            ? []
-            : ["--tmpfs=/workspace:rw,nosuid,size=128m,mode=1777"]),
-          ...names.flatMap((mount) => [
-            "--mount",
-            `type=volume,src=${mount.volume},dst=${mount.mountPath},volume-nocopy`,
-          ]),
-          "--env=HOME=/tmp",
-          "--workdir=/workspace",
-          image,
-          "/bin/sh",
-          "-c",
-          'mkdir -p "$1" && cd "$1" && exec timeout --signal=TERM --kill-after=2s "$2" /bin/sh -c "$3"',
-          "datool",
-          config.workingDirectory,
-          `${timeout}s`,
-          command,
-        ],
-        { stdio: ["pipe", "pipe", "pipe"], signal }
-      )
+      const child = spawn(/* turbopackIgnore: true */ docker, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        signal,
+      })
       child.stdin.on("error", () => undefined)
       child.stdin.end(io.stdin)
       const timer = setTimeout(
@@ -226,7 +283,8 @@ async function localCommand(
     })
   } finally {
     // Removing the client process does not remove a running container.
-    await stopLocalContainer(docker, name)
+    if (io.docker) await io.docker.remove(name)
+    else await stopLocalContainer(docker, name)
     stopped()
   }
 }
@@ -433,8 +491,12 @@ export async function runAgentSandboxCommand(
       ...mount,
       provisioned: cloudStorage(mount.provider) ? true : mount.provisioned,
     }))
+    const nativeDocker =
+      config.provider === "boat"
+        ? await boatDocker(context, leaseToken, true)
+        : undefined
     const result =
-      config.provider === "local"
+      config.provider === "local" || config.provider === "boat"
         ? await localCommand(
             context,
             config,
@@ -445,7 +507,7 @@ export async function runAgentSandboxCommand(
               stopped = true
             },
             signal,
-            io
+            { ...io, docker: nativeDocker }
           )
         : await modalCommand(
             context,
@@ -462,6 +524,7 @@ export async function runAgentSandboxCommand(
     await checkpointCloudDrives(context, config, mounts, leaseToken)
     return result
   } finally {
+    if (config.provider === "boat") await stopBoatSandbox(context, leaseToken)
     if (stopped && mounts.length)
       await context.database.execute(sql`
       UPDATE build_drives SET lease_token = NULL, lease_until = NULL
@@ -495,7 +558,17 @@ export async function transferDriveArchive(
     workingDirectory: "/workspace",
     drives: [{ driveId, mountPath: "/workspace" }],
   }
-  const run = config.provider === "local" ? localCommand : modalCommand
+  const drive =
+    config.provider === "boat" ? await loadCloudDrive(context, driveId) : null
+  if (drive && !drive.sync_compute_id)
+    throw new Error("Boat drive cache receipt is missing.")
+  const nativeDocker = drive
+    ? await boatDocker(context, drive.sync_compute_id!)
+    : undefined
+  const run =
+    config.provider === "local" || config.provider === "boat"
+      ? localCommand
+      : modalCommand
   const result = await run(
     context,
     configuration,
@@ -513,6 +586,7 @@ export async function transferDriveArchive(
     {
       ...(archive ? { stdin: archive.toString("base64") } : {}),
       maxOutputBytes: Math.ceil((maxArchiveBytes * 4) / 3) + 4096,
+      docker: nativeDocker,
     }
   )
   if (result.exitCode !== 0 || result.truncated)

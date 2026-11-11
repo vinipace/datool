@@ -36,8 +36,10 @@ const descriptions = {
   local: "Run scorers in an isolated Docker container on your Datool server.",
   vercel: "Run scorers in an isolated Vercel Sandbox using your account.",
   modal: "Run scorers in a Modal sandbox using your workspace credentials.",
+  boat: "Run agents and scorers in isolated containers on Boat VMs. Persistent drives use S3 or GCS.",
 }
 const fields = {
+  boat: [{ key: "apiKey", label: "API key", secret: true }],
   datool: [],
   local: [],
   vercel: [
@@ -74,7 +76,7 @@ export function SandboxProviderSettings({
   )
   const state = useRemote(load, [projectId])
   return (
-    <ProviderSettingsLayout description="Configure sandboxes for JavaScript and Python scorers in this project. Datool Sandbox uses execution credits. Your own providers use their configured fallback order.">
+    <ProviderSettingsLayout description="Configure sandboxes for agents and JavaScript/Python scorers in this project. Datool Sandbox uses execution credits. Your own providers use their configured fallback order.">
       {state.error && (
         <Notice variant="error" role="alert">
           {state.error.message}{" "}
@@ -186,7 +188,9 @@ function ProviderEditor({
                 ? "Docker"
                 : provider.id === "vercel"
                   ? (provider.projectId ?? "Vercel Sandbox")
-                  : "Modal workspace",
+                  : provider.id === "boat"
+                    ? "Boat VM"
+                    : "Modal workspace",
           icon: <ProviderIcon id={provider.id} />,
           kind: provider.id === "local" ? "Local" : "Cloud",
           status: "Configured",
@@ -448,6 +452,21 @@ function SandboxProviderForm({
             Vercel access token
           </a>{" "}
           with access to the team and project below.
+        </p>
+      )}
+      {id === "boat" && (
+        <p className="text-sm text-foreground-muted">
+          Use a{" "}
+          <a
+            className="underline"
+            href="https://docs.boat.dev/sdks/overview"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Boat API key
+          </a>{" "}
+          with permission to create, read, execute, write files, resume and stop
+          sandboxes. Usage is billed to your Boat account.
         </p>
       )}
       {id === "modal" && (

@@ -2,7 +2,12 @@ import { z } from "zod"
 import { sdkDriveContextSchema } from "./sdk-context"
 import { storageProviderSchema } from "./storage"
 
-export const agentSandboxProviderSchema = z.enum(["datool", "local", "modal"])
+export const agentSandboxProviderSchema = z.enum([
+  "datool",
+  "local",
+  "modal",
+  "boat",
+])
 export type AgentSandboxProvider = z.infer<typeof agentSandboxProviderSchema>
 
 // A dedicated namespace keeps mounts away from system directories and credentials.

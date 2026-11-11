@@ -1,7 +1,7 @@
 # Agent sandboxes and drives
 
 Open **Settings → Sandbox** to enable command execution. Choose
-Datool Sandbox, a project-configured Modal account, or Local container. Select
+Datool Sandbox, a project-configured Modal or Boat account, or Local container. Select
 Node.js 22 or Python 3.13, and enable network access when downloads or dependency
 installation are needed. The feature is off for existing agents.
 
@@ -68,8 +68,21 @@ using the same drive returns a busy result. Commands within a turn reuse its lea
 Leases release after confirmed shutdown; an unknown outcome retains the lease for
 twelve minutes, longer than the environment's ten-minute maximum lifetime.
 Datool Sandbox reserves execution credits and settles observed
-allocation at the 1 CPU / 512 MiB rate; Modal and Local use the project's infrastructure.
+allocation at the 1 CPU / 512 MiB rate; Modal, Boat and Local use the project's infrastructure.
 Persistent storage is retained separately from sandbox compute usage.
+
+Boat runs those same restricted containers inside a private VM created with
+`noEnv: true`. It needs a project Boat API key; standard VM Docker images are
+pulled on demand. Each execution has its own VM, with an idempotent allocation
+receipt. The VM is stopped after checkpointing (20-minute automatic stop as a
+backstop). The container's remaining lifetime excludes provisioning time so it
+cannot outlive its drive lease. A stopped VM may be resumed only to recover its
+pending drive cache. Boat requires S3/GCS for persistent drives and an explicit
+`sdkStorageConnectionId` for persistent SDK workspaces; it does not expose a
+native Boat drive. Recover failed uploads within the Boat account's snapshot
+retention window. Missing or expired caches fail closed. The protocol tests use
+real Docker execution through a local Boat API emulator; live Boat provisioning
+and account permissions need an operator smoke test.
 
 ## API and rollout
 
@@ -79,7 +92,7 @@ supports `after`/`limit` pagination. Configure mounts through `build_update_agen
 using its ordinary revision and draft/apply controls. The authoring guide publishes
 the complete sandbox configuration schema.
 
-Apply `0079_build_drives.sql`, `0084_build_agent_sandboxes.sql` and `0088_drive_storage.sql` with the normal database migration flow before
+Apply `0079_build_drives.sql`, `0084_build_agent_sandboxes.sql` `0088_drive_storage.sql` and `0089_boat_sandboxes.sql` with the normal database migration flow before
 deploying code. No existing agent opts in automatically.
 
 Verification:

@@ -5,6 +5,7 @@ export const sandboxProviderIds = [
   "local",
   "vercel",
   "modal",
+  "boat",
 ] as const
 export type SandboxProviderId = (typeof sandboxProviderIds)[number]
 export const sandboxProviderNames: Record<SandboxProviderId, string> = {
@@ -12,6 +13,7 @@ export const sandboxProviderNames: Record<SandboxProviderId, string> = {
   local: "Local container",
   vercel: "Vercel Sandbox",
   modal: "Modal",
+  boat: "Boat",
 }
 export const sandboxProviderIdSchema = z.enum(sandboxProviderIds)
 const credential = z.string().trim().min(1).max(4096).regex(/^\S+$/)
@@ -25,6 +27,7 @@ const identifier = z
 export const sandboxCredentialsSchema = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("datool") }).strict(),
   z.object({ provider: z.literal("local") }).strict(),
+  z.object({ provider: z.literal("boat"), apiKey: credential }).strict(),
   z
     .object({
       provider: z.literal("vercel"),
@@ -47,6 +50,9 @@ export type SandboxCredentials = z.infer<typeof sandboxCredentialsSchema>
 export const sandboxProviderInputSchema = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("datool") }).strict(),
   z.object({ provider: z.literal("local") }).strict(),
+  z
+    .object({ provider: z.literal("boat"), apiKey: credential.optional() })
+    .strict(),
   z
     .object({
       provider: z.literal("vercel"),

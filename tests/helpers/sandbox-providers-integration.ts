@@ -181,6 +181,46 @@ try {
       .status,
     200
   )
+  assert.equal(
+    (
+      await PUT(
+        request("PUT", { provider: "boat", apiKey: "boat-test-secret" }),
+        context()
+      )
+    ).status,
+    200
+  )
+  assert.equal(
+    (await PUT(request("PUT", { provider: "boat" }), context())).status,
+    200
+  )
+  assert.deepEqual(
+    (await getSandboxExecutionProviders("a"))
+      .find((item) => item.id === "boat")!
+      .credentials(),
+    { provider: "boat", apiKey: "boat-test-secret" }
+  )
+  assert(!JSON.stringify(await settings()).includes("boat-test-secret"))
+  const boatEncrypted = await db.query(
+    "SELECT providers->>'boat' AS secret FROM project_sandbox_settings WHERE project_id='a'"
+  )
+  assert(!boatEncrypted.rows[0].secret.includes("boat-test-secret"))
+  assert.equal(
+    (
+      await PUT(
+        request("PUT", { provider: "boat", apiKey: "replacement-boat-secret" }),
+        context()
+      )
+    ).status,
+    200
+  )
+  assert.deepEqual(
+    (await getSandboxExecutionProviders("a"))
+      .find((item) => item.id === "boat")!
+      .credentials(),
+    { provider: "boat", apiKey: "replacement-boat-secret" }
+  )
+  await DELETE(request("DELETE", { provider: "boat" }), context())
   // Copying ciphertext to another project cannot unlock it.
   await db.query(
     "INSERT INTO project_sandbox_settings (project_id, providers, default_provider) SELECT 'b', providers, default_provider FROM project_sandbox_settings WHERE project_id = 'a'"

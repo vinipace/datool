@@ -75,6 +75,11 @@ async function resolveLockedSdkDrive(
   const connection = config.sdkStorageConnectionId
     ? await storageConnection(context, config.sdkStorageConnectionId)
     : null
+  if (config.provider === "boat" && !connection)
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Select S3 or GCS for React SDK drive storage when using Boat."
+    )
   const provider = connection?.config_json.provider ?? config.provider
   const existing = await context.database.execute<{
     id: string

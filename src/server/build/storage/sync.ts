@@ -1,3 +1,4 @@
+import { boatDocker, stopBoatSandbox } from "../boat"
 import { randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import { cloudStorage } from "@/src/lib/build/storage"
@@ -21,10 +22,11 @@ export async function hydrateCloudDrives(
   mounts: Mount[],
   token: string
 ) {
+  if (config.provider === "boat") await boatDocker(context, token, true)
   for (const mount of mounts.filter((mount) => cloudStorage(mount.provider))) {
     await assertDriveLease(context, mount.id, token)
     const rows = await context.database.execute(
-      sql`UPDATE build_drives SET sync_pending=true,sync_hydrating=true,sync_compute_provider=${config.provider} WHERE project_id=${context.projectId} AND id=${mount.id}::uuid AND lease_token=${token}::uuid AND lease_until>now() RETURNING id`
+      sql`UPDATE build_drives SET sync_pending=true,sync_hydrating=true,sync_compute_provider=${config.provider},sync_compute_id=${config.provider === "boat" ? token : null}::uuid WHERE project_id=${context.projectId} AND id=${mount.id}::uuid AND lease_token=${token}::uuid AND lease_until>now() RETURNING id`
     )
     if (!rows.rows.length)
       throw new Error("The drive lease expired before the sandbox started.")
@@ -52,7 +54,7 @@ export async function checkpointCloudDrives(
     // A crash while restoring the cache must never commit a partial restore.
     if (drive.sync_hydrating) {
       await context.database.execute(
-        sql`UPDATE build_drives SET sync_pending=false,sync_hydrating=false,sync_compute_provider=NULL WHERE project_id=${context.projectId} AND id=${mount.id}::uuid AND lease_token=${token}::uuid`
+        sql`UPDATE build_drives SET sync_pending=false,sync_hydrating=false,sync_compute_provider=NULL,sync_compute_id=NULL WHERE project_id=${context.projectId} AND id=${mount.id}::uuid AND lease_token=${token}::uuid`
       )
       continue
     }
@@ -96,12 +98,17 @@ export async function recoverCloudDrives(
       sql`UPDATE build_drives SET lease_token=${token}::uuid,lease_until=now()+interval '5 minutes' WHERE project_id=${context.projectId} AND id=${drive.id}::uuid AND lease_token=${drive.lease_token}::uuid AND sync_pending AND lease_until<=now() RETURNING id`
     )
     if (!claimed.rows.length) continue
-    await checkpointCloudDrives(
-      context,
-      { ...config, provider: drive.sync_compute_provider },
-      [mount],
-      token
-    )
+    try {
+      await checkpointCloudDrives(
+        context,
+        { ...config, provider: drive.sync_compute_provider },
+        [mount],
+        token
+      )
+    } finally {
+      if (drive.sync_compute_provider === "boat" && drive.sync_compute_id)
+        await stopBoatSandbox(context, drive.sync_compute_id)
+    }
     await context.database.execute(
       sql`UPDATE build_drives SET lease_token=NULL,lease_until=NULL WHERE project_id=${context.projectId} AND id=${drive.id}::uuid AND lease_token=${token}::uuid AND NOT sync_pending`
     )

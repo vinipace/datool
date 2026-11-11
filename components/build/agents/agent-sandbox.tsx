@@ -242,6 +242,10 @@ export function AgentSandbox({
     setPending(true)
     try {
       if (!editingId && !existingId) {
+        if (sandbox.provider === "boat" && !storageId)
+          throw new Error(
+            "Select S3 or GCS storage for a persistent drive on Boat."
+          )
         const drive = await buildCall<AgentDrive>(buildOperations.createDrive, {
           name: name.trim(),
           description: description.trim(),
@@ -406,11 +410,11 @@ export function AgentSandbox({
                     </span>
                   </td>
                   <td className={collectionTable.cell}>
-                    {
-                      storageProviderNames[
-                        row.drive?.provider ?? sandbox.provider
-                      ]
-                    }
+                    {row.drive
+                      ? storageProviderNames[row.drive.provider]
+                      : sandbox.provider === "boat"
+                        ? "Select S3 or GCS"
+                        : storageProviderNames[sandbox.provider]}
                   </td>
                   <td className={collectionTable.cell}>
                     <span className="text-foreground-muted">
@@ -515,7 +519,9 @@ export function AgentSandbox({
                     onChange={(event) => setStorageId(event.target.value)}
                   >
                     <option value="">
-                      {storageProviderNames[sandbox.provider]}
+                      {sandbox.provider === "boat"
+                        ? "Select S3 or GCS"
+                        : storageProviderNames[sandbox.provider]}
                     </option>
                     {storage.data?.items.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -745,12 +751,17 @@ export function AgentSandboxSettings({ configuration, onChange }: Props) {
             <option value="datool">Datool Sandbox</option>
             <option value="modal">Modal</option>
             <option value="local">Local container</option>
+            <option value="boat">Boat</option>
           </Select>
         </FormRow>
         <FormRow
           label="SDK workspace storage"
           htmlFor="agent-sdk-storage"
-          description="Used for new SDK workspaces. Existing workspaces keep their storage; changing it requires an explicit migration."
+          description={
+            sandbox.provider === "boat"
+              ? "Boat requires S3 or GCS for persistent SDK workspaces. Without a connection, agents can use temporary files only."
+              : "Used for new SDK workspaces. Existing workspaces keep their storage; changing it requires an explicit migration."
+          }
         >
           <Select
             id="agent-sdk-storage"
@@ -762,7 +773,11 @@ export function AgentSandboxSettings({ configuration, onChange }: Props) {
               })
             }
           >
-            <option value="">{storageProviderNames[sandbox.provider]}</option>
+            <option value="">
+              {sandbox.provider === "boat"
+                ? "Select S3 or GCS"
+                : storageProviderNames[sandbox.provider]}
+            </option>
             {sandbox.sdkStorageConnectionId &&
               !storage.data?.items.some(
                 (item) => item.id === sandbox.sdkStorageConnectionId

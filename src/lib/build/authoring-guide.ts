@@ -201,7 +201,7 @@ export function buildAuthoringGuide(
   }
   const guidance = {
     sandbox: [
-      "Put this configuration under configuration.sandbox in build_update_agent, preserving unrelated settings and the current expectedRevision. Provider setup is separate; choose an available provider and keep each drive on the provider that owns it.",
+      "Put this configuration under configuration.sandbox in build_update_agent, preserving unrelated settings and the current expectedRevision. Provider setup is separate; choose datool, local, modal or boat. Native volumes must match compute; S3/GCS drives are independent. Boat requires S3/GCS for persistent drives, including sdkStorageConnectionId for SDK workspaces.",
       "build_create_drive creates shared persistent storage. Mount returned drive IDs at no more than four unique, non-overlapping /workspace paths. Only mounted contents persist after a turn. Eve exposes bash, read_file, write_file, edit_file, glob and grep when allowed by the agent's routing and approval settings.",
       "build_list_drives accepts agentId and returns shared drives plus this agent's SDK-managed drives, even before any chat exists. Follow nextCursor using after. sdkContext supplies agentId, connectionId, workspace and workspaceName for display; it never grants access.",
       "SDK sessions mount only their own application drive at /workspace and exclude static shared agent drives. Do not add SDK drives to configuration.sandbox.drives. Manage their files through build_sdk_files or the server SDK. Workspace names are display labels, not authentication.",

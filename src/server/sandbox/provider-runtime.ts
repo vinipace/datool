@@ -1,3 +1,4 @@
+import { BoatClient, BoatDocker } from "./boat"
 import { spawn, execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
@@ -399,6 +400,84 @@ async function runModal(
   }
 }
 
+async function runBoat(
+  config: Extract<SandboxCredentials, { provider: "boat" }>,
+  job: SandboxJob
+) {
+  const client = new BoatClient(config.apiKey)
+  const id = await client.create(
+    randomUUID(),
+    false,
+    Math.ceil(remaining(job, 240_000) / 1000)
+  )
+  const docker = new BoatDocker(client, id)
+  const name = `datool-scorer-${randomUUID()}`
+  try {
+    await client.ready(id, false, remaining(job, 180_000))
+    await docker.prepare(sandboxImages[job.language], remaining(job, 180_000))
+    if (job.deadlineMs !== undefined && Date.now() >= job.deadlineMs)
+      throw new Error("Scorer startup deadline elapsed.")
+    const process = docker.spawn(
+      [
+        "run",
+        "--rm",
+        "--pull=never",
+        "--name",
+        name,
+        "-i",
+        "--init",
+        "--network=none",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--user=65534:65534",
+        "--cpus=1",
+        "--memory=128m",
+        "--memory-swap=128m",
+        "--pids-limit=64",
+        "--tmpfs=/tmp:rw,noexec,nosuid,size=16m",
+        sandboxImages[job.language],
+        ...(await workerCommand(job)),
+      ],
+      true
+    )
+    const output = outputCollector()
+    const read = async (stream: ReadableStream<Uint8Array>, name: string) => {
+      const reader = stream.getReader()
+      try {
+        while (true) {
+          const next = await reader.read()
+          if (next.done) return
+          output.add(name, next.value)
+        }
+      } catch (error) {
+        await reader.cancel(error)
+        throw error
+      } finally {
+        reader.releaseLock()
+      }
+    }
+    const writing = (async () => {
+      const writer = process.stdin!.getWriter()
+      await writer.write(Buffer.from(job.payload))
+      await writer.close()
+    })()
+    try {
+      const [result] = await Promise.all([
+        process.wait(),
+        read(process.stdout, "stdout"),
+        read(process.stderr, "stderr"),
+        writing,
+      ])
+      return decodeSandboxResult(output.result(), result.exitCode)
+    } finally {
+      await docker.remove(name)
+    }
+  } finally {
+    await client.stop(id)
+  }
+}
+
 export async function executeSandboxProvider(
   config: SandboxCredentials,
   job: SandboxJob
@@ -408,6 +487,7 @@ export async function executeSandboxProvider(
       throw new Error("Datool Sandbox requires a funded project execution.")
     if (config.provider === "local") return await runContainer(job)
     if (config.provider === "vercel") return await runVercel(config, job)
+    if (config.provider === "boat") return await runBoat(config, job)
     return await runModal(config, job)
   } catch (error) {
     if (error instanceof OutputLimitError)

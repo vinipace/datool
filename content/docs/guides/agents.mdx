@@ -21,9 +21,9 @@ In the API, connected tools retain action definitions for revision history, appr
 
 ## Sandbox and persistent files
 
-Enable **Sandbox** and choose an available provider and environment. The agent can use native `bash`, `read_file`, `write_file`, `edit_file`, `glob`, and `grep` tools when allowed by its routing and approval settings. Commands in a turn share an environment. Only mounted drive contents persist when that environment stops.
+Enable **Sandbox** and choose an available provider (Datool, local Docker, Modal or Boat) and environment. The agent can use native `bash`, `read_file`, `write_file`, `edit_file`, `glob`, and `grep` tools when allowed by its routing and approval settings. Commands in a turn share an environment. Only mounted drive contents persist when that environment stops.
 
-Create shared drives with `build_create_drive`; mount returned IDs under `configuration.sandbox.drives`. Mount paths must be `/workspace` or descendants, with at most four unique drives and no overlapping paths. Native Docker and Modal volumes belong to their selected sandbox provider. S3/GCS drives use an independent storage connection and can be mounted by any sandbox provider. Changing settings never moves existing files. Unmounting retains the drive's files.
+Create shared drives with `build_create_drive`; mount returned IDs under `configuration.sandbox.drives`. Mount paths must be `/workspace` or descendants, with at most four unique drives and no overlapping paths. Native Docker and Modal volumes belong to their selected sandbox provider. Boat requires S3 or GCS for persistent drives, including SDK workspaces. S3/GCS drives use an independent storage connection and can be mounted by any sandbox provider. Changing settings never moves existing files. Unmounting retains the drive's files.
 
 | Drive kind | Used by | Management |
 | --- | --- | --- |

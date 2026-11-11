@@ -24,7 +24,8 @@ type Drive = {
   lease_until: Date | null
   sync_hydrating: boolean
   sync_pending: boolean
-  sync_compute_provider: "local" | "modal" | "datool" | null
+  sync_compute_id: string | null
+  sync_compute_provider: "local" | "modal" | "datool" | "boat" | null
 }
 export async function loadCloudDrive(context: BuildContext, driveId: string) {
   await assertBuildProject(context)
@@ -143,7 +144,7 @@ export async function commitDriveManifest(
         sql`INSERT INTO build_drive_versions(id,project_id,drive_id,manifest_json) VALUES(${id}::uuid,${context.projectId},${driveId}::uuid,${JSON.stringify(manifest)}::jsonb)`
       )
       const changed = await tx.execute(
-        sql`UPDATE build_drives SET head_revision=${id}::uuid,provisioned_at=coalesce(provisioned_at,now()),sync_pending=false,sync_hydrating=false,sync_compute_provider=NULL WHERE project_id=${context.projectId} AND id=${driveId}::uuid AND lease_token=${token}::uuid AND (lease_until>now() OR sync_pending) RETURNING id`
+        sql`UPDATE build_drives SET head_revision=${id}::uuid,provisioned_at=coalesce(provisioned_at,now()),sync_pending=false,sync_hydrating=false,sync_compute_provider=NULL,sync_compute_id=NULL WHERE project_id=${context.projectId} AND id=${driveId}::uuid AND lease_token=${token}::uuid AND (lease_until>now() OR sync_pending) RETURNING id`
       )
       if (!changed.rows.length)
         throw new Error(

@@ -1,3 +1,5 @@
+import { boatDocker, stopBoatSandbox } from "../boat"
+import type { BoatDocker } from "../../sandbox/boat"
 import { execFile, spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { Readable, Writable } from "node:stream"
@@ -40,7 +42,7 @@ type Row = {
   project_id: string
   turn_id: string
   session_id: string
-  provider: "local" | "modal" | "datool"
+  provider: "local" | "modal" | "datool" | "boat"
   native_name: string
   native_id: string | null
   operation_id: string | null
@@ -159,14 +161,42 @@ export async function openDatoolSandbox(
     throw new Error("Invalid environment session.")
   let client: ModalClient | undefined
   let sandbox: Sandbox | undefined
+  let nativeDocker: BoatDocker | undefined
+  const execute = (
+    binary: string,
+    args: string[],
+    options?: { timeout?: number }
+  ) =>
+    nativeDocker
+      ? nativeDocker.exec(args, options)
+      : exec(binary, args, options ?? {})
   try {
+    if (config.provider === "boat") {
+      nativeDocker = await boatDocker(
+        context,
+        row.id,
+        created || row.status === "creating"
+      )
+      row.native_id = nativeDocker.id
+      await nativeDocker.prepare(images[config.environment])
+    }
+    const remainingLifetime = () => {
+      const seconds = Math.floor(
+        (new Date(row.expires_at).getTime() - Date.now()) / 1000
+      )
+      if (seconds < 1)
+        throw new DatoolSandboxGoneError(
+          "The agent environment expired during startup."
+        )
+      return seconds
+    }
     if (created) {
       const mounts = await resolveSandboxDrives(context, config)
       await hydrateCloudDrives(context, config, mounts, row.id)
-      if (config.provider === "local") {
+      if (config.provider === "local" || config.provider === "boat") {
         for (const mount of mounts) {
           const name = volumeName(context.projectId, mount.id)
-          await exec(
+          await execute(
             docker(),
             mount.provisioned
               ? ["volume", "inspect", name]
@@ -183,7 +213,7 @@ export async function openDatoolSandbox(
                 ]
           )
           await markProvisioned(context, mount.id)
-          await exec(docker(), [
+          await execute(docker(), [
             "run",
             "--rm",
             "--pull=never",
@@ -200,7 +230,7 @@ export async function openDatoolSandbox(
             "/drive",
           ])
         }
-        await exec(docker(), [
+        await execute(docker(), [
           "run",
           "-d",
           "--name",
@@ -233,7 +263,7 @@ export async function openDatoolSandbox(
           images[config.environment],
           "bash",
           "-c",
-          `mkdir -p ${quote(config.workingDirectory)} && exec sleep ${lifetimeSeconds}`,
+          `mkdir -p ${quote(config.workingDirectory)} && exec sleep ${remainingLifetime()}`,
         ])
       } else {
         client = await modalClient(context, config.provider)
@@ -269,7 +299,7 @@ export async function openDatoolSandbox(
           {
             name: row.native_name,
             volumes,
-            timeoutMs: lifetimeSeconds * 1000,
+            timeoutMs: remainingLifetime() * 1000,
             blockNetwork: !config.networkAccess,
             cpu: 1,
             cpuLimit: 1,
@@ -279,7 +309,7 @@ export async function openDatoolSandbox(
             command: [
               "bash",
               "-c",
-              `mkdir -p ${quote(config.workingDirectory)} && exec sleep ${lifetimeSeconds}`,
+              `mkdir -p ${quote(config.workingDirectory)} && exec sleep ${remainingLifetime()}`,
             ],
           }
         )
@@ -291,8 +321,8 @@ export async function openDatoolSandbox(
             { allocationStartedAt: new Date(row.created_at).toISOString() }
           )
       }
-    } else if (config.provider === "local") {
-      const result = await exec(docker(), [
+    } else if (config.provider === "local" || config.provider === "boat") {
+      const result = await execute(docker(), [
         "inspect",
         "--format",
         "{{.State.Running}}",
@@ -320,7 +350,14 @@ export async function openDatoolSandbox(
     )
     if (!activated.rows.length)
       throw new DatoolSandboxGoneError("The agent environment has ended.")
-    const connection = connectionFor(context, run, row, client, sandbox)
+    const connection = connectionFor(
+      context,
+      run,
+      row,
+      client,
+      sandbox,
+      nativeDocker
+    )
     return {
       connection,
       state: { id: row.id, projectId: context.projectId, turnId: run.turnId },
@@ -344,7 +381,8 @@ function connectionFor(
   run: EveExecution,
   row: Row,
   client?: ModalClient,
-  sandbox?: Sandbox
+  sandbox?: Sandbox,
+  nativeDocker?: BoatDocker
 ): SandboxConnection {
   async function assertActive() {
     await assertEveOwnership(
@@ -373,7 +411,9 @@ function connectionFor(
       if (sandbox) {
         const process = await sandbox.exec(["bash", "-c", stop])
         await process.wait()
-      } else await exec(docker(), ["exec", row.native_name, "bash", "-c", stop])
+      } else if (nativeDocker)
+        await nativeDocker.exec(["exec", row.native_name, "bash", "-c", stop])
+      else await exec(docker(), ["exec", row.native_name, "bash", "-c", stop])
     }
     if (sandbox) {
       const process = await sandbox.exec(argv, {
@@ -390,22 +430,31 @@ function connectionFor(
         kill,
       }
     }
-    const child = spawn(
-      docker(),
-      [
-        "exec",
-        ...(stdin ? ["-i"] : []),
-        "--workdir",
-        workingDirectory,
-        ...Object.entries(env).flatMap(([key, value]) => [
-          "--env",
-          `${key}=${value}`,
-        ]),
-        row.native_name,
-        ...argv,
-      ],
-      { stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"] }
-    )
+    const args = [
+      "exec",
+      ...(stdin ? ["-i"] : []),
+      "--workdir",
+      workingDirectory,
+      ...Object.entries(env).flatMap(([key, value]) => [
+        "--env",
+        `${key}=${value}`,
+      ]),
+      row.native_name,
+      ...argv,
+    ]
+    if (nativeDocker) {
+      const process = nativeDocker.spawn(args, stdin)
+      return {
+        ...process,
+        kill: async () => {
+          await kill()
+          await process.kill()
+        },
+      }
+    }
+    const child = spawn(docker(), args, {
+      stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"],
+    })
     const waited = new Promise<{ exitCode: number }>((resolve, reject) => {
       child.once("error", reject)
       child.once("close", (code) => resolve({ exitCode: code ?? 137 }))
@@ -516,18 +565,33 @@ export async function closeDatoolSandbox(
 ) {
   // The final hook, stream recovery and cleanup worker can race. Serialize
   // shutdown/checkpointing across processes and re-read the closed state.
-  await context.database.transaction(async tx=>{
-    await tx.execute(sql`SELECT id FROM build_agent_sandboxes WHERE project_id=${context.projectId} AND turn_id=${turnId} FOR UPDATE`)
-    await closeLockedSandbox({...context,database:tx as unknown as BuildContext["database"]},turnId)
+  await context.database.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT id FROM build_agent_sandboxes WHERE project_id=${context.projectId} AND turn_id=${turnId} FOR UPDATE`
+    )
+    await closeLockedSandbox(
+      { ...context, database: tx as unknown as BuildContext["database"] },
+      turnId
+    )
   })
 }
-async function closeLockedSandbox(context:BuildContext,turnId:string) {
+async function closeLockedSandbox(context: BuildContext, turnId: string) {
   const row = await rowFor(context, turnId)
   if (!row || row.status === "closed") return
   await context.database.execute(
     sql`UPDATE build_agent_sandboxes SET status='closing' WHERE id=${row.id}::uuid AND project_id=${context.projectId} AND status<>'closed'`
   )
-  if (row.provider === "local") {
+  if (row.provider === "boat") {
+    try {
+      const nativeDocker = await boatDocker(context, row.id)
+      await nativeDocker.remove(row.native_name)
+    } catch (error) {
+      // A failed container-control request must still release VM compute. Keep
+      // the original failure and the pending drive receipt for recovery.
+      await stopBoatSandbox(context, row.id).catch(() => undefined)
+      throw error
+    }
+  } else if (row.provider === "local") {
     try {
       await exec(docker(), ["rm", "--force", row.native_name], {
         timeout: 15_000,
@@ -585,12 +649,16 @@ async function closeLockedSandbox(context:BuildContext,turnId:string) {
     context,
     run.plan.configuration.sandbox
   )
-  await checkpointCloudDrives(
-    context,
-    run.plan.configuration.sandbox,
-    mounts,
-    row.id
-  )
+  try {
+    await checkpointCloudDrives(
+      context,
+      run.plan.configuration.sandbox,
+      mounts,
+      row.id
+    )
+  } finally {
+    if (row.provider === "boat") await stopBoatSandbox(context, row.id)
+  }
   await context.database.transaction(async (tx) => {
     await tx.execute(
       sql`UPDATE build_agent_sandboxes SET status='closed',closed_at=coalesce(closed_at,now()) WHERE id=${row.id}::uuid AND project_id=${context.projectId}`
