@@ -47,6 +47,7 @@ function routeTitle(routePath: string) {
   if (routePath === "/settings") return "General"
   if (routePath === "/settings/members") return pageTitles.members
   if (routePath === "/settings/ai-providers") return pageTitles.aiProviders
+  if (routePath === "/settings/storage-providers") return pageTitles.storageProviders
   if (routePath === "/settings/sandbox-providers")
     return pageTitles.sandboxProviders
   if (routePath === "/settings/api-keys") return pageTitles.apiKeys

@@ -1,9 +1,15 @@
 import { z } from "zod"
-import { sdkFileInputSchema, sdkFileResultSchema } from "@/src/lib/build/react-sdk"
+import {
+  sdkFileInputSchema,
+  sdkFileResultSchema,
+} from "@/src/lib/build/react-sdk"
 import type { BuildContext } from "./context"
 import { resolveSdkDrive, sdkConnection } from "./sdk-scope"
 import { runAgentSandboxCommand } from "./sandbox-runtime"
 import { TracerError } from "@/src/server/tracer/errors"
+import { cloudDriveFiles } from "./storage/files"
+import { cloudStorage } from "@/src/lib/build/storage"
+import { resolveSandboxDrives } from "./drives"
 
 // Runs in the isolated provider environment with only this app drive mounted.
 // Reject every symlink component, including broken links; never follow a link
@@ -54,6 +60,12 @@ export async function sdkFiles(context: BuildContext, value: unknown) {
       "Choose a drive in the server SDK configuration."
     )
   const driveId = await resolveSdkDrive(context, input, config.sandbox)
+  const [drive] = await resolveSandboxDrives(context, {
+    ...config.sandbox,
+    drives: [{ driveId: driveId!, mountPath: "/workspace" }],
+  })
+  if (cloudStorage(drive.provider))
+    return cloudDriveFiles(context, driveId!, input.request)
   const command = `node -e '${sdkFileProgram.replaceAll("'", "'\\''")}'`
   const result = await runAgentSandboxCommand(
     context,

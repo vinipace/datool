@@ -144,6 +144,7 @@ const settingsRoutes = [
     icon: productIcons.aiProviders,
     label: pageTitles.aiProviders,
   },
+  { href: "/settings/storage-providers", icon: productIcons.sandboxProviders, label: pageTitles.storageProviders },
   {
     href: "/settings/sandbox-providers",
     icon: productIcons.sandboxProviders,

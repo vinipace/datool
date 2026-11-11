@@ -14,6 +14,14 @@ import { assertManagedProject } from "@/src/server/execution-credits/config"
 import { executionCredits } from "@/src/server/execution-credits/ledger"
 import { assertBuildProject, type BuildContext } from "./context"
 import { resolveSandboxDrives } from "./drives"
+import { cloudStorage } from "@/src/lib/build/storage"
+import {
+  hydrateCloudDrives,
+  checkpointCloudDrives,
+  recoverCloudDrives,
+} from "./storage/sync"
+import { assertDriveLease } from "./storage/files"
+import { maxArchiveBytes } from "./storage/archive"
 
 const executeFile = promisify(execFile)
 export const images = {
@@ -39,7 +47,7 @@ export function volumeName(projectId: string, driveId: string) {
 type CommandIO = { stdin?: string; maxOutputBytes?: number }
 
 function collector(limit = 32 * 1024) {
-  let remaining = Math.min(limit, 1024 * 1024)
+  let remaining = Math.min(limit, Math.ceil((maxArchiveBytes * 4) / 3) + 4096)
   let truncated = false
   const parts: Record<"stdout" | "stderr", Buffer[]> = {
     stdout: [],
@@ -394,6 +402,7 @@ export async function runAgentSandboxCommand(
     config.provider,
     context.database
   )
+  await recoverCloudDrives(context, config)
   const leaseToken = randomUUID()
   // Commit leases before starting external work. If a worker disappears or a
   // provider outcome is unknown, leases outlive the sandbox's 120-second limit.
@@ -407,7 +416,7 @@ export async function runAgentSandboxCommand(
       const lock = await tx.execute(sql`
         UPDATE build_drives SET lease_token = ${leaseToken}, lease_until = now() + interval '5 minutes'
         WHERE project_id = ${context.projectId} AND id = ${mount.id}::uuid
-          AND (lease_until IS NULL OR lease_until <= now()) RETURNING id
+          AND NOT sync_pending AND (lease_until IS NULL OR lease_until <= now()) RETURNING id
       `)
       if (!lock.rows.length)
         throw new SandboxDriveBusyError(
@@ -419,36 +428,97 @@ export async function runAgentSandboxCommand(
   let stopped = false
   try {
     signal?.throwIfAborted()
-    if (config.provider === "local")
-      return await localCommand(
-        context,
-        config,
-        mounts,
-        command,
-        timeoutSeconds,
-        () => {
-          stopped = true
-        },
-        signal,
-        io
-      )
-    return await modalCommand(
-      context,
-      config,
-      mounts,
-      command,
-      timeoutSeconds,
-      () => {
-        stopped = true
-      },
-      signal,
-      io
-    )
+    await hydrateCloudDrives(context, config, mounts, leaseToken)
+    const nativeMounts = mounts.map((mount) => ({
+      ...mount,
+      provisioned: cloudStorage(mount.provider) ? true : mount.provisioned,
+    }))
+    const result =
+      config.provider === "local"
+        ? await localCommand(
+            context,
+            config,
+            nativeMounts,
+            command,
+            timeoutSeconds,
+            () => {
+              stopped = true
+            },
+            signal,
+            io
+          )
+        : await modalCommand(
+            context,
+            config,
+            nativeMounts,
+            command,
+            timeoutSeconds,
+            () => {
+              stopped = true
+            },
+            signal,
+            io
+          )
+    await checkpointCloudDrives(context, config, mounts, leaseToken)
+    return result
   } finally {
     if (stopped && mounts.length)
       await context.database.execute(sql`
       UPDATE build_drives SET lease_token = NULL, lease_until = NULL
-      WHERE project_id = ${context.projectId} AND lease_token = ${leaseToken}::uuid
+      WHERE project_id = ${context.projectId} AND lease_token = ${leaseToken}::uuid AND NOT sync_pending
     `)
   }
+}
+
+/** Server-owned transfer: credentials stay outside the sandbox and callers must own its drive lease. */
+export async function transferDriveArchive(
+  context: BuildContext,
+  config: AgentSandboxConfiguration,
+  driveId: string,
+  token: string,
+  archive?: Buffer
+) {
+  await assertDriveLease(context, driveId, token)
+  await getSandboxProviderCredentials(
+    context.projectId,
+    config.provider,
+    context.database
+  )
+  const command = archive
+    ? "chmod -R u+rwX /workspace && find /workspace -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && base64 -d | tar --no-same-owner -xf - -C /workspace"
+    : "set -o pipefail; tar -cf - -C /workspace . | base64 -w0"
+  const configuration = {
+    ...config,
+    enabled: true,
+    environment: "node" as const,
+    networkAccess: false,
+    workingDirectory: "/workspace",
+    drives: [{ driveId, mountPath: "/workspace" }],
+  }
+  const run = config.provider === "local" ? localCommand : modalCommand
+  const result = await run(
+    context,
+    configuration,
+    [
+      {
+        id: driveId,
+        mountPath: "/workspace",
+        provisioned: archive === undefined,
+      },
+    ],
+    `bash -c '${command.replaceAll("'", "'\\''")}'`,
+    60,
+    () => {},
+    undefined,
+    {
+      ...(archive ? { stdin: archive.toString("base64") } : {}),
+      maxOutputBytes: Math.ceil((maxArchiveBytes * 4) / 3) + 4096,
+    }
+  )
+  if (result.exitCode !== 0 || result.truncated)
+    throw new Error(
+      "Drive transfer failed or exceeded the archive limit. Its previous committed version remains available."
+    )
+  await assertDriveLease(context, driveId, token)
+  return Buffer.from(result.stdout, "base64")
 }

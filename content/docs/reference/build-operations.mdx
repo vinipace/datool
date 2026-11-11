@@ -468,6 +468,79 @@ Required scopes: `build:read`, `build:write`, `build:run`. Idempotency key: **re
 
 Type: **object**.
 
+## build_list_storage_connections
+
+List configured storage connections without credentials. Local and Modal volumes are built in.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+
+## build_list_drive_versions
+
+List the last 100 committed versions of an S3 or GCS drive.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `driveId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+
+## build_restore_drive_version
+
+Restore a committed version as a new head of an S3 or GCS drive. Requires an idle drive and its current revision.
+
+Required scopes: `build:write`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `driveId` | string | Yes |
+| `versionId` | string | Yes |
+| `expectedRevision` | string or null | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `revision` | string | Yes |
+
+## build_recover_drive
+
+Save an expired sandbox's pending files to its object-backed drive before allowing further writes. An active sandbox cannot be recovered.
+
+Required scopes: `build:run`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `driveId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `recovered` | boolean | Yes |
+
 ## build_list_drives
 
 List persistent project drives and SDK-managed workspace drives. Filter by agent to include its SDK drives alongside shared drives.
@@ -501,7 +574,8 @@ Required scopes: `build:write`. Idempotency key: **required**. Expected revision
 | --- | --- | --- |
 | `name` | string | Yes |
 | `description` | string | No |
-| `provider` | "datool" or "local" or "modal" | Yes |
+| `provider` | "local" or "datool" or "modal" or "s3" or "gcs" | Yes |
+| `storageConnectionId` | string | No |
 | `idempotencyKey` | string | No |
 | `requestKey` | string | No |
 
@@ -511,10 +585,13 @@ Required scopes: `build:write`. Idempotency key: **required**. Expected revision
 | --- | --- | --- |
 | `name` | string | Yes |
 | `description` | string | Yes |
-| `provider` | "datool" or "local" or "modal" | Yes |
+| `provider` | "local" or "datool" or "modal" or "s3" or "gcs" | Yes |
+| `storageConnectionId` | string | No |
 | `id` | string | Yes |
 | `createdAt` | string | Yes |
 | `sdkContext` | object or null | No |
+| `revision` | string or null | No |
+| `syncPending` | boolean | No |
 
 ## build_list_agents
 

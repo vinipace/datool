@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { sdkDriveContextSchema } from "./sdk-context"
+import { storageProviderSchema } from "./storage"
 
 export const agentSandboxProviderSchema = z.enum(["datool", "local", "modal"])
 export type AgentSandboxProvider = z.infer<typeof agentSandboxProviderSchema>
@@ -20,6 +21,7 @@ export const agentSandboxSchema = z
     environment: z.enum(["node", "python"]).default("node"),
     networkAccess: z.boolean().default(false),
     workingDirectory: sandboxPathSchema.default("/workspace"),
+    sdkStorageConnectionId: z.string().uuid().optional(),
     drives: z
       .array(
         z
@@ -59,12 +61,15 @@ export type AgentSandboxConfiguration = z.infer<typeof agentSandboxSchema>
 export const createDriveSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(2000).default(""),
-  provider: agentSandboxProviderSchema,
+  provider: storageProviderSchema,
+  storageConnectionId: z.string().uuid().optional(),
 })
 export const agentDriveSchema = createDriveSchema.extend({
   id: z.string().uuid(),
   createdAt: z.string(),
   sdkContext: sdkDriveContextSchema.nullable().optional(),
+  revision: z.string().uuid().nullable().optional(),
+  syncPending: z.boolean().optional(),
 })
 export type AgentDrive = z.infer<typeof agentDriveSchema>
 

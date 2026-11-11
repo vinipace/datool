@@ -85,6 +85,10 @@ export async function bindEveSession(context: BuildContext, turnId: string, sess
 }
 
 export async function recordEveOutcome(context: BuildContext, turnId: string, outcome: EveExecutionOutcome) {
+  // Both the final hook and durable-stream recovery must commit files before
+  // exposing a successful outcome. Keep this gate at their shared boundary.
+  try { await (await import("./sandbox")).closeDatoolSandbox(context, turnId) }
+  catch { outcome = {status:"failed",text:"",error:{code:"DRIVE_SYNC_FAILED",message:"Sandbox shutdown or drive synchronization failed. Pending files are retained for recovery; check the drive before retrying."}} }
   await context.database.execute(sql`
     UPDATE build_eve_executions SET outcome_json=${JSON.stringify(outcome)}::jsonb,updated_at=now()
     WHERE project_id=${context.projectId} AND turn_id=${turnId} AND outcome_json IS NULL`)

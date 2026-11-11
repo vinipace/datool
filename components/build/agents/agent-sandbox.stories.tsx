@@ -47,6 +47,7 @@ const meta = {
     nextjs: { navigation: { pathname: "/p/demo/build/agents/research" } },
     msw: {
       handlers: [
+        http.post("*/api/build/build_list_storage_connections", () => HttpResponse.json({data:{items:[]}})),
         http.post("*/api/build/build_list_drives", () =>
           HttpResponse.json({ data: { items: savedDrives, nextCursor: null } })
         ),

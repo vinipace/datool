@@ -14,6 +14,9 @@ import { getSandboxExecutionProviders } from "../../src/server/sandbox/providers
 import { defaultScorer } from "../../src/lib/tracer/scorers"
 import { createTestTracerService } from "../../src/server/tracer/service"
 
+import { GET as getStorage,PUT as putStorage,DELETE as deleteStorage } from "../../app/api/projects/[projectId]/storage-connections/route"
+import { GET as exportDrive,PUT as importDrive } from "../../app/api/projects/[projectId]/drives/[driveId]/archive/route"
+
 try {
   const auth = await getAuth().$context
   async function userSession(name: string) {
@@ -60,6 +63,19 @@ try {
     })
   const settings = async (project = "a") =>
     (await GET(request("GET"), context(project))).json()
+  // Storage settings and backups use the same authenticated project boundary.
+  assert.equal((await getStorage(request("GET",undefined,""),context())).status,401)
+  assert.equal((await getStorage(request("GET",undefined,outsider.cookie),context())).status,403)
+  assert.equal((await getStorage(request("GET",undefined,member.cookie),context())).status,200)
+  for(const handler of [putStorage,deleteStorage]) {
+    assert.equal((await handler(request("PUT",{},member.cookie),context())).status,403)
+    assert.equal((await handler(request("PUT",{},owner.cookie,"https://untrusted.test"),context())).status,403)
+  }
+  const driveContext={params:Promise.resolve({projectId:"a",driveId:crypto.randomUUID()})}
+  assert.equal((await exportDrive(request("GET",undefined,outsider.cookie),driveContext)).status,403)
+  assert.equal((await importDrive(request("PUT",{},member.cookie),driveContext)).status,403)
+  assert.equal((await importDrive(request("PUT",{},owner.cookie,"https://untrusted.test"),driveContext)).status,403)
+  assert.equal((await importDrive(request("PUT",{},owner.cookie),driveContext)).status,400)
   const vercel = {
     provider: "vercel",
     apiKey: "sandbox-secret-a",

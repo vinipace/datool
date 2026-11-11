@@ -11,6 +11,11 @@ import type { EveExecution } from "./contracts"
 import { assertEveOwnership, getEveExecution } from "./store"
 import { resolveSandboxDrives } from "../drives"
 import {
+  hydrateCloudDrives,
+  checkpointCloudDrives,
+  recoverCloudDrives,
+} from "../storage/sync"
+import {
   images,
   markProvisioned,
   volumeName,
@@ -115,6 +120,7 @@ export async function openDatoolSandbox(
   let row = await rowFor(context, run.turnId)
   let created = false
   if (!row && !state) {
+    await recoverCloudDrives(context, config)
     const id = randomUUID()
     const result = await context.database.transaction(async (tx) => {
       const result =
@@ -131,7 +137,7 @@ export async function openDatoolSandbox(
       )) {
         const lease =
           await tx.execute(sql`UPDATE build_drives SET lease_token=${id}::uuid,lease_until=now()+make_interval(secs=>${lifetimeSeconds + 120})
-          WHERE project_id=${context.projectId} AND id=${mount.id}::uuid AND (lease_until IS NULL OR lease_until<=now()) RETURNING id`)
+          WHERE project_id=${context.projectId} AND id=${mount.id}::uuid AND NOT sync_pending AND (lease_until IS NULL OR lease_until<=now()) RETURNING id`)
         if (!lease.rows.length)
           throw new Error(
             "A mounted drive is busy. Try again after the other environment finishes."
@@ -156,6 +162,7 @@ export async function openDatoolSandbox(
   try {
     if (created) {
       const mounts = await resolveSandboxDrives(context, config)
+      await hydrateCloudDrives(context, config, mounts, row.id)
       if (config.provider === "local") {
         for (const mount of mounts) {
           const name = volumeName(context.projectId, mount.id)
@@ -507,6 +514,14 @@ export async function closeDatoolSandbox(
   context: BuildContext,
   turnId: string
 ) {
+  // The final hook, stream recovery and cleanup worker can race. Serialize
+  // shutdown/checkpointing across processes and re-read the closed state.
+  await context.database.transaction(async tx=>{
+    await tx.execute(sql`SELECT id FROM build_agent_sandboxes WHERE project_id=${context.projectId} AND turn_id=${turnId} FOR UPDATE`)
+    await closeLockedSandbox({...context,database:tx as unknown as BuildContext["database"]},turnId)
+  })
+}
+async function closeLockedSandbox(context:BuildContext,turnId:string) {
   const row = await rowFor(context, turnId)
   if (!row || row.status === "closed") return
   await context.database.execute(
@@ -565,6 +580,17 @@ export async function closeDatoolSandbox(
       await client.close()
     }
   }
+  const run = await getEveExecution(context, turnId)
+  const mounts = await resolveSandboxDrives(
+    context,
+    run.plan.configuration.sandbox
+  )
+  await checkpointCloudDrives(
+    context,
+    run.plan.configuration.sandbox,
+    mounts,
+    row.id
+  )
   await context.database.transaction(async (tx) => {
     await tx.execute(
       sql`UPDATE build_agent_sandboxes SET status='closed',closed_at=coalesce(closed_at,now()) WHERE id=${row.id}::uuid AND project_id=${context.projectId}`

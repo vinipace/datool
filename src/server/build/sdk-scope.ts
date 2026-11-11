@@ -7,6 +7,7 @@ import { assertBuildProject, type BuildContext } from "./context"
 import { getAgent } from "./agents"
 import { getChannelConnection } from "./channels/service"
 import { ConversationService } from "./conversations"
+import { storageConnection } from "./storage/connections"
 import {
   savedSdkTaskContextSchema,
   type SavedSdkTaskContext,
@@ -43,7 +44,7 @@ export async function sdkConnection(
   return { connection, agent, config }
 }
 
-/** Logical names are private to this connection and provider, never host paths. */
+/** Preserve legacy drive IDs; new bucket-backed identities are independent of compute. */
 export async function resolveSdkDrive(
   context: BuildContext,
   scope: SdkScope,
@@ -55,17 +56,58 @@ export async function resolveSdkDrive(
       "VALIDATION_ERROR",
       "Enable Sandbox on this agent to use a drive."
     )
+  return context.database.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([context.projectId, scope.connectionId, scope.drive])}, 0))`
+    )
+    return resolveLockedSdkDrive(
+      { ...context, database: tx as unknown as BuildContext["database"] },
+      scope,
+      config
+    )
+  })
+}
+async function resolveLockedSdkDrive(
+  context: BuildContext,
+  scope: SdkScope,
+  config: AgentSandboxConfiguration
+) {
+  const connection = config.sdkStorageConnectionId
+    ? await storageConnection(context, config.sdkStorageConnectionId)
+    : null
+  const provider = connection?.config_json.provider ?? config.provider
+  const existing = await context.database.execute<{
+    id: string
+    provider: string
+    storage_connection_id: string | null
+  }>(
+    sql`SELECT id,provider,storage_connection_id FROM build_drives WHERE project_id=${context.projectId} AND sdk_context->>'connectionId'=${scope.connectionId} AND sdk_context->>'workspace'=${scope.drive}`
+  )
+  if (
+    existing.rows.length > 1 ||
+    existing.rows.some(
+      (row) =>
+        row.provider !== provider ||
+        row.storage_connection_id !== (config.sdkStorageConnectionId ?? null)
+    )
+  )
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "This workspace already has a drive in another storage location. Export and migrate its files explicitly before changing storage."
+    )
   const digest = hash([
-    "sdk-drive-v1",
+    connection ? "sdk-drive-v2" : "sdk-drive-v1",
     context.projectId,
     scope.connectionId,
-    config.provider,
+    connection ? config.sdkStorageConnectionId : config.provider,
     scope.drive,
   ])
-  const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`
+  const id =
+    existing.rows[0]?.id ??
+    `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`
   await context.database
-    .execute(sql`INSERT INTO build_drives(id,project_id,name,description,provider,sdk_context)
-    SELECT ${id}::uuid,${context.projectId},${scope.drive},'React SDK application drive',${config.provider},
+    .execute(sql`INSERT INTO build_drives(id,project_id,name,description,provider,storage_connection_id,sdk_context)
+    SELECT ${id}::uuid,${context.projectId},${scope.drive},'React SDK application drive',${provider},${config.sdkStorageConnectionId ?? null}::uuid,
       jsonb_build_object('agentId',c.agent_id,'connectionId',c.id,'workspace',${scope.drive}::text,'workspaceName',${scope.workspaceName ?? scope.drive}::text)
     FROM build_channel_connection c WHERE c.project_id=${context.projectId} AND c.id=${scope.connectionId}::uuid
     ON CONFLICT(id) DO UPDATE SET sdk_context=EXCLUDED.sdk_context || jsonb_build_object('workspaceName',COALESCE(${scope.workspaceName ?? null}::text,build_drives.sdk_context->>'workspaceName',EXCLUDED.sdk_context->>'workspaceName'))`)

@@ -36,7 +36,9 @@ Next.js App Router uses a named `POST` export. An optional catch-all route at `a
 
 The callback runs for every request, including message polling. Return a stable `userId` for conversations that follow the user across devices and for server-created proactive tasks. If you return only a drive, the handler supplies a signed browser visitor cookie instead. Derive the identity and drive from your authenticated session; never trust browser-supplied organization or user IDs.
 
-A drive is created on demand, scoped to the connection and sandbox provider, and mounted at `/workspace`. Users with the same drive share files. Their conversations and scheduled tasks remain private to each user and thread. Other drives attached to the agent are excluded from SDK sessions. Omit `drive` for chat without an application drive.
+A drive is created on demand, scoped to the SDK connection and chosen storage, and mounted at `/workspace`. Users with the same drive share files. Their conversations and scheduled tasks remain private to each user and thread. Other drives attached to the agent are excluded from SDK sessions. Omit `drive` for chat without an application drive.
+
+Choose **SDK workspace storage** in the agent’s Sandbox settings: use a native Docker/Modal volume or a configured S3/GCS connection. Object-backed workspace IDs stay stable when changing compute. Existing workspaces keep their original storage and reject an incompatible setting change. S3/GCS file operations access storage directly without allocating a sandbox; native volumes use their sandbox provider.
 
 SDK-managed drives appear on the agent's **Sandbox** page with their workspace. Return an optional `workspaceName` from your server callback, or pass it to `datool.agent()`, to show a friendly name such as `Acme Studio`. This label does not change access or identity; the authenticated `drive` value selects the workspace.
 

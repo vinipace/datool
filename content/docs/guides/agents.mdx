@@ -23,7 +23,7 @@ In the API, connected tools retain action definitions for revision history, appr
 
 Enable **Sandbox** and choose an available provider and environment. The agent can use native `bash`, `read_file`, `write_file`, `edit_file`, `glob`, and `grep` tools when allowed by its routing and approval settings. Commands in a turn share an environment. Only mounted drive contents persist when that environment stops.
 
-Create shared drives with `build_create_drive`; mount returned IDs under `configuration.sandbox.drives`. Mount paths must be `/workspace` or descendants, with at most four unique drives and no overlapping paths. Drives belong to their selected provider; changing providers does not move their contents. Unmounting retains the drive's files.
+Create shared drives with `build_create_drive`; mount returned IDs under `configuration.sandbox.drives`. Mount paths must be `/workspace` or descendants, with at most four unique drives and no overlapping paths. Native Docker and Modal volumes belong to their selected sandbox provider. S3/GCS drives use an independent storage connection and can be mounted by any sandbox provider. Changing settings never moves existing files. Unmounting retains the drive's files.
 
 | Drive kind | Used by | Management |
 | --- | --- | --- |
@@ -41,3 +41,11 @@ SDK sessions mount their own application drive at `/workspace` and exclude the a
 Sandbox network access and web tools are separate settings. `web.fetchEnabled` permits public URL reading; `web.searchEnabled` enables provider-managed search using project model credentials. Both default to off. Restricted routing, approval requirements, and mocked simulations can limit tool availability.
 
 For automation, read [scheduled tasks](/docs/guides/scheduled-tasks). To embed this agent in your own app, follow [React SDK and proactive agents](/docs/guides/react-sdk). MCP clients can request `build_get_authoring_guide` with `topic: "agent"` or `topic: "sandbox"` for validated examples and current schemas.
+
+## Storage providers
+
+Self-hosted installations can run Docker sandboxes with local named volumes and no cloud credentials. All workers must use the same daemon. PostgreSQL stores drive metadata; the named volume stores files. Back up both.
+
+Owners/admins can configure S3-compatible storage or Google Cloud Storage in **Project settings → Storage providers**. Choose that connection when adding a drive. Credentials remain encrypted on the server. Sandbox runs hydrate a native working volume and commit files after shutdown; failed synchronization retains pending files and blocks overwrites until recovery.
+
+Object-backed drives support regular files and folders, with 16 MiB per file, 64 MiB total and 10,000 entries. Put symlinks and installed dependencies on a native volume. **Versions** lists saved snapshots and offers restore, export and import. Restoring creates a new version and requires the current revision. History and object data are retained indefinitely; back up both PostgreSQL and bucket contents. Existing SDK workspaces cannot be migrated in place by changing settings.

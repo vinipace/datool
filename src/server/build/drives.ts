@@ -7,6 +7,8 @@ import {
 } from "@/src/lib/build/sandbox"
 import { TracerError } from "@/src/server/tracer/errors"
 import { assertBuildProject, type BuildContext } from "./context"
+import { cloudStorage } from "@/src/lib/build/storage"
+import { storageConnection } from "./storage/connections"
 
 type DriveRow = {
   id: string
@@ -16,6 +18,9 @@ type DriveRow = {
   created_at: Date | string
   provisioned_at: Date | string | null
   sdk_context: AgentDrive["sdkContext"]
+  storage_connection_id: string | null
+  head_revision: string | null
+  sync_pending: boolean
 }
 const driveModel = (row: DriveRow): AgentDrive => ({
   id: row.id,
@@ -24,6 +29,11 @@ const driveModel = (row: DriveRow): AgentDrive => ({
   provider: row.provider,
   createdAt: new Date(row.created_at).toISOString(),
   sdkContext: row.sdk_context ?? null,
+  ...(row.storage_connection_id
+    ? { storageConnectionId: row.storage_connection_id }
+    : {}),
+  revision: row.head_revision ?? null,
+  syncPending: row.sync_pending ?? false,
 })
 
 export async function listDrives(
@@ -50,9 +60,29 @@ export async function createDrive(
 ): Promise<AgentDrive> {
   await assertBuildProject(context)
   const value = createDriveSchema.parse(input)
+  if (cloudStorage(value.provider)) {
+    if (!value.storageConnectionId)
+      throw new TracerError(
+        "VALIDATION_ERROR",
+        "Select a storage connection for this drive."
+      )
+    const connection = await storageConnection(
+      context,
+      value.storageConnectionId
+    )
+    if (connection.config_json.provider !== value.provider)
+      throw new TracerError(
+        "VALIDATION_ERROR",
+        "The storage connection uses a different provider."
+      )
+  } else if (value.storageConnectionId)
+    throw new TracerError(
+      "VALIDATION_ERROR",
+      "Local and Modal volumes do not use bucket connections."
+    )
   const rows = await context.database.execute<DriveRow>(sql`
-    INSERT INTO build_drives (id, project_id, name, description, provider)
-    VALUES (${randomUUID()}, ${context.projectId}, ${value.name}, ${value.description}, ${value.provider})
+    INSERT INTO build_drives (id, project_id, name, description, provider, storage_connection_id)
+    VALUES (${randomUUID()}, ${context.projectId}, ${value.name}, ${value.description}, ${value.provider},${value.storageConnectionId ?? null}::uuid)
     RETURNING *
   `)
   return driveModel(rows.rows[0])
@@ -63,6 +93,8 @@ export async function resolveSandboxDrives(
   context: BuildContext,
   config: AgentSandboxConfiguration
 ) {
+  if (config.sdkStorageConnectionId)
+    await storageConnection(context, config.sdkStorageConnectionId)
   if (!config.drives.length) return []
   const ids = sql.join(
     config.drives.map((mount) => sql`${mount.driveId}::uuid`),
@@ -78,10 +110,10 @@ export async function resolveSandboxDrives(
         "VALIDATION_ERROR",
         "A mounted drive is unavailable in this project."
       )
-    if (row.provider !== config.provider)
+    if (!cloudStorage(row.provider) && row.provider !== config.provider)
       throw new TracerError(
         "VALIDATION_ERROR",
-        "Use drives from the selected sandbox provider."
+        "Local and Modal volumes must match the selected sandbox provider. Object-backed drives can use any sandbox provider."
       )
     return {
       ...driveModel(row),

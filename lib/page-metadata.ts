@@ -14,6 +14,7 @@ export const pageTitles = {
   newOrganization: "New organization",
   projects: "Projects",
   projectSettings: "Project settings",
+  storageProviders: "Storage providers",
   sandboxProviders: "Sandbox providers",
   aiProviders: "AI providers",
   alerts: "Alerts",

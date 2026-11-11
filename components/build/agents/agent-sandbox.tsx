@@ -45,7 +45,12 @@ import {
   type AgentDrive,
   type AgentSandboxConfiguration,
 } from "@/src/lib/build/sandbox"
-import { sandboxProviderNames } from "@/src/lib/sandbox-providers"
+import {
+  storageProviderNames,
+  cloudStorage,
+  type StorageConnection,
+} from "@/src/lib/build/storage"
+import { DriveVersions } from "./drive-versions"
 
 type Props = {
   configuration: AgentConfiguration
@@ -80,6 +85,18 @@ export function AgentSandbox({
     [agentId],
     { enabled: active, intervalMs: 5000 }
   )
+  const storage = useRemote(
+    (signal) =>
+      buildCall<{ items: StorageConnection[] }>(
+        "build_list_storage_connections",
+        {},
+        { signal }
+      ),
+    [],
+    { enabled: active }
+  )
+  const [storageId, setStorageId] = React.useState("")
+  const [history, setHistory] = React.useState<AgentDrive | null>(null)
   const [added, setAdded] = React.useState<AgentDrive[]>([])
   const [search, setSearch] = React.useState("")
   const [open, setOpen] = React.useState(false)
@@ -94,7 +111,7 @@ export function AgentSandbox({
   const catalog = [...(drives.data ?? []), ...added]
   const available = catalog.filter(
     (drive, index) =>
-      drive.provider === sandbox.provider &&
+      (drive.provider === sandbox.provider || cloudStorage(drive.provider)) &&
       !drive.sdkContext &&
       !sandbox.drives.some((mount) => mount.driveId === drive.id) &&
       catalog.findIndex((item) => item.id === drive.id) === index
@@ -150,6 +167,7 @@ export function AgentSandbox({
       })
     )
       number++
+    setStorageId("")
     setEditingId(null)
     setExistingId("")
     setName("")
@@ -227,7 +245,10 @@ export function AgentSandbox({
         const drive = await buildCall<AgentDrive>(buildOperations.createDrive, {
           name: name.trim(),
           description: description.trim(),
-          provider: sandbox.provider,
+          provider:
+            storage.data?.items.find((item) => item.id === storageId)?.config
+              .provider ?? sandbox.provider,
+          ...(storageId ? { storageConnectionId: storageId } : {}),
         })
         next.data.drives = next.data.drives.map((mount) =>
           mount.driveId === driveId ? { ...mount, driveId: drive.id } : mount
@@ -360,7 +381,9 @@ export function AgentSandbox({
                         <span className="truncate">
                           {row.drive?.sdkContext?.workspaceName}
                         </span>
-                        <span className="shrink-0 text-xs text-foreground-muted">SDK-managed</span>
+                        <span className="shrink-0 text-xs text-foreground-muted">
+                          SDK-managed
+                        </span>
                       </span>
                     ) : (
                       <span className="text-foreground-muted">Shared</span>
@@ -384,7 +407,7 @@ export function AgentSandbox({
                   </td>
                   <td className={collectionTable.cell}>
                     {
-                      sandboxProviderNames[
+                      storageProviderNames[
                         row.drive?.provider ?? sandbox.provider
                       ]
                     }
@@ -400,6 +423,19 @@ export function AgentSandbox({
                     </span>
                   </td>
                   <td className={collectionTable.cell}>
+                    {row.drive && cloudStorage(row.drive.provider) && (
+                      <Button
+                        variant="ghost-muted"
+                        size="sm"
+                        aria-label={`Versions of ${row.drive.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setHistory(row.drive!)
+                        }}
+                      >
+                        {row.drive.syncPending ? "Sync pending" : "Versions"}
+                      </Button>
+                    )}
                     {!row.managed && (
                       <Button
                         variant="ghost-muted"
@@ -421,6 +457,15 @@ export function AgentSandbox({
           </CollectionTable>
         </CollectionPage>
       </CollectionPanel>
+      {history && (
+        <DriveVersions
+          drive={history}
+          onClose={() => {
+            setHistory(null)
+            drives.refresh()
+          }}
+        />
+      )}
       <Sheet
         open={open && active}
         onOpenChange={(value) => {
@@ -455,6 +500,51 @@ export function AgentSandbox({
                   {error}
                 </Notice>
               ) : null}
+              {!editingId && !existingId && (
+                <FormRow
+                  label="Storage"
+                  htmlFor="drive-storage"
+                  layout="vertical"
+                  variant="plain"
+                  description="Local volumes stay on the Docker host. Bucket-backed drives keep committed snapshots independently of compute."
+                >
+                  <Select
+                    id="drive-storage"
+                    value={storageId}
+                    disabled={storage.isLoading}
+                    onChange={(event) => setStorageId(event.target.value)}
+                  >
+                    <option value="">
+                      {storageProviderNames[sandbox.provider]}
+                    </option>
+                    {storage.data?.items.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} —{" "}
+                        {storageProviderNames[item.config.provider]}
+                      </option>
+                    ))}
+                  </Select>
+                  {storage.error && (
+                    <Notice variant="error" role="alert">
+                      Storage connections could not be loaded.{" "}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="link"
+                        onClick={storage.refresh}
+                      >
+                        Retry
+                      </Button>
+                    </Notice>
+                  )}
+                  {storageId && (
+                    <p className="text-xs text-foreground-muted">
+                      Regular files and folders only; 16 MiB per file and 64 MiB
+                      per drive. Keep installed dependencies on a native volume.
+                    </p>
+                  )}
+                </FormRow>
+              )}
               {!existingId ? (
                 <>
                   <FormRow
@@ -572,6 +662,15 @@ export function AgentSandbox({
 export function AgentSandboxSettings({ configuration, onChange }: Props) {
   const sandbox = configuration.sandbox
   const workspaceHref = useWorkspaceHref()
+  const storage = useRemote(
+    (signal) =>
+      buildCall<{ items: StorageConnection[] }>(
+        "build_list_storage_connections",
+        {},
+        { signal }
+      ),
+    []
+  )
   function update(value: Partial<AgentSandboxConfiguration>) {
     onChange({ ...configuration, sandbox: { ...sandbox, ...value } })
   }
@@ -648,6 +747,47 @@ export function AgentSandboxSettings({ configuration, onChange }: Props) {
             <option value="local">Local container</option>
           </Select>
         </FormRow>
+        <FormRow
+          label="SDK workspace storage"
+          htmlFor="agent-sdk-storage"
+          description="Used for new SDK workspaces. Existing workspaces keep their storage; changing it requires an explicit migration."
+        >
+          <Select
+            id="agent-sdk-storage"
+            value={sandbox.sdkStorageConnectionId ?? ""}
+            disabled={storage.isLoading || Boolean(storage.error)}
+            onChange={(event) =>
+              update({
+                sdkStorageConnectionId: event.target.value || undefined,
+              })
+            }
+          >
+            <option value="">{storageProviderNames[sandbox.provider]}</option>
+            {sandbox.sdkStorageConnectionId &&
+              !storage.data?.items.some(
+                (item) => item.id === sandbox.sdkStorageConnectionId
+              ) && (
+                <option value={sandbox.sdkStorageConnectionId}>
+                  Unavailable storage connection
+                </option>
+              )}
+            {storage.data?.items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </Select>
+          {storage.error && (
+            <Button variant="link" size="sm" onClick={storage.refresh}>
+              Retry storage
+            </Button>
+          )}
+        </FormRow>
+        <Button asChild variant="link" size="sm">
+          <Link href={workspaceHref("/settings/storage-providers")}>
+            Configure storage providers
+          </Link>
+        </Button>
         <FormRow label="Environment" htmlFor="agent-sandbox-environment">
           <Select
             id="agent-sandbox-environment"

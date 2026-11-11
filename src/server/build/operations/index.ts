@@ -1,3 +1,15 @@
+import {
+  storageConnectionSchema,
+  driveVersionSchema,
+} from "@/src/lib/build/storage"
+import { listStorageConnections } from "../storage/connections"
+import {
+  listDriveVersions,
+  restoreDriveVersion,
+  loadCloudDrive,
+} from "../storage/files"
+import { recoverCloudDrives } from "../storage/sync"
+import { agentSandboxSchema as recoverySandboxSchema } from "@/src/lib/build/sandbox"
 import { getZernioConnection, beginZernioSignup, finishZernioSignup, disconnectZernio } from "../channels/zernio"
 import { listChannelLinks } from "../channels/links"
 import { beginEvolutionConnection, getEvolutionConnection, getEvolutionPairing, refreshEvolutionConnection, disconnectEvolution } from "../channels/evolution"
@@ -229,6 +241,71 @@ function register(
   })
 }
 
+register(
+  "build_list_storage_connections",
+  "List configured storage connections without credentials. Local and Modal volumes are built in.",
+  ["build:read"],
+  z.object({}),
+  (context) => listStorageConnections(context),
+  { outputSchema: z.object({ items: z.array(storageConnectionSchema) }) }
+)
+register(
+  "build_list_drive_versions",
+  "List the last 100 committed versions of an S3 or GCS drive.",
+  ["build:read"],
+  z.object({ driveId: z.uuid() }),
+  (context, input) => listDriveVersions(context, input.driveId as string),
+  { outputSchema: z.object({ items: z.array(driveVersionSchema) }) }
+)
+register(
+  "build_restore_drive_version",
+  "Restore a committed version as a new head of an S3 or GCS drive. Requires an idle drive and its current revision.",
+  ["build:write"],
+  z.object({
+    driveId: z.uuid(),
+    versionId: z.uuid(),
+    expectedRevision: z.uuid().nullable(),
+  }),
+  (context, input) =>
+    restoreDriveVersion(
+      context,
+      input.driveId as string,
+      input.versionId as string,
+      input.expectedRevision as string | null
+    ),
+  {
+    idempotency: "none",
+    destructive: true,
+    outputSchema: z.object({ revision: z.uuid() }),
+  }
+)
+register(
+  "build_recover_drive",
+  "Save an expired sandbox's pending files to its object-backed drive before allowing further writes. An active sandbox cannot be recovered.",
+  ["build:run"],
+  z.object({ driveId: z.uuid() }),
+  async (context, input) => {
+    const drive = await loadCloudDrive(context, input.driveId as string)
+    if (
+      drive.sync_pending &&
+      drive.lease_until &&
+      new Date(drive.lease_until).getTime() > Date.now()
+    )
+      throw new Error(
+        "The sandbox is still active or its lease has not expired. Try again after it finishes."
+      )
+    await recoverCloudDrives(
+      context,
+      recoverySandboxSchema.parse({
+        enabled: true,
+        provider: "local",
+        drives: [{ driveId: input.driveId, mountPath: "/workspace" }],
+      })
+    )
+    return { recovered: true }
+  },
+  { idempotency: "none", outputSchema: z.object({ recovered: z.boolean() }) }
+)
 register(
   "build_list_drives",
   "List persistent project drives and SDK-managed workspace drives. Filter by agent to include its SDK drives alongside shared drives.",

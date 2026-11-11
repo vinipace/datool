@@ -28,7 +28,10 @@ async function probeStoredCiphertexts() {
         FROM project_model_provider LIMIT 5)
      UNION ALL
      (SELECT encrypted_credentials, project_id, 'build-channel:' || id::text
-        FROM build_channel_connection WHERE encrypted_credentials IS NOT NULL LIMIT 5)`
+        FROM build_channel_connection WHERE encrypted_credentials IS NOT NULL LIMIT 5)
+     UNION ALL
+     (SELECT encrypted_credentials, project_id, 'storage:' || id::text
+        FROM build_storage_connections LIMIT 5)`
   )
   let opened = 0
   for (const row of samples.rows) {

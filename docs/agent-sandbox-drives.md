@@ -27,7 +27,7 @@ accepts `command` and an optional `timeout` (1–120 seconds, default 30); a com
 that outlasts that wait returns a process ID and output paths so the agent can
 check or stop it with later commands. Background processes end with the turn.
 Only files in mounted drives survive environment shutdown and future turns.
-Keep dependencies in the drive (`node_modules`, virtual environments, or pip's
+Keep dependencies in a native Docker or Modal drive (`node_modules`, virtual environments, or pip's
 `--target` directory). Installing a package globally into a temporary environment
 does not persist it. Changing the Node/Python environment retains mounted files;
 dependencies with native binaries may need rebuilding.
@@ -42,7 +42,7 @@ external actions also omit this tool so they cannot write production drives.
 ## Persistence and ownership
 
 The drive catalog is project-scoped. Configuration saves and execution both reject
-foreign drives and provider mismatches. Drives remain tied to their provider;
+foreign drives and incompatible native volumes. Native drives remain tied to their provider;
 there is no fallback to a different provider with empty storage. Unmounting,
 disabling or archiving an agent retains its drive contents. Cloning an agent
 retains its drive references and therefore shares the same context.
@@ -58,8 +58,10 @@ Datool Sandbox and Modal use named Modal Volumes. Sandbox termination waits for 
 provider's final commit before returning success; see [Modal filesystem persistence](https://modal.com/docs/guide/sandbox-files).
 Once a volume has been provisioned, a missing volume fails rather than silently
 creating replacement storage. Changing credentials to a different provider account
-therefore cannot turn an existing drive into an empty one. This release does not
-include drive deletion, file browsing or cross-provider data migration.
+therefore cannot turn an existing drive into an empty one. S3 and GCS drives can instead persist independently of compute. See
+[Agent drive storage](agent-drive-storage.md) for setup, direct SDK file access,
+version history, export/import and recovery. Drive deletion and in-place SDK
+storage migration are not included.
 
 Drive writers acquire durable leases before creating an environment. Another turn
 using the same drive returns a busy result. Commands within a turn reuse its lease.
@@ -77,7 +79,7 @@ supports `after`/`limit` pagination. Configure mounts through `build_update_agen
 using its ordinary revision and draft/apply controls. The authoring guide publishes
 the complete sandbox configuration schema.
 
-Apply `0079_build_drives.sql` and `0084_build_agent_sandboxes.sql` with the normal database migration flow before
+Apply `0079_build_drives.sql`, `0084_build_agent_sandboxes.sql` and `0088_drive_storage.sql` with the normal database migration flow before
 deploying code. No existing agent opts in automatically.
 
 Verification:
