@@ -11,8 +11,9 @@ cleanup() {
     docker logs "$prefix-web" 2>/dev/null || true
     docker logs "$prefix-worker" 2>/dev/null || true
     docker logs "$prefix-buildworker" 2>/dev/null || true
+    docker logs "$prefix-eve" 2>/dev/null || true
   fi
-  docker rm -fv "$prefix-web" "$prefix-worker" "$prefix-buildworker" "$prefix-db" "$prefix-redis" >/dev/null 2>&1 || true
+  docker rm -fv "$prefix-web" "$prefix-worker" "$prefix-buildworker" "$prefix-eve" "$prefix-db" "$prefix-redis" >/dev/null 2>&1 || true
   docker network rm "$prefix" >/dev/null 2>&1 || true
   docker volume rm "$prefix-data" >/dev/null 2>&1 || true
   rm -rf "$temporary"
@@ -34,6 +35,9 @@ done
 [ "$ready" = 1 ]
 environment=(--network "$prefix"
   -e DATABASE_URL=postgresql://datool:isolated-test@database:5432/datool
+  -e WORKFLOW_POSTGRES_URL=postgresql://datool:isolated-test@database:5432/datool
+  -e DATOOL_EVE_URL=http://eve:2001
+  -e DATOOL_EVE_SECRET=docker-test-eve-secret-at-least-thirty-two-characters
   -e DATOOL_ALERT_DATABASE_URL=postgresql://datool_alert_reader:isolated-reader@database:5432/datool
   -e REDIS_URL=redis://redis:6379
   -e BETTER_AUTH_URL=https://localhost:3443
@@ -64,6 +68,7 @@ docker run --rm --network "container:$prefix-db" \
   --mount "type=bind,source=$PWD/scripts/test.mjs,target=/app/scripts/test.mjs,readonly" \
   --mount "type=bind,source=$PWD/vitest.agent-journeys.config.mts,target=/app/vitest.agent-journeys.config.mts,readonly" \
   "$image" bun --no-env-file scripts/test.mjs --journeys-only
+docker run -d --name "$prefix-eve" --network-alias eve "${environment[@]}" "$image" bun run eve:start >/dev/null
 docker run -d --name "$prefix-web" "${environment[@]}" -v "$prefix-data:/app/.data" "$image" >/dev/null
 docker run -d --name "$prefix-worker" "${environment[@]}" "$image" bun run worker:ingestion >/dev/null
 docker run -d --name "$prefix-buildworker" "${environment[@]}" "$image" bun run worker:build >/dev/null
@@ -83,6 +88,7 @@ docker exec "$prefix-web" node -e '
  const session=await fetch("http://127.0.0.1:3000/cms/api/cms-users/me");
  if(!session.ok || (await session.json()).user!==null) throw new Error("Anonymous CMS session endpoint failed");'
 # TLS terminates in front of Next, as it does with Dokku nginx. Trust only this test CA.
+[ "$(docker inspect --format '{{.State.Running}}' "$prefix-eve")" = true ]
 [ "$(docker inspect --format '{{.State.Running}}' "$prefix-worker")" = true ]
 [ "$(docker inspect --format '{{.State.Running}}' "$prefix-buildworker")" = true ]
 cat > "$temporary/openssl.cnf" <<'EOF'
@@ -121,7 +127,7 @@ docker exec -e NODE_EXTRA_CA_CERTS=/tmp/datool-tls/cert.pem "$prefix-web" node -
 # Development and acceptance scripts must not ship in the production image.
 docker exec "$prefix-web" node -e '
  const fs=require("node:fs");
- const expected=["alerts-worker.ts","backfill-eval-attribution.ts","backfill-missing-costs.ts","build-worker.ts","check-self-hosting.mjs","cms-local-database.ts","cms-seed-options.ts","execution-credits.ts","ingestion-jobs.ts","ingestion-worker.ts","langfuse-import.ts","migrate.ts","provision-alert-reader.ts","release.sh","seed-cms.ts","shopify-privacy.ts"];
+ const expected=["alerts-worker.ts","backfill-eval-attribution.ts","backfill-missing-costs.ts","bootstrap-eve.mjs","build-worker.ts","check-encryption-key.ts","check-self-hosting.mjs","cms-local-database.ts","cms-seed-options.ts","execution-credits.ts","ingestion-jobs.ts","ingestion-worker.ts","langfuse-import.ts","migrate.ts","provision-alert-reader.ts","release.sh","seed-cms.ts","shopify-privacy.ts","start-eve.mjs","validate-invariants.ts"];
  if(JSON.stringify(fs.readdirSync("scripts").sort())!==JSON.stringify(expected.sort())) throw new Error("Unexpected runtime scripts");'
 # The operator command must work in the packaged image, not just the checkout.
 docker exec "$prefix-web" bun scripts/shopify-privacy.ts health > "$temporary/privacy-health.json"

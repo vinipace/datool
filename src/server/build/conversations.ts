@@ -1045,7 +1045,8 @@ export class ConversationService {
           ${input.ownerFence === undefined ? sql`` : sql`AND c.owner_fence = ${input.ownerFence}`}
       )
       ON CONFLICT (project_id, turn_id, tool_call_id)
-      DO UPDATE SET input_json = EXCLUDED.input_json
+      DO UPDATE SET action_id = EXCLUDED.action_id,
+                    input_json = EXCLUDED.input_json
       RETURNING *
     `)
     if (!result.rows[0]) {

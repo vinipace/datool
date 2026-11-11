@@ -152,7 +152,7 @@ export async function executeInvocation(
   app: ResolvedApp,
   trace: TraceDetail,
   promptScope?: PromptRunScope,
-  execution?: { assertActive: () => Promise<void> }
+  execution?: { assertActive: () => Promise<void>; leaseOwner: string }
 ) {
   try {
     validateAppInput(app, trace.input)

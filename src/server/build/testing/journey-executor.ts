@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import type { WidgetDefinition } from "@/src/lib/build/contracts"
 import {
   journeyStepLabel,
@@ -10,13 +9,16 @@ import { widgetAsCode } from "@/src/lib/build/widget-code"
 import type { PromptRunScope } from "@/src/lib/tracer/prompt-overrides"
 import { canonicalJson } from "@/src/lib/tracer/resource-document"
 import {
-  actionContinuation,
   runAgentTurn,
   type RunAgentTurnInput,
   type RunAgentTurnResult,
   type RuntimeContinuation,
 } from "../runtime"
-import type { AgentEvaluationTarget } from "../evaluation"
+import {
+  evaluationSimulation,
+  type AgentEvaluationTarget,
+  type AgentEvaluationExecution,
+} from "../evaluation"
 import { JourneyBrowser } from "./journey-browser"
 
 function matchesInput(
@@ -35,12 +37,19 @@ export async function executeJourneyEvaluation(
   journey: AgentJourney,
   callId: string,
   scope?: PromptRunScope,
-  execution?: { assertActive: () => Promise<void> }
+  execution?: AgentEvaluationExecution
 ) {
   const context = {
     database: target.database,
     projectId: target.agent.projectId,
   }
+  const simulation = evaluationSimulation(
+    target,
+    callId,
+    scope,
+    execution,
+    journey.actionMocks
+  )
   const cancellation = new AbortController()
   const signal = AbortSignal.any([
     AbortSignal.timeout(120_000),
@@ -118,44 +127,24 @@ export async function executeJourneyEvaluation(
         recordFormData: false,
         dependencies: {
           mockExternalActions: true,
-          executeAction: async ({ action, input }) => {
-            await assertActive()
-            if (action.type === "widget" || action.type === "form") {
-              const continuation = actionContinuation(
-                action,
-                input,
-                randomUUID()
-              )
-              observed.push({ actionId: action.id, input, status: "succeeded" })
-              return {
-                status: "awaiting_client",
-                output: continuation,
-                continuation,
-              }
-            }
-            const mock = journey.actionMocks.find(
-              (mock) => mock.actionId === action.id
-            )
-            if (!mock)
-              missingMock = `Add a test response for external action ${action.id}.`
-            const error =
-              mock?.error ??
-              (!mock
-                ? "External actions require a test mock during agent evaluations."
-                : null)
-            observed.push({
-              actionId: action.id,
-              input,
-              status: error ? "failed" : "succeeded",
-            })
-            return error
-              ? { status: "failed", output: { error } }
-              : { status: "completed", output: mock?.response ?? null }
-          },
+          simulation,
         },
       }
     )
     current = result
+    for (const call of result.toolCalls.filter(
+      (call) => call.turnId === result.turn.id
+    )) {
+      observed.push({
+        actionId: call.actionId,
+        input: call.input,
+        status: ["completed", "awaiting_client"].includes(call.status)
+          ? "succeeded"
+          : "failed",
+      })
+      if (call.error?.kind === "ACTION_MOCK_REQUIRED")
+        missingMock = String(call.error.message)
+    }
     if (result.text) answers.push(result.text)
     if (result.traceId) traceIds.push(result.traceId)
     if (missingMock) throw new Error(missingMock)

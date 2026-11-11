@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai"
-import type { AgentConfiguration, ActionRecord, ProcedureRecord } from "@/src/lib/build/contracts"
+import type { AgentConfiguration, ActionRecord, ProcedureRecord, WidgetRecord } from "@/src/lib/build/contracts"
 import type { ToolMock } from "@/src/lib/build/testing"
 import type { RuntimeContinuation, RuntimeBudgetReservation } from "../runtime"
 
@@ -17,7 +17,7 @@ export type EveExecutionPlan = {
   formCompletion: { actionId: string; continuationId: string | null } | null
   budgetReservation: RuntimeBudgetReservation | null
   maxToolSteps: number
-  simulation?: { runId: string; caseId: string; leaseOwner: string; toolMocks: readonly ToolMock[]; actions: ActionRecord[]; procedures: ProcedureRecord[] }
+  simulation?: { kind?: "evaluation"; runId: string; caseId: string; leaseOwner: string; toolMocks: readonly ToolMock[]; actions: ActionRecord[]; procedures: ProcedureRecord[]; widgets?: WidgetRecord[] }
 }
 
 export type EveExecutionState = {

@@ -38,7 +38,12 @@ export async function getEveExecution(context: BuildContext, turnId: string) {
 }
 
 export async function assertEveOwnership(context: BuildContext, run: EveExecution) {
-  if (run.plan.simulation) {
+  if (run.plan.simulation?.kind === "evaluation") {
+    const active = await context.database.execute(sql`SELECT r.id FROM eval_runs r JOIN eval_run_lease l ON l.run_id=r.id
+      WHERE r.project_id=${context.projectId} AND r.id=${run.plan.simulation.runId}
+        AND r.status='running' AND l.owner=${run.plan.simulation.leaseOwner} AND l.expires_at>now()`)
+    if (!active.rows.length) throw new EveOwnershipLostError("The evaluation is no longer active.")
+  } else if (run.plan.simulation) {
     const active = await context.database.execute(sql`SELECT r.id FROM build_test_runs r JOIN build_test_cases c ON c.project_id=r.project_id AND c.run_id=r.id
       WHERE r.project_id=${context.projectId} AND r.id=${run.plan.simulation.runId} AND c.id=${run.plan.simulation.caseId}
         AND r.status='running' AND c.status='running' AND r.lease_expires_at>now() AND c.lease_expires_at>now()

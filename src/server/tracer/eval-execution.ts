@@ -193,7 +193,7 @@ export function evalExecution(
                 target.trace = await executeInvocation(service, app, current, {
                   projectId: project,
                   runId: id,
-                }, { assertActive: () => active(id, owner) })
+                }, { assertActive: () => active(id, owner), leaseOwner: owner })
               } else {
                 // A bridge may have durably acknowledged output before its waiting server crashed.
                 const job = (

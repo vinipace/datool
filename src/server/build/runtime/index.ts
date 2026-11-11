@@ -1701,7 +1701,12 @@ export async function runAgentTurn(
   rawInput: RunAgentTurnInput,
   options: RunAgentTurnOptions = {}
 ): Promise<RunAgentTurnResult> {
-  const dependencies = options.dependencies ?? {}
+  const dependencies = {
+    ...options.dependencies,
+    ...(options.dependencies?.simulation?.kind === "evaluation"
+      ? simulationActionDependencies(options.dependencies.simulation)
+      : {}),
+  }
   const parsed = runAgentTurnInputSchema.parse(rawInput)
   const service =
     options.conversationService ?? new ConversationService(context)
@@ -2610,7 +2615,7 @@ export async function runAgentTurn(
               ? conversation.metadata.contactId.trim()
               : undefined
           const form = action.definition
-          if (options.recordFormData !== false) await (context as BuildContext).database.transaction(async (tx) => {
+          if (options.recordFormData !== false && !dependencies.simulation) await (context as BuildContext).database.transaction(async (tx) => {
             const formContext = {
               ...context,
               database: tx,
@@ -3324,7 +3329,7 @@ async function eveRuntimeContext(context: BuildRuntimeContext, run: EveExecution
   const turn = await service.getTurn(run.turnId)
   if (!turn || conversation.agentId !== run.agentId) throw new BuildRuntimeError("CONVERSATION_MISMATCH", "The execution does not belong to this conversation.")
   const catalog = run.plan.simulation
-    ? { actions: run.plan.simulation.actions, procedures: run.plan.simulation.procedures, widgets: [] }
+    ? { actions: run.plan.simulation.actions, procedures: run.plan.simulation.procedures, widgets: run.plan.simulation.widgets ?? [] }
     : await getRuntimeAppliedDefinitions(context as BuildContext, run.agentId, run.plan.agent.revision)
   const actions = catalog.actions.filter(item => item.definition.enabled && item.definition.channels.includes(conversation.channel))
   return { service, conversation, turn, catalog, actions, actionMap: new Map(actions.map(item => [item.id, item])) }
@@ -3360,14 +3365,20 @@ function eveToolInputSchema(schema: Record<string, unknown>): Record<string, unk
   return result
 }
 
-function eveActionDependencies(run: EveExecution): RuntimeDependencies {
-  const simulation = run.plan.simulation
+function simulationActionDependencies(simulation: EveExecutionPlan["simulation"]): RuntimeDependencies {
   if (!simulation) return {}
   return {
     mockExternalActions: true,
     executeAction: async ({ action, input, signal }) => {
+      if (simulation.kind === "evaluation" && (action.type === "widget" || action.type === "form")) {
+        const continuation = actionContinuation(action, input, randomUUID())
+        return { status: "awaiting_client", output: continuation, continuation }
+      }
       const mock = simulation.toolMocks.find(item => item.matcher.actionId === action.id && (item.matcher.match === "action" || canonicalJson(item.matcher.arguments) === canonicalJson(input)))
-      if (!mock) throw new BuildRuntimeError("ACTION_NOT_AVAILABLE", "Live actions are disabled in simulations; add a matching tool mock.")
+      if (!mock) throw new BuildRuntimeError(
+        simulation.kind === "evaluation" ? "ACTION_MOCK_REQUIRED" : "ACTION_NOT_AVAILABLE",
+        simulation.kind === "evaluation" ? `Add a test response for external action ${action.id}.` : "Live actions are disabled in simulations; add a matching tool mock.",
+      )
       if (mock.latencyMs) await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(resolve, mock.latencyMs)
         signal?.addEventListener("abort", () => { clearTimeout(timer); reject(new Error("The simulation was cancelled.")) }, { once: true })
@@ -3434,7 +3445,7 @@ export async function executeEveRuntimeTool(context: BuildRuntimeContext, turnId
       const claim = await ctx.database.execute(sql`UPDATE build_eve_executions SET state_json=jsonb_set(state_json,'{procedures}',coalesce(state_json->'procedures','[]'::jsonb) || ${JSON.stringify([id])}::jsonb),updated_at=now()
         WHERE project_id=${ctx.projectId} AND turn_id=${turnId} AND NOT (coalesce(state_json->'procedures','[]'::jsonb) ? ${id}) RETURNING turn_id`)
       if (!claim.rows.length) throw new BuildRuntimeError("PROCEDURE_ALREADY_RAN", "This skill already ran in this turn.")
-      const result = await runProcedure(ctx, service, conversation, turn, run.plan.inputText, catalog.procedures, actionMap, eveActionDependencies(run), run.plan.configuration.guardrails.requireHumanForActions, signal, {}, undefined, id)
+      const result = await runProcedure(ctx, service, conversation, turn, run.plan.inputText, catalog.procedures, actionMap, simulationActionDependencies(run.plan.simulation), run.plan.configuration.guardrails.requireHumanForActions, signal, {}, undefined, id)
       if (!result) throw new BuildRuntimeError("PROCEDURE_NOT_FOUND", "This skill is not available on the published revision.")
       actionRefs = [...new Set([...actionRefs, ...(result.actionRefs ?? [])])]
       metadata = result.integrationMetadata ?? {}
@@ -3444,7 +3455,7 @@ export async function executeEveRuntimeTool(context: BuildRuntimeContext, turnId
     } else {
       const action = actionMap.get(capability.id)!
       const result = await executeAction(ctx, service, conversation, turn, action.definition, input, {
-        dependencies: eveActionDependencies(run), availableActions: actionMap, toolCallId, question: run.plan.inputText,
+        dependencies: simulationActionDependencies(run.plan.simulation), availableActions: actionMap, toolCallId, question: run.plan.inputText,
         requireHumanForActions: run.plan.configuration.guardrails.requireHumanForActions, signal,
       })
       output = result.output
