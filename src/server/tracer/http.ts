@@ -240,7 +240,7 @@ const auditResources = new Set([
   "scorers", "prompts", "evaluators", "views", "custom-views", "page-views",
   "object-views", "view-preferences", "react-views", "custom-fields", "dashboards",
   "reports", "project-home", "evals", "imported-scores", "apps", "playgrounds",
-  "demo", "resources", "cli",
+  "demo", "resources", "cli", "deployments", "project-mcp",
 ])
 
 async function auditProjectRequest(request: Request, handler: (context: TracerApiContext) => Promise<Response>) {

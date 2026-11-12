@@ -200,6 +200,7 @@ export type SaveAgentInput = {
 }
 
 export const actionTypeSchema = z.enum([
+  "deployment",
   "integration",
   "http",
   "client",
@@ -233,6 +234,7 @@ const actionBaseSchema = z.object({
 })
 
 export const actionDefinitionSchema = z.discriminatedUnion("type", [
+  actionBaseSchema.extend({ type: z.literal("deployment"), deploymentId: z.string().uuid(), toolName: z.string().min(1).max(64) }),
   actionBaseSchema.extend({
     type: z.literal("integration"),
     connectionId: z.string().uuid(),

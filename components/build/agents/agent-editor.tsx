@@ -2046,6 +2046,7 @@ function ActionsTab({
               >
                 <CustomSelect
                   value={draft.type}
+                  disabled={draft.type === "deployment"}
                   onValueChange={(value) => {
                     if (value)
                       setDraft((current) =>
@@ -2086,6 +2087,7 @@ function ActionsTab({
                   onManageIntegrations={() => { clearAction(); onManageIntegrations() }}
                 />
               ) : null}
+              {draft.type === "deployment" ? <Notice>This tool is deployed from your codebase. Run datool deploy to update its code and input schema.</Notice> : null}
               {draft.type === "http" ? (
                 <HttpActionFields
                   draft={draft}

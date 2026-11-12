@@ -33,6 +33,7 @@
   "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
   "dependencies": {
+    "esbuild": "^0.28.2",
     "@napi-rs/keyring": "2.0.0",
     "ajv": "^8.20.0",
     "zod": "^4.5.4",

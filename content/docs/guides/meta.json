@@ -2,6 +2,7 @@
   "title": "Product guides",
   "pages": [
     "agents",
+    "project-deployment",
     "integrations",
     "scheduled-tasks",
     "playground",

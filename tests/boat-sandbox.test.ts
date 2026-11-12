@@ -22,6 +22,7 @@ import { createDrive } from "@/src/server/build/drives"
 import { createAgent } from "@/src/server/build/agents"
 import { runAgentTurn } from "@/src/server/build/runtime"
 import { runAgentSandboxCommand } from "@/src/server/build/sandbox-runtime"
+import { executeDeploymentModule } from "@/src/server/deploy/execute"
 import { agentSandboxSchema } from "@/src/lib/build/sandbox"
 
 // Owns the new transport/lifecycle boundary: API emulation drives real isolated
@@ -141,6 +142,14 @@ test("Boat preserves bytes, isolation and pending drive recovery through fresh V
     expect((await command("cat note.txt")).stdout).toBe("recover me")
     expect((await loadCloudDrive(context, drive.id)).sync_pending).toBe(false)
 
+    const deployed = await executeDeploymentModule(context, {
+      sandbox: "boat",
+      mode: "tool",
+      name: "lookup",
+      code: `export const tools={lookup:{execute:async(_,ctx)=>{await ctx.db.set("boat_records","one",{text:"ação ✓"},0);return ctx.db.get("boat_records","one")}}};export const sources={};`,
+      input: {},
+    })
+    expect(deployed).toEqual({ value: { text: "ação ✓" }, revision: 1 })
     const agent = await createAgent(context, {
       name: "Boat native files",
       configuration: {

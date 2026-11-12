@@ -1,3 +1,4 @@
+import { sandboxRpc, sandboxStream } from "./sandbox-rpc"
 import { boatDocker, stopBoatSandbox } from "./boat"
 import type { BoatDocker } from "../sandbox/boat"
 import { execFile, spawn } from "node:child_process"
@@ -50,6 +51,7 @@ type CommandIO = {
   stdin?: string
   maxOutputBytes?: number
   docker?: BoatDocker
+  rpc?: (request: unknown) => Promise<unknown>
 }
 
 function collector(limit = 32 * 1024) {
@@ -60,7 +62,7 @@ function collector(limit = 32 * 1024) {
     stderr: [],
   }
   return {
-    add(stream: "stdout" | "stderr", chunk: string | Buffer) {
+    add(stream: "stdout" | "stderr", chunk: string | Uint8Array) {
       const bytes = Buffer.from(chunk)
       if (bytes.length > remaining) truncated = true
       if (!remaining) return
@@ -183,7 +185,7 @@ async function localCommand(
   try {
     const args = [
       "run",
-      ...(io.stdin !== undefined ? ["-i"] : []),
+      ...(io.stdin !== undefined || io.rpc ? ["-i"] : []),
       "--rm",
       "--pull=never",
       "--name",
@@ -218,40 +220,39 @@ async function localCommand(
       command,
     ]
     if (io.docker) {
-      const child = io.docker.spawn(args, io.stdin !== undefined)
+      const child = io.docker.spawn(
+        args,
+        io.stdin !== undefined || Boolean(io.rpc),
+        Boolean(io.rpc)
+      )
       const abort = () => {
         void Promise.resolve(child.kill()).catch(() => undefined)
       }
       signal?.addEventListener("abort", abort, { once: true })
       if (signal?.aborted) abort()
       try {
-        const writing =
-          io.stdin === undefined
-            ? Promise.resolve()
-            : (async () => {
-                const writer = child.stdin!.getWriter()
-                await writer.write(Buffer.from(io.stdin!))
-                await writer.close()
-              })()
-        const collect = async (
-          stream: ReadableStream<Uint8Array>,
-          name: "stdout" | "stderr"
-        ) => {
-          const reader = stream.getReader()
-          try {
-            while (true) {
-              const next = await reader.read()
-              if (next.done) return
-              output.add(name, Buffer.from(next.value))
-            }
-          } finally {
-            reader.releaseLock()
-          }
-        }
+        const writer = child.stdin?.getWriter()
+        const writing = (async () => {
+          if (io.stdin !== undefined) await writer!.write(Buffer.from(io.stdin))
+          if (!io.rpc) await writer?.close()
+        })()
+        const stdout = sandboxStream(child.stdout)
+        const stderr = sandboxStream(child.stderr)
         const [result] = await Promise.all([
           child.wait(),
-          collect(child.stdout, "stdout"),
-          collect(child.stderr, "stderr"),
+          io.rpc
+            ? sandboxRpc(
+                stdout,
+                (text) => writer!.write(Buffer.from(text)),
+                io.rpc,
+                (text) => output.add("stdout", text)
+              )
+            : (async () => {
+                for await (const chunk of stdout) output.add("stdout", chunk)
+              })(),
+          (async () => {
+            for await (const chunk of stderr) output.add("stderr", chunk)
+          })(),
           writing,
         ])
         return output.result(result.exitCode)
@@ -259,28 +260,46 @@ async function localCommand(
         signal?.removeEventListener("abort", abort)
       }
     }
-    return await new Promise<SandboxCommandResult>((resolve, reject) => {
-      const child = spawn(/* turbopackIgnore: true */ docker, args, {
-        stdio: ["pipe", "pipe", "pipe"],
-        signal,
-      })
-      child.stdin.on("error", () => undefined)
-      child.stdin.end(io.stdin)
-      const timer = setTimeout(
-        () => child.kill("SIGKILL"),
-        (timeout + 20) * 1000
-      )
-      child.stdout.on("data", (chunk) => output.add("stdout", chunk))
-      child.stderr.on("data", (chunk) => output.add("stderr", chunk))
-      child.once("error", (error) => {
-        clearTimeout(timer)
-        reject(error)
-      })
-      child.once("close", (code) => {
-        clearTimeout(timer)
-        resolve(output.result(code ?? 137))
-      })
+    const child = spawn(/* turbopackIgnore: true */ docker, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      signal,
     })
+    child.stdin.on("error", () => undefined)
+    if (io.rpc) child.stdin.write(io.stdin ?? "")
+    else child.stdin.end(io.stdin)
+    const timer = setTimeout(() => child.kill("SIGKILL"), (timeout + 20) * 1000)
+    try {
+      const closed = new Promise<number>((resolve, reject) => {
+        child.once("error", reject)
+        child.once("close", (code) => resolve(code ?? 137))
+      })
+      const [code] = await Promise.all([
+        closed,
+        io.rpc
+          ? sandboxRpc(
+              child.stdout,
+              (text) =>
+                new Promise<void>((resolve, reject) =>
+                  child.stdin.write(text, (error) =>
+                    error ? reject(error) : resolve()
+                  )
+                ),
+              io.rpc,
+              (text) => output.add("stdout", text)
+            )
+          : (async () => {
+              for await (const chunk of child.stdout)
+                output.add("stdout", chunk)
+            })(),
+        (async () => {
+          for await (const chunk of child.stderr) output.add("stderr", chunk)
+        })(),
+      ])
+      return output.result(code)
+    } finally {
+      clearTimeout(timer)
+      child.kill("SIGKILL")
+    }
   } finally {
     // Removing the client process does not remove a running container.
     if (io.docker) await io.docker.remove(name)
@@ -386,11 +405,9 @@ async function modalCommand(
       ],
       { timeoutMs: (timeout + 5) * 1000 }
     )
-    if (io.stdin !== undefined) {
-      const writer = commandProcess.stdin.getWriter()
-      await writer.write(io.stdin)
-      await writer.close()
-    }
+    const writer = commandProcess.stdin.getWriter()
+    if (io.stdin !== undefined) await writer.write(io.stdin)
+    if (!io.rpc) await writer?.close()
     const abort = () => {
       void sandbox?.terminate().catch(() => undefined)
     }
@@ -398,7 +415,16 @@ async function modalCommand(
     let exitCode: number
     try {
       ;[, , exitCode] = await Promise.all([
-        drain(commandProcess.stdout, (chunk) => output.add("stdout", chunk)),
+        io.rpc
+          ? sandboxRpc(
+              sandboxStream(commandProcess.stdout),
+              (text) => writer.write(text),
+              io.rpc,
+              (text) => output.add("stdout", text)
+            )
+          : drain(commandProcess.stdout, (chunk) =>
+              output.add("stdout", chunk)
+            ),
         drain(commandProcess.stderr, (chunk) => output.add("stderr", chunk)),
         commandProcess.wait(),
       ])
@@ -449,7 +475,10 @@ export async function runAgentSandboxCommand(
   signal?: AbortSignal,
   io: CommandIO = {}
 ): Promise<SandboxCommandResult> {
-  if (io.stdin && Buffer.byteLength(io.stdin) > 512 * 1024)
+  if (
+    io.stdin &&
+    Buffer.byteLength(io.stdin) > (io.rpc ? 4 * 1024 * 1024 : 512 * 1024)
+  )
     throw new Error("File input is too large.")
   const config = agentSandboxSchema.parse(configuration)
   const { command, timeoutSeconds } = sandboxCommandSchema.parse(input)

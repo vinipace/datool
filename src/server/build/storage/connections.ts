@@ -142,12 +142,12 @@ export async function removeStorageConnection(
   const { organizationId } = await providerContext(context)
   await storageConnection(context, id)
   const rows = await context.database.execute(
-    sql`DELETE FROM build_storage_connections c WHERE c.organization_id=${organizationId} AND c.id=${id}::uuid AND NOT EXISTS(SELECT 1 FROM build_drives d WHERE d.organization_id=c.organization_id AND d.storage_connection_id=c.id) RETURNING id`
+    sql`DELETE FROM build_storage_connections c WHERE c.organization_id=${organizationId} AND c.id=${id}::uuid AND NOT EXISTS(SELECT 1 FROM build_drives d WHERE d.organization_id=c.organization_id AND d.storage_connection_id=c.id) AND NOT EXISTS(SELECT 1 FROM project_deployment_state s WHERE s.organization_id=c.organization_id AND s.storage_connection_id=c.id) RETURNING id`
   )
   if (!rows.rows.length)
     throw new TracerError(
       "VALIDATION_ERROR",
-      "This storage connection is used by a drive and cannot be removed."
+      "This storage connection is used by a drive or project bucket and cannot be removed."
     )
   return { deleted: true }
 }

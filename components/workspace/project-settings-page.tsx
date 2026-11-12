@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
+import { ProjectDeploymentCard } from "./project-deployment-card"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -25,10 +26,14 @@ export function ProjectSettingsPage({
   organization,
   project,
   canManage,
+  deploymentsEnabled = false,
+  deploymentOrigin = "https://your-datool-host",
 }: {
   organization: WorkspaceOrganization
   project: SettingsProject
   canManage: boolean
+  deploymentsEnabled?: boolean
+  deploymentOrigin?: string
 }) {
   const router = useRouter()
   const [saved, setSaved] = useState(project)
@@ -179,6 +184,14 @@ export function ProjectSettingsPage({
             />
           </CardContent>
         </Card>
+        {deploymentsEnabled && (
+          <ProjectDeploymentCard
+            key={project.id}
+            projectId={project.id}
+            projectSlug={project.slug}
+            origin={deploymentOrigin}
+          />
+        )}
       </div>
     </div>
   )

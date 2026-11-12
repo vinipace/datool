@@ -186,10 +186,21 @@ export class BoatClient {
 
 // The API carries UTF-8 logs. Frame binary output before it enters that transport,
 // preserving arbitrary files, split UTF-8 sequences and separate output streams.
-const relay = `import base64,json,os,selectors,subprocess,sys
-args=json.loads(sys.argv[1]); input_path=sys.argv[2]
-source=open(input_path,'rb') if input_path else subprocess.DEVNULL
+const relay = `import base64,json,os,selectors,subprocess,sys,threading,time
+args=json.loads(sys.argv[1]); input_path=sys.argv[2]; interactive=len(sys.argv)>3 and sys.argv[3]=='interactive'
+source=subprocess.PIPE if interactive else open(input_path,'rb') if input_path else subprocess.DEVNULL
 p=subprocess.Popen(args,stdin=source,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+if interactive:
+ def feed():
+  try:
+   with open(input_path,'rb') as f:
+    while p.poll() is None:
+     data=f.read(16384)
+     if data: p.stdin.write(data); p.stdin.flush()
+     elif os.path.exists(input_path+'.eof'): p.stdin.close(); break
+     else: time.sleep(.02)
+  except (BrokenPipeError,OSError): pass
+ threading.Thread(target=feed,daemon=True).start()
 s=selectors.DefaultSelector()
 s.register(p.stdout,selectors.EVENT_READ,'stdout'); s.register(p.stderr,selectors.EVENT_READ,'stderr')
 while s.get_map():
@@ -229,7 +240,37 @@ export class BoatDocker {
       `docker info >/dev/null && if docker container inspect ${shellQuote(name)} >/dev/null 2>&1; then docker rm -f ${shellQuote(name)}; fi`
     )
   }
-  spawn(args: string[], stdin = false): SandboxProcess {
+  spawn(args: string[], stdin = false, interactive = false): SandboxProcess {
+    if (interactive && !stdin)
+      throw new Error("Interactive Boat commands need stdin.")
+    const directory = `/tmp/datool-input-${randomUUID()}`
+    let inputDirectoryReady!: () => void
+    let inputDirectoryFailed!: (error: unknown) => void
+    const directoryReady = new Promise<void>((resolve, reject) => {
+      inputDirectoryReady = resolve
+      inputDirectoryFailed = reject
+    })
+    void directoryReady.catch(() => undefined)
+    const appendInput = async (data: Uint8Array) => {
+      for (let offset = 0; offset < data.length; offset += 1024 * 1024) {
+        await this.client.request(`/sandboxes/${this.id}/files`, "PUT", {
+          path: `${directory}/chunk`,
+          content: Buffer.from(
+            data.subarray(offset, offset + 1024 * 1024)
+          ).toString("base64"),
+          encoding: "base64",
+        })
+        await this.client.command(
+          this.id,
+          `cat ${shellQuote(directory + "/chunk")} >> ${shellQuote(directory + "/input")}`
+        )
+      }
+    }
+    const finishInput = () =>
+      this.client.command(
+        this.id,
+        `touch ${shellQuote(directory + "/input.eof")}`
+      )
     const out = new TransformStream<Uint8Array, Uint8Array>()
     const err = new TransformStream<Uint8Array, Uint8Array>()
     const writers = {
@@ -245,18 +286,26 @@ export class BoatDocker {
     const inputReady = new Promise<void>((resolve) => {
       start = resolve
     })
-    if (!stdin) start()
+    if (!stdin || interactive) start()
     const input = new WritableStream<Uint8Array>({
-      write(chunk) {
+      async write(chunk) {
         size += chunk.byteLength
         if (size > 112 * 1024 * 1024) {
           killed = true
           start()
           throw new Error("Boat input exceeds the transfer limit.")
         }
-        chunks.push(chunk.slice())
+        if (interactive) {
+          await directoryReady
+          if (killed || finished) throw new Error("Boat command ended.")
+          await appendInput(chunk)
+        } else chunks.push(chunk.slice())
       },
-      close() {
+      async close() {
+        if (interactive) {
+          await directoryReady
+          await finishInput()
+        }
         start()
       },
       abort() {
@@ -265,7 +314,6 @@ export class BoatDocker {
       },
     })
     const waited = (async () => {
-      const directory = `/tmp/datool-input-${randomUUID()}`
       try {
         await inputReady
         if (killed) throw new Error("Boat command was cancelled.")
@@ -278,20 +326,8 @@ export class BoatDocker {
             this.id,
             `mkdir -m 700 ${shellQuote(directory)} && touch ${shellQuote(directory + "/input")}`
           )
-          for (let offset = 0; offset < data.length; offset += 1024 * 1024) {
-            if (killed) throw new Error("Boat command was cancelled.")
-            await this.client.request(`/sandboxes/${this.id}/files`, "PUT", {
-              path: `${directory}/chunk`,
-              content: data
-                .subarray(offset, offset + 1024 * 1024)
-                .toString("base64"),
-              encoding: "base64",
-            })
-            await this.client.command(
-              this.id,
-              `cat ${shellQuote(directory + "/chunk")} >> ${shellQuote(directory + "/input")}`
-            )
-          }
+          inputDirectoryReady()
+          if (!interactive) await appendInput(data)
         }
         if (killed) throw new Error("Boat command was cancelled.")
         const started = await this.client.request<{ processId: number }>(
@@ -304,6 +340,7 @@ export class BoatDocker {
               relay,
               JSON.stringify(["docker", ...args]),
               stdin ? `${directory}/input` : "",
+              interactive ? "interactive" : "",
             ]
               .map(shellQuote)
               .join(" "),
@@ -380,6 +417,7 @@ export class BoatDocker {
         const error = new Error(
           "Boat command failed or its connection was interrupted."
         )
+        inputDirectoryFailed(error)
         await Promise.allSettled([
           writers.stdout.abort(error),
           writers.stderr.abort(error),

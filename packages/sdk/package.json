@@ -50,6 +50,11 @@
       "import": "./dist/contracts.js",
       "default": "./dist/contracts.js"
     },
+    "./deploy": {
+      "types": "./dist/deploy.d.ts",
+      "import": "./dist/deploy.js",
+      "default": "./dist/deploy.js"
+    },
     "./agents": {
       "types": "./dist/agents.d.ts",
       "import": "./dist/agents.js",

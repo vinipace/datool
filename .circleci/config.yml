@@ -218,7 +218,12 @@ jobs:
             bun run build:packages
             bun --no-env-file scripts/test.mjs --journeys-only
             bun --no-env-file test tests/build-agent-autosave.test.ts
-            bunx vitest run --project=storybook components/build/agents/agent-journey-editor.stories.tsx components/tracer/dataset-item-inspector.stories.tsx
+            bunx vitest run --project=storybook components/build/agents/agent-journey-editor.stories.tsx components/tracer/dataset-item-inspector.stories.tsx components/workspace/project-deployment-card.stories.tsx
+      - run:
+          name: Verify CLI project deployment and sandbox capabilities
+          command: |
+            docker pull node:22-bookworm-slim
+            bun --no-env-file test tests/project-deployment.test.ts
       - run:
           name: Verify ingestion retries, retention, and safe diagnostics
           command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-inspection.test.ts tests/ingestion-sequence.test.ts tests/inbox-diagnostics.test.ts

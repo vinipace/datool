@@ -1,0 +1,129 @@
+---
+title: Deploy a project folder
+description: Publish managed agents, project MCP tools, persistent data and company knowledge from the CLI.
+---
+
+Deploy the same folder from a laptop or CI. Datool hosts the MCP endpoint and executes the JavaScript in the organization's sandbox provider. You do not need a Next.js app, an HTTP server or a listener running on your laptop.
+
+This feature requires a server with migration `0091_project_deployments.sql` and a CLI built from the same release. It is not available in the previously published CLI 0.4.1.
+
+## Connect and deploy
+
+Open **Project settings**, copy the project ID and create an API key with **Build read**, **Build write** and **Build run** permissions. Keys belong to the organization; every request also selects a project. Configure a sandbox in **Organization settings → Sandbox providers**. Self-hosting supports Docker and local files.
+
+```sh
+export DATOOL_BASE_URL=https://your-datool-host
+export DATOOL_PROJECT_ID=your-project-id
+export DATOOL_API_KEY=your-api-key
+
+datool deploy ./company --dry-run
+datool deploy ./company
+datool deploy status
+```
+
+`--dry-run` validates and bundles locally without uploading or executing your modules. Deployment validates the exports and runs source collectors inside an isolated sandbox, then publishes the agents, tools, skills and indexed sources together. If preparation fails, the previous deployment remains active. A competing deployment returns a conflict; inspect status before retrying. After a network timeout, use `deploy status` to check whether publication completed.
+
+```text
+company/
+  agents/foo/instructions.md
+  agents/foo/agent.json       # optional model/agent configuration
+  skills/research.md
+  tools/search_projects.ts
+  sources/fetch_sources.ts
+  sources/company.md
+  datool.json                 # optional provider selection
+  package.json               # optional dependencies
+```
+
+Top-level `.ts`, `.mts`, `.js` and `.mjs` files in `tools/` become MCP tools named after their filenames. Import helper modules from a separate folder, such as `lib/`. JavaScript dependencies are bundled from the folder's installed `node_modules`; native addons and packages requiring unbundled runtime files are not supported. Symlinks in deployed folders, imports outside the deployment root and hidden-file imports are rejected. `.env`, hidden files and `node_modules` are not uploaded as source files. Never put secrets in code, Markdown or imported data: those become deployment content.
+
+## Write a tool
+
+```ts
+import type { ProjectContext } from '@datool/sdk/deploy'
+
+export default {
+  description: 'Search company projects by status.',
+  inputSchema: {
+    type: 'object',
+    properties: { status: { type: 'string' } },
+    additionalProperties: false,
+  },
+  async execute(input: { status?: string }, ctx: ProjectContext) {
+    return ctx.db.list('projects', {
+      limit: 20,
+      ...(input.status ? { where: { status: input.status } } : {}),
+    })
+  },
+}
+```
+
+Tools receive `ctx.db`, `ctx.bucket`, `ctx.sandbox`, `ctx.brain` and `ctx.fetch`. They never receive the deployment API key, database password or provider credentials. Input schemas support object properties, arrays, primitive types, enums, required fields, bounds and schema alternatives. References, patterns and formats are not supported.
+
+The returned MCP URL is `/api/project-mcp?projectId=YOUR_PROJECT_ID`. Configure your MCP client with `Authorization: Bearer YOUR_API_KEY`, using a key with Build read and run permissions. The endpoint supports stateless Streamable HTTP POST. It lists the deployed tools and `brain_search`, and exposes source and skill documents as MCP resources. Each request selects the active deployment; an in-flight call retains its selected version.
+
+Agents from `agents/NAME/instructions.md` appear in Datool with the project's tools and skills attached. `agent.json` optionally supplies agent configuration such as `provider`, `model` and `temperature`. Sources are shared company knowledge for the deployed project's agents through `brain_search`. Each applied agent revision pins its tool and knowledge deployment. Redeploying updates only the folder's managed agents; removing an agent folder archives that managed agent. Removing tools or skills disables their managed definitions. Agents created in the UI are preserved, and conflicting names cause publication to fail.
+
+## Persistent database and bucket
+
+The database is a project-scoped document store backed by the installation's PostgreSQL database. It survives code changes and server restarts. It does not expose arbitrary SQL or the installation database connection.
+
+```ts
+await ctx.db.set('projects', 'alpha', { name: 'Alpha', status: 'active' }, 0)
+const record = await ctx.db.get('projects', 'alpha')
+await ctx.db.set('projects', 'alpha', { ...record.value, status: 'done' }, record.revision)
+const page = await ctx.db.list('projects', { where: { status: 'done' }, limit: 20 })
+await ctx.db.delete('projects', 'alpha', record.revision + 1)
+
+await ctx.bucket.put('reports/latest.txt', 'Hello', 'text/plain')
+const file = await ctx.bucket.get('reports/latest.txt') // data is a Buffer
+const files = await ctx.bucket.list({ prefix: 'reports/', limit: 20 })
+await ctx.bucket.delete('reports/latest.txt')
+```
+
+`get` returns `null` for a missing record. `set` returns its revision. Omit `expectedRevision` for an atomic upsert, use `0` for insert-only, or pass the current revision for compare-and-set. `list` returns `items` and `nextCursor`; pass that cursor to continue. `where` matches JSON containment. Resource writes are individual operations: a later tool error does not roll back earlier writes. Tool calls are not automatically retried.
+
+Local bucket bytes live under `DATOOL_DATA_DIR/project-buckets/<project-hash>/`, with metadata in PostgreSQL. Back up both. Cloud bucket bytes use the configured prefix plus `project-buckets/<project-hash>/`. Configure cloud storage once in Organization settings, then select its connection in the folder:
+
+```json
+{
+  "sandbox": "local",
+  "storageConnectionId": "organization-storage-connection-uuid"
+}
+```
+
+Omit `datool.json` to use the organization's preferred supported sandbox and a local bucket. A project's bucket location is fixed by its first deployment; redeployment cannot silently move existing data. A referenced storage connection cannot be removed. Old object generations are retained after overwrites; no automatic retention cleanup is provided yet. Database documents and bucket objects are shared by tools in the same project and isolated from other projects, including projects in the same organization.
+
+## Sandbox and fetching
+
+```ts
+const result = await ctx.sandbox.run('node -e "console.log(1 + 1)"', {
+  timeoutSeconds: 10,
+})
+const response = await ctx.fetch('https://example.com/company.json')
+if (!response.ok) throw new Error('Company API failed')
+const company = await response.json()
+```
+
+The tool already runs in a fresh sandbox. `sandbox.run` provides a second temporary shell environment in the same configured provider. Files in these temporary environments do not persist; use the bucket or database for durable data. Direct network access is disabled. `ctx.fetch` permits public HTTP(S) destinations, with DNS validation, bounded responses and no automatic redirects. Loopback, private network and cloud metadata endpoints are blocked.
+
+## Company sources
+
+Markdown, text, JSON and CSV files under `sources/` are indexed as text. Top-level JavaScript/TypeScript files are collectors that run on every deployment and return documents:
+
+```ts
+import type { ProjectSourceCollector } from '@datool/sdk/deploy'
+
+const collect: ProjectSourceCollector = async ctx => {
+  const response = await ctx.fetch('https://example.com/handbook.txt')
+  if (!response.ok) throw new Error('Handbook fetch failed')
+  return [{ path: 'handbook.md', title: 'Company handbook', text: await response.text() }]
+}
+export default collect
+```
+
+Collectors have read-only database/bucket access and GET/HEAD fetching. They cannot modify resources or launch nested sandboxes. Returned paths are namespaced under the collector. Static and collected documents are chunked and searched using PostgreSQL full-text search; this version does not require embeddings. Redeploy to refresh collectors. Scheduling is not automatic.
+
+## Limits
+
+A deployment accepts 4 MiB, up to 64 tools, 30 agents, 50 skill documents and 20 collectors. Each tool runs for up to 60 seconds with 1 CPU and 512 MiB of memory, up to 100 capability calls and 64 KiB of input. Database documents are limited to 256 KiB, bucket transfers to 1 MiB, and source documents to 200,000 characters. Published company knowledge is limited to 200 documents and 4 MiB. Deployments have a 210-second preparation/publication deadline. Historical deployment code and knowledge remain in PostgreSQL to support existing pinned agent revisions.

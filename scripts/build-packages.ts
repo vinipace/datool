@@ -14,7 +14,7 @@ for (const name of requested ? [requested] : ["sdk", "cli", "react"]) {
   )
   const entries =
     name === "sdk"
-      ? ["index", "otel", "context", "openai", "contracts", "agents"]
+      ? ["index", "otel", "context", "openai", "contracts", "agents", "deploy"]
       : name === "react"
         ? ["index", "server"]
         : ["index", "datool"]

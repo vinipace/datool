@@ -22,6 +22,8 @@ export async function routeScopes(request: Request): Promise<WorkspaceScope[]> {
   const url = new URL(request.url)
   const resource = url.pathname.split("/")[2]
   if (url.pathname === "/api/cli/session" && request.method === "GET") return []
+  if (url.pathname === "/api/deployments" && ["GET", "POST"].includes(request.method)) return request.method === "GET" ? ["build:read"] : ["build:read", "build:write", "build:run"]
+  if (url.pathname === "/api/project-mcp" && request.method === "POST") return ["build:read", "build:run"]
   if (resource === "agent") {
     const operation = findAgentOperation(url.pathname.split("/")[3])
     if (!operation || request.method !== "POST")

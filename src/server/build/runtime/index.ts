@@ -1385,7 +1385,7 @@ async function executeAction(
     knownSecrets,
     options.procedureCursor
   )
-  if (action.type !== "http" && action.type !== "integration") {
+  if (action.type !== "http" && action.type !== "integration" && action.type !== "deployment") {
     try {
       await service.recordToolCallFinish({
         conversationId: conversation.id,
@@ -1430,6 +1430,12 @@ async function executeAction(
         ownerFence: turn.ownerFence,
       })
       return { ...result, output }
+    }
+    if (action.type === "deployment") {
+      const { invokeDeploymentTool } = await import("../../deploy/service")
+      const output = await invokeDeploymentTool(context, action.deploymentId, action.toolName, input, options.signal)
+      await service.recordToolCallFinish({ conversationId: conversation.id, turnId: turn.id, toolCallId: options.toolCallId, status: "completed", output, ownerFence: turn.ownerFence })
+      return { output, continuation: null, status: "completed" as const }
     }
     if (action.type !== "http") throw new Error("Unsupported action.")
     assertSafeActionUrl(action.url)

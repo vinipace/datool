@@ -1,3 +1,4 @@
+import { buildEnabled } from "@/lib/build/config"
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
 import { ProjectSettingsPage } from "@/components/workspace/project-settings-page"
@@ -36,6 +37,8 @@ export default async function Page({
       organization={organization}
       project={{ id: project.id, name: project.name, slug: project.slug }}
       canManage={canManageProject(authorization.access.role)}
+      deploymentsEnabled={buildEnabled(organization.id)}
+      deploymentOrigin={new URL(process.env.BETTER_AUTH_URL!).origin}
     />
   )
 }
