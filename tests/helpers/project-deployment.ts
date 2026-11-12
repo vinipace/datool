@@ -327,6 +327,23 @@ try {
       [project, updated.id]
     )
   }
+  await rm(join(directory, "agents/foo/instructions.md"))
+  await cli([directory])
+  assert.equal(
+    (await db.query("SELECT status FROM build_agents WHERE id=$1", [agent]))
+      .rows[0].status,
+    "archived"
+  )
+  await writeFile(
+    join(directory, "agents/foo/instructions.md"),
+    "Use the company brain and deployed tools."
+  )
+  await cli([directory])
+  const restoredAgent = await db.query(
+    "SELECT a.id,a.status FROM project_deployed_agents d JOIN build_agents a ON a.id=d.agent_id WHERE d.project_id=$1 AND d.slug='foo'",
+    [project]
+  )
+  assert.deepEqual(restoredAgent.rows[0], { id: agent, status: "active" })
   const foreign = crypto.randomUUID()
   await db.query(
     "INSERT INTO project(id,organization_id,name,slug) VALUES($1,$2,'Second',$1)",

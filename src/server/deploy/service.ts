@@ -221,7 +221,9 @@ export async function deployProject(
         instructions: definition.instructions,
       })
       let agent = mapping.rows[0]
-        ? await getAgent(scoped, mapping.rows[0].agent_id)
+        ? await getAgent(scoped, mapping.rows[0].agent_id, {
+            includeArchived: true,
+          })
         : await createAgent(scoped, {
             name: definition.slug,
             slug: definition.slug,
