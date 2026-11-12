@@ -55,7 +55,6 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  StatusPill,
 } from "@/components/tracer/primitives"
 import { JsonCode } from "@/components/tracer/json-code"
 import { useRemote } from "@/components/tracer/hooks"
@@ -92,13 +91,6 @@ async function read<T>(
     )
   return (await response.json()).data
 }
-const date = (value: string) =>
-  new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
 const environmentLabel = (value: DeploymentEnvironment) =>
   value === "preview" ? "Preview" : "Production"
 function openRow(event: KeyboardEvent<HTMLElement>) {
@@ -439,20 +431,6 @@ function DeploymentContents({
             ) : undefined,
             showExport: false,
           }}
-          toolbar={
-            current && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3 text-xs text-foreground-muted">
-                <span className="font-medium text-foreground">
-                  {environmentLabel(current.environment)}
-                </span>
-                <StatusPill
-                  status={detail.data!.active ? "active" : "historical"}
-                />
-                <span>Published {date(current.createdAt)}</span>
-                {current.postgres && <span>PostgreSQL</span>}
-              </div>
-            )
-          }
         >
           <TabsContent
             value="tools"
