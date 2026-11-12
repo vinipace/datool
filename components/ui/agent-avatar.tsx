@@ -48,6 +48,19 @@ const shapes: Partial<Record<AgentAppearance["avatarStyle"], ReactNode>> = {
   ),
 }
 
+// Fit each silhouette closely, retaining a small margin around its outer points.
+const shapeViewBoxes: Partial<Record<AgentAppearance["avatarStyle"], string>> =
+  {
+    star: "2 2 96 96",
+    cube: "10 9 82 82",
+    circle: "8 8 84 84",
+    flower: "1 1 98 98",
+    diamond: "4 4 92 92",
+    arch: "8 9 84 84",
+    triangle: "3 2 94 94",
+    heart: "6 6 88 88",
+  }
+
 type AvatarAppearance = Partial<
   Pick<AgentAppearance, "avatarUrl" | "avatarStyle" | "avatarColor">
 >
@@ -72,7 +85,8 @@ export function AgentAvatar({
       aria-hidden
       data-slot="agent-avatar"
       className={cn(
-        "relative inline-flex size-6 shrink-0 overflow-hidden rounded-md",
+        "relative inline-flex size-6 shrink-0 rounded-md",
+        shape && !image ? "overflow-visible" : "overflow-hidden",
         className
       )}
     >
@@ -87,7 +101,7 @@ export function AgentAvatar({
       >
         {shape ? (
           <svg
-            viewBox="0 0 100 100"
+            viewBox={shapeViewBoxes[expression]}
             className={cn("size-full", color.artwork)}
             aria-hidden
           >
@@ -199,7 +213,10 @@ export function AgentAvatarPicker({
                 key={style}
                 type="button"
                 variant="outline"
-                className="size-12 rounded-xl p-1 aria-pressed:ring-2 aria-pressed:ring-ring"
+                className={cn(
+                  "size-12 rounded-xl aria-pressed:ring-2 aria-pressed:ring-ring",
+                  shapes[style] ? "p-0" : "p-1"
+                )}
                 aria-label={`${style[0].toUpperCase()}${style.slice(1)} avatar`}
                 title={`${style[0].toUpperCase()}${style.slice(1)}`}
                 aria-pressed={
