@@ -1,4 +1,5 @@
 import Ajv from "ajv"
+import { TracerError } from "../tracer/errors"
 import {
   agentSandboxSchema,
   type AgentSandboxProvider,
@@ -87,7 +88,7 @@ export async function executeDeploymentModule(
   options: {
     code: string
     sandbox: AgentSandboxProvider
-    mode: "describe" | "tool" | "source"
+    mode: "describe" | "tool" | "source" | "schema"
     name?: string
     input?: unknown
     deploymentId?: string
@@ -131,6 +132,9 @@ export async function executeDeploymentModule(
       "Deployed code failed, timed out or exceeded its output limit."
     )
   const output = JSON.parse(result.stdout)
-  if (output.error) throw new Error(String(output.error))
+  if (output.error)
+    throw new TracerError("VALIDATION_ERROR", String(output.error), {
+      details: { reason: "DEPLOYMENT_MODULE_FAILED" },
+    })
   return output.value as unknown
 }

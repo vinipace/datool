@@ -109,6 +109,37 @@ export async function appRequest<T>(
         let advice = ""
         let category: DatoolRequestError["category"] = "request"
         switch (response.status) {
+          case 400: {
+            const reason = error?.error?.details?.reason
+            if (reason === "PROJECT_DATABASE_DESTRUCTIVE_CHANGE")
+              advice =
+                " Automatic migrations cannot remove or change existing database definitions. Use an additive migration."
+            if (reason === "PROJECT_DATABASE_NOT_CONFIGURED")
+              advice =
+                " Configure DATOOL_PROJECT_DATABASE_ADMIN_URL on the server to provision project PostgreSQL databases."
+            if (reason === "DEPLOYMENT_MODULE_FAILED")
+              advice =
+                " A deployed module failed during inspection, schema evaluation or source collection."
+            if (reason === "PROJECT_DATABASE_COMMIT_UNKNOWN")
+              advice =
+                " The migration commit was not confirmed. Run deploy --plan to inspect applied history before retrying."
+            if (reason === "PROJECT_DATABASE_MIGRATION_FAILED") {
+              const state = error?.error?.details?.sqlState
+              const known = [
+                "23502",
+                "23503",
+                "23505",
+                "23514",
+                "42501",
+                "55P03",
+                "42601",
+              ].includes(state)
+                ? ` (${state})`
+                : ""
+              advice = ` PostgreSQL migration failed and rolled back${known}. Check required-column defaults, constraints and database permissions.`
+            }
+            break
+          }
           case 401:
             advice =
               " Authentication failed: credential is invalid, expired, or revoked."

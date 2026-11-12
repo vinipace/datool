@@ -1,3 +1,4 @@
+import { verifyProjectPostgres } from "./project-postgres"
 import { createServer } from "node:http"
 import assert from "node:assert/strict"
 import {
@@ -402,6 +403,7 @@ try {
         bundle,
         expectedDeploymentId: null,
       })
+      assert.ok("id" in published)
       await invokeDeploymentTool(cloud, published.id, "records", {
         mode: "write",
       })
@@ -434,6 +436,14 @@ try {
       await storage.close()
     }
   }
+  await verifyProjectPostgres({
+    directory,
+    origin,
+    headers,
+    db,
+    organization,
+    cli,
+  })
   await symlink(
     join(directory, "sources/company.md"),
     join(directory, "tools/linked.ts")

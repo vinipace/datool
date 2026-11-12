@@ -5,7 +5,7 @@ description: Publish managed agents, project MCP tools, persistent data and comp
 
 Deploy the same folder from a laptop or CI. Datool hosts the MCP endpoint and executes the JavaScript in the organization's sandbox provider. You do not need a Next.js app, an HTTP server or a listener running on your laptop.
 
-This feature requires a server with migration `0091_project_deployments.sql` and a CLI built from the same release. It is not available in the previously published CLI 0.4.1.
+This feature requires a server with migrations through `0092_project_postgres.sql` and a CLI built from the same release. It is not available in the previously published CLI 0.4.1.
 
 ## Connect and deploy
 
@@ -31,6 +31,9 @@ company/
   tools/search_projects.ts
   sources/fetch_sources.ts
   sources/company.md
+  schema.ts                   # optional Drizzle PostgreSQL schema
+  datool.generated.ts         # generated typed tool/source helpers
+  migrations/                 # generated SQL after deployment
   datool.json                 # optional provider selection
   package.json               # optional dependencies
 ```
@@ -66,7 +69,7 @@ Agents from `agents/NAME/instructions.md` appear in Datool with the project's to
 
 ## Persistent database and bucket
 
-The database is a project-scoped document store backed by the installation's PostgreSQL database. It survives code changes and server restarts. It does not expose arbitrary SQL or the installation database connection.
+`ctx.db` is a project-scoped document store backed by the installation's PostgreSQL database. It survives code changes and server restarts. It does not expose arbitrary SQL or the installation database connection.
 
 ```ts
 await ctx.db.set('projects', 'alpha', { name: 'Alpha', status: 'active' }, 0)
@@ -93,6 +96,67 @@ Local bucket bytes live under `DATOOL_DATA_DIR/project-buckets/<project-hash>/`,
 ```
 
 Omit `datool.json` to use the organization's preferred supported sandbox and a local bucket. A project's bucket location is fixed by its first deployment; redeployment cannot silently move existing data. A referenced storage connection cannot be removed. Old object generations are retained after overwrites; no automatic retention cleanup is provided yet. Database documents and bucket objects are shared by tools in the same project and isolated from other projects, including projects in the same organization.
+
+## Typed PostgreSQL with Drizzle
+
+Add `schema.ts` at the folder root and install `drizzle-orm` and the matching `@datool/sdk` release inside that folder. Use standard Drizzle PostgreSQL declarations:
+
+```ts
+// schema.ts
+import { pgTable, integer, text, timestamp } from 'drizzle-orm/pg-core'
+
+export const projects = pgTable('projects', {
+  id: integer().generatedAlwaysAsIdentity().primaryKey(),
+  name: text().notNull(),
+  status: text().notNull().default('active'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+```
+
+The CLI generates `datool.generated.ts` before typechecking. Import its helper in tools to infer the database, table, column, insert and result types from your schema:
+
+```ts
+// tools/search_projects.ts
+import { eq } from 'drizzle-orm'
+import { projects } from '../schema'
+import { defineTool } from '../datool.generated'
+
+export default defineTool({
+  description: 'Search projects by status.',
+  inputSchema: {
+    type: 'object',
+    properties: { status: { type: 'string' } },
+    required: ['status'],
+    additionalProperties: false,
+  },
+  async execute(input: { status: string }, ctx) {
+    return ctx.sql.select().from(projects)
+      .where(eq(projects.status, input.status)).limit(20)
+  },
+})
+```
+
+`ctx.sql` is a Drizzle PostgreSQL proxy client. `ctx.db` remains the document store. Sources can import `defineSource` from the same generated file; their `ctx.sql` is typed identically but uses a read-only database role. TypeScript errors stop deployment before upload. `schema.ts` is evaluated only in the provider sandbox, with no host credentials or direct network access.
+
+```sh
+datool deploy ./company --dry-run  # generate types, typecheck and bundle locally
+datool deploy ./company --plan     # inspect schema and preview generated SQL
+datool deploy ./company            # apply migrations, then publish tools and agents
+```
+
+`--plan` requires the deployment API key and a configured sandbox. It does not provision a database or apply migrations. Drizzle Kit compares the new schema with the last applied snapshot. Deployment applies new tables, columns, indexes and constraints, saves migration history transactionally in the project database, and writes the applied SQL to `migrations/<schema-hash>.sql` locally. Commit those files for review and auditing; editing them does not alter future deployments. The server owns migration history. Identical schemas produce no new migration.
+
+Automatic migrations are additive. Drops, renames and changes to existing definitions are rejected to preserve data and older pinned tool revisions. A new required column needs a suitable default when existing rows are present. A failed migration rolls back its SQL and history. If the commit acknowledgement is lost, run `--plan` before retrying; the recorded history prevents replay of committed SQL. Migrations commit before source collectors run, so collectors can query the new schema. If later collection or publication fails, the previous deployment stays active and the additive migration remains applied; retrying does not reapply it and exports its SQL locally after publication succeeds. Keep `schema.ts` on subsequent deployments.
+
+This version supports public-schema tables, enums, indexes, keys, checks and Drizzle relations. Custom schemas, views, standalone sequences, roles and policies are not supported. Each query is its own operation; Drizzle proxy transactions are not supported. Queries have a 15-second statement limit, 1,000-row/1-MiB response limit and 256-KiB parameter limit. Use explicit limits and pagination. The transport requires JSON-compatible values; serialize bigint tool outputs before returning them. PostgreSQL does not impose a database size quota through this feature.
+
+### Self-hosted PostgreSQL setup
+
+Set the server-only `DATOOL_PROJECT_DATABASE_ADMIN_URL` to a PostgreSQL administrator connection that can create databases and login roles, and assign ownership to those roles. Apply migration 0092 and restart the web service. Docker Compose passes this optional variable through. An empty value disables provisioning; existing provisioned databases use their saved connections.
+
+Each project gets a separate database created from `template0`, an owner used only for migrations, a tool role restricted to data access, and a read-only source role. Runtime code receives an RPC client; database URLs stay encrypted on the host with the provider credential encryption key. The administrator URL is not the runtime connection. Public database access, runtime DDL and migration-history access are revoked.
+
+Back up the project databases and roles as well as Datool's database and encryption key. The supplied PostgreSQL Docker volume persists all databases. Existing databases are not automatically dropped or re-provisioned when settings change. Interrupted provisioning can retain an unbound database and roles; an operator should check bindings before cleaning those resources up. Projects with a provisioned database cannot be deleted until an operator deliberately retires that database and its `project_postgres` binding. Do not grant these project roles membership in application or administrative roles.
 
 ## Sandbox and fetching
 

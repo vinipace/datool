@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
   ...(process.env.DATOOL_DIST_DIR
     ? { distDir: process.env.DATOOL_DIST_DIR }
     : {}),
-  serverExternalPackages: ["autoevals", "esbuild", "playwright"],
+  serverExternalPackages: ["autoevals", "esbuild", "playwright", "drizzle-kit"],
   outputFileTracingIncludes: {
     "/api/mcp/trace-explorer": ["./public/mcp-apps/trace-explorer.html"],
     "/api/**": [

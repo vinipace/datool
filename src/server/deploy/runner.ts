@@ -9,6 +9,7 @@ const rpc = (op, input) => new Promise((resolve, reject) => {
   const id = ++nextId; pending.set(id, { resolve, reject }); send({ type: 'rpc', id, request: { op, input } });
 });
 const context = {
+  query: (sql, params, method) => rpc('sql.query', { sql, params, method }),
   db: {
     get: (collection, key) => rpc('db.get', { collection, key }),
     set: (collection, key, value, expectedRevision) => rpc('db.set', { collection, key, value, expectedRevision }),
@@ -31,6 +32,7 @@ const context = {
 for (const method of ['log', 'info', 'warn', 'error', 'debug']) console[method] = () => {};
 async function run(packet) {
   const module = await import('data:text/javascript;base64,' + Buffer.from(packet.code).toString('base64'));
+  if (packet.mode === 'schema') return module.describeDatabase();
   if (packet.mode === 'describe') {
     const tools = Object.entries(module.tools).map(([name, tool]) => {
       if (typeof tool?.execute !== 'function') throw new Error('Tool ' + name + ' needs an execute function.');

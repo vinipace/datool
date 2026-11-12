@@ -1,5 +1,13 @@
+import { drizzle, type PgRemoteDatabase } from "drizzle-orm/pg-proxy"
+
 /** Runtime capabilities injected into deployed tools and source collectors. */
 export type ProjectContext = {
+  /** Transport used by the generated typed PostgreSQL client. */
+  query(
+    sql: string,
+    params: unknown[],
+    method: "all" | "execute"
+  ): Promise<{ rows: unknown[] }>
   db: {
     get<T = unknown>(
       collection: string,
@@ -85,4 +93,34 @@ export type ProjectSourceCollector = (
 ) => ProjectSource[] | Promise<ProjectSource[]>
 export function defineTool<Input, Output>(tool: ProjectTool<Input, Output>) {
   return tool
+}
+
+/** Used by datool.generated.ts; schema imports retain Drizzle's inferred types. */
+export function createProject<Schema extends Record<string, unknown>>(
+  schema: Schema
+) {
+  type Context = ProjectContext & { sql: PgRemoteDatabase<Schema> }
+  const context = (ctx: ProjectContext): Context => ({
+    ...ctx,
+    sql: drizzle((query, params, method) => ctx.query(query, params, method), {
+      schema,
+    }),
+  })
+  return {
+    defineTool<Input, Output>(
+      tool: Omit<ProjectTool<Input, Output>, "execute"> & {
+        execute(input: Input, ctx: Context): Output | Promise<Output>
+      }
+    ): ProjectTool<Input, Output> {
+      return {
+        ...tool,
+        execute: (input, ctx) => tool.execute(input, context(ctx)),
+      }
+    },
+    defineSource(
+      collector: (ctx: Context) => ProjectSource[] | Promise<ProjectSource[]>
+    ): ProjectSourceCollector {
+      return (ctx) => collector(context(ctx))
+    },
+  }
 }

@@ -18,7 +18,7 @@ import { prepareConnectionWorker, watchConnection } from "./connect-watch"
 const usage = `Datool CLI
 
   datool connect [config.ts|handler.ts|http-url] [--mode workflow|agent] [--name name] [--watch|--no-watch]
-  datool deploy [folder] [--dry-run] | deploy status
+  datool deploy [folder] [--dry-run | --plan] | deploy status
   datool apps sync <config.ts>
   datool datasets|scorers push <file.json> [--dry-run]
   datool datasets|scorers pull <key> --out <file.json> [--replace]

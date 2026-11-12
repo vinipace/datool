@@ -24,6 +24,10 @@ export const deploymentBundle = z
     version: z.literal(1),
     config: deploymentConfig,
     code: z.string().max(2 * 1024 * 1024),
+    database: z
+      .object({ code: z.string().max(2 * 1024 * 1024) })
+      .strict()
+      .optional(),
     tools: z.array(deploymentName).max(64),
     collectors: z.array(deploymentName).max(20),
     agents: z
@@ -88,6 +92,7 @@ export const deployInput = z
   .object({
     bundle: deploymentBundle,
     expectedDeploymentId: z.string().uuid().nullable(),
+    planOnly: z.boolean().optional(),
   })
   .strict()
 export const brainSearchSchema = z

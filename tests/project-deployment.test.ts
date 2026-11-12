@@ -25,6 +25,8 @@ test("CLI deployment publishes atomic project MCP revisions with isolated durabl
         env: {
           ...process.env,
           DATABASE_URL: target.databaseUrl,
+          DATOOL_PROJECT_DATABASE_ADMIN_URL:
+            process.env.DATOOL_TEST_DATABASE_URL,
           TEST_PROJECT: target.projectId,
           TEST_ORGANIZATION: target.organizationId,
           TEST_OWNER: target.ownerId,
@@ -40,7 +42,7 @@ test("CLI deployment publishes atomic project MCP revisions with isolated durabl
           DATOOL_HOST_SECRET: "must-not-reach-sandbox",
           NEXT_TELEMETRY_DISABLED: "1",
         },
-        timeout: 240_000,
+        timeout: 480_000,
         maxBuffer: 1024 * 1024,
       }
     )
@@ -51,7 +53,7 @@ test("CLI deployment publishes atomic project MCP revisions with isolated durabl
     await target.close()
     await rm(directory, { recursive: true, force: true })
   }
-}, 300_000)
+}, 540_000)
 
 // The Eve bridge is a distinct execution boundary from the MCP HTTP transport.
 test("deployed agent actions execute their pinned code through Eve", async () => {

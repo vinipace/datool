@@ -18,6 +18,7 @@ import {
   type AgentSandboxProvider,
 } from "@/src/lib/build/sandbox"
 import { brainSearchSchema } from "@/src/lib/deploy/contracts"
+import { queryProjectDatabase } from "./postgres"
 import { TracerError } from "../tracer/errors"
 
 const key = z.string().min(1).max(240)
@@ -111,6 +112,7 @@ export function deploymentCapabilities(
     if (
       options.readOnly &&
       ![
+        "sql.query",
         "db.get",
         "db.list",
         "bucket.get",
@@ -121,6 +123,13 @@ export function deploymentCapabilities(
     )
       throw new Error(
         "Source collectors and module inspection cannot modify project resources."
+      )
+    if (op === "sql.query")
+      return queryProjectDatabase(
+        context,
+        input,
+        Boolean(options.readOnly),
+        options.signal
       )
     if (op === "db.get") {
       const value = documentKey.parse(input)

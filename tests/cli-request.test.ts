@@ -83,6 +83,27 @@ test("CLI reports only recognized permission details and never upstream secret t
     expect((error as Error).message).not.toContain("secret-key")
     return true
   })
+  for (const sqlState of ["23502", "secret-key"]) {
+    globalThis.fetch = async () =>
+      Response.json(
+        {
+          error: {
+            message: "secret-key",
+            details: { reason: "PROJECT_DATABASE_MIGRATION_FAILED", sqlState },
+          },
+        },
+        { status: 400 }
+      )
+    await rejects(
+      appRequest("http://localhost", "/api/deployments", {}),
+      (error) => {
+        expect(String(error)).toContain("migration failed and rolled back")
+        expect(String(error)).not.toContain("secret-key")
+        if (sqlState === "23502") expect(String(error)).toContain("23502")
+        return true
+      }
+    )
+  }
 })
 
 test("read-only requests survive throttling and retain sanitized cooldown details", async () => {

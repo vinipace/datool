@@ -1,6 +1,14 @@
-import { readdir, readFile, lstat, realpath } from "node:fs/promises"
+import {
+  readdir,
+  readFile,
+  lstat,
+  realpath,
+  mkdir,
+  writeFile,
+} from "node:fs/promises"
 import { resolve, relative, sep, extname } from "node:path"
-import { build } from "esbuild"
+import { prepareDatabase } from "./deploy-database"
+import { build, type BuildOptions } from "esbuild"
 import { appRequest } from "./request"
 import {
   deploymentBundle,
@@ -65,63 +73,61 @@ export async function packDeployment(
   )
   const name = (p: string) => p.split("/").at(-1)!.slice(0, -extname(p).length)
   const entries = [...tools, ...collectors]
-  const bundled = entries.length
-    ? await build({
-        stdin: {
-          contents:
-            entries
-              .map(
-                (p, i) => `import module${i} from ${JSON.stringify("./" + p)};`
-              )
-              .join("\n") +
-            `\nexport const tools = {${tools.map((p, i) => `${JSON.stringify(name(p))}:module${i}`).join(",")}};` +
-            `\nexport const sources = {${collectors.map((p, i) => `${JSON.stringify(name(p))}:module${tools.length + i}`).join(",")}};`,
-          resolveDir: root,
-          sourcefile: "datool-entry.ts",
-        },
-        banner: {
-          js: 'import { createRequire as __datoolCreateRequire } from "node:module";const require = __datoolCreateRequire("/workspace/deployment.cjs");',
-        },
-        bundle: true,
-        write: false,
-        platform: "node",
-        format: "esm",
-        target: "node22",
-        sourcemap: false,
-        minify: true,
-        plugins: [
-          {
-            name: "deployment-boundary",
-            setup(plugin) {
-              plugin.onLoad({ filter: /.*/ }, async (args) => {
-                const actual = await realpath(args.path)
-                const path = relative(root, actual)
-                if (
-                  path.startsWith(`..${sep}`) ||
-                  path === ".." ||
-                  resolve(root, path) !== actual ||
-                  path
-                    .split(sep)
-                    .some(
-                      (p, i, parts) =>
-                        p.startsWith(".") &&
-                        !(
-                          i > 0 &&
-                          parts[i - 1] === "node_modules" &&
-                          [".bun", ".pnpm"].includes(p)
-                        )
+  const buildOptions: BuildOptions = {
+    stdin: {
+      contents:
+        entries
+          .map((p, i) => `import module${i} from ${JSON.stringify("./" + p)};`)
+          .join("\n") +
+        `\nexport const tools = {${tools.map((p, i) => `${JSON.stringify(name(p))}:module${i}`).join(",")}};` +
+        `\nexport const sources = {${collectors.map((p, i) => `${JSON.stringify(name(p))}:module${tools.length + i}`).join(",")}};`,
+      resolveDir: root,
+      sourcefile: "datool-entry.ts",
+    },
+    banner: {
+      js: 'import { createRequire as __datoolCreateRequire } from "node:module";const require = __datoolCreateRequire("/workspace/deployment.cjs");',
+    },
+    bundle: true,
+    write: false,
+    platform: "node",
+    format: "esm",
+    target: "node22",
+    sourcemap: false,
+    minify: true,
+    plugins: [
+      {
+        name: "deployment-boundary",
+        setup(plugin) {
+          plugin.onLoad({ filter: /.*/ }, async (args) => {
+            const actual = await realpath(args.path)
+            const path = relative(root, actual)
+            if (
+              path.startsWith(`..${sep}`) ||
+              path === ".." ||
+              resolve(root, path) !== actual ||
+              path
+                .split(sep)
+                .some(
+                  (p, i, parts) =>
+                    p.startsWith(".") &&
+                    !(
+                      i > 0 &&
+                      parts[i - 1] === "node_modules" &&
+                      [".bun", ".pnpm"].includes(p)
                     )
                 )
-                  throw new Error(
-                    "Deploy imports must stay inside the folder and cannot include hidden files."
-                  )
-                return undefined
-              })
-            },
-          },
-        ],
-      })
-    : null
+            )
+              throw new Error(
+                "Deploy imports must stay inside the folder and cannot include hidden files."
+              )
+            return undefined
+          })
+        },
+      },
+    ],
+  }
+  const database = await prepareDatabase(root, entries, buildOptions)
+  const bundled = entries.length ? await build(buildOptions) : null
   const document = async (path: string) => ({
     path,
     title:
@@ -133,8 +139,9 @@ export async function packDeployment(
     version: 1,
     config,
     code:
-      bundled?.outputFiles[0].text ??
+      bundled?.outputFiles?.[0].text ??
       "export const tools={};export const sources={};",
+    database,
     tools: tools.map(name),
     collectors: collectors.map(name),
     agents: await Promise.all(
@@ -188,18 +195,19 @@ export async function deployCommand(args: string[]) {
     return
   }
   const unknown = args.filter(
-    (arg) => arg.startsWith("-") && arg !== "--dry-run"
+    (arg) => arg.startsWith("-") && !["--dry-run", "--plan"].includes(arg)
   )
   if (unknown.length) throw new Error(`Unknown deploy option: ${unknown[0]}`)
   const paths = args.filter((arg) => !arg.startsWith("-"))
   if (paths.length > 1)
-    throw new Error("Usage: datool deploy [folder] [--dry-run]")
+    throw new Error("Usage: datool deploy [folder] [--dry-run | --plan]")
   const bundle = await packDeployment(paths[0] ?? ".")
   if (args.includes("--dry-run")) {
     console.info(
       JSON.stringify(
         {
           dryRun: true,
+          postgres: Boolean(bundle.database),
           agents: bundle.agents.map((a) => a.slug),
           tools: bundle.tools,
           sources: bundle.sources.map((s) => s.path),
@@ -217,11 +225,53 @@ export async function deployCommand(args: string[]) {
     origin,
     "/api/deployments"
   )
-  const data = await appRequest(
+  const data = await appRequest<{
+    database?: {
+      hash: string
+      statements: string[]
+      migration?: { hash: string; statements: string[] }
+    }
+  }>(
     origin,
     "/api/deployments",
-    { bundle, expectedDeploymentId: current?.id ?? null },
+    {
+      bundle,
+      expectedDeploymentId: current?.id ?? null,
+      planOnly: args.includes("--plan"),
+    },
     { timeoutMs: 240_000 }
   )
+  const migration = data.database?.migration
+  if (migration?.statements.length && !args.includes("--plan")) {
+    if (
+      !/^[a-f0-9]{64}$/.test(migration.hash) ||
+      !migration.statements.every((statement) => typeof statement === "string")
+    )
+      throw new Error(
+        "Deployment completed, but the server returned an invalid migration artifact."
+      )
+    const directory = resolve(paths[0] ?? ".", "migrations")
+    if ((await lstat(directory).catch(() => null))?.isSymbolicLink())
+      throw new Error(
+        "Deployment completed; migrations cannot be written through a symlink."
+      )
+    await mkdir(directory, { recursive: true })
+    const file = resolve(directory, `${migration.hash}.sql`)
+    if ((await lstat(file).catch(() => null))?.isSymbolicLink())
+      throw new Error(
+        "Deployment completed; the migration file cannot be a symlink."
+      )
+    const contents =
+      migration.statements.join("\n--> statement-breakpoint\n") + "\n"
+    const existing = await readFile(file, "utf8").catch((error) => {
+      if (error.code === "ENOENT") return null
+      throw error
+    })
+    if (existing !== null && existing !== contents)
+      throw new Error(
+        "Deployment completed; the local migration file differs from the applied SQL. Preserve it and use a clean folder to export the applied migration."
+      )
+    if (existing === null) await writeFile(file, contents, { flag: "wx" })
+  }
   console.info(JSON.stringify(data, null, 2))
 }

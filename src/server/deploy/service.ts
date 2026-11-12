@@ -33,6 +33,11 @@ import {
   validateToolInput,
   validateDeploymentSchema,
 } from "./execute"
+import {
+  withDeploymentLock,
+  planProjectDatabase,
+  migrateProjectDatabase,
+} from "./postgres"
 import { searchBrain } from "./capabilities"
 
 type DeploymentRow = {
@@ -79,6 +84,15 @@ export function deploymentSummary(row: DeploymentRow) {
 }
 
 export async function deployProject(
+  context: BuildContext,
+  raw: unknown,
+  signal?: AbortSignal
+) {
+  await ready(context)
+  return withDeploymentLock(context, () => prepareProject(context, raw, signal))
+}
+
+async function prepareProject(
   context: BuildContext,
   raw: unknown,
   signal?: AbortSignal
@@ -148,6 +162,39 @@ export async function deployProject(
   )
     throw new Error("Bundled exports do not match the deployment manifest.")
   for (const tool of described.tools) validateDeploymentSchema(tool.inputSchema)
+  if (existing?.bundle_json.database && !bundle.database)
+    throw new Error(
+      "Keep schema.ts when redeploying a project with PostgreSQL."
+    )
+  const database = bundle.database
+    ? await planProjectDatabase(
+        scope,
+        await executeDeploymentModule(scope, {
+          code: bundle.database.code,
+          sandbox,
+          mode: "schema",
+          signal,
+        })
+      )
+    : undefined
+  if (input.planOnly)
+    return {
+      planOnly: true,
+      database: database
+        ? { hash: database.hash, statements: database.statements }
+        : undefined,
+    }
+  signal.throwIfAborted()
+  // Additive DDL commits independently before collectors can read the new schema.
+  // A failed publication can leave an applied, recorded migration; retries are idempotent.
+  if (database) await migrateProjectDatabase(scope, database, signal)
+  const databaseSummary = database
+    ? {
+        hash: database.hash,
+        statements: database.statements,
+        migration: database.migration,
+      }
+    : undefined
   const documents = [...bundle.sources]
   for (const name of bundle.collectors) {
     const output = await executeDeploymentModule(scope, {
@@ -200,7 +247,11 @@ export async function deployProject(
       )
     signal!.throwIfAborted()
     if (existing?.content_hash === contentHash)
-      return { ...deploymentSummary(existing), unchanged: true }
+      return {
+        ...deploymentSummary(existing),
+        database: databaseSummary,
+        unchanged: true,
+      }
     const inserted = await tx.execute<DeploymentRow>(
       sql`INSERT INTO project_deployments(id,project_id,content_hash,bundle_json,tools_json,sandbox_provider,created_by) VALUES(${id}::uuid,${scope.projectId},${contentHash},${JSON.stringify(savedBundle)}::jsonb,${JSON.stringify(tools)}::jsonb,${sandbox},${scope.actorId ?? null}) RETURNING *`
     )
@@ -315,7 +366,11 @@ export async function deployProject(
     await tx.execute(
       sql`INSERT INTO project_deployment_state(project_id,organization_id,active_id,storage_connection_id) VALUES(${scope.projectId},${scope.organizationId},${id}::uuid,${bundle.config.storageConnectionId}::uuid) ON CONFLICT(project_id) DO UPDATE SET active_id=excluded.active_id`
     )
-    return { ...deploymentSummary(inserted.rows[0]), unchanged: false }
+    return {
+      ...deploymentSummary(inserted.rows[0]),
+      database: databaseSummary,
+      unchanged: false,
+    }
   })
 }
 
