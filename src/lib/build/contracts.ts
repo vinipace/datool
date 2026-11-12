@@ -36,6 +36,14 @@ export const agentChannelOverrideSchema = z.object({
 export type AgentChannelOverride = z.infer<typeof agentChannelOverrideSchema>
 
 export const agentAvatarStyleSchema = z.enum([
+  "star",
+  "cube",
+  "circle",
+  "flower",
+  "diamond",
+  "arch",
+  "triangle",
+  "heart",
   "friendly",
   "happy",
   "wink",
@@ -48,6 +56,14 @@ export const agentAvatarColorSchema = z.enum([
   "green",
   "rose",
   "yellow",
+  "coral",
+  "lime",
+  "cyan",
+  "teal",
+  "cobalt",
+  "magenta",
+  "scarlet",
+  "midnight",
 ])
 
 export const agentAppearanceSchema = z.object({

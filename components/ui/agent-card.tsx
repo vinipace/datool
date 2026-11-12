@@ -5,14 +5,7 @@ import { cn } from "@/lib/utils"
 import { AgentAvatar } from "./agent-avatar"
 import { Card, CardAction } from "./card"
 
-const previewColors = {
-  orange: "bg-avatar-orange/20 [&_[data-bubble]]:bg-avatar-orange",
-  violet: "bg-avatar-violet/20 [&_[data-bubble]]:bg-avatar-violet",
-  blue: "bg-avatar-blue/20 [&_[data-bubble]]:bg-avatar-blue",
-  green: "bg-avatar-green/20 [&_[data-bubble]]:bg-avatar-green",
-  rose: "bg-avatar-rose/20 [&_[data-bubble]]:bg-avatar-rose",
-  yellow: "bg-avatar-yellow/20 [&_[data-bubble]]:bg-avatar-yellow",
-} satisfies Record<AgentAppearance["avatarColor"], string>
+import { agentAvatarColors } from "./agent-avatar-colors"
 
 export function AgentCard({
   name,
@@ -35,7 +28,7 @@ export function AgentCard({
             aria-hidden="true"
             className={cn(
               "flex h-32 items-end justify-center overflow-hidden px-5 pt-5",
-              previewColors[appearance.avatarColor]
+              agentAvatarColors[appearance.avatarColor].preview
             )}
           >
             <div className="h-full w-4/5 max-w-48 overflow-hidden rounded-t-xl border border-border bg-background shadow-sm transition-transform group-hover:translate-y-1 motion-reduce:transition-none">

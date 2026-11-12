@@ -218,7 +218,7 @@ jobs:
             bun run build:packages
             bun --no-env-file scripts/test.mjs --journeys-only
             bun --no-env-file test tests/build-agent-autosave.test.ts
-            bunx vitest run --project=storybook components/build/agents/agent-journey-editor.stories.tsx components/tracer/dataset-item-inspector.stories.tsx components/workspace/project-deployment-card.stories.tsx components/workspace/project-deployments-page.stories.tsx
+            bunx vitest run --project=storybook components/build/agents/agent-journey-editor.stories.tsx components/tracer/dataset-item-inspector.stories.tsx components/workspace/project-deployment-card.stories.tsx components/workspace/project-deployments-page.stories.tsx components/ui/agent-avatar.stories.tsx
       - run:
           name: Verify CLI project deployment and sandbox capabilities
           command: |
