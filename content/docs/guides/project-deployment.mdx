@@ -83,7 +83,7 @@ await ctx.bucket.delete('reports/latest.txt')
 
 `get` returns `null` for a missing record. `set` returns its revision. Omit `expectedRevision` for an atomic upsert, use `0` for insert-only, or pass the current revision for compare-and-set. `list` returns `items` and `nextCursor`; pass that cursor to continue. `where` matches JSON containment. Resource writes are individual operations: a later tool error does not roll back earlier writes. Tool calls are not automatically retried.
 
-Local bucket bytes live under `DATOOL_DATA_DIR/project-buckets/<project-hash>/`, with metadata in PostgreSQL. Back up both. Cloud bucket bytes use the configured prefix plus `project-buckets/<project-hash>/`. Configure cloud storage once in Organization settings, then select its connection in the folder:
+Local bucket bytes live under `DATOOL_DATA_DIR/project-buckets/<project-hash>/`, with metadata in PostgreSQL. Back up both. Web and Eve services must share this directory; the supplied Compose configuration mounts the same `datool-files` volume in both. For services on different hosts, use shared storage or a cloud bucket. Cloud bucket bytes use the configured prefix plus `project-buckets/<project-hash>/`. Configure cloud storage once in Organization settings, then select its connection in the folder:
 
 ```json
 {

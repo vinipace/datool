@@ -121,9 +121,9 @@ docker compose up -d
 
 `down` preserves data. **`down -v` deletes the installation's volumes.** Back up
 PostgreSQL and the files volume, and protect the configuration secrets. Redis
-AOF holds queued work; preserve it through restarts. App and worker share the
+AOF holds queued work; preserve it through restarts. App, workers and Eve share the
 files volume. For upgrades, take a database backup, review migrations, rebuild,
-run `docker compose run --rm migrate`, then recreate app and worker with
+run `docker compose run --rm migrate`, then recreate app, workers and Eve with
 `docker compose up -d`. Do not assume application rollback reverses migrations.
 
 ## Code scorer sandboxes

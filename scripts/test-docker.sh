@@ -68,7 +68,7 @@ docker run --rm --network "container:$prefix-db" \
   --mount "type=bind,source=$PWD/scripts/test.mjs,target=/app/scripts/test.mjs,readonly" \
   --mount "type=bind,source=$PWD/vitest.agent-journeys.config.mts,target=/app/vitest.agent-journeys.config.mts,readonly" \
   "$image" bun --no-env-file scripts/test.mjs --journeys-only
-docker run -d --name "$prefix-eve" --network-alias eve "${environment[@]}" "$image" bun run eve:start >/dev/null
+docker run -d --name "$prefix-eve" --network-alias eve "${environment[@]}" -v "$prefix-data:/app/.data" "$image" bun run eve:start >/dev/null
 docker run -d --name "$prefix-web" "${environment[@]}" -v "$prefix-data:/app/.data" "$image" >/dev/null
 docker run -d --name "$prefix-worker" "${environment[@]}" "$image" bun run worker:ingestion >/dev/null
 docker run -d --name "$prefix-buildworker" "${environment[@]}" "$image" bun run worker:build >/dev/null
@@ -183,6 +183,8 @@ docker exec "$prefix-web" node -e '
  if(process.getuid()===0) throw new Error("Runtime must not be root");
  for(const path of [".env.local",".env",".git","artifacts",".next/cache/turbopack",".next/cache/webpack"]) if(fs.existsSync(path)) throw new Error("Unexpected image file: "+path);
  fs.writeFileSync("/app/.data/docker-test-marker","persisted");'
+docker exec "$prefix-eve" node -e 'if(require("node:fs").readFileSync("/app/.data/docker-test-marker","utf8")!=="persisted") process.exit(1)'
 docker restart "$prefix-web" >/dev/null
 docker exec "$prefix-web" node -e 'if(require("node:fs").readFileSync("/app/.data/docker-test-marker","utf8")!=="persisted") process.exit(1)'
+docker exec "$prefix-eve" node -e 'if(require("node:fs").readFileSync("/app/.data/docker-test-marker","utf8")!=="persisted") process.exit(1)'
 echo "Production image passed: application and CMS migrations, repeatable CMS seed, public CMS content, HTTPS/auth rejection, v1 APIs, unconfigured sandbox fails closed, SDK -> worker -> PostgreSQL, Build worker knowledge indexing, non-root runtime, persistent files."

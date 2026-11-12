@@ -88,6 +88,7 @@ compose exec -T app node -e '
  for(const path of [".env",".env.local",".git","artifacts"]) if(fs.existsSync(path)) throw new Error("Unexpected image file: "+path);
  fs.writeFileSync("/app/.data/self-hosting-test-marker","persisted");'
 compose exec -T worker node -e 'if(require("node:fs").readFileSync("/app/.data/self-hosting-test-marker","utf8")!=="persisted") process.exit(1)'
+compose exec -T eve node -e 'if(require("node:fs").readFileSync("/app/.data/self-hosting-test-marker","utf8")!=="persisted") process.exit(1)'
 # Explicit opt-in: the same image now gets access to the sandbox daemon.
 sandbox up -d --no-build --wait --wait-timeout 180
 run_browser sandbox
@@ -97,6 +98,7 @@ sandbox up -d --no-build --wait --wait-timeout 180
 run_browser restart
 sandbox exec -T app node -e 'if(require("node:fs").readFileSync("/app/.data/self-hosting-test-marker","utf8")!=="persisted") process.exit(1)'
 sandbox exec -T worker node -e 'if(require("node:fs").readFileSync("/app/.data/self-hosting-test-marker","utf8")!=="persisted") process.exit(1)'
+sandbox exec -T eve node -e 'if(require("node:fs").readFileSync("/app/.data/self-hosting-test-marker","utf8")!=="persisted") process.exit(1)'
 # Turn CMS on at runtime using the same image and the same existing database.
 node --input-type=module -e '
  import fs from "node:fs"; import crypto from "node:crypto";

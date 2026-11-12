@@ -131,6 +131,8 @@ services:
     command: ["bun", "run", "eve:start"]
     restart: unless-stopped
     stop_grace_period: 60s
+    volumes:
+      - datool-files:/app/.data
     depends_on:
       migrate:
         condition: service_completed_successfully
