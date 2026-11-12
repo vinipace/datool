@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Gauge,
   MessagesSquare,
+  Route,
   ShieldCheck,
   Wallet,
   type LucideIcon,
@@ -14,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentConfiguration } from "@/src/lib/build/contracts"
+import { channelCatalog } from "@/components/build/shared/channel-catalog"
 
 type Guardrails = AgentConfiguration["guardrails"]
 
@@ -40,6 +42,84 @@ export function AgentGuardrails({
           and when a teammate needs to step in.
         </p>
       </div>
+
+      <GuardrailGroup
+        title="Jev check"
+        description="Route requests within your agent’s scope before it replies."
+        icon={Route}
+      >
+        <FormRow
+          label="Enable Jev check"
+          htmlFor="guardrail-jev"
+          description="Jev checks each request against this agent’s purpose and chooses to answer, redirect, or clarify. Redirect and clarify routes cannot use tools."
+          descriptionId="guardrail-jev-help"
+          controlWidth="auto"
+          variant="plain"
+        >
+          <Switch
+            id="guardrail-jev"
+            aria-describedby="guardrail-jev-help"
+            checked={guardrails.jevCheckEnabled}
+            onCheckedChange={(value) => update("jevCheckEnabled", value)}
+          />
+        </FormRow>
+        <div className="space-y-4 border-t border-border pt-5">
+          <div className="space-y-1">
+            <h4 className="text-sm font-medium">Channels</h4>
+            <p className="text-xs text-foreground-muted">
+              Turning off the main switch disables Jev on every channel.
+            </p>
+          </div>
+          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            {configuration.channelAllowlist.map((channel) => {
+              const entry = channelCatalog[channel]
+              const label = channel === "web" ? "Website chat" : entry.label
+              return (
+                <div
+                  key={channel}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <label
+                    htmlFor={`guardrail-jev-${channel}`}
+                    className="flex min-w-0 items-center gap-2 text-sm"
+                  >
+                    <entry.icon
+                      aria-hidden
+                      className="size-4 shrink-0 text-foreground-muted"
+                    />
+                    {label}
+                  </label>
+                  <Switch
+                    id={`guardrail-jev-${channel}`}
+                    aria-label={`Jev check for ${label}`}
+                    disabled={!guardrails.jevCheckEnabled}
+                    checked={
+                      guardrails.jevCheckEnabled &&
+                      configuration.channelOverrides[channel]
+                        ?.jevCheckEnabled !== false
+                    }
+                    onCheckedChange={(value) =>
+                      onChange({
+                        ...configuration,
+                        channelOverrides: {
+                          ...configuration.channelOverrides,
+                          [channel]: {
+                            ...configuration.channelOverrides[channel],
+                            enabled:
+                              configuration.channelOverrides[channel]
+                                ?.enabled ?? true,
+                            jevCheckEnabled: value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </GuardrailGroup>
 
       <GuardrailGroup
         title="Content & access"

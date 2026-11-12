@@ -6,6 +6,14 @@ import { callBuild } from "@/src/lib/build/client"
  * contract exposed to MCP and the CLI rather than growing page-only routes.
  */
 export const buildOperations = {
+  listScheduledTasks: "build_list_scheduled_tasks",
+  createScheduledTask: "build_create_scheduled_task",
+  updateScheduledTask: "build_update_scheduled_task",
+  deleteScheduledTask: "build_delete_scheduled_task",
+  runScheduledTask: "build_run_scheduled_task",
+  listScheduledTaskRuns: "build_list_scheduled_task_runs",
+  listDrives: "build_list_drives",
+  createDrive: "build_create_drive",
   listAgents: "build_list_agents",
   getAgent: "build_get_agent",
   createAgent: "build_create_agent",

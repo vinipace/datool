@@ -91,6 +91,8 @@ import { WidgetsTab } from "./widgets-tab"
 import { ActionWidgetPicker } from "./action-widget-picker"
 import { AgentPlayground } from "./agent-playground"
 import { AgentGuardrails } from "./agent-guardrails"
+import { AgentSandbox, AgentSandboxSettings } from "./agent-sandbox"
+import { AgentScheduledTasks } from "./agent-scheduled-tasks"
 import { SkillsTab } from "./skills-tab"
 import { IntegrationActionFields } from "./integration-action-fields"
 import { IntegrationsTab } from "./integrations-tab"
@@ -135,7 +137,7 @@ import {
   knowledgeSourceStatusMessage,
 } from "@/src/lib/build/knowledge"
 
-type AgentEditorProps = { agent?: ManagedAgent; initialTab?: string }
+type AgentEditorProps = { agent?: ManagedAgent; initialTab?: string; onReload?: () => void }
 
 const supportedChannelOptions: BuildChannel[] = ["web", "telegram"]
 
@@ -205,6 +207,7 @@ export function BuildAgentDetailPage({
       key={`${agentId}:${state.data.currentRevision}`}
       agent={state.data}
       initialTab={initialTab}
+      onReload={state.refresh}
     />
   )
 }
@@ -220,18 +223,19 @@ export function BuildAgentEditor(props: AgentEditorProps) {
 function BuildAgentEditorContent({
   agent,
   initialTab = agent ? "overview" : "settings",
+  onReload,
 }: AgentEditorProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const workspaceHref = useWorkspaceHref()
   const [store] = React.useState(() =>
-    createAgentAutosave(agent, (draft, saved, changes) =>
+    createAgentAutosave(agent, (draft, saved, changes, options) =>
       saved
         ? buildCall<ManagedAgent>(buildOperations.updateAgent, {
             agentId: saved.id,
             ...changes,
             expectedRevision: saved.currentRevision,
-            apply: true,
+            apply: options?.apply ?? !draft.configuration.testing.requirePassingJourneys,
           })
         : buildCall<ManagedAgent>(buildOperations.createAgent, draft)
     )
@@ -265,6 +269,7 @@ function BuildAgentEditorContent({
   )
   const visitedTabs = new Set([...visitedSections, active])
   const [actionsView, setActionsView] = React.useState("mine")
+  const [integrationAction, setIntegrationAction] = React.useState<ActionRecord | null>(null)
   const pending = saveState.status === "saving"
   const [error, setError] = React.useState<string | null>(null)
   const dirty = store.pending()
@@ -502,11 +507,14 @@ function BuildAgentEditorContent({
           ref={mainRef}
           role="region"
           aria-label="Agent editor"
-          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" || active === "contacts" ? "overflow-hidden" : "overflow-y-auto"}`}
+          className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" || active === "contacts" || active === "schedules" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
-          {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} /> : null}
+          {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} requireJourneys={draft.configuration.testing.requirePassingJourneys} onRequireJourneys={required => updateDraft("configuration", { ...draft.configuration, testing: { requirePassingJourneys: required } })} onPublish={() => store.apply()} pending={pending} unpublished={saved.currentRevision !== saved.appliedRevision} /> : null}
           {active === "overview" && saved ? (
             <AgentOverview key={saved.id} agentId={saved.id} />
+          ) : null}
+          {active === "schedules" && saved ? (
+            <AgentScheduledTasks agentId={saved.id} configuration={saved.appliedConfiguration ?? saved.configuration} />
           ) : null}
           {visitedTabs.has("settings") || (!saved && active === "overview") ? (
             <div
@@ -535,6 +543,11 @@ function BuildAgentEditorContent({
                   updateDraft("configuration", configuration)
                 }
               />
+            </div>
+          ) : null}
+          {visitedTabs.has("sandbox") && saved ? (
+            <div className="h-full" hidden={active !== "sandbox"} aria-hidden={active !== "sandbox"}>
+              <AgentSandbox active={active === "sandbox"} agentId={saved.id} configuration={draft.configuration} onChange={(configuration) => updateDraft("configuration", configuration)} />
             </div>
           ) : null}
           {visitedTabs.has("guardrails") ? (
@@ -575,23 +588,30 @@ function BuildAgentEditorContent({
               aria-hidden={active !== "integrations"}
             >
               <IntegrationsTab
+                agentId={saved.id}
                 active={active === "integrations"}
-                onOpenActions={() => selectTab("actions")}
+                onEditAction={setIntegrationAction}
+                onDefinitionDirty={store.definitionsChanged}
+                beforeToolChange={store.flush}
+                onCatalogChanged={onReload}
               />
             </div>
           ) : null}
-          {visitedTabs.has("actions") && saved ? (
+          {(visitedTabs.has("actions") || integrationAction) && saved ? (
             <div
               hidden={active !== "actions"}
               aria-hidden={active !== "actions"}
             >
               <ActionsTab
+                key={integrationAction?.id ?? "custom-actions"}
                 agentId={saved.id}
                 active={active === "actions"}
                 onManageIntegrations={() => selectTab("integrations")}
                 view={actionsView}
                 onViewChange={setActionsView}
                 onDefinitionDirty={store.definitionsChanged}
+                integrationAction={integrationAction}
+                onIntegrationActionClosed={() => setIntegrationAction(null)}
               />
             </div>
           ) : null}
@@ -721,6 +741,10 @@ function SettingsTab({
         </FormRow>
         <AgentAppearanceFields
           config={draft.configuration}
+          onChange={(configuration) => onChange("configuration", configuration)}
+        />
+        <AgentSandboxSettings
+          configuration={draft.configuration}
           onChange={(configuration) => onChange("configuration", configuration)}
         />
       </div>
@@ -1636,8 +1660,12 @@ function ActionsTab({
   onViewChange,
   view,
   onDefinitionDirty,
+  integrationAction,
+  onIntegrationActionClosed,
 }: {
   agentId: string
+  integrationAction?: ActionRecord | null
+  onIntegrationActionClosed?: () => void
   view: string
   onViewChange: (value: string) => void
   active: boolean
@@ -1654,10 +1682,10 @@ function ActionsTab({
     [agentId]
   )
   const state = useRemote(load, [agentId])
-  const [selected, setSelected] = React.useState<ActionRecord | null>(null)
+  const [selected, setSelected] = React.useState<ActionRecord | null>(integrationAction ?? null)
   const [isCreating, setIsCreating] = React.useState(false)
   const [draft, setDraft] = React.useState<ActionDefinition>(() =>
-    newActionDraft("http")
+    integrationAction?.definition ?? newActionDraft("http")
   )
   const [editorKey, setEditorKey] = React.useState(0)
   const [pending, setPending] = React.useState(false)
@@ -1665,7 +1693,7 @@ function ActionsTab({
   const [message, setMessage] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
   const [templateSearch, setTemplateSearch] = React.useState("")
-  const rows = (state.data ?? []).filter(({ definition }) =>
+  const rows = (state.data ?? []).filter(({ definition }) => definition.type !== "integration").filter(({ definition }) =>
     `${definition.name} ${definition.description} ${definition.type}`
       .toLowerCase()
       .includes(search.trim().toLowerCase())
@@ -1696,6 +1724,7 @@ function ActionsTab({
     setIsCreating(false)
     setError(null)
     setMessage(null)
+    onIntegrationActionClosed?.()
   }
   async function saveAction(event: React.FormEvent) {
     event.preventDefault()
@@ -1722,6 +1751,7 @@ function ActionsTab({
       onDefinitionDirty?.()
       setSelected(null)
       setIsCreating(false)
+      onIntegrationActionClosed?.()
       setMessage(selected ? "Action updated." : "Action created.")
       onViewChange("mine")
       state.refresh()
@@ -1862,7 +1892,7 @@ function ActionsTab({
                         <p className="text-sm leading-6 text-foreground-muted">
                           {search
                             ? "Try another name, description or action type."
-                            : "Use a template to connect an app, show a widget, collect details or hand off to your team."}
+                            : "Use a template to call an API, show a widget, collect details or hand off to your team."}
                         </p>
                         <Button
                           variant="outline"
@@ -1934,7 +1964,7 @@ function ActionsTab({
         </CollectionPage>
       </CollectionPanel>
       <Sheet
-        open={active && Boolean(selected || isCreating)}
+        open={(active || Boolean(integrationAction)) && Boolean(selected || isCreating)}
         onOpenChange={(open) => {
           if (!open && !pending) clearAction()
         }}
@@ -2016,6 +2046,7 @@ function ActionsTab({
               >
                 <CustomSelect
                   value={draft.type}
+                  disabled={draft.type === "deployment"}
                   onValueChange={(value) => {
                     if (value)
                       setDraft((current) =>
@@ -2034,7 +2065,7 @@ function ActionsTab({
                   <SelectContent alignItemWithTrigger={false}>
                     {(
                       [
-                        "integration",
+                        ...(draft.type === "integration" ? ["integration" as const] : []),
                         "http",
                         "client",
                         "widget",
@@ -2053,9 +2084,10 @@ function ActionsTab({
                 <IntegrationActionFields
                   draft={draft}
                   onChange={setDraft}
-                  onManageIntegrations={onManageIntegrations}
+                  onManageIntegrations={() => { clearAction(); onManageIntegrations() }}
                 />
               ) : null}
+              {draft.type === "deployment" ? <Notice>This tool is deployed from your codebase. Run datool deploy to update its code and input schema.</Notice> : null}
               {draft.type === "http" ? (
                 <HttpActionFields
                   draft={draft}

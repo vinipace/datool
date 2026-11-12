@@ -16,13 +16,22 @@
 }
 
 @theme {
-  /* Agent portrait palette. The character artwork stays legible in either theme. */
+  /* Agent artwork palette; vivid fills pair with ink or paper eyes in either theme. */
   --color-avatar-orange: #f93300;
   --color-avatar-violet: #9b7af5;
   --color-avatar-blue: #61a8f5;
   --color-avatar-green: #6bc68d;
   --color-avatar-rose: #ef8fb5;
   --color-avatar-yellow: #f2cb59;
+  --color-avatar-coral: #ff7659;
+  --color-avatar-lime: #c5f33b;
+  --color-avatar-cyan: #34d9f5;
+  --color-avatar-teal: #00bfa6;
+  --color-avatar-cobalt: #3155f5;
+  --color-avatar-magenta: #e83abf;
+  --color-avatar-scarlet: #ed4055;
+  --color-avatar-midnight: #252f55;
+  --color-avatar-canvas: #f1f0e8;
   --color-avatar-paper: #ffffff;
   --color-avatar-ink: #000000;
   /* Channel identity colors live here; channel-identity.tsx owns their UI mapping. */

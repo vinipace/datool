@@ -33,18 +33,29 @@ export function registerBuildMcpTools(
     )
       continue
     const schema = buildOperationInputSchema(operation)
+    const outputSchema = operation.outputSchema
+      ? z.object({ data: operation.outputSchema })
+      : undefined
     const metadata = {
-        description: operation.description,
-        annotations: {
-          readOnlyHint: operation.scopes.every((scope) => scope === "build:read"),
-          destructiveHint: operation.destructive ?? false,
-          idempotentHint: operation.idempotent ?? false,
-          openWorldHint: operation.openWorld ?? false,
-        },
-      }
+      description: operation.description,
+      annotations: {
+        readOnlyHint: operation.scopes.every((scope) => scope === "build:read"),
+        destructiveHint: operation.destructive ?? false,
+        idempotentHint: operation.idempotent ?? false,
+        openWorldHint: operation.openWorld ?? false,
+      },
+    }
     describeTools.push(() => ({
       name: operation.name,
       ...metadata,
+      ...(outputSchema
+        ? {
+            outputSchema: z.toJSONSchema(outputSchema, {
+              io: "output",
+              target: "draft-2020-12",
+            }) as Tool["outputSchema"],
+          }
+        : {}),
       inputSchema: z.toJSONSchema(schema, {
         io: "input",
         target: "draft-2020-12",
@@ -52,7 +63,11 @@ export function registerBuildMcpTools(
     }))
     server.registerTool(
       operation.name,
-      { ...metadata, inputSchema: schema.shape },
+      {
+        ...metadata,
+        inputSchema: schema.shape,
+        ...(outputSchema ? { outputSchema: outputSchema.shape } : {}),
+      },
       async (input: unknown): Promise<CallToolResult> => {
         try {
           const data = await executeBuildOperation(operation.name, input)

@@ -8,10 +8,13 @@ import { startBillingReconciliationWorker } from "../src/server/billing/reconcil
 import { describeIngestionError, diagnosticSummary, ingestionContext, ingestionFailureLog, ingestionRelease } from "../src/server/ingestion/diagnostics"
 import { startCompletedIngestionCleanup } from "../src/server/ingestion/retention"
 import { startIngestionHealthMonitor } from "../src/server/ingestion/health"
+import { assertDurableRedis } from "../src/server/ingestion/redis-durability"
+const connection = redisConnection(true)
+// Fail before accepting work if Redis could evict queued events.
+await assertDurableRedis(connection)
 const stopBillingReconciliation = startBillingReconciliationWorker()
 const stopRetention = startCloudRetentionWorker()
 const stopAlerts = startAlertWorker()
-const connection = redisConnection(true)
 const stopIngestionCleanup = startCompletedIngestionCleanup(connection)
 const stopIngestionHealth = startIngestionHealthMonitor()
 const worker = startIngestionWorker({ connection })

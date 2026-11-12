@@ -1,3 +1,5 @@
+import { saveOrganizationProviderKey } from "@/src/server/model-providers/store"
+import { projectProviderContext } from "@/src/server/providers/context"
 import { afterEach, expect, spyOn, test } from "bun:test"
 import { Buffer } from "node:buffer"
 import assert from "node:assert/strict"
@@ -21,7 +23,10 @@ import {
   updateKnowledgeSource,
 } from "@/src/server/build/knowledge"
 import { assertPublicUrl } from "@/src/server/build/knowledge/crawler"
-import { getKnowledgePage, listKnowledgePages } from "@/src/server/build/knowledge/pages"
+import {
+  getKnowledgePage,
+  listKnowledgePages,
+} from "@/src/server/build/knowledge/pages"
 import * as publicHttp from "@/src/server/build/http"
 import {
   extractDocumentText,
@@ -29,7 +34,6 @@ import {
 } from "@/src/server/build/knowledge/extract"
 import { createKnowledgeQueryExpander } from "@/src/server/build/knowledge/query-expansion"
 import { backfillKnowledgeEmbeddings } from "@/src/server/build/knowledge/embeddings"
-import { encryptProviderKey } from "@/src/server/model-providers/secrets"
 import { createAgent } from "@/src/server/build/agents"
 import {
   createTracerDatabase,
@@ -182,7 +186,11 @@ dbTest(
     const pageMarkdown = [
       "# Onboarding",
       "Zirconium support includes weekend onboarding.",
-      ...Array.from({ length: 80 }, (_, index) => `## Step ${index + 1}\nRead the **onboarding guide** and complete the scheduled setup.`),
+      ...Array.from(
+        { length: 80 },
+        (_, index) =>
+          `## Step ${index + 1}\nRead the **onboarding guide** and complete the scheduled setup.`
+      ),
       "[Linked documentation](/linked-only?utm_source=test#details)",
     ].join("\n\n")
     const transport = spyOn(publicHttp, "publicHttpRequest").mockImplementation(
@@ -256,27 +264,72 @@ dbTest(
 
       // The page browser owns discovery beyond one result page and exact
       // stored content; retrieval tests alone cannot establish these contracts.
-      const first = await listKnowledgePages(context, { sourceId: source.id, limit: 100 })
-      const second = await listKnowledgePages(context, { sourceId: source.id, limit: 100, offset: 100 })
+      const first = await listKnowledgePages(context, {
+        sourceId: source.id,
+        limit: 100,
+      })
+      const second = await listKnowledgePages(context, {
+        sourceId: source.id,
+        limit: 100,
+        offset: 100,
+      })
       expect(first.total).toBe(132)
       expect(first.items).toHaveLength(100)
       expect(second.items).toHaveLength(32)
-      expect(new Set([...first.items, ...second.items].map((page) => page.url)).size).toBe(132)
-      const matching = await listKnowledgePages(context, { sourceId: source.id, search: "PAGE-129" })
-      expect(matching.items.map((page) => page.url)).toEqual(["https://example.test/page-129"])
-      expect((await listKnowledgePages(context, { sourceId: source.id, search: "missing-page" })).filteredTotal).toBe(0)
-      const detailInput = { sourceId: source.id, url: matching.items[0].url, revision: first.revision }
+      expect(
+        new Set([...first.items, ...second.items].map((page) => page.url)).size
+      ).toBe(132)
+      const matching = await listKnowledgePages(context, {
+        sourceId: source.id,
+        search: "PAGE-129",
+      })
+      expect(matching.items.map((page) => page.url)).toEqual([
+        "https://example.test/page-129",
+      ])
+      expect(
+        (
+          await listKnowledgePages(context, {
+            sourceId: source.id,
+            search: "missing-page",
+          })
+        ).filteredTotal
+      ).toBe(0)
+      const detailInput = {
+        sourceId: source.id,
+        url: matching.items[0].url,
+        revision: first.revision,
+      }
       const page = await getKnowledgePage(context, detailInput)
       expect(page.markdown).toBe(pageMarkdown)
       expect(page.contentOrigin).toBe("crawl")
-      await assert.rejects(getKnowledgePage(context, { ...detailInput, revision: first.revision + 1 }), /index changed/i)
-      await assert.rejects(getKnowledgePage(context, { ...detailInput, url: "https://example.test/unindexed" }), /not found/i)
+      await assert.rejects(
+        getKnowledgePage(context, {
+          ...detailInput,
+          revision: first.revision + 1,
+        }),
+        /index changed/i
+      )
+      await assert.rejects(
+        getKnowledgePage(context, {
+          ...detailInput,
+          url: "https://example.test/unindexed",
+        }),
+        /not found/i
+      )
       const otherProject = { ...context, projectId: crypto.randomUUID() }
-      await assert.rejects(listKnowledgePages(otherProject, { sourceId: source.id }), /not found/i)
-      await assert.rejects(getKnowledgePage(otherProject, detailInput), /not found/i)
+      await assert.rejects(
+        listKnowledgePages(otherProject, { sourceId: source.id }),
+        /not found/i
+      )
+      await assert.rejects(
+        getKnowledgePage(otherProject, detailInput),
+        /not found/i
+      )
 
       // Retired crawl checkpoints must not hide the still-active retrieval index.
-      await database.execute(sql`delete from build_knowledge_crawl_pages where project_id=${context.projectId}`)
+      await database.execute(
+        sql`delete from build_knowledge_crawl_pages where project_id=${context.projectId}`
+      )
       const fallback = await getKnowledgePage(context, detailInput)
       expect(fallback.markdown).toBe(pageMarkdown)
       expect(fallback.contentOrigin).toBe("chunks")
@@ -290,146 +343,245 @@ dbTest(
 // The real database and SDK own indexing, ranking, revisions and tenant filters.
 // Fixed vectors at the HTTP boundary isolate those contracts from a paid model;
 // real-model paraphrase quality is validated separately against indexed content.
-dbTest("hybrid knowledge retrieves paraphrases, isolates agents and retains the index on provider failure", async () => {
-  const fixture = await createIsolatedPostgres()
-  fixtures.add(fixture)
-  await migrateIsolatedPostgres(fixture)
-  await seedTestWorkspace(fixture)
-  const database = createTracerDatabase(fixture.databaseUrl, {
-    projectId: fixture.projectId, schema: fixture.schema,
-  })
-  databases.add(database)
-  const context = { database, projectId: fixture.projectId }
-  const agent = await createAgent(context, { name: "Support", slug: "support" })
-  const other = await createAgent(context, { name: "Private support", slug: "private" })
-  const previousSecret = process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
-  process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = "knowledge-test-only-encryption-secret-1234"
-  const key = encryptProviderKey("knowledge-test-key", fixture.projectId, "openai")
-  await database.execute(sql`insert into project_model_provider(project_id,provider,encrypted_api_key)
-    values (${fixture.projectId},'openai',${key})`)
-  let failing = false
-  let embeddedInputs = 0
-  const transport = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
-    expect(String(url)).toBe("https://api.openai.com/v1/embeddings")
-    if (failing) return Response.json({ error: { message: "Temporarily unavailable" } }, { status: 503 })
-    const body = JSON.parse(String(init?.body)) as { input: string[]; model: string }
-    expect(body.model).toBe("text-embedding-3-small")
-    embeddedInputs += body.input.length
-    return Response.json({
-      data: body.input.map((text, index) => ({
-        index,
-        embedding: [text.includes("banana") ? -1 : 1, ...Array(1535).fill(0)],
-      })),
-      usage: { prompt_tokens: 10, total_tokens: 10 },
+dbTest(
+  "hybrid knowledge retrieves paraphrases, isolates agents and retains the index on provider failure",
+  async () => {
+    const fixture = await createIsolatedPostgres()
+    fixtures.add(fixture)
+    await migrateIsolatedPostgres(fixture)
+    await seedTestWorkspace(fixture)
+    const database = createTracerDatabase(fixture.databaseUrl, {
+      projectId: fixture.projectId,
+      schema: fixture.schema,
     })
-  })
-  try {
+    databases.add(database)
+    const context = { database, projectId: fixture.projectId }
+    const agent = await createAgent(context, {
+      name: "Support",
+      slug: "support",
+    })
+    const other = await createAgent(context, {
+      name: "Private support",
+      slug: "private",
+    })
+    const previousSecret = process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
+    process.env.DATOOL_PROVIDER_ENCRYPTION_KEY =
+      "knowledge-test-only-encryption-secret-1234"
+    await saveOrganizationProviderKey(
+      await projectProviderContext(fixture.projectId, database),
+      "openai",
+      "knowledge-test-key"
+    )
+    let failing = false
+    let embeddedInputs = 0
+    const transport = spyOn(globalThis, "fetch").mockImplementation(
+      async (url, init) => {
+        expect(String(url)).toBe("https://api.openai.com/v1/embeddings")
+        if (failing)
+          return Response.json(
+            { error: { message: "Temporarily unavailable" } },
+            { status: 503 }
+          )
+        const body = JSON.parse(String(init?.body)) as {
+          input: string[]
+          model: string
+        }
+        expect(body.model).toBe("text-embedding-3-small")
+        embeddedInputs += body.input.length
+        return Response.json({
+          data: body.input.map((text, index) => ({
+            index,
+            embedding: [
+              text.includes("banana") ? -1 : 1,
+              ...Array(1535).fill(0),
+            ],
+          })),
+          usage: { prompt_tokens: 10, total_tokens: 10 },
+        })
+      }
+    )
+    try {
+      const source = await createKnowledgeSource(context, {
+        agentId: agent.id,
+        name: "Returns",
+        kind: "text",
+        text: "Customers can request a refund within seven days of purchase.",
+      })
+      await createKnowledgeSource(context, {
+        agentId: other.id,
+        name: "Private policy",
+        kind: "text",
+        text: "Private refunds require internal approval.",
+      })
+      expect(
+        (await runQueuedKnowledgeJobs(context)).every(
+          (job) => job.status === "succeeded"
+        )
+      ).toBe(true)
+      const paraphrase = {
+        agentId: agent.id,
+        query: "Can I get my money back?",
+      }
+      const grounded = await retrieveGroundedKnowledge(context, paraphrase)
+      expect(grounded.documents.map((doc) => doc.sourceId)).toEqual([source.id])
+      expect(grounded.text).toContain("seven days")
+      expect(grounded.snapshotId?.startsWith("knowledge:")).toBe(true)
+      expect(
+        await retrieveKnowledge(context, {
+          agentId: agent.id,
+          query: "banana cultivation",
+        })
+      ).toEqual([])
+
+      // A foreign project must not retrieve an otherwise matching vector.
+      expect(
+        await retrieveKnowledge(
+          { ...context, projectId: "foreign-project" },
+          paraphrase
+        )
+      ).toEqual([])
+      const beforeRefresh = embeddedInputs
+      await enqueueKnowledgeIndex(context, { sourceId: source.id })
+      expect((await runQueuedKnowledgeJobs(context))[0].status).toBe(
+        "succeeded"
+      )
+      expect(embeddedInputs).toBe(beforeRefresh)
+
+      failing = true
+      expect(
+        (
+          await retrieveKnowledge(context, {
+            agentId: agent.id,
+            query: "refund",
+          })
+        )[0].sourceId
+      ).toBe(source.id)
+      await updateKnowledgeSource(context, {
+        sourceId: source.id,
+        expectedRevision: 1,
+        text: "Customers can request a refund within thirty days of purchase.",
+      })
+      expect((await runQueuedKnowledgeJobs(context))[0].status).toBe("failed")
+      failing = false
+      expect(
+        (await retrieveGroundedKnowledge(context, paraphrase)).text
+      ).toContain("seven days")
+      await enqueueKnowledgeIndex(context, { sourceId: source.id })
+      expect((await runQueuedKnowledgeJobs(context))[0].status).toBe(
+        "succeeded"
+      )
+      const updated = await retrieveGroundedKnowledge(context, paraphrase)
+      expect(updated.text).toContain("thirty days")
+      expect(updated.text).not.toContain("seven days")
+      expect(updated.snapshotId).not.toBe(grounded.snapshotId)
+      await deleteKnowledgeSource(context, { sourceId: source.id })
+      expect(await retrieveKnowledge(context, paraphrase)).toEqual([])
+    } finally {
+      transport.mockRestore()
+      if (previousSecret === undefined)
+        delete process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
+      else process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = previousSecret
+    }
+  },
+  30_000
+)
+
+dbTest(
+  "knowledge embedding backfill resumes existing chunks without recrawling and rejects malformed provider batches",
+  async () => {
+    const fixture = await createIsolatedPostgres()
+    fixtures.add(fixture)
+    await migrateIsolatedPostgres(fixture)
+    await seedTestWorkspace(fixture)
+    const database = createTracerDatabase(fixture.databaseUrl, {
+      projectId: fixture.projectId,
+      schema: fixture.schema,
+    })
+    databases.add(database)
+    const context = { database, projectId: fixture.projectId }
+    const agent = await createAgent(context, {
+      name: "Legacy knowledge",
+      slug: "legacy",
+    })
     const source = await createKnowledgeSource(context, {
-      agentId: agent.id, name: "Returns", kind: "text",
-      text: "Customers can request a refund within seven days of purchase.",
+      agentId: agent.id,
+      name: "Existing pages",
+      kind: "text",
+      text: Array.from(
+        { length: 90 },
+        (_, index) => `Section ${index}. ${"Policy information. ".repeat(65)}`
+      ).join("\n\n"),
     })
-    await createKnowledgeSource(context, {
-      agentId: other.id, name: "Private policy", kind: "text",
-      text: "Private refunds require internal approval.",
-    })
-    expect((await runQueuedKnowledgeJobs(context)).every((job) => job.status === "succeeded")).toBe(true)
-    const paraphrase = { agentId: agent.id, query: "Can I get my money back?" }
-    const grounded = await retrieveGroundedKnowledge(context, paraphrase)
-    expect(grounded.documents.map((doc) => doc.sourceId)).toEqual([source.id])
-    expect(grounded.text).toContain("seven days")
-    expect(grounded.snapshotId?.startsWith("knowledge:")).toBe(true)
-    expect(await retrieveKnowledge(context, { agentId: agent.id, query: "banana cultivation" })).toEqual([])
-
-    // A foreign project must not retrieve an otherwise matching vector.
-    expect(await retrieveKnowledge({ ...context, projectId: "foreign-project" }, paraphrase)).toEqual([])
-    const beforeRefresh = embeddedInputs
-    await enqueueKnowledgeIndex(context, { sourceId: source.id })
-    expect((await runQueuedKnowledgeJobs(context))[0].status).toBe("succeeded")
-    expect(embeddedInputs).toBe(beforeRefresh)
-
-    failing = true
-    expect((await retrieveKnowledge(context, { agentId: agent.id, query: "refund" }))[0].sourceId).toBe(source.id)
-    await updateKnowledgeSource(context, {
-      sourceId: source.id, expectedRevision: 1,
-      text: "Customers can request a refund within thirty days of purchase.",
-    })
-    expect((await runQueuedKnowledgeJobs(context))[0].status).toBe("failed")
-    failing = false
-    expect((await retrieveGroundedKnowledge(context, paraphrase)).text).toContain("seven days")
-    await enqueueKnowledgeIndex(context, { sourceId: source.id })
-    expect((await runQueuedKnowledgeJobs(context))[0].status).toBe("succeeded")
-    const updated = await retrieveGroundedKnowledge(context, paraphrase)
-    expect(updated.text).toContain("thirty days")
-    expect(updated.text).not.toContain("seven days")
-    expect(updated.snapshotId).not.toBe(grounded.snapshotId)
-    await deleteKnowledgeSource(context, { sourceId: source.id })
-    expect(await retrieveKnowledge(context, paraphrase)).toEqual([])
-  } finally {
-    transport.mockRestore()
-    if (previousSecret === undefined) delete process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
-    else process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = previousSecret
-  }
-}, 30_000)
-
-dbTest("knowledge embedding backfill resumes existing chunks without recrawling and rejects malformed provider batches", async () => {
-  const fixture = await createIsolatedPostgres()
-  fixtures.add(fixture)
-  await migrateIsolatedPostgres(fixture)
-  await seedTestWorkspace(fixture)
-  const database = createTracerDatabase(fixture.databaseUrl, {
-    projectId: fixture.projectId, schema: fixture.schema,
-  })
-  databases.add(database)
-  const context = { database, projectId: fixture.projectId }
-  const agent = await createAgent(context, { name: "Legacy knowledge", slug: "legacy" })
-  const source = await createKnowledgeSource(context, {
-    agentId: agent.id, name: "Existing pages", kind: "text",
-    text: Array.from({ length: 90 }, (_, index) => `Section ${index}. ${"Policy information. ".repeat(65)}`).join("\n\n"),
-  })
-  await runQueuedKnowledgeJobs(context)
-  const ready = await getKnowledgeSource(context, { sourceId: source.id })
-  expect(ready.chunkCount).toBeGreaterThan(64)
-  const previousSecret = process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
-  process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = "knowledge-test-only-encryption-secret-1234"
-  const key = encryptProviderKey("knowledge-test-key", fixture.projectId, "openai")
-  await database.execute(sql`insert into project_model_provider(project_id,provider,encrypted_api_key)
-    values (${fixture.projectId},'openai',${key})`)
-  let calls = 0
-  let malformed = true
-  const transport = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
-    expect(String(url)).toBe("https://api.openai.com/v1/embeddings")
-    const body = JSON.parse(String(init?.body)) as { input: string[] }
-    expect(body.input.length).toBeLessThanOrEqual(64)
-    calls += 1
-    return Response.json({
-      data: body.input.map((_, index) => ({
-        index,
-        embedding: malformed && calls > 1 ? [1, 0] : [1, ...Array(1535).fill(0)],
-      })),
-      usage: { prompt_tokens: 10, total_tokens: 10 },
-    })
-  })
-  try {
-    await assert.rejects(backfillKnowledgeEmbeddings(context, { agentId: agent.id }), /invalid vector/)
-    const partial = await database.execute<{ count: number }>(sql`
+    await runQueuedKnowledgeJobs(context)
+    const ready = await getKnowledgeSource(context, { sourceId: source.id })
+    expect(ready.chunkCount).toBeGreaterThan(64)
+    const previousSecret = process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
+    process.env.DATOOL_PROVIDER_ENCRYPTION_KEY =
+      "knowledge-test-only-encryption-secret-1234"
+    await saveOrganizationProviderKey(
+      await projectProviderContext(fixture.projectId, database),
+      "openai",
+      "knowledge-test-key"
+    )
+    let calls = 0
+    let malformed = true
+    const transport = spyOn(globalThis, "fetch").mockImplementation(
+      async (url, init) => {
+        expect(String(url)).toBe("https://api.openai.com/v1/embeddings")
+        const body = JSON.parse(String(init?.body)) as { input: string[] }
+        expect(body.input.length).toBeLessThanOrEqual(64)
+        calls += 1
+        return Response.json({
+          data: body.input.map((_, index) => ({
+            index,
+            embedding:
+              malformed && calls > 1 ? [1, 0] : [1, ...Array(1535).fill(0)],
+          })),
+          usage: { prompt_tokens: 10, total_tokens: 10 },
+        })
+      }
+    )
+    try {
+      await assert.rejects(
+        backfillKnowledgeEmbeddings(context, { agentId: agent.id }),
+        /invalid vector/
+      )
+      const partial = await database.execute<{ count: number }>(sql`
       select count(*)::int as count from build_knowledge_chunks
       where project_id=${fixture.projectId} and source_id=${source.id} and embedding is not null
     `)
-    expect(partial.rows[0].count).toBe(64)
-    malformed = false
-    const resumed = await backfillKnowledgeEmbeddings(context, { agentId: agent.id })
-    expect(resumed.embedded).toBe(ready.chunkCount! - 64)
-    const beforeNoop = calls
-    expect(await backfillKnowledgeEmbeddings(context, { agentId: agent.id })).toEqual({ embedded: 0 })
-    expect(calls).toBe(beforeNoop)
-    expect((await getKnowledgeSource(context, { sourceId: source.id })).activeRevision).toBe(ready.activeRevision)
-    expect((await retrieveKnowledge(context, { agentId: agent.id, query: "Completely different wording" }))[0].sourceId).toBe(source.id)
-  } finally {
-    transport.mockRestore()
-    if (previousSecret === undefined) delete process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
-    else process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = previousSecret
-  }
-}, 30_000)
+      expect(partial.rows[0].count).toBe(64)
+      malformed = false
+      const resumed = await backfillKnowledgeEmbeddings(context, {
+        agentId: agent.id,
+      })
+      expect(resumed.embedded).toBe(ready.chunkCount! - 64)
+      const beforeNoop = calls
+      expect(
+        await backfillKnowledgeEmbeddings(context, { agentId: agent.id })
+      ).toEqual({ embedded: 0 })
+      expect(calls).toBe(beforeNoop)
+      expect(
+        (await getKnowledgeSource(context, { sourceId: source.id }))
+          .activeRevision
+      ).toBe(ready.activeRevision)
+      expect(
+        (
+          await retrieveKnowledge(context, {
+            agentId: agent.id,
+            query: "Completely different wording",
+          })
+        )[0].sourceId
+      ).toBe(source.id)
+    } finally {
+      transport.mockRestore()
+      if (previousSecret === undefined)
+        delete process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
+      else process.env.DATOOL_PROVIDER_ENCRYPTION_KEY = previousSecret
+    }
+  },
+  30_000
+)
 
 // This service-level case owns final context selection: duplicate passages must
 // not consume slots, reranking must preserve provenance, and provider failure
@@ -574,8 +726,11 @@ dbTest(
       }
     )
     try {
-      await database.execute(sql`insert into project_model_provider(project_id,provider,encrypted_api_key)
-      values (${context.projectId},'vercel-ai-gateway',${encryptProviderKey("knowledge-test-key", context.projectId, "vercel-ai-gateway")})`)
+      await saveOrganizationProviderKey(
+        await projectProviderContext(context.projectId, database),
+        "vercel-ai-gateway",
+        "knowledge-test-key"
+      )
       const ranked = await retrieveGroundedKnowledge(context, input)
       expect(ranked.results.map((item) => item.sourceId)).toEqual([
         sources[2].id,

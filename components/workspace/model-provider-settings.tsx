@@ -2,6 +2,7 @@
 
 import { DATOOL_PROVIDER } from "@/src/lib/execution-credits"
 
+import { ProviderConnections } from "./provider-connections"
 import { useCallback, useState } from "react"
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -31,23 +32,27 @@ import {
   type ProviderStatus,
 } from "@/src/lib/model-providers"
 
-type Settings = { providers: ProviderStatus[] }
+import type { ProviderConnectionInfo } from "@/src/lib/provider-connections"
+type Settings = {
+  providers: ProviderStatus[]
+  connections?: ProviderConnectionInfo[]
+}
 
 export function ModelProviderSettings({
-  projectId,
+  organizationId,
   canManage,
 }: {
-  projectId: string
+  organizationId: string
   canManage: boolean
 }) {
-  const path = `/api/projects/${encodeURIComponent(projectId)}/providers`
+  const path = `/api/organizations/${encodeURIComponent(organizationId)}/providers`
   const load = useCallback(
     (signal: AbortSignal) => workspaceRequest<Settings>(path, { signal }),
     [path]
   )
-  const state = useRemote(load, [projectId])
+  const state = useRemote(load, [organizationId])
   return (
-    <ProviderSettingsLayout description="Connect AI providers to run LLM scorers in this project.">
+    <ProviderSettingsLayout description="Connect AI providers to run LLM scorers in this organization.">
       {state.error && (
         <Notice variant="error" role="alert">
           {state.error.message}{" "}
@@ -57,7 +62,7 @@ export function ModelProviderSettings({
         </Notice>
       )}
       <ProviderEditor
-        key={`${projectId}:${JSON.stringify(state.data)}`}
+        key={`${organizationId}:${JSON.stringify(state.data)}`}
         initial={state.data}
         path={path}
         canManage={canManage}
@@ -129,7 +134,7 @@ function ProviderEditor({
       setSuccess(
         remove
           ? `API key removed. Scorers using ${modelProviders[target].name} can no longer run.`
-          : "API key saved for this project."
+          : "API key saved for this organization."
       )
     } catch (reason) {
       setError(
@@ -250,7 +255,7 @@ function ProviderEditor({
               </DialogTitle>
               <DialogDescription>
                 {editing === "picker"
-                  ? "Choose a provider to connect to this project."
+                  ? "Choose a provider to connect to this organization."
                   : editingInfo?.description}
               </DialogDescription>
             </DialogHeader>
@@ -370,8 +375,15 @@ function ProviderEditor({
         </p>
       )}
       <p className="text-xs text-foreground-muted">
-        Provider keys are encrypted and scoped to this project.
+        Provider keys are encrypted and scoped to this organization.
       </p>
+      <ProviderConnections
+        kind="model"
+        path={path}
+        connections={settings?.connections ?? []}
+        canManage={canManage && !disabled}
+        onChange={setSettings}
+      />
       <Dialog
         open={removing !== null}
         onOpenChange={(open) => {
@@ -385,7 +397,7 @@ function ProviderEditor({
           <DialogHeader>
             <DialogTitle>Remove {removingName}?</DialogTitle>
             <DialogDescription>
-              Removing this key prevents this project's scorers using{" "}
+              Removing this key prevents this organization's scorers using{" "}
               {removingName} from running.
             </DialogDescription>
           </DialogHeader>

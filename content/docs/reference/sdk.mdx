@@ -18,6 +18,14 @@ Install `@datool/sdk` in a Node.js 22.18+ application. Follow [Send your first t
 
 Correlation helpers do not authenticate callers. Authenticate an incoming request before using its correlation context.
 
+## Managed agent and React entry points
+
+A compatible agent SDK build also provides `createDatoolClient` from `@datool/sdk/agents` for scoped files, messages, and scheduled tasks. The separate `@datool/react` package exports `DatoolChat`; `@datool/react/server` exports `createDatoolHandler`. Import `@datool/react/styles.css` with the chat component.
+
+These exports require the [agent SDK preview build and compatible server](/docs/reference/compatibility#react-sdk-and-proactive-agent-preview); do not infer availability from the tracing package baseline. The agent client takes explicit `apiKey`, `projectId`, optional `baseUrl`, and optional `fetch`. It defaults to the hosted Datool origin, accepts HTTP only on loopback, and never belongs in browser code. Its transport timeout is 120 seconds and writes are not automatically retried.
+
+Use `client.agent({ connectionId, userId, drive, workspaceName, threadId })` on the server. The identity and drive must come from authenticated access. `workspaceName` only changes the display label; `threadId` defaults to `default`. A task retains the original user scope, connection, drive, and conversation, including when run from the dashboard. Follow the [React SDK guide](/docs/guides/react-sdk) for setup, method examples, file limits, workspace switching and task isolation.
+
 ## Configuration
 
 ```ts

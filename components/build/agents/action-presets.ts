@@ -20,6 +20,8 @@ export function withActionType(
     inputSchema: current.inputSchema,
   }
   switch (type) {
+    case "deployment":
+      throw new Error("Deploy tools with datool deploy.")
     case "integration":
       return { ...base, type, connectionId: "", toolSlug: "" }
     case "http":

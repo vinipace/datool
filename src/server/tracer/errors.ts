@@ -73,6 +73,19 @@ export function asTracerError(
         { status: 429, details }
       )
     }
+    // Record IDs are primary keys across every project, so a caller-chosen ID
+    // can collide with another tenant's record. A unique violation is a
+    // conflict, not a server fault, and the ingestion worker must not retry it.
+    // Services that already translated the violation keep their own message.
+    if (
+      !(error instanceof TracerError) &&
+      "code" in cause &&
+      cause.code === "23505"
+    )
+      return new TracerError(
+        "CONFLICT",
+        "A record with the same ID or unique value already exists."
+      )
     if ("code" in cause && (cause.code === "57014" || cause.code === "55P03"))
       return new TracerError(
         "READ_TIMEOUT",

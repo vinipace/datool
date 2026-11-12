@@ -337,9 +337,10 @@ export async function listConversationMessages(
     where u.id in (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
   `) : { rows: [] }
   const authors = new Map(profiles.rows.map(profile => [profile.id, profile]))
-  const agentResult = await ctx.database.execute<{ id: string; name: string; appearance: unknown }>(sql`
-    select a.id,a.name,a.current_config_json->'appearance' as appearance
+  const agentResult = await ctx.database.execute<{ id: string; name: string; appearance: unknown; contact_name: string | null }>(sql`
+    select a.id,a.name,a.current_config_json->'appearance' as appearance,contact.display_name as contact_name
     from build_conversations c join build_agents a on a.id=c.agent_id and a.project_id=c.project_id
+    left join build_contacts contact on contact.project_id=c.project_id and contact.id=c.metadata_json->>'contactId'
     where c.project_id=${ctx.projectId} and c.id=${conversationId}
   `)
   const agent = agentResult.rows[0]
@@ -358,7 +359,10 @@ export async function listConversationMessages(
     ...page,
     items: page.items.map(message => ({
       ...message,
-      author: message.role === "assistant" && message.metadata.source !== "human"
+      isViewer: Boolean(ctx.actorId && senderId(message) === ctx.actorId),
+      author: message.role === "user"
+        ? { name: agent?.contact_name?.trim() || "Customer", image: null }
+        : message.role === "assistant" && message.metadata.source !== "human"
         ? agentAuthor
         : authors.get(senderId(message) ?? "") ?? null,
     })),
@@ -454,6 +458,17 @@ export async function takeoverConversation(context: BuildContext, value: unknown
       update build_conversations
       set owner_type='human',owner_id=${ctx.actorId},owner_fence=owner_fence+1,status='handed_off',updated_at=now()
       where project_id=${ctx.projectId} and id=${input.conversationId}
+    `)
+    // Same rule as ConversationService.claim: a takeover fences in-flight AI
+    // turns, and a tool may already have reached its destination, so their
+    // outcome is uncertain rather than left running until the lock expires.
+    await tx.execute(sql`
+      update build_conversation_turns
+      set status='uncertain',
+          error_json=${JSON.stringify({ kind: "CONVERSATION_HUMAN_OWNED", message: "The conversation was handed to a human while the AI turn was running." })}::jsonb,
+          completed_at=now(),lock_expires_at=null
+      where project_id=${ctx.projectId} and conversation_id=${input.conversationId}
+        and status in ('started','running') and owner_fence<${ownerFence + 1}
     `)
     await tx.execute(sql`
       insert into build_conversation_ownership_events

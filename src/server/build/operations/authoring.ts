@@ -62,7 +62,7 @@ registerBuildOperation({
 registerBuildOperation({
   name: "build_get_authoring_guide",
   description:
-    "Get authoritative input JSON Schema, a valid example and authoring workflow for an agent configuration, action, skill (procedure) or widget. Includes semantic constraints beyond JSON Schema, safe save/apply guidance and translation support. Does not validate or save user content.",
+    "Get authoritative input JSON Schema, a valid example and authoring workflow for an agent configuration, action, skill (procedure), widget, sandbox/drives, integration tool, React SDK or scheduled task. Includes semantic constraints beyond JSON Schema, safe save/apply guidance, SDK workspace isolation, scheduling context and translation support. Does not validate or save user content.",
   scopes: ["build:read"],
   schema: z.object({ topic: authoringTopicSchema }),
   execute: (_context, input) =>

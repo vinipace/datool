@@ -730,6 +730,8 @@ export async function saveAction(
       )
       definition.inputSchema =
         tool.inputSchema as ActionDefinition["inputSchema"]
+      if (tool.originalName) definition.mcpToolName = tool.originalName
+      else delete definition.mcpToolName
     }
     if (definition.type === "form" && definition.submitActionId)
       await assertActionReferences(context, agentId, [

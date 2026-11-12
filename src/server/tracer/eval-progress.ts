@@ -26,7 +26,7 @@ export async function getEvalProgress(
         and s.trace_id in (select trace_id from targets)
         and s.attributes_json::jsonb->>'eval.run_id'=${runId}
         and s.attributes_json::jsonb->>'datool.scorer.execution'='true'
-      order by s.attributes_json::jsonb->>'eval.target_id', s.attributes_json::jsonb->>'scorer.id', s.started_at desc, s.id desc
+      order by s.attributes_json::jsonb->>'eval.target_id', s.attributes_json::jsonb->>'scorer.id', s.started_at_ms desc nulls last, s.started_at desc, s.id desc
     ), results as materialized (
       select distinct on (t.id, r.evaluator_id) t.id as target_id, r.evaluator_id, r.status, r.score,
         r.metadata_json::jsonb->>'skipped'='true' as skipped

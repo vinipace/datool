@@ -26,6 +26,7 @@ const identities: Record<
   ActionPreset,
   { label: string; icon: LucideIcon; tone: string }
 > = {
+  deployment: { label: "Deployed tool", icon: Braces, tone: "text-action-api" },
   integration: { label: "Connected app", icon: Box, tone: "text-action-api" },
   http: { label: "Call API", icon: Box, tone: "text-action-api" },
   client: { label: "Client event", icon: Braces, tone: "text-action-api" },
@@ -54,13 +55,6 @@ const catalog: {
   description: string
   actions: { preset: ActionPreset; label: string }[]
 }[] = [
-  {
-    id: "integration",
-    title: "Connected app",
-    description:
-      "Let your agent use apps such as Google Calendar through a connected account.",
-    actions: [{ preset: "integration", label: "Use connected app" }],
-  },
   {
     id: "handoff",
     title: "Escalations",

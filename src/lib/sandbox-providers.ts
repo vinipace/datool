@@ -1,3 +1,4 @@
+import type { ProviderConnectionInfo } from "./provider-connections"
 import { z } from "zod"
 
 export const sandboxProviderIds = [
@@ -5,6 +6,7 @@ export const sandboxProviderIds = [
   "local",
   "vercel",
   "modal",
+  "boat",
 ] as const
 export type SandboxProviderId = (typeof sandboxProviderIds)[number]
 export const sandboxProviderNames: Record<SandboxProviderId, string> = {
@@ -12,6 +14,7 @@ export const sandboxProviderNames: Record<SandboxProviderId, string> = {
   local: "Local container",
   vercel: "Vercel Sandbox",
   modal: "Modal",
+  boat: "Boat",
 }
 export const sandboxProviderIdSchema = z.enum(sandboxProviderIds)
 const credential = z.string().trim().min(1).max(4096).regex(/^\S+$/)
@@ -25,6 +28,7 @@ const identifier = z
 export const sandboxCredentialsSchema = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("datool") }).strict(),
   z.object({ provider: z.literal("local") }).strict(),
+  z.object({ provider: z.literal("boat"), apiKey: credential }).strict(),
   z
     .object({
       provider: z.literal("vercel"),
@@ -47,6 +51,9 @@ export type SandboxCredentials = z.infer<typeof sandboxCredentialsSchema>
 export const sandboxProviderInputSchema = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("datool") }).strict(),
   z.object({ provider: z.literal("local") }).strict(),
+  z
+    .object({ provider: z.literal("boat"), apiKey: credential.optional() })
+    .strict(),
   z
     .object({
       provider: z.literal("vercel"),
@@ -71,6 +78,7 @@ export type SandboxProviderStatus = {
   projectId?: string
 }
 export type SandboxProviderSettings = {
+  connections?: ProviderConnectionInfo[]
   providers: SandboxProviderStatus[]
   defaultProvider: SandboxProviderId | null
   executionOrder: SandboxProviderId[]
@@ -92,3 +100,18 @@ export function sandboxExecutionOrder(
     ),
   ]
 }
+
+export const sandboxProviderFields = {
+  boat: [{ key: "apiKey", label: "API key", secret: true }],
+  datool: [],
+  local: [],
+  vercel: [
+    { key: "apiKey", label: "API token", secret: true },
+    { key: "teamId", label: "Team ID", secret: false },
+    { key: "projectId", label: "Vercel project ID", secret: false },
+  ],
+  modal: [
+    { key: "tokenId", label: "Token ID", secret: true },
+    { key: "tokenSecret", label: "Token secret", secret: true },
+  ],
+} as const

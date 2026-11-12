@@ -1,11 +1,13 @@
 ---
 name: datool
-description: Use Datool MCP, CLI, SDK and browser WebMCP to connect apps, author agent widgets, integrate managed prompts, debug AI workflows, submit AI-labelled reviews, route evaluation work and customize Page or Object Views.
+description: Use Datool MCP, CLI, SDK and browser WebMCP to configure managed and proactive agents, embed React chat, connect apps, author agent widgets, integrate managed prompts, debug AI workflows, submit AI-labelled reviews, route evaluation work and customize Page or Object Views.
 ---
 
 # Datool
 
 ## Connection and discovery
+
+For managed agents, integration tools, persistent drives, embedded React chat and proactive tasks, read [managed agents and workspace isolation](references/agents.md). Use `build_describe_operations` for this surface; its CLI transport is `datool build`, while `datool agent` targets Observe operations.
 
 For customer-facing agent widgets, read [widget authoring](references/widgets.md) before writing JSX. Discover templates and supported components, preserve representative preview data, and validate the saved widget in its browser sandbox. Widgets use a different component library from Page and Object Views.
 

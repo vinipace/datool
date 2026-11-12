@@ -1,0 +1,36 @@
+---
+title: Integration connections and MCP tools
+description: Connect apps and MCP servers, manage each connection on its own page, and enable tools for an agent.
+---
+
+Open an agent's **Integrations** and select a connected account or MCP server. Management opens a dedicated page that supports browser back/forward navigation. The tool list is the primary view; open connection settings to change authentication or server details.
+
+Search tools by name or description, filter by enabled state, and scroll to load more rows. Each tool has an enable control and settings. Tool changes are saved with the agent's definitions and used when its revision is applied. **Actions** remains the place for custom tools.
+
+## Connect an MCP server
+
+Use a public HTTPS Streamable HTTP endpoint. Choose OAuth when supported, sign in to the intended account, and complete authorization. Token and unauthenticated servers are also supported. Saved credentials are encrypted and are not returned by read operations.
+
+Through MCP, inspect `build_describe_operations` and use:
+
+| Operation | Purpose |
+| --- | --- |
+| `build_list_app_connections` | Discover project connections, optionally for an agent; credentials are redacted. |
+| `build_start_mcp_oauth` | Start authorization and obtain a sign-in URL. Requires a signed-in project member. |
+| `build_save_mcp_connection` | Save or update a server, verifying discovery first. Omit saved URL/token to retain them; an empty token removes it. |
+| `build_refresh_app_connection` | Check the actual provider/server connection state. |
+| `build_list_app_tools` | Read available tool names and schemas for a connection. |
+| `build_enable_mcp_tools` | Import missing tools for an agent and apply its catalog, preserving existing settings. |
+| `build_disconnect_app` | Revoke the connection for every agent revision using it. |
+
+Supplying `agentId` while connecting an MCP server can import and publish its tools. Importing is an applying change, not a read-only preview. For individual tools, discover their current schema and choose exactly which ones the agent may use.
+
+## Enable or configure a single tool through MCP
+
+Read the agent and `build_list_actions`. Find the existing definition by `connectionId` and `toolSlug`; preserve its ID, slug, input schema, channel restrictions, approval settings, and other fields. Call `build_save_action` with the complete definition, changed `enabled` value or settings, and the current `expectedRevision`. Create a new definition only when the agent has none for that tool, using IDs and schemas returned by discovery.
+
+Apply the reviewed change with `build_update_agent` and the latest agent revision. Saving an action and applying an agent are separate API steps. `build_enable_mcp_tools` performs its import/apply atomically and does not re-enable previously disabled tools.
+
+A tool toggle changes this agent's catalog. Disconnecting an account revokes the connection across agent revisions. Use the action matching the intended scope. A successful connection check proves discovery/authentication, not that a particular remote tool invocation succeeded.
+
+Datool's own [MCP endpoint](/docs/reference/mcp) lets an assistant manage Datool. An MCP integration gives a Datool agent tools from another service. These are separate connections and permissions. Request `build_get_authoring_guide` with `topic: "integration"` for the current workflow.

@@ -1,13 +1,18 @@
 {
   "title": "Product guides",
   "pages": [
+    "agents",
+    "project-deployment",
+    "integrations",
+    "scheduled-tasks",
     "playground",
     "prompts",
     "dashboards",
     "reviews",
     "alerts",
     "providers",
-    "whatsapp"
+    "whatsapp",
+    "react-sdk"
   ],
   "icon": "documentation"
 }

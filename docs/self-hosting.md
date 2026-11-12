@@ -101,10 +101,13 @@ presence here; the real login verifies that they work.
 6. Build is disabled by default. To deploy customer-facing agents, set
    `DATOOL_BUILD_ENABLED=true` in `.env`, or keep it false and set
    `DATOOL_BUILD_ORGANIZATION_IDS` to a comma-separated list of organization IDs.
-   Recreate `app` and `build-worker` after changing either value.
+   Generate `DATOOL_EVE_SECRET` (32+ random characters), then recreate `app`,
+   `build-worker`, and `eve` after changing either value.
    Follow the [Build setup guide](build.md).
    The `build-worker` service processes hosted conversations, Telegram messages,
-   knowledge indexing, simulations, and campaigns.
+   knowledge indexing, simulations, campaigns, and Eve execution recovery.
+   The private `eve` service runs the agent engine; see
+   [Eve runtime setup](agent-eve-runtime.md).
 
 The application has no pre-created admin, sample account, or default password.
 A `/sign-in` health response proves the web process is responding; it does not
@@ -118,9 +121,9 @@ docker compose up -d
 
 `down` preserves data. **`down -v` deletes the installation's volumes.** Back up
 PostgreSQL and the files volume, and protect the configuration secrets. Redis
-AOF holds queued work; preserve it through restarts. App and worker share the
+AOF holds queued work; preserve it through restarts. App, workers and Eve share the
 files volume. For upgrades, take a database backup, review migrations, rebuild,
-run `docker compose run --rm migrate`, then recreate app and worker with
+run `docker compose run --rm migrate`, then recreate app, workers and Eve with
 `docker compose up -d`. Do not assume application rollback reverses migrations.
 
 ## Code scorer sandboxes
@@ -130,8 +133,8 @@ fails with a saved configuration error and no score; it never falls back to
 executing code directly on the application host.
 
 For an installation shared with untrusted users, configure **Modal** or
-**Vercel Sandbox** in the project's **Project settings → Sandbox providers**, test the
-connection, and make it the default. Each project supplies its own credentials;
+**Vercel Sandbox** in **Organization settings → Sandbox providers**, test the
+connection, and make it the default. Each organization supplies shared credentials;
 self-hosting does not require Datool Cloud billing. Only configure providers
 whose infrastructure and execution costs you control.
 

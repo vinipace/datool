@@ -30,6 +30,9 @@ export const buildScopes = [
 ] as const
 export type BuildScope = (typeof buildScopes)[number]
 
+/** Connecting to deployed tools does not grant deployment authoring access. */
+export const projectMcpScopes = ["build:read", "build:run"] as const
+
 /** All scopes accepted by the primary MCP resource. */
 export const mcpResourceScopes = [...mcpScopes, ...buildScopes] as const
 

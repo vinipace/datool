@@ -1,0 +1,318 @@
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
+import {
+  readdir,
+  readFile,
+  lstat,
+  realpath,
+  mkdir,
+  writeFile,
+} from "node:fs/promises"
+import { resolve, relative, sep, extname, basename } from "node:path"
+import { prepareDatabase } from "./deploy-database"
+import { build, type BuildOptions } from "esbuild"
+import { appRequest } from "./request"
+import {
+  deploymentBundle,
+  deploymentEnvironment,
+  deploymentMetadata,
+  deploymentConfig,
+  deploymentMaxBytes,
+  type DeploymentBundle,
+} from "../src/lib/deploy/contracts"
+
+/** Never import user code into the CLI process, which holds the deployment key. */
+export async function packDeployment(
+  directory: string
+): Promise<DeploymentBundle> {
+  const root = await realpath(resolve(directory))
+  const files: string[] = []
+  async function walk(path: string) {
+    let entries
+    try {
+      entries = await readdir(resolve(root, path), { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return
+      throw error
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (
+        entry.name.startsWith(".") ||
+        ["node_modules", "dist"].includes(entry.name)
+      )
+        continue
+      const name = `${path}/${entry.name}`
+      if (entry.isSymbolicLink())
+        throw new Error(`Symlinks cannot be deployed: ${name}`)
+      if (entry.isDirectory()) await walk(name)
+      else if (entry.isFile()) files.push(name)
+      if (files.length > 400)
+        throw new Error("A deployment supports at most 400 files.")
+    }
+  }
+  for (const path of ["agents", "skills", "tools", "sources"]) {
+    const info = await lstat(resolve(root, path)).catch(() => null)
+    if (info?.isSymbolicLink())
+      throw new Error(`Symlinks cannot be deployed: ${path}`)
+    await walk(path)
+  }
+  const text = async (path: string) => {
+    const info = await lstat(resolve(root, path))
+    if (!info.isFile() || info.size > 2 * 1024 * 1024)
+      throw new Error(`File is invalid or too large: ${path}`)
+    return readFile(resolve(root, path), "utf8")
+  }
+  const configPath = resolve(root, "datool.json")
+  const config = deploymentConfig.parse(
+    await lstat(configPath)
+      .then(() => text("datool.json").then(JSON.parse))
+      .catch((error) => {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return {}
+        throw error
+      })
+  )
+  const tools = files.filter((p) => /^tools\/[^/]+\.(ts|js|mts|mjs)$/.test(p))
+  const collectors = files.filter((p) =>
+    /^sources\/[^/]+\.(ts|js|mts|mjs)$/.test(p)
+  )
+  const name = (p: string) => p.split("/").at(-1)!.slice(0, -extname(p).length)
+  const entries = [...tools, ...collectors]
+  const buildOptions: BuildOptions = {
+    stdin: {
+      contents:
+        entries
+          .map((p, i) => `import module${i} from ${JSON.stringify("./" + p)};`)
+          .join("\n") +
+        `\nexport const tools = {${tools.map((p, i) => `${JSON.stringify(name(p))}:module${i}`).join(",")}};` +
+        `\nexport const sources = {${collectors.map((p, i) => `${JSON.stringify(name(p))}:module${tools.length + i}`).join(",")}};`,
+      resolveDir: root,
+      sourcefile: "datool-entry.ts",
+    },
+    banner: {
+      js: 'import { createRequire as __datoolCreateRequire } from "node:module";const require = __datoolCreateRequire("/workspace/deployment.cjs");',
+    },
+    bundle: true,
+    write: false,
+    platform: "node",
+    format: "esm",
+    target: "node22",
+    sourcemap: false,
+    minify: true,
+    plugins: [
+      {
+        name: "deployment-boundary",
+        setup(plugin) {
+          plugin.onLoad({ filter: /.*/ }, async (args) => {
+            const actual = await realpath(args.path)
+            const path = relative(root, actual)
+            if (
+              path.startsWith(`..${sep}`) ||
+              path === ".." ||
+              resolve(root, path) !== actual ||
+              path
+                .split(sep)
+                .some(
+                  (p, i, parts) =>
+                    p.startsWith(".") &&
+                    !(
+                      i > 0 &&
+                      parts[i - 1] === "node_modules" &&
+                      [".bun", ".pnpm"].includes(p)
+                    )
+                )
+            )
+              throw new Error(
+                "Deploy imports must stay inside the folder and cannot include hidden files."
+              )
+            return undefined
+          })
+        },
+      },
+    ],
+  }
+  const database = await prepareDatabase(root, entries, buildOptions)
+  const bundled = entries.length ? await build(buildOptions) : null
+  const document = async (path: string) => ({
+    path,
+    title:
+      (await text(path)).match(/^# +(.+)$/m)?.[1]?.slice(0, 200) ??
+      path.split("/").at(-1)!,
+    text: await text(path),
+  })
+  const bundle = deploymentBundle.parse({
+    version: 1,
+    config,
+    code:
+      bundled?.outputFiles?.[0].text ??
+      "export const tools={};export const sources={};",
+    database,
+    tools: tools.map(name),
+    collectors: collectors.map(name),
+    agents: await Promise.all(
+      files
+        .filter((p) => /^agents\/[^/]+\/instructions\.md$/.test(p))
+        .map(async (p) => {
+          const base = p.slice(0, -"instructions.md".length)
+          return {
+            slug: p.split("/")[1],
+            instructions: await text(p),
+            configuration: files.includes(`${base}agent.json`)
+              ? JSON.parse(await text(`${base}agent.json`))
+              : {},
+          }
+        })
+    ),
+    skills: await Promise.all(
+      files
+        .filter((p) => p.startsWith("skills/") && /\.md$/.test(p))
+        .map(document)
+    ),
+    sources: await Promise.all(
+      files
+        .filter(
+          (p) => p.startsWith("sources/") && /\.(md|txt|json|csv)$/.test(p)
+        )
+        .map(document)
+    ),
+  })
+  if (Buffer.byteLength(JSON.stringify(bundle)) > deploymentMaxBytes - 1024)
+    throw new Error("Deployment exceeds 4 MiB.")
+  if (
+    !bundle.agents.length &&
+    !bundle.tools.length &&
+    !bundle.sources.length &&
+    !bundle.collectors.length
+  )
+    throw new Error("No deployable agents, tools or sources found.")
+  return bundle
+}
+
+async function folderMetadata(folder: string) {
+  const cwd = resolve(folder)
+  const git = async (...args: string[]) =>
+    (
+      await promisify(execFile)("git", args, {
+        cwd,
+        timeout: 5000,
+        maxBuffer: 64 * 1024,
+      })
+    ).stdout.trim()
+  try {
+    const [commit, branch, title, dirty] = await Promise.all([
+      git("rev-parse", "HEAD"),
+      git("branch", "--show-current"),
+      git("log", "-1", "--format=%s"),
+      git("status", "--porcelain", "--", "."),
+    ])
+    return deploymentMetadata.parse({
+      commit,
+      ...(branch ? { branch: branch.slice(0, 200) } : {}),
+      title: title.slice(0, 200) || basename(cwd),
+      dirty: Boolean(dirty),
+    })
+  } catch {
+    return { title: basename(cwd).slice(0, 200) || "CLI deployment" }
+  }
+}
+
+export async function deployCommand(args: string[]) {
+  const origin =
+    process.env.DATOOL_BASE_URL ??
+    process.env.DATOOL_URL ??
+    "http://127.0.0.1:3000"
+  const environmentIndex = args.indexOf("--environment")
+  const environment = deploymentEnvironment.parse(
+    environmentIndex < 0 ? "production" : args[environmentIndex + 1]
+  )
+  if (environmentIndex >= 0)
+    args = args.filter(
+      (_, index) => index !== environmentIndex && index !== environmentIndex + 1
+    )
+  const endpoint = `/api/deployments?environment=${environment}`
+  if (args[0] === "status") {
+    console.info(JSON.stringify(await appRequest(origin, endpoint), null, 2))
+    return
+  }
+  const unknown = args.filter(
+    (arg) => arg.startsWith("-") && !["--dry-run", "--plan"].includes(arg)
+  )
+  if (unknown.length) throw new Error(`Unknown deploy option: ${unknown[0]}`)
+  const paths = args.filter((arg) => !arg.startsWith("-"))
+  if (paths.length > 1)
+    throw new Error(
+      "Usage: datool deploy [folder] [--environment preview|production] [--dry-run | --plan]"
+    )
+  const bundle = await packDeployment(paths[0] ?? ".")
+  if (args.includes("--dry-run")) {
+    console.info(
+      JSON.stringify(
+        {
+          dryRun: true,
+          environment,
+          postgres: Boolean(bundle.database),
+          agents: bundle.agents.map((a) => a.slug),
+          tools: bundle.tools,
+          sources: bundle.sources.map((s) => s.path),
+          collectors: bundle.collectors,
+          skills: bundle.skills.map((s) => s.path),
+          bytes: Buffer.byteLength(JSON.stringify(bundle)),
+        },
+        null,
+        2
+      )
+    )
+    return
+  }
+  const current = await appRequest<{ id: string } | null>(origin, endpoint)
+  const data = await appRequest<{
+    database?: {
+      hash: string
+      statements: string[]
+      migration?: { hash: string; statements: string[] }
+    }
+  }>(
+    origin,
+    endpoint,
+    {
+      bundle,
+      metadata: await folderMetadata(paths[0] ?? "."),
+      environment,
+      expectedDeploymentId: current?.id ?? null,
+      planOnly: args.includes("--plan"),
+    },
+    { timeoutMs: 240_000 }
+  )
+  const migration = data.database?.migration
+  if (migration?.statements.length && !args.includes("--plan")) {
+    if (
+      !/^[a-f0-9]{64}$/.test(migration.hash) ||
+      !migration.statements.every((statement) => typeof statement === "string")
+    )
+      throw new Error(
+        "Deployment completed, but the server returned an invalid migration artifact."
+      )
+    const directory = resolve(paths[0] ?? ".", "migrations")
+    if ((await lstat(directory).catch(() => null))?.isSymbolicLink())
+      throw new Error(
+        "Deployment completed; migrations cannot be written through a symlink."
+      )
+    await mkdir(directory, { recursive: true })
+    const file = resolve(directory, `${migration.hash}.sql`)
+    if ((await lstat(file).catch(() => null))?.isSymbolicLink())
+      throw new Error(
+        "Deployment completed; the migration file cannot be a symlink."
+      )
+    const contents =
+      migration.statements.join("\n--> statement-breakpoint\n") + "\n"
+    const existing = await readFile(file, "utf8").catch((error) => {
+      if (error.code === "ENOENT") return null
+      throw error
+    })
+    if (existing !== null && existing !== contents)
+      throw new Error(
+        "Deployment completed; the local migration file differs from the applied SQL. Preserve it and use a clean folder to export the applied migration."
+      )
+    if (existing === null) await writeFile(file, contents, { flag: "wx" })
+  }
+  console.info(JSON.stringify(data, null, 2))
+}

@@ -15,23 +15,20 @@ import {
   runQueuedSimulationRuns,
   startSimulationRun,
 } from "../src/server/build/testing/service"
-import {
-  createTracerFixture,
-  closeTracerFixture,
-} from "./helpers/tracer-fixture"
-import { getTracerProjectId } from "../src/server/tracer/db"
-
+import { createEveFixture, invokeTool, eveResponse } from "./helpers/eve-fixture"
+let activeEve: Awaited<ReturnType<typeof createEveFixture>>
 async function fixture() {
-  const db = await createTracerFixture()
+  activeEve = await createEveFixture()
+  const db = activeEve.context.database
   const context = createBuildContext(db, {
-    projectId: getTracerProjectId(db),
+    projectId: activeEve.context.projectId,
     actorId: "simulation-runtime-test",
   })
   const agent = await createAgent(context, {
     name: `Runtime simulation ${crypto.randomUUID()}`,
     configuration: {
       instructions: "Use the lookup action before answering order questions.",
-      model: "configured-model",
+      provider: "openai", model: "gpt-4.1-mini", guardrails: { jevCheckEnabled: false },
       channelAllowlist: ["telegram"],
     },
   })
@@ -58,30 +55,8 @@ async function fixture() {
   return { db, context, agent }
 }
 
-function generatedAgentText() {
-  return async (options: unknown) => {
-    const tools = (
-      options as {
-        tools?: Record<
-          string,
-          {
-            execute: (
-              input: Record<string, unknown>,
-              toolOptions: { toolCallId: string }
-            ) => Promise<unknown>
-          }
-        >
-      }
-    ).tools
-    const result = await tools?.lookup_order?.execute(
-      { orderId: "123" },
-      { toolCallId: "simulation-tool-1" }
-    )
-    return {
-      text: `The order state is ${JSON.stringify(result)}.`,
-      usage: { inputTokens: 5, outputTokens: 8, totalTokens: 13 },
-    }
-  }
+function scriptAgent() {
+  activeEve.provider(body => invokeTool(body, { orderId: "123" }, "The order state is shipped."))
 }
 
 function delay(milliseconds: number) {
@@ -89,7 +64,7 @@ function delay(milliseconds: number) {
 }
 
 test("runtime simulation executes the real agent loop against mocked actions", async () => {
-  const { db, context, agent } = await fixture()
+  const { context, agent } = await fixture()
   try {
     const definition = await createSimulationDefinition(context, {
       agentId: agent.id,
@@ -127,9 +102,10 @@ test("runtime simulation executes the real agent loop against mocked actions", a
       },
       response: { state: "shipped" },
     })
+    scriptAgent()
     let structuredJudgeCalls = 0
     const executor = createRuntimeSimulationExecutor(context, {
-      generateText: generatedAgentText() as never,
+
       generateObject: (async (options: unknown) => {
         if (
           (options as { schemaName?: string }).schemaName ===
@@ -169,12 +145,12 @@ test("runtime simulation executes the real agent loop against mocked actions", a
       result: { state: "shipped" },
     })
   } finally {
-    await closeTracerFixture(db)
+    await activeEve.close()
   }
 })
 
 test("runtime simulation preserves no_verdict and provider failures", async () => {
-  const { db, context, agent } = await fixture()
+  const { context, agent } = await fixture()
   try {
     const noJudgeDefinition = await createSimulationDefinition(context, {
       agentId: agent.id,
@@ -197,7 +173,7 @@ test("runtime simulation preserves no_verdict and provider failures", async () =
     await runQueuedSimulationRuns(
       context,
       createRuntimeSimulationExecutor(context, {
-        generateText: (async () => ({ text: "Hello!", usage: {} })) as never,
+
         customer: null,
         judge: null,
       })
@@ -224,15 +200,10 @@ test("runtime simulation preserves no_verdict and provider failures", async () =
       infraDefinition.id,
       { snapshotLoader: async () => captureSimulationConfig(context, agent.id) }
     )
+    activeEve.provider(() => Response.json({ error: { message: "private provider diagnostic" } }, { status: 403 }))
     await runQueuedSimulationRuns(
       context,
-      createRuntimeSimulationExecutor(context, {
-        generateText: (async () => {
-          throw new Error("provider unavailable")
-        }) as never,
-        customer: null,
-        judge: null,
-      })
+      createRuntimeSimulationExecutor(context, { customer: null, judge: null })
     )
     const infraCase = (await listSimulationCases(context, infraRun.id))[0]
     expect(infraCase?.verdict?.status).toBe("infra_error")
@@ -240,12 +211,12 @@ test("runtime simulation preserves no_verdict and provider failures", async () =
       1
     )
   } finally {
-    await closeTracerFixture(db)
+    await activeEve.close()
   }
 })
 
 test("runtime simulation cannot pass a required action that returned a mock error", async () => {
-  const { db, context, agent } = await fixture()
+  const { context, agent } = await fixture()
   try {
     const definition = await createSimulationDefinition(context, {
       agentId: agent.id,
@@ -267,10 +238,11 @@ test("runtime simulation cannot pass a required action that returned a mock erro
     const run = await startSimulationRun(context, agent.id, definition.id, {
       snapshotLoader: async () => captureSimulationConfig(context, agent.id),
     })
+    scriptAgent()
     await runQueuedSimulationRuns(
       context,
       createRuntimeSimulationExecutor(context, {
-        generateText: generatedAgentText() as never,
+
         customer: null,
         judge: async () => ({
           status: "passed",
@@ -293,7 +265,7 @@ test("runtime simulation cannot pass a required action that returned a mock erro
       "Required actions were not observed"
     )
   } finally {
-    await closeTracerFixture(db)
+    await activeEve.close()
   }
 })
 
@@ -318,7 +290,7 @@ test("runtime simulation renews the lease during a long model call", async () =>
     const pump = runQueuedSimulationRuns(
       context,
       createRuntimeSimulationExecutor(context, {
-        generateText: (async () => ({ text: "Hello!", usage: {} })) as never,
+
         customer: null,
         judge: async () => {
           await delay(5_500)
@@ -359,12 +331,12 @@ test("runtime simulation renews the lease during a long model call", async () =>
     const completed = (await pump)[0]
     expect(completed?.status).toBe("completed")
   } finally {
-    await closeTracerFixture(db)
+    await activeEve.close()
   }
 }, 30_000)
 
 test("runtime simulation aborts an in-flight model and does not continue after cancellation", async () => {
-  const { db, context, agent } = await fixture()
+  const { context, agent } = await fixture()
   try {
     const definition = await createSimulationDefinition(context, {
       agentId: agent.id,
@@ -384,25 +356,14 @@ test("runtime simulation aborts an in-flight model and does not continue after c
     let modelCalls = 0
     let customerCalls = 0
     let judgeCalls = 0
+    let release: (() => void) | undefined
+    activeEve.provider(body => {
+      modelCalls++
+      return new Promise<Response>(resolve => { release = () => resolve(eveResponse(body, "Help is available.")) })
+    })
     const pump = runQueuedSimulationRuns(
       context,
       createRuntimeSimulationExecutor(context, {
-        generateText: (async (options: unknown) => {
-          modelCalls += 1
-          const signal = (options as { abortSignal?: AbortSignal }).abortSignal
-          await new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(resolve, 30_000)
-            signal?.addEventListener(
-              "abort",
-              () => {
-                clearTimeout(timer)
-                reject(new Error("model aborted"))
-              },
-              { once: true }
-            )
-          })
-          return { text: "Help is available.", usage: {} }
-        }) as never,
         customer: async () => {
           customerCalls += 1
           return { message: "Continue", done: false }
@@ -419,9 +380,10 @@ test("runtime simulation aborts an in-flight model and does not continue after c
       }),
       { leaseSeconds: 5 }
     )
-    await delay(100)
+    while (!modelCalls) await delay(50)
     await cancelSimulationRun(context, run.id)
     const completed = (await pump)[0]
+    release?.()
     expect(completed?.status).toBe("cancelled")
     expect(modelCalls).toBe(1)
     expect(customerCalls).toBe(0)
@@ -430,6 +392,6 @@ test("runtime simulation aborts an in-flight model and does not continue after c
       "cancelled"
     )
   } finally {
-    await closeTracerFixture(db)
+    await activeEve.close()
   }
 }, 30_000)

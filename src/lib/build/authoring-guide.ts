@@ -1,4 +1,7 @@
 import { z } from "zod"
+import { agentSandboxSchema } from "./sandbox"
+import { sdkChatInputSchema } from "./react-sdk"
+import { scheduledTaskInputSchema } from "./schedules"
 import { widgetComponentCatalog } from "./widget-components"
 import {
   actionDefinitionSchema,
@@ -14,6 +17,10 @@ export const authoringTopicSchema = z.enum([
   "action",
   "skill",
   "widget",
+  "sandbox",
+  "integration",
+  "react-sdk",
+  "scheduled-task",
 ])
 
 /** Public sandbox component contract; JSX props include functions and React nodes,
@@ -117,8 +124,48 @@ export function buildAuthoringGuide(
     action: actionDefinitionSchema,
     skill: procedureDefinitionSchema,
     widget: widgetDefinitionSchema,
+    sandbox: agentSandboxSchema,
+    integration: actionDefinitionSchema,
+    "react-sdk": sdkChatInputSchema,
+    "scheduled-task": scheduledTaskInputSchema,
   }
   const examples = {
+    sandbox: {
+      enabled: true,
+      provider: "datool",
+      environment: "node",
+      networkAccess: false,
+      drives: [],
+    },
+    integration: {
+      id: "workspace_lookup",
+      name: "Look up workspace",
+      type: "integration",
+      enabled: false,
+      connectionId: "11111111-1111-4111-8111-111111111111",
+      toolSlug: "DISCOVERED_TOOL_SLUG",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+    },
+    "react-sdk": {
+      connectionId: "11111111-1111-4111-8111-111111111111",
+      userId: "authenticated-user",
+      drive: "drive_acme",
+      workspaceName: "Acme Studio",
+      request: { action: "session", threadId: "default" },
+    },
+    "scheduled-task": {
+      agentId: "discovered-agent-id",
+      name: "Weekday briefing",
+      prompt: "Read /workspace/context/company.md and summarize next steps.",
+      schedule: { kind: "cron", expression: "0 9 * * 1-5" },
+      timezone: "America/Sao_Paulo",
+      channel: "web",
+      enabled: false,
+    },
     agent: {
       instructions:
         "Answer from approved knowledge. Follow the visitor's language. Confirm actions only after success.",
@@ -153,10 +200,39 @@ export function buildAuthoringGuide(
     ),
   }
   const guidance = {
+    sandbox: [
+      "Put this configuration under configuration.sandbox in build_update_agent, preserving unrelated settings and the current expectedRevision. Provider setup is separate; choose datool, local, modal or boat. Native volumes must match compute; S3/GCS drives are independent. Boat requires S3/GCS for persistent drives, including sdkStorageConnectionId for SDK workspaces.",
+      "build_create_drive creates shared persistent storage. Mount returned drive IDs at no more than four unique, non-overlapping /workspace paths. Only mounted contents persist after a turn. Eve exposes bash, read_file, write_file, edit_file, glob and grep when allowed by the agent's routing and approval settings.",
+      "build_list_drives accepts agentId and returns shared drives plus this agent's SDK-managed drives, even before any chat exists. Follow nextCursor using after. sdkContext supplies agentId, connectionId, workspace and workspaceName for display; it never grants access.",
+      "SDK sessions mount only their own application drive at /workspace and exclude static shared agent drives. Do not add SDK drives to configuration.sandbox.drives. Manage their files through build_sdk_files or the server SDK. Workspace names are display labels, not authentication.",
+    ],
+    integration: [
+      "In the UI, manage a connection on its own Integrations page. Tools appear first with search, enabled/disabled filters and infinite scrolling; connection settings are separate. Actions is for custom tools. Integration tool definitions still use the action API for revisions and execution.",
+      "Discover build_list_app_connections and build_list_app_tools. For custom Streamable HTTP servers use build_save_mcp_connection with a public HTTPS URL, or build_start_mcp_oauth and the returned sign-in URL. OAuth needs a signed-in project member; do not guess or fabricate credentials. Omit saved URL/token on updates to preserve them.",
+      "build_enable_mcp_tools imports missing tools and applies the agent catalog; it preserves existing enabled/settings values. Supplying agentId during MCP connection setup can also import and publish tools. This is an applying mutation, not just discovery.",
+      "To toggle one tool, find its existing build_list_actions definition by connectionId/toolSlug, preserve its ID and settings, and use build_save_action with its current revision and definition.enabled. For a new tool, use the discovered tool schema and IDs. Apply the intended agent revision with build_update_agent. Never create duplicate definitions just to toggle a tool.",
+      "Disconnecting a connection revokes it for all agent revisions. Disabling a single tool affects this agent's applied catalog. Verify the requested scope before choosing either action.",
+    ],
+    "react-sdk": [
+      "Configure an api channel through build_create_channel and build_update_channel_status, or Channels > React SDK. The applied agent must allow api; enable Sandbox when using files. Read the returned connection ID, never guess it.",
+      "Use createDatoolHandler from @datool/react/server in your application's authenticated POST route, including Next.js app/api/datool/[[...datool]]/route.ts. Resolve userId and drive from server-side auth on every request. Return workspaceName only as a friendly display label. Keep API keys on the server; render DatoolChat from @datool/react with an endpoint on your application's origin and import @datool/react/styles.css.",
+      "Use createDatoolClient from @datool/sdk/agents with the same connectionId, userId, drive and threadId for files, messages and tasks. If the authenticated workspace changes, recreate the scoped client and reset the chat React key. Load the matching saved context before opening chat; a file is available for the agent to read, not automatically injected into its instructions.",
+      "This example is a build_sdk_chat session input. Reuse the returned conversationId for messages/send and build_sdk_tasks. Send requires a stable requestId UUID; pending replies require polling. File requests use build_sdk_files, drive-relative paths and base64 content, with a 256 KiB file limit and 500-entry directory limit. The SDK handles encoding.",
+      "Use build_sdk_tasks for per-user proactive work. Task creation saves the original user scope, connection, drive and conversation; all later runs verify that binding and reject missing/changed context. They read current file contents from the saved drive. A workspace switch never retargets an existing task. Pause/delete tasks when application access is revoked.",
+      "Discover scopes before execution: chat requires build:run; files require build:write and build:run; SDK tasks require build:read, build:write and build:run. The project's server credential may address app users; it must never be exposed to those users. Confirm installed packages and deployed support separately; repository source does not prove an npm release.",
+    ],
+    "scheduled-task": [
+      "This example is for build_create_scheduled_task, a shared agent task. It runs with published agent settings and starts a new conversation each run. For a user/workspace-bound task use build_sdk_tasks action=create instead; never imitate binding by setting channel=api or supplying sdkContext.",
+      "Choose an IANA timezone and a five-field cron expression, or schedule:{kind:'once',at:<future ISO timestamp with offset>}. Start disabled if preparing a draft. Creation and run-now require a stable idempotencyKey; edits/deletion require expectedRevision from the current task.",
+      "build_list_scheduled_tasks accepts agentId, search, cursor and limit. It returns workspace/drive/conversation in sdkContext without the private scope key. Search includes workspace names. The Scheduled tasks UI shows the same workspace and original conversation.",
+      "SDK tasks and queued runs retain their original binding through edits, pauses and manual runs. Missing or changed bindings fail closed. Their channel cannot be changed away from api. Shared tasks use the agent's static drives; SDK tasks use only their saved application drive.",
+      "Use build_run_scheduled_task for a run now; inspect build_list_scheduled_task_runs until a terminal state. Queued/completed execution is separate from useful output. Pausing stops future scheduled runs; started work may finish. Deleting cancels unstarted runs and retains existing conversations/history.",
+    ],
     agent: [
       "Use build_create_agent or build_update_agent; put the example under configuration, not definition. A create establishes an initial applied revision. Use apply:false for subsequent draft edits and apply:true only when the reviewed changes should go live.",
       "Read build_get_agent and preserve unrelated configuration. Use its current revision as expectedRevision on updates; use build_list_agent_revisions and build_restore_agent_revision for history/rollback.",
-      "Configure instructions, provider/model, channels and guardrails using the schema. Provider credentials and external app authorization are separate setup steps; never embed secrets in instructions.",
+      "guardrails.jevCheckEnabled controls the pre-generation Jev scope router and defaults to true. channelOverrides[channel].jevCheckEnabled can opt out a channel; the agent-wide switch must also be enabled. Turning it off skips Jev calls and their usage while retaining normal generation and other guardrails. Jev selects answer, redirect or clarify; redirect/clarify disable tools. This is routing, not an extra response judge.",
+      "Configure instructions, provider/model, channels, guardrails, sandbox and web access using the schema. sandbox.enabled exposes Eve's bash, read_file, write_file, edit_file, glob and grep tools except when human approval is required or external actions are mocked in simulations. Commands share one environment during the turn; only mounted drives persist afterwards. Create/list project drives with build_create_drive/build_list_drives and mount at most four non-overlapping paths under /workspace. Drives belong to their provider; never switch providers as a fallback for an existing drive. web.fetchEnabled enables public URL reading; web.searchEnabled enables provider-managed search using project model credentials. Both are off by default and unavailable on restricted Jev routes or in simulations. Provider credentials and external app authorization are separate setup steps; never embed secrets in instructions.",
     ],
     action: [
       "Use build_save_action with agentId and definition. Inspect connected app tools with build_list_app_tools before defining integration actions. Bind verified connection/tool IDs, never guessed ones.",

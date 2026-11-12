@@ -53,7 +53,7 @@ the application host when a sandbox is unavailable.
 
 For UI development, follow [Shared product patterns](docs/shared-product-patterns.md). New collection pages should compose `CollectionPage`, `CollectionTable`, and the existing filter, saved-view, and inspector components. The guide identifies each behavior's owner and its verification contract.
 
-Install Node.js 22.18+ (CI also tests Node 24), Bun 1.3.14, and Docker with Compose v2. Create a local environment file from the example:
+Install Node.js 24+ (published SDK and CLI packages also support Node 22.18+), Bun 1.3.14, and Docker with Compose v2. Create a local environment file from the example:
 
 ```bash
 bun install --frozen-lockfile
@@ -141,12 +141,19 @@ The test suite requires a separate, explicit loopback PostgreSQL target. It neve
 
 ```bash
 docker compose -f compose.dev.yaml up -d postgres redis
+bun run build:monaco
+bunx playwright install chromium
 env -u DATABASE_URL \
   DATOOL_TEST_DATABASE_URL=postgresql://datool:datool@127.0.0.1:5432/datool \
-  bun test
+  bun run test
 ```
 
 Do not point `DATOOL_TEST_DATABASE_URL` at a shared, preview, or production database. The helper rejects non-loopback hosts and a value equal to `DATABASE_URL`.
+
+`bun run test` runs ordinary Bun tests and the Node/Vitest journey integration
+suite. To run only the journeys, use `bun run test:agent:journeys` with the same
+explicit test database. The `.integration.ts` files stay out of raw `bun test`
+discovery so browser-driver state is isolated from Bun's test lifecycle.
 
 Run the disposable production self-hosting acceptance test with Docker and local Playwright browsers available:
 

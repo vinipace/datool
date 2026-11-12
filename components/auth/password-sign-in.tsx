@@ -42,7 +42,9 @@ export function PasswordSignIn({ callbackURL }: { callbackURL: string }) {
                 ? "Too many requests. Please wait a minute before trying again."
                 : "Unable to sign in. Check your email and password, or use another sign-in method."
             )
-          } else {
+          } else if (!result.data?.redirect) {
+            // Better Auth follows the provider's signed OAuth continuation itself.
+            // A second navigation here would replace it with the workspace page.
             window.location.assign(callbackURL)
           }
         } catch {

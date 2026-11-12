@@ -94,11 +94,11 @@ export const channelCatalog: Record<
     available: false,
   },
   api: {
-    label: "API",
-    description: "Conversations in your own application.",
+    label: "React SDK",
+    description: "Embed chat in your app with your own authentication, files and proactive tasks.",
     icon: Code2,
     tone: "text-channel-api bg-channel-api/10",
-    available: false,
+    available: true,
   },
   helpdesk: {
     label: "Helpdesk",

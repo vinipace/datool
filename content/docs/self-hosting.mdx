@@ -103,8 +103,8 @@ See [Security](/docs/security) for the deployment responsibilities.
 
 ## Code scorer sandbox
 
-Configure Modal or Vercel Sandbox in **Project settings → Sandbox providers**,
-test the connection, and select it as default. Each project supplies its own
+Configure Boat, Modal or Vercel Sandbox in **Organization settings → Sandbox providers**,
+test the connection, and select it as default. Each organization supplies shared
 credentials. Without a working sandbox, code scoring fails with a saved error
 and no score; Datool does not execute scorer code directly on the app host.
 
@@ -114,7 +114,7 @@ host with trusted administrators. Follow the socket-group and image setup in
 the repository's `docs/self-hosting.md` before enabling the override. A separate
 sandbox provider is preferable for a public multi-user installation. The default
 Compose stack mounts no Docker socket. LLM scorers separately require a model
-provider key in project settings.
+provider key in organization settings.
 
 ## Optional CMS
 
@@ -150,3 +150,9 @@ bun run ingestion:jobs retry JOB_ID
 Investigate the cause before retrying failed jobs. Replay failed predecessor events before dependent events. Monitor failed jobs, queue age, worker uptime, and storage availability.
 
 HTTP 202 means queue acceptance. A completed SDK flush confirms persistence. Verify a real trace reaches the UI after deployment; a responding sign-in page alone does not establish ingestion health.
+
+## Agent sandboxes and persistent drives
+
+Docker plus local storage works without cloud credentials. Use `compose.sandbox.yaml` and configure **Local container** for the agent, then add a **Local volume** drive. Pre-pull `node:22-bookworm-slim` and `python:3.13-slim`. See the [agent guide](/docs/guides/agents) for mounting drives. All web and Eve workers accessing a local drive must reach the same Docker daemon. Drive files persist in named Docker volumes, independently of container shutdown; PostgreSQL stores their catalog and leases. Back up the database and volumes together with sandboxes stopped.
+
+For storage independent of the compute host, configure S3 or GCS in **Organization settings → Storage providers**. Existing volumes are retained. Bucket-backed drives use bounded file snapshots and require both database and object backups. Private S3 endpoints require the operator setting `DATOOL_STORAGE_ALLOW_PRIVATE_ENDPOINTS=true`; enable this only for trusted organization administrators because it permits access to private network endpoints. The setting must be consistent across Datool and Eve workers.

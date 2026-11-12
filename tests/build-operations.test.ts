@@ -415,7 +415,7 @@ test("Telegram campaign worker delivers through the provider outbox and human re
     expect(transcript.items.find(message => message.id === aiMessage.id)?.author).toMatchObject({
       id: agent.id, name: "Worker", agentAvatar: { avatarUrl: null, avatarStyle: "wink", avatarColor: "violet" },
     })
-    expect(transcript.items.find(message => message.id === customerMessage.id)?.author).toBeNull()
+    expect(transcript.items.find(message => message.id === customerMessage.id)?.author).toMatchObject({ image: null })
     const humanJob = await claimNextChannelJob(database)
     expect(humanJob?.kind).toBe("deliver_outbound")
     if (!humanJob) throw new Error("Human reply did not enqueue a channel job.")

@@ -150,6 +150,7 @@ type Ticket = {
   macros?: Macro[]
 }
 type Message = {
+  isViewer?: boolean
   id?: string
   author?: InspectorMessage["author"]
   role?: string
@@ -2069,6 +2070,7 @@ function InboxInspector({
             perspective="operator"
             messages={activeTicket.messages.map((item) => ({
               id: item.id,
+              isViewer: item.isViewer,
               author: item.author,
               role:
                 item.role ||

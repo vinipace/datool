@@ -44,7 +44,7 @@ export function SyntaxCode({
   language,
   className,
 }: {
-  text: string
+  text: string | null | undefined
   language: "json" | "yaml" | "filter" | "javascript"
   className?: string
 }) {
@@ -55,7 +55,7 @@ export function SyntaxCode({
     >
       {renderTokens(
         Prism.tokenize(
-          text,
+          text ?? "",
           language === "filter" ? filterGrammar : Prism.languages[language]
         )
       )}

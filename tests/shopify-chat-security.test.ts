@@ -24,7 +24,9 @@ import {
   decryptProviderKey,
 } from "@/src/server/model-providers/secrets"
 import { saveAction, saveProcedure } from "@/src/server/build/definitions"
-import { runAgentTurn } from "@/src/server/build/runtime"
+import { scriptedEveRunner } from "./helpers/scripted-eve"
+import type { IsolatedPostgres } from "./helpers/postgres"
+import type { BuildContext } from "@/src/server/build/context"
 import { shopifyCartTools } from "@/src/server/build/integrations/shopify-cart"
 import { shopifyChannelCart } from "@/src/server/build/integrations/shopify-channel-cart"
 import { createAgent, updateAgent } from "@/src/server/build/agents"
@@ -62,6 +64,8 @@ import {
 
 configureBuildTestEnvironment()
 const cleanup: Array<() => Promise<void>> = []
+const eveTargets = new WeakMap<BuildContext["database"], IsolatedPostgres>()
+const runAgentTurn = scriptedEveRunner(context => eveTargets.get(context.database)!, cleanup)
 const saved = new Map<string, string | undefined>()
 function env(name: string, value: string) {
   if (!saved.has(name)) saved.set(name, process.env[name])
@@ -97,6 +101,7 @@ async function fixture(
     await closeTracerDatabase(database)
     await target.close()
   })
+  eveTargets.set(database, target)
   const context = createBuildContext(database, {
     organizationId: target.organizationId,
     actorId: target.ownerId,
@@ -104,6 +109,7 @@ async function fixture(
   const agent = await createAgent(context, {
     name: "Shopify support",
     slug: "shopify-support",
+    configuration: { provider: "openai", model: "gpt-4.1-mini", guardrails: { jevCheckEnabled: false } },
   })
   const shop = "fixture.myshopify.com"
   const channel = await createChannelConnection(context, {
@@ -447,7 +453,7 @@ for (const channelType of ["whatsapp", "telegram"] as const) {
     let args: Record<string, unknown> = { query: "wax" }
     let toolOutput: unknown
     const dependencies = {
-      generateText: (async (input: {
+      script: (async (input: {
         tools: Record<
           string,
           {
@@ -462,7 +468,9 @@ for (const channelType of ["whatsapp", "telegram"] as const) {
           toolCallId: randomUUID(),
         })
         return {
-          text: "Here is the result.",
+          text: chosen === "SHOPIFY_SEARCH_PRODUCTS"
+            ? (() => { const result = toolOutput as { currency: string; products: Array<{ title: string; priceMin: string; url: string }> }; const product = result.products[0]; return `${product.title} — ${product.priceMin} ${result.currency}\n${product.url}` })()
+            : chosen === "SHOPIFY_GET_CART" && (toolOutput as { shopifyCart?: { itemCount: number } })?.shopifyCart?.itemCount === 0 ? "Your cart is empty." : "Here is the result.",
           usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
         }
       }) as never,
@@ -1443,7 +1451,7 @@ for (const flow of [
         WHERE action_id=${searchAction.id}`)
     }
     const dependencies = {
-      generateText: (async (options: {
+      script: (async (options: {
         tools: Record<
           string,
           {
@@ -1735,7 +1743,7 @@ for (const flow of [
       await runAgentTurn(f.context, await admittedTurn(), {
         agent,
         dependencies: {
-          generateText: (async (options: { messages: typeof nextMessages }) => {
+          script: (async (options: { messages: typeof nextMessages }) => {
             nextMessages = options.messages
             return {
               text: "I can help with that cart.",
@@ -2056,7 +2064,7 @@ for (const paymentMethod of ["online", "cash_on_delivery", "free"] as const) {
       })
       let session = await f.session(paymentMethod === "online" ? "" : "123")
       const dependencies = {
-        generateText: (async (options: {
+        script: (async (options: {
           tools: Record<
             string,
             {
@@ -2745,7 +2753,7 @@ async function returnRuntimeFixture(
   })
   let session = await f.session(options.guest ? "" : "123")
   const dependencies = {
-    generateText: (async ({
+    script: (async ({
       tools,
     }: {
       tools: Record<

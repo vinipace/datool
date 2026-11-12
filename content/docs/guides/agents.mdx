@@ -1,0 +1,51 @@
+---
+title: Agents, tools, and persistent drives
+description: Configure a durable agent, connect tools, and choose shared or application workspace storage.
+---
+
+Datool agents use saved configurations and published revisions. Create an agent, choose a configured model provider, write its instructions, and enable the channels your users need. Provider credentials belong in organization settings; connected app credentials belong in **Integrations**.
+
+## Draft, apply, and verify
+
+Creating an agent establishes an initial applied revision. Later edits can stay in a draft. Through MCP, read `build_get_agent`, preserve unrelated fields, and pass its `currentRevision` as `expectedRevision` to `build_update_agent`. Use `apply: false` for a draft and `apply: true` when the intended changes should run. Applied revisions include the agent's action, skill, and widget definitions. A running turn retains its admitted configuration snapshot.
+
+Use the agent's **Test** tools and approved mocks to check behavior before applying changes. A successful save validates configuration; it does not prove tool authorization, rendered widget quality, or a useful response. Read conversations, traces, and test results to verify those outcomes. Revision history supports inspecting and restoring earlier configurations.
+
+Eve executes turns durably with saved checkpoints and recovery. A response may remain pending after the request returns. Inspect the saved turn or poll the conversation; a queued run is not a completed response. Do not blindly replay an external action after an uncertain result.
+
+## Custom tools and connected tools
+
+Use **Actions** for custom HTTP tools, forms, client tools, handoffs, and widgets. Manage tools supplied by an app or MCP server inside that connection's **Integrations** page. Each connection has its own addressable page, tool search, enabled/disabled filters, and an infinitely scrolling list. Open connection settings when changing the account, server, or authentication. See [integration connections](/docs/guides/integrations).
+
+In the API, connected tools retain action definitions for revision history, approvals, channel restrictions, and execution. `build_list_actions` therefore includes connected tools even though the Actions UI shows custom tools. Match an integration definition by `connectionId` and `toolSlug` before editing it.
+
+## Sandbox and persistent files
+
+Enable **Sandbox** and choose an available provider (Datool, local Docker, Modal or Boat) and environment. The agent can use native `bash`, `read_file`, `write_file`, `edit_file`, `glob`, and `grep` tools when allowed by its routing and approval settings. Commands in a turn share an environment. Only mounted drive contents persist when that environment stops.
+
+Create shared drives with `build_create_drive`; mount returned IDs under `configuration.sandbox.drives`. Mount paths must be `/workspace` or descendants, with at most four unique drives and no overlapping paths. Native Docker and Modal volumes belong to their selected sandbox provider. Boat requires S3 or GCS for persistent drives, including SDK workspaces. S3/GCS drives use an independent storage connection and can be mounted by any sandbox provider. Changing settings never moves existing files. Unmounting retains the drive's files.
+
+| Drive kind | Used by | Management |
+| --- | --- | --- |
+| Shared drive | Ordinary conversations and shared scheduled tasks using the agent configuration | Create and mount in Sandbox; use the returned drive ID. |
+| SDK-managed workspace drive | Authenticated application users assigned the same logical `drive` | Created on demand by the server SDK; shown with workspace ownership in Sandbox. |
+
+SDK sessions mount their own application drive at `/workspace` and exclude the agent's static drives. Do not manually attach a customer workspace drive to the shared configuration. SDK-managed rows cannot be unmounted through the shared-drive control. Use the [server SDK](/docs/guides/react-sdk) to read and write files in the authenticated workspace.
+
+`build_list_drives` supports `agentId`, `limit`, and `after`. With `agentId`, it returns shared drives plus that agent's SDK-managed drives. Pass each `nextCursor` as `after`. `sdkContext` contains the owning agent/connection and logical workspace/display name; it is descriptive metadata, not authorization. Drives created through file operations appear even before the first chat.
+
+## Routing and web access
+
+`guardrails.jevCheckEnabled` enables Jev's pre-generation scope routing. A channel can opt out with `channelOverrides[channel].jevCheckEnabled: false`; the global setting must also be enabled for Jev to run. Jev chooses answer, redirect, or clarify. Redirect and clarify routes disable tools. Turning Jev off skips those routing calls while retaining normal generation and other guardrails.
+
+Sandbox network access and web tools are separate settings. `web.fetchEnabled` permits public URL reading; `web.searchEnabled` enables provider-managed search using project model credentials. Both default to off. Restricted routing, approval requirements, and mocked simulations can limit tool availability.
+
+For automation, read [scheduled tasks](/docs/guides/scheduled-tasks). To embed this agent in your own app, follow [React SDK and proactive agents](/docs/guides/react-sdk). MCP clients can request `build_get_authoring_guide` with `topic: "agent"` or `topic: "sandbox"` for validated examples and current schemas.
+
+## Storage providers
+
+Self-hosted installations can run Docker sandboxes with local named volumes and no cloud credentials. All workers must use the same daemon. PostgreSQL stores drive metadata; the named volume stores files. Back up both.
+
+Owners/admins can configure S3-compatible storage or Google Cloud Storage in **Organization settings → Storage providers**. Choose that connection when adding a drive. Credentials remain encrypted on the server. Sandbox runs hydrate a native working volume and commit files after shutdown; failed synchronization retains pending files and blocks overwrites until recovery.
+
+Object-backed drives support regular files and folders, with 16 MiB per file, 64 MiB total and 10,000 entries. Put symlinks and installed dependencies on a native volume. **Versions** lists saved snapshots and offers restore, export and import. Restoring creates a new version and requires the current revision. History and object data are retained indefinitely; back up both PostgreSQL and bucket contents. Existing SDK workspaces cannot be migrated in place by changing settings.

@@ -1,10 +1,11 @@
+import { createEveFixture, eveResponse } from "./helpers/eve-fixture"
 import { configureBuildTestEnvironment } from "./helpers/build-env"
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import assert from "node:assert/strict"
 
 import { sql } from "drizzle-orm"
 
-import { createAgent } from "@/src/server/build/agents"
+import { createAgent, getAgent, updateAgent } from "@/src/server/build/agents"
 import { ConversationService } from "@/src/server/build/conversations"
 import {
   listTickets,
@@ -14,7 +15,6 @@ import {
 } from "@/src/server/build/operations/inbox"
 import {
   runAgentTurn,
-  type RuntimeDependencies,
 } from "@/src/server/build/runtime"
 import { TracerService } from "@/src/server/tracer/service"
 import { runTracerEffect } from "@/src/server/tracer/effect"
@@ -69,9 +69,11 @@ const resources: Array<{ database: TracerDatabase; target: IsolatedPostgres }> =
   []
 const token = "123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
+const eveFixtures: Awaited<ReturnType<typeof createEveFixture>>[] = []
 const auditSpies: { mockRestore(): void }[] = []
 
 afterEach(async () => {
+  for (const eve of eveFixtures.splice(0)) await eve.close()
   for (const spy of auditSpies.splice(0)) spy.mockRestore()
   for (const { database, target } of resources.splice(0)) {
     await closeTracerDatabase(database)
@@ -659,6 +661,11 @@ describe("durable Build channel delivery", () => {
 
   test("uses the same durable runtime path for a signed public web session", async () => {
     const { database, context } = await fixture()
+    const eve = await createEveFixture({ target: resources.at(-1)!.target })
+    eveFixtures.push(eve)
+    eve.provider(body => eveResponse(body, "Yes, before dispatch."))
+    const current = await getAgent(context, "agent-telegram")
+    await updateAgent(context, current.id, { expectedRevision: current.currentRevision, configuration: { ...current.configuration, provider: "openai", guardrails: { ...current.configuration.guardrails, jevCheckEnabled: false } } })
     const web = await createChannelConnection(context, {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       agentId: "agent-telegram",
@@ -711,16 +718,7 @@ describe("durable Build channel delivery", () => {
             requestKey: String(input.metadata.requestKey),
             message: input.messages.at(-1)!.content,
           },
-          {
-            dependencies: {
-              generateText: (async () => ({
-                text: "Yes, before dispatch.",
-                usage: { inputTokens: 5, outputTokens: 4, totalTokens: 9 },
-              })) as unknown as NonNullable<
-                RuntimeDependencies["generateText"]
-              >,
-            },
-          }
+          {}
         )
         responseTraceId = result.traceId
         return {

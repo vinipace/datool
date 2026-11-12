@@ -29,6 +29,12 @@ npx datool agent tools record_review
 
 The CLI 0.4.1 source adds bridge session protocol changes. A source version is not evidence of an npm release. Use the published baseline above unless your administrator supplies and verifies a newer CLI and compatible server together. `connect --watch` exists in 0.4.0; stop and reconnect if your server rejects the bridge protocol.
 
+## React SDK and proactive agent preview
+
+`@datool/react`, `@datool/react/server`, and `@datool/sdk/agents` are supplied by the agent SDK source change. Do not assume the published package baseline above contains these exports. Use a compatible administrator-provided build or build/pack the authorized source checkout, and verify both the installed exports and `build_sdk_chat`, `build_sdk_files`, and `build_sdk_tasks` on the target server. The included Next.js example uses the workspace packages.
+
+Workspace metadata and saved task context require migration 0087, following the earlier agent/SDK migrations. Apply pending migrations and restart web and Build worker processes; the Eve runtime must also be available for execution. Verify workspace drives, scheduled output and binding rejection after upgrading. A successful package build or local test is not a production rollout.
+
 ## Python preview access
 
 The application source repository is private. Public documentation links do not grant source access. Ask your Datool administrator for a Python wheel and its checksum, or source access, before following the [Python setup](/docs/reference/python-sdk). Do not install an unrelated package simply because it has a similar name.

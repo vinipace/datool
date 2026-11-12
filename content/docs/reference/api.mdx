@@ -8,6 +8,12 @@ Datool exposes the operation surface shared by REST, CLI, and MCP through `POST 
 
 The specification describes operation input constraints, result fields, pagination, error responses, and scopes. Application-defined inputs, outputs, metadata, and JSON Schema values remain open JSON. Browser-internal endpoints and the MCP JSON-RPC transport are outside this REST contract.
 
+## Managed-agent operations
+
+Build operations use `POST /api/build/{operation}`, with the same API-key/project headers and a `data` response envelope. They require explicit `build:read`, `build:write`, and/or `build:run` scopes. Browse the [Build operation reference](/docs/reference/build-operations), or call `build_describe_operations` for the current input and available output schemas. The Observe OpenAPI document above does not include this separate Build catalog.
+
+The CLI dispatches these through `datool build tools` and `datool build call`; MCP exposes their `build_*` names directly. A React SDK endpoint in your own application authenticates the visitor and calls Build from the server, keeping the project credential private. See [React SDK](/docs/guides/react-sdk).
+
 ## Make a request
 
 Create an organization API key with `traces:read`. Set `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and `DATOOL_API_KEY`, then list one trace:

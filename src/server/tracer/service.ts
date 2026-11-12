@@ -71,7 +71,7 @@ import { createCustomViewService } from "./custom-views"
 import { createViewLibrary } from "./view-library"
 import { randomUUID } from "node:crypto"
 
-import { and, count, desc, eq, getTableColumns, inArray, notExists, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, getTableColumns, inArray, notExists, sql } from "drizzle-orm"
 import { Effect } from "effect"
 
 import type { SemanticCatalogMetadata } from "@/src/lib/semantic/catalog"
@@ -863,7 +863,7 @@ export class TracerService {
           .select()
           .from(spans)
           .where(predicate)
-          .orderBy(spans.startedAt, spans.id)
+          .orderBy(asc(spans.startedAtMs), spans.startedAt, spans.id)
         return rows.map(toSpan)
       })
     )
@@ -1666,13 +1666,13 @@ export class TracerService {
     if (page)
       await assertRelationBytes(
         this.database,
-        sql`select * from ${spans} where ${spans.projectId}=${this.projectId} and ${spans.traceId}=${id} order by ${spans.startedAt},${spans.id} limit ${(page.limit ?? 100) + 1}`
+        sql`select * from ${spans} where ${spans.projectId}=${this.projectId} and ${spans.traceId}=${id} order by ${spans.startedAtMs},${spans.startedAt},${spans.id} limit ${(page.limit ?? 100) + 1}`
       )
     const spanQuery = this.database
       .select()
       .from(spans)
       .where(and(eq(spans.projectId, this.projectId), eq(spans.traceId, id)))
-      .orderBy(spans.startedAt, spans.id)
+      .orderBy(asc(spans.startedAtMs), spans.startedAt, spans.id)
       .$dynamic()
     const scoreQuery = sql`select * from (${this.traceScoreRelation(id)}) score_rows order by "createdAt" desc, id desc ${page ? sql`limit 101` : sql``}`
     const [spanRows, scoreResult] = await Promise.all([
@@ -2528,7 +2528,7 @@ export class TracerService {
           sourceApp,
           mode: app ? "connected" : "evidence",
           agentId: input.agentId ?? null,
-          ...(app?.buildAgent ? { agentRevision: app.definition.revision, externalActions: "disabled" } : {}),
+          ...(app?.buildAgent ? { agentRevision: app.definition.revision, externalActions: "mocked-or-disabled" } : {}),
           // Reserved provenance: caller metadata cannot replace the actual overrides.
           inputOverrides: inputOverrides ?? {},
           concurrency: input.concurrency ?? 4,
@@ -2681,7 +2681,7 @@ export class TracerService {
             inArray(spans.traceId, traceIds),
             sql`${spans.attributesJson}::jsonb ->> 'eval.run_id' = ${id}`,
             sql`${spans.attributesJson}::jsonb ->> 'eval.target_id' in (${sql.join(targets.map(target => sql`${target.id}`), sql`, `)})`,
-          )).orderBy(spans.startedAt, spans.id)
+          )).orderBy(asc(spans.startedAtMs), spans.startedAt, spans.id)
         : [],
     ])
     const rows = targets.flatMap((target) => {
@@ -3201,6 +3201,11 @@ export class TracerService {
         const current = await transaction.execute(sql`select r.id from eval_runs r join eval_run_lease l on l.run_id=r.id where r.project_id=${this.projectId} and r.id=${runId} and r.status='running' and l.owner=${owner} and l.expires_at>now() for update of r`)
         if (!current.rows.length) throw new TracerError("CONFLICT", "Run cancelled or execution ownership changed")
       }
+      // One settled judgment per run target and evaluator. A worker that lost
+      // the race (or retried after persisting) keeps the first settled result;
+      // eval_results_one_settled_per_target rejects concurrent duplicates.
+      const settled = await transaction.execute(sql`select 1 from eval_results where project_id=${this.projectId} and run_id=${runId} and evaluator_id=${evaluator.id} and (target_id=${target.targetId!} or (target_id is null and metadata_json::jsonb->>'evalTargetId'=${target.targetId!})) and status<>'error' limit 1`)
+      if (settled.rows.length) return
       await transaction.execute(sql`delete from eval_results where project_id=${this.projectId} and run_id=${runId} and evaluator_id=${evaluator.id} and (target_id=${target.targetId!} or (target_id is null and metadata_json::jsonb->>'evalTargetId'=${target.targetId!})) and status='error'`)
       await transaction.insert(evalResults).values({
         targetId: target.targetId!,

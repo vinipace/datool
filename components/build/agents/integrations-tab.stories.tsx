@@ -1,5 +1,11 @@
+import { useSyncExternalStore } from "react"
+import {
+  useSearchParams,
+  ReadonlyURLSearchParams,
+} from "@storybook/nextjs-vite/navigation.mock"
+import { subscribeBrowserNavigation } from "@/components/navigation/navigation"
 import type { Meta, StoryObj } from "@storybook/nextjs-vite"
-import { expect, fn, userEvent, waitFor, within } from "storybook/test"
+import { expect, userEvent, waitFor, within } from "storybook/test"
 import { IntegrationsTab } from "./integrations-tab"
 import { appIntegrationScenario } from "@/.storybook/scenarios/app-integrations"
 
@@ -13,8 +19,33 @@ const shopify = appIntegrationScenario("shopify")
 const meta = {
   title: "Build/AgentIntegrations",
   component: IntegrationsTab,
-  args: { onOpenActions: fn() },
+  args: { agentId: "calendar-agent" },
   parameters: { layout: "fullscreen", msw: { handlers: active.handlers } },
+  beforeEach: () => {
+    const original = useSearchParams.getMockImplementation()
+    const url = new URL(window.location.href)
+    url.searchParams.delete("integration")
+    url.searchParams.delete("mcp")
+    window.history.replaceState(null, "", url.toString())
+    const push = window.history.pushState
+    window.history.pushState = function (...args) {
+      push.apply(this, args)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    }
+    useSearchParams.mockImplementation(function () {
+      return new ReadonlyURLSearchParams(
+        useSyncExternalStore(
+          subscribeBrowserNavigation,
+          () => window.location.search,
+          () => ""
+        )
+      )
+    })
+    return () => {
+      window.history.pushState = push
+      if (original) useSearchParams.mockImplementation(original)
+    }
+  },
 } satisfies Meta<typeof IntegrationsTab>
 export default meta
 type Story = StoryObj<typeof meta>
@@ -27,7 +58,7 @@ export const Shopify: Story = {
       await canvas.findByRole("button", { name: /^Connect$/ })
     )
     const dialog = within(
-      await within(canvasElement.ownerDocument.body).findByRole("dialog", {
+      await within(canvasElement.ownerDocument.body).findByRole("region", {
         name: "Shopify",
       })
     )
@@ -56,12 +87,12 @@ export const Connected: Story = {
     await userEvent.click(manage)
     const page = within(canvasElement.ownerDocument.body)
     const dialog = within(
-      await page.findByRole("dialog", { name: "Google Calendar" })
+      await page.findByRole("region", { name: "Google Calendar" })
     )
     await expect(dialog.getByText("Connected", { exact: true })).toBeVisible()
     await expect(
-      dialog.getByRole("button", { name: "Open Actions" })
-    ).toBeVisible()
+      dialog.findByRole("switch", { name: "Enable List calendar events" })
+    ).resolves.toBeVisible()
     await userEvent.click(dialog.getByRole("button", { name: /Options for/ }))
     await expect(
       page.getByRole("menuitem", { name: "Check connection" })
@@ -70,10 +101,24 @@ export const Connected: Story = {
       page.getByRole("menuitem", { name: "Disconnect" })
     ).toBeVisible()
     await userEvent.keyboard("{Escape}")
-    await expect(page.getByRole("dialog")).toBeVisible()
-    await userEvent.keyboard("{Escape}")
     await expect(page.queryByRole("dialog")).not.toBeInTheDocument()
-    await expect(manage).toHaveFocus()
+    await expect(
+      new URL(window.location.href).searchParams.get("integration")
+    ).toBe("googlecalendar")
+    window.history.back()
+    await expect(
+      canvas.findByRole("group", { name: "Google Calendar" })
+    ).resolves.toBeVisible()
+    window.history.forward()
+    const reopened = within(
+      await page.findByRole("region", { name: "Google Calendar" })
+    )
+    await userEvent.click(
+      reopened.getByRole("button", { name: "Integrations" })
+    )
+    await expect(
+      canvas.findByRole("group", { name: "Google Calendar" })
+    ).resolves.toBeVisible()
   },
 }
 export const Empty: Story = {
@@ -85,7 +130,9 @@ export const Empty: Story = {
       await canvas.findByRole("button", { name: /^Connect$/ })
     )
     const page = within(canvasElement.ownerDocument.body)
-    const dialog = within(await page.findByRole("dialog"))
+    const dialog = within(
+      await page.findByRole("region", { name: "Google Calendar" })
+    )
     await expect(
       dialog.findByRole("link", { name: "Authorize account" })
     ).resolves.toBeVisible()
@@ -98,7 +145,7 @@ export const Empty: Story = {
     await expect(
       dialog.queryByRole("link", { name: "Authorize account" })
     ).not.toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
+    await userEvent.click(dialog.getByRole("button", { name: "Integrations" }))
     await expect(canvas.getByRole("button", { name: "Manage" })).toBeVisible()
   },
 }
@@ -109,17 +156,19 @@ export const Pending: Story = {
     const canvas = within(canvasElement)
     await userEvent.click(await canvas.findByRole("button", { name: "Manage" }))
     const dialog = within(
-      await within(canvasElement.ownerDocument.body).findByRole("dialog")
+      await within(canvasElement.ownerDocument.body).findByRole("region", {
+        name: "Google Calendar",
+      })
     )
     await expect(dialog.getByText("Awaiting authorization")).toBeVisible()
     await expect(
-      dialog.queryByRole("button", { name: "Open Actions" })
+      dialog.queryByRole("switch", { name: "Enable List calendar events" })
     ).not.toBeInTheDocument()
     await userEvent.click(
       dialog.getByRole("button", { name: "Check connection" })
     )
     await expect(
-      dialog.findByRole("button", { name: "Open Actions" })
+      dialog.findByRole("switch", { name: "Enable List calendar events" })
     ).resolves.toBeVisible()
   },
 }
@@ -145,7 +194,7 @@ export const Catalog: Story = {
     await userEvent.click(calendar.getByRole("button", { name: "Manage" }))
     const page = within(canvasElement.ownerDocument.body)
     let dialog = within(
-      await page.findByRole("dialog", { name: "Google Calendar" })
+      await page.findByRole("region", { name: "Google Calendar" })
     )
     await expect(dialog.getByText("Connected", { exact: true })).toBeVisible()
     await expect(
@@ -154,20 +203,20 @@ export const Catalog: Story = {
     await expect(dialog.queryByText("Awaiting authorization")).not.toBeVisible()
     await userEvent.click(dialog.getByText("Other connections (1)"))
     await expect(dialog.getByText("Awaiting authorization")).toBeVisible()
-    await userEvent.keyboard("{Escape}")
+    await userEvent.click(dialog.getByRole("button", { name: "Integrations" }))
     await userEvent.click(
       within(canvas.getByRole("group", { name: "Slack" })).getByRole("button", {
         name: "Manage",
       })
     )
-    dialog = within(await page.findByRole("dialog", { name: "Slack" }))
+    dialog = within(await page.findByRole("region", { name: "Slack" }))
     await expect(
       dialog.getByRole("group", { name: "Slack account" })
     ).toBeVisible()
     await expect(
       dialog.queryByRole("group", { name: /Google Calendar/ })
     ).not.toBeInTheDocument()
-    await userEvent.keyboard("{Escape}")
+    await userEvent.click(dialog.getByRole("button", { name: "Integrations" }))
     await expect(
       within(canvas.getByRole("group", { name: "Shopify" })).getByRole(
         "button",
@@ -185,7 +234,9 @@ export const ConnectFailure: Story = {
       await canvas.findByRole("button", { name: "Connect" })
     )
     const page = within(canvasElement.ownerDocument.body)
-    const dialog = within(await page.findByRole("dialog"))
+    const dialog = within(
+      await page.findByRole("region", { name: "Google Calendar" })
+    )
     await expect(dialog.findByRole("alert")).resolves.toHaveTextContent(
       "Unable to start authorization."
     )
@@ -206,7 +257,9 @@ export const DisconnectAccount: Story = {
     const canvas = within(canvasElement)
     await userEvent.click(await canvas.findByRole("button", { name: "Manage" }))
     const page = within(canvasElement.ownerDocument.body)
-    const dialog = within(await page.findByRole("dialog"))
+    const dialog = within(
+      await page.findByRole("region", { name: "Google Calendar" })
+    )
     const options = dialog.getByRole("button", { name: /Options for/ })
     await userEvent.click(options)
     await userEvent.click(page.getByRole("menuitem", { name: "Disconnect" }))
@@ -231,7 +284,105 @@ export const DisconnectAccount: Story = {
       dialog.findByRole("button", { name: "Connect account" })
     ).resolves.toBeVisible()
     await expect(
-      dialog.queryByRole("button", { name: "Open Actions" })
+      dialog.queryByRole("switch", { name: "Enable List calendar events" })
     ).not.toBeInTheDocument()
+  },
+}
+
+const customMcp = appIntegrationScenario("custom-mcp")
+export const CustomMcp: Story = {
+  parameters: { msw: { handlers: customMcp.handlers } },
+  beforeEach: customMcp.reset,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const page = within(canvasElement.ownerDocument.body)
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("button", { name: "Add custom MCP" })
+      ).toBeEnabled()
+    )
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Add custom MCP" })
+    )
+    let dialog = within(
+      await page.findByRole("region", { name: "Add custom MCP" })
+    )
+    await expect(dialog.getByLabelText("Authentication")).toHaveValue("oauth")
+    await expect(
+      dialog.getByRole("button", { name: "Continue with OAuth" })
+    ).toBeVisible()
+    await expect(
+      dialog.queryByLabelText("Access token")
+    ).not.toBeInTheDocument()
+    await userEvent.type(dialog.getByLabelText("Name"), "Customer records")
+    await userEvent.type(
+      dialog.getByLabelText("Server URL"),
+      "https://records.example.com/mcp"
+    )
+    await userEvent.selectOptions(
+      dialog.getByLabelText("Authentication"),
+      "token"
+    )
+    await userEvent.type(
+      dialog.getByLabelText("Access token"),
+      "fixture-secret"
+    )
+    await userEvent.click(dialog.getByRole("button", { name: "Connect MCP" }))
+    await waitFor(() =>
+      expect(
+        page.queryByRole("region", { name: "Add custom MCP" })
+      ).not.toBeInTheDocument()
+    )
+    const row = within(
+      await canvas.findByRole("group", { name: "Customer records" })
+    )
+    await expect(row.getByText("https://records.example.com/mcp")).toBeVisible()
+    await userEvent.click(row.getByRole("button", { name: "Manage" }))
+    dialog = within(
+      await page.findByRole("region", { name: "Customer records" })
+    )
+    await expect(
+      dialog.queryByLabelText("Access token")
+    ).not.toBeInTheDocument()
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Check connection" })
+    )
+    await expect(dialog.findByText(/Connection checked/)).resolves.toBeVisible()
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Connection settings" })
+    )
+    await expect(dialog.getByLabelText("Access token")).toHaveValue("")
+    await userEvent.clear(dialog.getByLabelText("Name"))
+    await userEvent.type(dialog.getByLabelText("Name"), "Sales records")
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Save connection" })
+    )
+    dialog = within(await page.findByRole("region", { name: "Sales records" }))
+    await expect(dialog.queryByLabelText("Name")).not.toBeInTheDocument()
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Connection settings" })
+    )
+    await userEvent.click(dialog.getByRole("button", { name: "Disconnect" }))
+    let confirmation = within(await page.findByRole("alertdialog"))
+    await waitFor(() =>
+      expect(confirmation.getByRole("button", { name: "Cancel" })).toHaveFocus()
+    )
+    await userEvent.keyboard("{Escape}")
+    await expect(
+      dialog.getByRole("button", { name: "Disconnect" })
+    ).toHaveFocus()
+    await userEvent.click(dialog.getByRole("button", { name: "Disconnect" }))
+    confirmation = within(await page.findByRole("alertdialog"))
+    await userEvent.click(
+      confirmation.getByRole("button", { name: "Disconnect account" })
+    )
+    await waitFor(() =>
+      expect(page.queryByRole("alertdialog")).not.toBeInTheDocument()
+    )
+    await expect(
+      within(canvas.getByRole("group", { name: "Sales records" })).getByText(
+        "Disconnected"
+      )
+    ).toBeVisible()
   },
 }

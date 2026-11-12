@@ -30,6 +30,31 @@ function deferred() {
 }
 
 describe("agent autosave", () => {
+  test("publishes explicitly after saving drafts and preserves edits made during publication", async () => {
+    const started = deferred()
+    const release = deferred()
+    const calls: Array<{ name: string; apply: boolean }> = []
+    const store = createAgentAutosave({ ...agent, configuration: agentConfigurationSchema.parse({ testing: { requirePassingJourneys: true } }) }, async (draft, saved, _changes, options) => {
+      const apply = options?.apply ?? false
+      calls.push({ name: draft.name, apply })
+      if (apply) { started.resolve(); await release.promise }
+      return { ...saved!, ...draft, currentRevision: saved!.currentRevision + 1, appliedRevision: apply ? saved!.currentRevision + 1 : saved!.appliedRevision }
+    }, 60_000)
+    store.update({ ...store.getSnapshot().draft, name: "Tested version" })
+    const publishing = store.apply()
+    await started.promise
+    store.update({ ...store.getSnapshot().draft, name: "Later edit" })
+    const queuedSave = store.flush()
+    expect(calls).toHaveLength(2)
+    release.resolve()
+    await publishing
+    await queuedSave
+    await store.flush()
+    expect(calls).toEqual([{ name: "Tested version", apply: false }, { name: "Tested version", apply: true }, { name: "Later edit", apply: false }])
+    expect(store.getSnapshot().saved).toMatchObject({ name: "Later edit", currentRevision: 4, appliedRevision: 3 })
+    expect(store.pending()).toBe(false)
+  })
+
   test("autosaves edits in revision order and preserves newer edits during a write", async () => {
     const started = deferred()
     const release = deferred()

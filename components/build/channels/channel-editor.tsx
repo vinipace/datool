@@ -39,6 +39,7 @@ import {
   BuildStatus,
   FormLabel,
 } from "@/components/build/operations/build-page"
+import { ReactSdkEditor } from "./react-sdk-editor"
 import { ChatBubbleEditor } from "./chat-bubble-editor"
 import { WhatsAppEditor } from "./whatsapp-editor"
 import type { ChannelConnection } from "@/src/lib/build/channels"
@@ -68,6 +69,7 @@ export function ChannelEditorPage({ connectionId }: { connectionId?: string }) {
   const agentId = params.get("agentId") || ""
   const channel = params.get("channel") || "web"
   const isWeb = channel === "web" || channel === "help_page"
+  const autoCreate = isWeb || channel === "api"
   const workspaceHref = useWorkspaceHref()
   const state = useRemote(
     async (signal) => {
@@ -87,20 +89,20 @@ export function ChannelEditorPage({ connectionId }: { connectionId?: string }) {
           "Select an agent from Channels before setting up a connection."
         )
       const kind = connection?.channel ?? channel
-      if (kind !== "web" && kind !== "help_page" && kind !== "telegram" && kind !== "whatsapp")
+      if (kind !== "web" && kind !== "help_page" && kind !== "telegram" && kind !== "whatsapp" && kind !== "api")
         throw new Error("Setup is not available for this channel yet.")
       const agent = await buildApi.call<ManagedAgent>(
         "build_get_agent",
         { agentId: connection?.agentId ?? agentId },
         signal
       )
-      if (!connection && isWeb) {
+      if (!connection && autoCreate) {
         connection = await buildApi.call<ChannelConnection>(
           "build_create_channel",
           {
             agentId: agent.id,
-            channel: "web",
-            label: channel === "help_page" ? "Help Page" : "Chat Bubble",
+            channel: channel === "api" ? "api" : "web",
+            label: channel === "api" ? "React SDK" : channel === "help_page" ? "Help Page" : "Chat Bubble",
             config:
               channel === "help_page"
                 ? {
@@ -117,33 +119,35 @@ export function ChannelEditorPage({ connectionId }: { connectionId?: string }) {
       }
       return { connection, agent }
     },
-    [connectionId, agentId, channel, isWeb, creationKey]
+    [connectionId, agentId, channel, autoCreate, creationKey]
   )
   const data =
     state.data &&
-    (state.data.connection?.id === connectionId || (!connectionId && isWeb)) &&
+    (state.data.connection?.id === connectionId || (!connectionId && autoCreate)) &&
     (!agentId || state.data.agent.id === agentId)
       ? state.data
       : null
   React.useEffect(() => {
-    if (connectionId || !isWeb || !data?.connection) return
+    if (connectionId || !autoCreate || !data?.connection) return
     const query = new URLSearchParams({ agentId: data.agent.id })
     if (params.get("from") === "agent") query.set("from", "agent")
     router.replace(
       workspaceHref(`/build/integrations/${data.connection.id}?${query}`)
     )
-  }, [connectionId, isWeb, data, params, router, workspaceHref])
+  }, [connectionId, autoCreate, data, params, router, workspaceHref])
   return (
     <BuildState
       isLoading={
         state.isLoading ||
         (!data && !state.error) ||
-        (!connectionId && isWeb && !state.error)
+        (!connectionId && autoCreate && !state.error)
       }
       error={state.error}
       onRetry={state.refresh}
     >
-      {data?.connection?.channel === "web" ? (
+      {data?.connection?.channel === "api" ? (
+        <ReactSdkEditor connection={data.connection} agent={data.agent} fromAgent={params.get("from") === "agent"} />
+      ) : data?.connection?.channel === "web" ? (
         <ChatBubbleEditor
           key={data.connection.id}
           connection={data.connection}

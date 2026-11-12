@@ -22,6 +22,8 @@ x-app: &app
     DATOOL_META_WEBHOOK_VERIFY_TOKEN: ${DATOOL_META_WEBHOOK_VERIFY_TOKEN:-}
     DATOOL_META_GRAPH_VERSION: ${DATOOL_META_GRAPH_VERSION:-v23.0}
     DATOOL_PROVIDER_ENCRYPTION_KEY: ${DATOOL_PROVIDER_ENCRYPTION_KEY:-}
+    DATOOL_PROJECT_DATABASE_ADMIN_URL: ${DATOOL_PROJECT_DATABASE_ADMIN_URL:-}
+    DATOOL_STORAGE_ALLOW_PRIVATE_ENDPOINTS: ${DATOOL_STORAGE_ALLOW_PRIVATE_ENDPOINTS:-false}
     AUTH_ALLOWED_DOMAINS: ${AUTH_ALLOWED_DOMAINS:-}
     AUTH_ALLOW_PUBLIC_SIGNUP: ${AUTH_ALLOW_PUBLIC_SIGNUP:-false}
     GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -31,6 +33,11 @@ x-app: &app
     DATOOL_CMS_ENABLED: ${DATOOL_CMS_ENABLED:-false}
     DATOOL_BUILD_ENABLED: ${DATOOL_BUILD_ENABLED:-false}
     DATOOL_BUILD_ORGANIZATION_IDS: ${DATOOL_BUILD_ORGANIZATION_IDS:-}
+    DATOOL_EVE_URL: http://eve:2001
+    DATOOL_EVE_SECRET: ${DATOOL_EVE_SECRET:-}
+    WORKFLOW_POSTGRES_URL: postgresql://datool:${POSTGRES_PASSWORD:?Generate POSTGRES_PASSWORD in .env}@postgres:5432/datool
+    WORKFLOW_POSTGRES_JOB_PREFIX: ${WORKFLOW_POSTGRES_JOB_PREFIX:-datool_}
+    WORKFLOW_POSTGRES_JOB_LOCK_STALE_SECONDS: "30"
     PAYLOAD_SECRET: ${PAYLOAD_SECRET:-}
     PAYLOAD_DATABASE_URL: ${PAYLOAD_DATABASE_URL:-}
     CMS_ADMIN_USER_IDS: ${CMS_ADMIN_USER_IDS:-}
@@ -112,6 +119,17 @@ services:
   build-worker:
     <<: *app
     command: ["bun", "run", "worker:build"]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    volumes:
+      - datool-files:/app/.data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  eve:
+    <<: *app
+    command: ["bun", "run", "eve:start"]
     restart: unless-stopped
     stop_grace_period: 60s
     volumes:

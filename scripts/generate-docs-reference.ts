@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { agentOpenApi } from "../src/server/mcp/openapi"
+import { buildOperationCatalog } from "../src/server/build/bootstrap"
 
 type Schema = {
   $ref?: string
@@ -14,7 +15,7 @@ type Schema = {
   description?: string
 }
 const spec = agentOpenApi("https://your-datool-host")
-function dereference(schema: Schema): Schema {
+function dereference(schema: Schema, root: unknown = spec): Schema {
   if (!schema.$ref) return schema
   const resolved = schema.$ref
     .slice(2)
@@ -24,37 +25,37 @@ function dereference(schema: Schema): Schema {
         (value as Record<string, unknown>)[
           key.replace(/~1/g, "/").replace(/~0/g, "~")
         ],
-      spec
+      root
     ) as Schema
   if (!resolved) throw new Error(`Unresolved schema: ${schema.$ref}`)
   return resolved
 }
-function typeName(schema: Schema, depth = 0): string {
+function typeName(schema: Schema, depth = 0, root: unknown = spec): string {
   if (depth > 4) return "JSON"
-  schema = dereference(schema)
+  schema = dereference(schema, root)
   if (Object.hasOwn(schema, "const")) return JSON.stringify(schema.const)
   if (schema.enum)
     return schema.enum.map((value) => JSON.stringify(value)).join(" or ")
   const union = schema.anyOf ?? schema.oneOf
   if (union)
-    return [...new Set(union.map((item) => typeName(item, depth + 1)))].join(
+    return [...new Set(union.map((item) => typeName(item, depth + 1, root)))].join(
       " or "
     )
   if (schema.type === "array")
-    return `array of ${typeName(schema.items ?? {}, depth + 1)}`
+    return `array of ${typeName(schema.items ?? {}, depth + 1, root)}`
   return String(schema.type ?? "JSON")
 }
 const cell = (value: string) => value.replace(/\|/g, "\\|").replace(/\n/g, " ")
-function fields(schema: Schema) {
-  const resolved = dereference(schema)
-  if (!resolved.properties) return `Type: **${typeName(resolved)}**.\n`
+function fields(schema: Schema, root: unknown = spec) {
+  const resolved = dereference(schema, root)
+  if (!resolved.properties) return `Type: **${typeName(resolved, 0, root)}**.\n`
   return (
     [
       "| Field | Type | Required |",
       "| --- | --- | --- |",
       ...Object.entries(resolved.properties).map(
         ([name, value]) =>
-          `| \`${cell(name)}\` | ${cell(typeName(value))} | ${resolved.required?.includes(name) ? "Yes" : "No"} |`
+          `| \`${cell(name)}\` | ${cell(typeName(value, 0, root))} | ${resolved.required?.includes(name) ? "Yes" : "No"} |`
       ),
     ].join("\n") + "\n"
   )
@@ -95,6 +96,28 @@ function save(path: string, generated: string) {
   } else writeFileSync(path, generated)
 }
 save("content/docs/reference/operations.mdx", content)
+
+const buildCatalog = buildOperationCatalog()
+let buildContent = `---
+title: Build operation reference
+description: Discover managed agent, integration, drive, React SDK and scheduled task operations, scopes and retry contracts.
+icon: reference
+---
+
+Generated from the shared Build registry. Call these operations with \`POST /api/build/OPERATION_NAME\`, the MCP tool of the same name, or a compatible CLI's \`datool build call OPERATION_NAME --input @input.json\`. Use \`build_describe_operations\` (or \`datool build tools\`) on the target server for complete current input and available output schemas. Build must be enabled and the credential must hold every listed scope. Observe operations use a [separate endpoint and catalog](/docs/reference/operations).
+
+Use [agent configuration and drives](/docs/guides/agents), [integrations](/docs/guides/integrations), [scheduled tasks](/docs/guides/scheduled-tasks), and [React SDK](/docs/guides/react-sdk) for workflows and examples. The tool \`build_get_authoring_guide\` returns validated examples and semantic constraints for these topics.
+
+Successful REST results are wrapped in \`{ "data": ... }\`; MCP returns the same envelope in structuredContent. When outputSchema is advertised it describes that envelope. Required retry keys can be supplied as \`idempotencyKey\` or \`requestKey\` in tool input; REST also accepts the Idempotency-Key header. Use the current expectedRevision for revision-protected edits. Read a saved state before retrying an uncertain mutation.
+`
+for (const operation of buildCatalog) {
+  buildContent += `\n## ${operation.name}\n\n${operation.description.replace(/[{}<>]/g, (character) => `\\${character}`)}\n\nRequired scopes: ${operation.scopes.map((scope) => `\`${scope}\``).join(", ")}. Idempotency key: **${operation.idempotency}**. Expected revision: **${operation.expectedRevision}**.\n\n**Request fields**\n\n${fields(operation.inputSchema as Schema, operation.inputSchema)}`
+  if (operation.outputSchema) {
+    const result = (operation.outputSchema as Schema).properties!.data
+    buildContent += `\n**Result**\n\n${fields(result, operation.outputSchema)}`
+  }
+}
+save("content/docs/reference/build-operations.mdx", buildContent)
 
 // Read help literals without running the CLI (which would load user configuration).
 const topHelp = /const usage = `([\s\S]*?)`/.exec(

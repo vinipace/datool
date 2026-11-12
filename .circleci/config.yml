@@ -210,6 +210,21 @@ jobs:
           command: bun audit --audit-level high
       - start-services
       - run:
+          name: Verify agent interaction tests and publishing gates
+          command: |
+            bunx playwright install --with-deps chromium
+            bun run build:monaco
+            bun run eve:build
+            bun run build:packages
+            bun --no-env-file scripts/test.mjs --journeys-only
+            bun --no-env-file test tests/build-agent-autosave.test.ts
+            bunx vitest run --project=storybook components/build/agents/agent-journey-editor.stories.tsx components/tracer/dataset-item-inspector.stories.tsx components/workspace/project-deployment-card.stories.tsx components/workspace/project-deployments-page.stories.tsx components/ui/agent-avatar.stories.tsx
+      - run:
+          name: Verify CLI project deployment and sandbox capabilities
+          command: |
+            docker pull node:22-bookworm-slim
+            bun --no-env-file test tests/project-deployment.test.ts
+      - run:
           name: Verify ingestion retries, retention, and safe diagnostics
           command: bun test tests/ingestion.test.ts tests/ingestion-diagnostics.test.ts tests/ingestion-http.test.ts tests/ingestion-operations.test.ts tests/ingestion-inspection.test.ts tests/ingestion-sequence.test.ts tests/inbox-diagnostics.test.ts
       - run:
@@ -237,6 +252,7 @@ jobs:
                 tests/shopify-billing.test.ts tests/shopify-privacy-ops.test.ts tests/customer-retention.test.ts tests/build-channel-presentation.test.ts tests/whatsapp-text.test.ts \
                 tests/build-feature-gate.test.ts tests/build-api.test.ts \
                 tests/build-mcp.test.ts tests/build-organization-worker.test.ts
+              bun --no-env-file test tests/organization-providers-migration.test.ts tests/model-providers-integration.test.ts tests/sandbox-providers-integration.test.ts
               bun --no-env-file test tests/build-channel-durable.test.ts --test-name-pattern 'keeps visitor history' --timeout 30000
               bun --no-env-file test tests/shopify-chat-security.test.ts --test-name-pattern 'session preserves the conversation' --timeout 30000
               bun run test:build:access
@@ -267,6 +283,7 @@ jobs:
       - run:
           name: Prepare runtime assets, built SDK and CLI, and scorer images
           command: |
+            bunx playwright install --with-deps chromium
             bun run build:monaco
             bun run build:chatgpt
             bun run build:packages
@@ -274,7 +291,7 @@ jobs:
             docker pull python:3.13-slim
       - run:
           name: Run the complete Bun suite once
-          command: bun --no-env-file test tests --timeout 30000
+          command: bun --no-env-file scripts/test.mjs --timeout 30000
           environment:
             DATOOL_TEST_SANDBOX_CONTAINERS: "1"
       - run:

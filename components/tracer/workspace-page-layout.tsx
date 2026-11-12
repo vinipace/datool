@@ -9,6 +9,7 @@ import { PageLayout } from "./page-layout"
 
 const collectionTitles: Record<string, string> = {
   traces: pageTitles.traces,
+  deployments: pageTitles.deployments,
   alerts: pageTitles.alerts,
   playground: pageTitles.playground,
   dashboards: pageTitles.dashboards,
@@ -35,6 +36,7 @@ const buildTitles: Record<string, string> = {
 }
 
 function routeTitle(routePath: string) {
+  if (routePath.startsWith("/deployments/")) return routePath.split("/")[2].slice(0, 8)
   if (routePath === "/") return pageTitles.projectHome
   if (routePath === "/build/integrations/new") return pageTitles.newBuildChannel
   if (routePath.startsWith("/build/integrations/"))
@@ -47,6 +49,7 @@ function routeTitle(routePath: string) {
   if (routePath === "/settings") return "General"
   if (routePath === "/settings/members") return pageTitles.members
   if (routePath === "/settings/ai-providers") return pageTitles.aiProviders
+  if (routePath === "/settings/storage-providers") return pageTitles.storageProviders
   if (routePath === "/settings/sandbox-providers")
     return pageTitles.sandboxProviders
   if (routePath === "/settings/api-keys") return pageTitles.apiKeys
@@ -84,6 +87,7 @@ export function WorkspacePageLayout({
   const prefix = workspacePrefix(pathname) ?? ""
   const routePath = pathname.slice(prefix.length) || "/"
   const parent = [
+    "deployments",
     "reviews",
     "datasets",
     "dashboards",

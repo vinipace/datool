@@ -7,11 +7,11 @@ import {
   type SandboxProviderSettings as Settings,
   type SandboxProviderId,
 } from "@/src/lib/sandbox-providers"
-import { StorybookProjectFrame } from "../../.storybook/component-frame"
+import { StorybookOrganizationFrame } from "../../.storybook/component-frame"
 import { modelProviderHandlers } from "../../.storybook/scenarios/model-providers"
 import { SandboxProviderSettings } from "./sandbox-provider-settings"
 
-const path = "/api/projects/sandbox-test/sandbox-providers"
+const path = "/api/organizations/sandbox-test/sandbox-providers"
 const initial = (): Settings => ({
   providers: sandboxProviderIds.map((id) => ({
     id,
@@ -84,15 +84,15 @@ const handlers = [
 const meta = {
   title: "Workspace/SandboxProviderSettings",
   component: SandboxProviderSettings,
-  args: { projectId: "sandbox-test", canManage: true },
+  args: { organizationId: "sandbox-test", canManage: true },
   beforeEach: () => {
     settings = initial()
   },
   parameters: { msw: { handlers } },
   render: (args) => (
-    <StorybookProjectFrame title="Sandbox providers">
+    <StorybookOrganizationFrame title="Sandbox providers">
       <SandboxProviderSettings {...args} />
-    </StorybookProjectFrame>
+    </StorybookOrganizationFrame>
   ),
 } satisfies Meta<typeof SandboxProviderSettings>
 export default meta
@@ -211,7 +211,7 @@ export const Configured: Story = {
           : {}),
       })),
       defaultProvider: "vercel",
-      executionOrder: ["vercel", "local", "modal"],
+      executionOrder: ["vercel", "local", "modal", "boat"],
     }
   },
 }
@@ -312,5 +312,33 @@ export const SaveError: Story = {
     await expect(modal.getByLabelText("Token secret")).toHaveValue(
       "modal-secret"
     )
+  },
+}
+
+export const BoatCredentials: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText("Local container")
+    const dialog = await openProvider(canvasElement, "Boat")
+    await expect(
+      dialog.getByRole("button", { name: "Add provider" })
+    ).toBeDisabled()
+    await userEvent.type(dialog.getByLabelText("API key"), "boat_test_key")
+    await userEvent.click(dialog.getByRole("button", { name: "Add provider" }))
+    await expectClosed()
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Make Boat default" })
+    )
+    await waitFor(() =>
+      expect(canvas.getByRole("row", { name: /Boat/ })).toHaveTextContent(
+        "Default"
+      )
+    )
+    await userEvent.click(canvas.getByRole("button", { name: "Edit Boat" }))
+    const edit = within(await within(document.body).findByRole("dialog"))
+    await expect(edit.getByLabelText("API key")).toHaveValue("")
+    await expect(
+      edit.getByRole("button", { name: "Save changes" })
+    ).toBeDisabled()
   },
 }

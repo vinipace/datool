@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { WhatsAppApiError } from "./channels/whatsapp-api"
+import { EveExecutionPendingError } from "./eve/client"
 
 import type { BuildScope } from "@/src/lib/auth/permissions"
 import { workspaceIdentity } from "@/src/server/auth/context"
@@ -162,6 +163,7 @@ export function buildOperationCatalog(scopes?: readonly string[]) {
       idempotency: operation.idempotency ?? "none",
       expectedRevision: operation.expectedRevision ?? "none",
       maxInputBytes: operation.maxInputBytes ?? 1024 * 1024,
+      ...(operation.outputSchema ? { outputSchema: z.toJSONSchema(z.object({ data: operation.outputSchema }), { io: "output", target: "draft-2020-12" }) } : {}),
       inputSchema: z.toJSONSchema(buildOperationInputSchema(operation), {
         io: "input",
       }),
@@ -191,6 +193,12 @@ function safeInput(input: unknown): Record<string, unknown> {
 
 function normalizeBuildError(error: unknown): TracerError {
   if (error instanceof TracerError) return error
+  if (error instanceof EveExecutionPendingError)
+    return new TracerError("INTERNAL_ERROR", error.message, {
+      status: 503,
+      details: error.details,
+      cause: error,
+    })
   for (
     let cause = error, depth = 0;
     cause instanceof Error && depth < 8;
@@ -208,7 +216,17 @@ function normalizeBuildError(error: unknown): TracerError {
       )
   }
   if (error instanceof WhatsAppApiError)
-    return new TracerError("VALIDATION_ERROR", error.message, { status: error.code === "RATE_LIMITED" ? 429 : error.uncertain || error.code === "NETWORK_ERROR" || error.code === "PROVIDER_UNAVAILABLE" ? 502 : 400, details: { reason: error.code } })
+    return new TracerError("VALIDATION_ERROR", error.message, {
+      status:
+        error.code === "RATE_LIMITED"
+          ? 429
+          : error.uncertain ||
+              error.code === "NETWORK_ERROR" ||
+              error.code === "PROVIDER_UNAVAILABLE"
+            ? 502
+            : 400,
+      details: { reason: error.code },
+    })
   if (!(error instanceof Error))
     return new TracerError("INTERNAL_ERROR", "Build operation failed.")
 
@@ -321,7 +339,10 @@ export async function executeBuildOperation(
   input: unknown,
   options: BuildExecutionOptions = {}
 ) {
-  return audited({ action: findBuildOperation(name)?.name ?? "build.unknown" }, () => executeAuthorizedBuildOperation(name, input, options))
+  return audited(
+    { action: findBuildOperation(name)?.name ?? "build.unknown" },
+    () => executeAuthorizedBuildOperation(name, input, options)
+  )
 }
 
 async function executeAuthorizedBuildOperation(
@@ -331,7 +352,10 @@ async function executeAuthorizedBuildOperation(
 ) {
   const operation = findBuildOperation(name)
   if (!buildEnabled(workspaceIdentity()?.organizationId))
-    throw new TracerError("NOT_FOUND", "Build is disabled for this organization.")
+    throw new TracerError(
+      "NOT_FOUND",
+      "Build is disabled for this organization."
+    )
   if (!operation)
     throw new TracerError(
       "NOT_FOUND",
@@ -444,7 +468,7 @@ async function executeAuthorizedBuildOperation(
 registerBuildOperation({
   name: "build_describe_operations",
   description:
-    "Discover Build operation names, required scopes, JSON input schemas and retry/revision policies available to the authorized project.",
+    "Discover Build operation names, required scopes, JSON input schemas, available structured output schemas and retry/revision policies available to the authorized project.",
   scopes: ["build:read"],
   schema: z.object({
     name: z

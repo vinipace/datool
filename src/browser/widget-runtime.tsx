@@ -217,7 +217,7 @@ function Form({
           <label key={config.name}>
             <span>
               {context.t(config.label ?? config.name)}
-              {config.required ? " *" : ""}
+              {config.required ? <span aria-hidden="true"> *</span> : null}
             </span>
             {config.type === "textarea" ? (
               <textarea {...common} rows={2} />

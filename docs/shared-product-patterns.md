@@ -468,6 +468,15 @@ Snapshot inspectors continue to use their frozen evidence without network reads.
 
 ## Dataset item links
 
+Agent Tests embeds the dataset workflow and adds structured customer journeys.
+The case inspector uses the guided journey editor and keeps raw input collapsed
+under Advanced input. Steps target accessible controls, support a preview width
+and locale, and use explicit mocks for external actions. Dataset rows display
+interaction status separately from answer scores; trace inspection shows the
+failing step and skipped successors. Required journeys may gate publication of
+saved configuration/catalog/knowledge revisions without auto-applying drafts.
+Existing message-only cases and ordinary app datasets retain their current flow.
+
 Dataset inspectors use `/p/[projectSlug]/datasets/[datasetId]/[itemId]`, with
 `itemTab` (`form`, `runs`, or `views`) and `objectView` query parameters.
 Opening a row, changing its tab or Object View,
@@ -756,6 +765,43 @@ saving and saved states. New agents still require the explicit Create agent acti
 
 
 ### Agent and Inbox navigation
+
+The agent Integrations page uses compact lists for apps and custom MCP servers.
+App rows open project account management, including adding accounts, checking
+authorization and disconnecting. **Add custom MCP** accepts a public HTTPS
+Streamable HTTP endpoint with OAuth selected by default; bearer tokens and no
+authentication remain available. OAuth discovers the server's authorization
+metadata, uses PKCE and user-bound expiring state, and returns to Integrations.
+OAuth settings optionally accept a registered client ID and secret; otherwise
+the client uses metadata documents or dynamic registration when supported.
+Connecting from an agent imports the server's tools as ordinary integration
+actions and publishes them for that agent. Existing connections show **Enable
+tools** when their account is connected but no tools are enabled for this agent.
+The row shows the published tool count. `build_enable_mcp_tools` discovers once,
+preserves existing action settings, avoids duplicate imports and publishes the
+catalog atomically. Other agents and previous published snapshots are unchanged.
+Eve's deferred tool search retains the original MCP identifier alongside the
+connection label and display title. Exact names such as
+`superuser_list_projects` rank ahead of keyword matches. Refreshing an imported
+catalog repairs missing name metadata without replacing action settings.
+Individual actions retain channel, approval and revocation controls.
+The management dialog edits the name, replaces the URL or token, checks connectivity and reconnects or
+disconnects the account. Omitting the URL or token preserves its saved value;
+choosing no authentication removes the token. OAuth tokens are refreshed through
+the same public-address HTTP boundary and encrypted with the connection.
+Custom servers work independently of the configured app catalog. Legacy SSE
+endpoints are not supported by the custom-server form.
+
+`build_save_mcp_connection` verifies discovery before saving and encrypts the
+full endpoint and token with project/connection binding. Public responses expose
+only the endpoint without query parameters and whether a token is saved.
+Custom tools use the existing Actions editor, validation, execution ledger and
+revocation checks, with namespaced tool IDs. Each invocation opens a bounded
+MCP session through the shared public-address HTTP boundary; redirects and
+private destinations are rejected. Apply migration `0080_custom_mcp_connections.sql`
+before serving custom connections, and `0083_build_mcp_oauth.sql` before using
+custom-server OAuth. Disconnect invalidates pending authorization requests and
+removes locally stored credentials.
 
 The workspace sidebar shows Home followed by Inbox, then Observe and Test, without
 mode tabs. Inbox and Home's agent cards appear only when Build is enabled for the

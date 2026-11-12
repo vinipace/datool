@@ -10,6 +10,10 @@
     "packages/*"
   ],
   "scripts": {
+    "eve:build": "node scripts/build-eve-bridge.mjs && eve build",
+    "eve:start": "node scripts/start-eve.mjs",
+    "eve:bootstrap": "node scripts/bootstrap-eve.mjs",
+    "test:eve": "bun run eve:build && bun --no-env-file test tests/build-eve-runtime.test.ts tests/build-eve-tools.test.ts tests/build-eve-native-tools.test.ts tests/build-runtime.test.ts tests/build-form-continuations.test.ts tests/build-testing-runtime.test.ts",
     "postinstall": "fumadocs-mdx && node scripts/install-git-hooks.mjs",
     "hooks:install": "node scripts/install-git-hooks.mjs",
     "check:pre-push": "bun run lint && bun run check:styles && bun run typecheck && bun test tests/style-guard.test.ts tests/ui-controls.test.tsx tests/git-hooks.test.ts",
@@ -20,12 +24,14 @@
     "db:init": "bun run scripts/migrate.ts",
     "db:alerts-reader": "bun run scripts/provision-alert-reader.ts",
     "db:migrate": "bun run scripts/migrate.ts",
+    "db:validate-invariants": "bun run scripts/validate-invariants.ts",
     "vercel:build": "bun run scripts/vercel-build.ts",
     "demo:trace": "bun run scripts/demo-trace.ts",
     "build": "bun run check:docs && bun run build:monaco && bun run build:chatgpt && next build",
     "build:chatgpt": "node packages/chatgpt-trace-explorer/scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "bun test tests",
+    "test": "bun --no-env-file scripts/test.mjs",
+    "test:agent:journeys": "bun --no-env-file scripts/test.mjs --journeys-only",
     "verify:v1": "bun run scripts/verify-v1.ts",
     "verify:semantic": "bun run scripts/verify-semantic.ts",
     "lint": "eslint app components lib src scripts tests next.config.ts drizzle.config.ts",
@@ -37,7 +43,7 @@
     "worker:alerts": "bun run scripts/alerts-worker.ts",
     "test:build:access": "bun --no-env-file scripts/test-build-organization-access.ts",
     "test:evolution:e2e": "bun --no-env-file scripts/test-evolution-e2e.ts",
-    "test:whatsapp:e2e": "bun --no-env-file scripts/test-whatsapp-e2e.ts",
+    "test:whatsapp:e2e": "bun run eve:build && bun --no-env-file scripts/test-whatsapp-e2e.ts",
     "test:alerts:e2e": "bun run build:monaco && bun run scripts/test-alerts-e2e.ts",
     "import:langfuse": "bun run scripts/langfuse-import.ts",
     "worker:imports": "bun run scripts/langfuse-import.ts worker",
@@ -75,6 +81,7 @@
     "test:widgets:e2e": "bun run build:monaco && bun --no-env-file scripts/test-widget-authoring-e2e.ts"
   },
   "devDependencies": {
+    "@datool/sdk": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -108,6 +115,7 @@
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/tar-stream": "3.1.5",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/browser-playwright": "4.1.12",
     "bun-types": "^1.2.22",
@@ -115,7 +123,6 @@
     "clsx": "^2.1.1",
     "csstype": "3.2.3",
     "date-fns": "^4.1.0",
-    "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.2",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -143,15 +150,19 @@
     "vitest": "4.1.12"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^4.0.85",
+    "@ai-sdk/gateway": "4.0.118",
     "@ai-sdk/openai": "4.0.96",
     "@ai-sdk/otel": "1.0.105",
-    "@ai-sdk/typesafe-ai": "3.0.2",
+    "@ai-sdk/provider": "4.0.37",
+    "@ai-sdk/typesafe-ai": "3.0.35",
+    "@aws-sdk/client-s3": "3.1166.0",
     "@base-ui/react": "^1.8.0",
     "@better-auth/api-key": "1.7.7",
     "@better-auth/expo": "1.7.7",
     "@better-auth/oauth-provider": "1.7.7",
     "@composio/core": "0.25.0",
+    "@datool/eve-bridge": "workspace:*",
+    "@google-cloud/storage": "8.4.0",
     "@mdx-js/mdx": "3.1.1",
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -165,18 +176,22 @@
     "@payloadcms/ui": "3.90.2",
     "@shopify/shopify-api": "15.0.1",
     "@vercel/sandbox": "^3.3.0",
+    "@workflow/world-postgres": "5.1.1",
     "@xyflow/react": "^12.11.6",
-    "ai": "^7.0.105",
+    "ai": "7.0.165",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "autoevals": "0.3.0",
     "better-auth": "1.7.7",
     "bullmq": "^6.3.4",
+    "cron-parser": "5.10.0",
     "drizzle-orm": "^0.45.2",
     "effect": "4.0.0-beta.102",
+    "eve": "1.0.0-rc.6",
     "fumadocs-core": "16.15.11",
     "fumadocs-mdx": "15.4.1",
     "fumadocs-ui": "16.15.11",
+    "google-auth-library": "11.3.4",
     "grammy": "1.46.0",
     "graphql": "16.11.0",
     "ioredis": "^6.0.0",
@@ -201,10 +216,13 @@
     "server-only": "0.0.1",
     "sharp": "0.35.5",
     "stripe": "^22.6.2",
+    "tar-stream": "3.2.2",
     "tokenlens": "1.3.1",
+    "undici-eve": "npm:undici@8.12.4",
     "unified": "11.0.5",
     "yaml": "^2.9.0",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "drizzle-kit": "^0.31.10"
   },
   "msw": {
     "workerDirectory": [
@@ -212,7 +230,7 @@
     ]
   },
   "engines": {
-    "node": ">=22.18.0",
+    "node": ">=24.0.0",
     "bun": ">=1.3.14"
   },
   "repository": {
@@ -224,9 +242,12 @@
     "image-size": "2.0.4",
     "esbuild": "0.28.2",
     "dompurify": "3.4.17",
-    "undici": "7.30.1",
+    "undici": "7.30.2",
     "zod": "4.6.7",
     "happy-dom": "21.0.4",
     "toml": "5.0.1"
+  },
+  "patchedDependencies": {
+    "eve@1.0.0-rc.6": "patches/eve@1.0.0-rc.6.patch"
   }
 }

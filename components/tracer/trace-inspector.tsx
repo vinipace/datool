@@ -43,6 +43,8 @@ import {
 import { usePathname, useRouter, useSearchParams } from "@/components/navigation/navigation"
 
 import { cn } from "@/lib/utils"
+import { readJourneyResult } from "@/src/lib/build/agent-journey"
+import { JourneyResults } from "@/components/build/agents/journey-results"
 import {
   HoverCard,
   HoverCardTrigger,
@@ -453,6 +455,7 @@ function LoadedInspector({
   const validInitialSpanId = trace.spans.some(
     (span) => span.id === initialSpanId
   )
+  const journey = readJourneyResult(trace.attributes)
   const annotationFocus = useReviewAnnotations()?.focus ?? null
   const [selection, setSelection] = React.useState({
     focus: annotationFocus,
@@ -481,6 +484,7 @@ function LoadedInspector({
       {...props}
       viewLoader={loader}
     >
+      {journey ? <details open={journey.status !== "passed"} className="max-h-[45%] shrink-0 overflow-y-auto border-b border-border"><summary className="cursor-pointer px-4 py-3 text-xs font-medium">Customer journey · {journey.status === "passed" ? "Interactions passed" : journey.status === "failed" ? "Interactions failed" : "Could not run interactions"}</summary><JourneyResults result={journey} /></details> : null}
       {activeTab === "trace" || activeTab === "timeline" ? (
         <TraceWorkspace
           navigation={activeTab}
@@ -1291,7 +1295,7 @@ function SpanDetail({
           <div>
             <PayloadSection key={annotationFocus?.reference.field === "input" ? annotationFocus.nonce : "input"} label="Input" value={payload.input} annotationTarget={{ traceId: trace.id, spanId: span?.id ?? null, spanName: title }} />
             <PayloadSection key={annotationFocus?.reference.field === "output" ? annotationFocus.nonce : "output"} label="Output" value={payload.output} inputValue={payload.input} annotationTarget={{ traceId: trace.id, spanId: span?.id ?? null, spanName: title }} />
-            <CapturedErrors attributes={attributes} status={status} />
+            <CapturedErrors attributes={attributes} status={status} output={payload.output} />
             {!hideOverviewScores && trace.scores.length > 0 && (
               <details {...scoresDisclosure} className="group border-t border-border">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 text-sm text-foreground-secondary [&::-webkit-details-marker]:hidden">
@@ -1315,6 +1319,7 @@ function SpanDetail({
             span={span}
             status={status}
             trace={trace}
+            output={payload?.output}
           />
         ) : null}
         {detailTab === "metadata" ? (
@@ -1545,11 +1550,13 @@ function SelectedDetails({
   span,
   status,
   trace,
+  output,
 }: {
   attributes: JsonObject
   span: SpanOverview | null
   status: TraceStatus
   trace: TraceOverview
+  output?: JsonValue | null
 }) {
   const workspaceHref = useWorkspaceHref()
   const rootSpanId = React.useMemo(() => buildInspectorTree(trace).id, [trace])
@@ -1624,7 +1631,7 @@ function SelectedDetails({
           )}
         </section>
       </div>
-      <CapturedErrors attributes={attributes} status={status} />
+      <CapturedErrors attributes={attributes} status={status} output={output} />
     </div>
   )
 }
@@ -1659,10 +1666,13 @@ function InspectorTags({ attributes }: { attributes: JsonObject }) {
 function CapturedErrors({
   attributes,
   status,
+  output,
 }: {
   attributes: JsonObject
   status: TraceStatus
+  output?: JsonValue | null
 }) {
+  const outputError = output && typeof output === "object" && !Array.isArray(output) ? output.error : null
   const fields = Object.entries(attributes).filter(
     ([key, value]) =>
       /(^|[._])(error|exception)([._]|$)/i.test(key) &&
@@ -1677,7 +1687,7 @@ function CapturedErrors({
       value={
         fields.length
           ? (Object.fromEntries(fields) as JsonObject)
-          : "This execution failed, but no error details were captured."
+          : outputError ?? "This execution failed, but no error details were captured."
       }
     />
   )

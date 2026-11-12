@@ -9,7 +9,7 @@ host log rotation, see [disk maintenance](../ops/dokku-disk/README.md).
 
 CircleCI builds and tests the root Dockerfile without database access or
 build-time credentials, then transfers that exact image to Dokku. Do not compile
-the application on the production host. The runtime runs as `node` (UID/GID 1000), with Node 22
+the application on the production host. The runtime runs as `node` (UID/GID 1000), with Node 24
 for Next and evaluator isolation and Bun for TypeScript jobs. Dependencies are
 not pruned because several runtime UI packages currently live in devDependencies.
 The image build sets a 4 GiB Node heap limit for Next.js and its TypeScript worker.

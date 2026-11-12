@@ -45,6 +45,7 @@ const meta = {
     nextjs: { navigation: { pathname: "/p/demo/build/agents/calendar-agent" } },
     msw: {
       handlers: [
+        http.get("*/api/custom-fields", () => HttpResponse.json({ data: [] })),
         http.get(
           "https://logos.composio.dev/api/:app",
           () => new HttpResponse(null, { status: 404 })
@@ -109,66 +110,55 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 export const Integrations: Story = {}
-export const ManageFromAction: Story = {
+export const ManageTools: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const toggle = within(
-      canvas.getByRole("banner", { name: "Page controls" })
-    ).getByRole("button", { name: "Toggle sidebar" })
-    if (toggle.getAttribute("aria-expanded") !== "true")
-      await userEvent.click(toggle)
-    await expect(
-      canvas.findByRole("link", { name: "Calendar assistant — back to agents" })
-    ).resolves.toBeVisible()
-    await expect(
-      canvas.queryByRole("link", { name: "Home" })
-    ).not.toBeInTheDocument()
-    await expect(
-      canvas.queryByRole("link", { name: "Traces" })
-    ).not.toBeInTheDocument()
-    await expect(
-      canvas.findByRole("heading", { name: "Integrations" })
-    ).resolves.toBeVisible()
-    await userEvent.click(canvas.getByRole("link", { name: "Actions" }))
-    await userEvent.click(
-      await canvas.findByRole("tab", { name: "Create Actions" })
-    )
-    await userEvent.click(
-      await canvas.findByRole("button", { name: "Use connected app" })
-    )
     const page = within(canvasElement.ownerDocument.body)
-    const name = await page.findByLabelText("Name", { selector: "input" })
-    await userEvent.clear(name)
-    await userEvent.type(name, "My calendar action")
+    const sidebar = canvas.getByRole("button", { name: "Toggle sidebar" })
+    if (sidebar.getAttribute("aria-expanded") !== "true")
+      await userEvent.click(sidebar)
+    await userEvent.click(await canvas.findByRole("button", { name: "Manage" }))
+    const dialog = within(
+      await page.findByRole("region", { name: "Google Calendar" })
+    )
+    const toggle = await dialog.findByRole("switch", {
+      name: "Enable List calendar events",
+    })
+    await expect(toggle).not.toBeChecked()
+    await userEvent.click(toggle)
+    await expect(
+      dialog.findByRole("switch", {
+        name: "Enable Google Calendar: List calendar events",
+      })
+    ).resolves.toBeChecked()
     await userEvent.click(
-      page.getByRole("button", { name: "Manage integrations" })
+      dialog.getByRole("button", {
+        name: "Settings for Google Calendar: List calendar events",
+      })
     )
+    const editor = within(await page.findByRole("dialog"))
     await expect(
-      canvas.findByRole("heading", { name: "Integrations" })
-    ).resolves.toBeVisible()
-    await expect(page.queryByRole("dialog")).not.toBeInTheDocument()
-    await expect(
-      canvas.findByRole("group", { name: "Google Calendar" })
-    ).resolves.toBeVisible()
-    await userEvent.click(canvas.getByRole("button", { name: "Manage" }))
-    const integrationDialog = within(
-      await page.findByRole("dialog", { name: "Google Calendar" })
+      editor.getByLabelText("Name", { selector: "input" })
+    ).toHaveValue("Google Calendar: List calendar events")
+    await userEvent.click(editor.getByRole("button", { name: "Cancel" }))
+    const reopened = within(
+      await page.findByRole("region", { name: "Google Calendar" })
     )
+    const enabled = await reopened.findByRole("switch", {
+      name: "Enable Google Calendar: List calendar events",
+    })
+    await userEvent.click(enabled)
+    await expect(enabled).not.toBeChecked()
     await userEvent.click(
-      integrationDialog.getByRole("button", { name: "Open Actions" })
+      reopened.getByRole("button", { name: "Integrations" })
     )
+    await userEvent.click(canvas.getByRole("link", { name: "Actions" }))
     await expect(
-      page.queryByRole("dialog", { name: "Google Calendar" })
+      canvas.queryByText("Google Calendar: List calendar events")
     ).not.toBeInTheDocument()
+    await userEvent.click(await canvas.findByRole("tab", { name: "Templates" }))
     await expect(
-      page.findByLabelText("Name", { selector: "input" })
-    ).resolves.toHaveValue("My calendar action")
-    const dialog = within(await page.findByRole("dialog"))
-    await expect(
-      dialog.queryByRole("button", { name: /^Connect$/ })
-    ).not.toBeInTheDocument()
-    await expect(
-      dialog.queryByRole("button", { name: "Disconnect" })
+      canvas.queryByRole("button", { name: "Use connected app" })
     ).not.toBeInTheDocument()
   },
 }

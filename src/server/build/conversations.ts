@@ -361,6 +361,8 @@ export class ConversationService {
         ) as subject
       ) preview on true
       where c.project_id=${this.projectId}
+        and (exists (select 1 from build_conversation_messages m where m.project_id=c.project_id and m.conversation_id=c.id)
+          or exists (select 1 from build_channel_message m where m.project_id=c.project_id and m.conversation_id=c.id))
         ${input.agentId ? sql`and c.agent_id=${input.agentId}` : sql``}
         ${cursor ? sql`and (c.updated_at,c.id)<(${cursor[0]}::timestamptz,${cursor[1]})` : sql``}
         ${input.status ? sql`and c.status=${input.status}` : sql``}
@@ -552,9 +554,6 @@ export class ConversationService {
     input: StartConversationTurnInput
   ): Promise<TurnAdmission> {
     const parsed = startConversationTurnInputSchema.parse(input)
-    const lockUntil = new Date(
-      new Date(this.currentTime()).getTime() + this.lockMs
-    ).toISOString()
     return this.database.transaction(async (tx) => {
       const conversationResult = await tx.execute<Record<string, unknown>>(sql`
         SELECT * FROM build_conversations
@@ -640,7 +639,9 @@ export class ConversationService {
         VALUES
           (${turnId}, ${this.projectId}, ${conversationId}, ${parsed.requestKey},
            ${parsed.sourceEventId ?? null}, 'running', ${inputMessageId},
-           ${json(parsed.snapshot)}::jsonb, ${nextOwnerFence}, ${lockUntil}, now())
+           ${json(parsed.snapshot)}::jsonb, ${nextOwnerFence},
+           -- Liveness checks compare locks with the database clock.
+           now() + ${this.lockMs}::double precision * interval '1 millisecond', now())
         RETURNING *
       `)
       const messageResult = await tx.execute<Record<string, unknown>>(sql`
@@ -1044,7 +1045,8 @@ export class ConversationService {
           ${input.ownerFence === undefined ? sql`` : sql`AND c.owner_fence = ${input.ownerFence}`}
       )
       ON CONFLICT (project_id, turn_id, tool_call_id)
-      DO UPDATE SET input_json = EXCLUDED.input_json
+      DO UPDATE SET action_id = EXCLUDED.action_id,
+                    input_json = EXCLUDED.input_json
       RETURNING *
     `)
     if (!result.rows[0]) {
@@ -1105,6 +1107,8 @@ export class ConversationService {
     widgetId?: string
     continuationId?: string
     allowApproval?: boolean
+    /** A server-owned frozen evaluation catalog; never accepted from transport input. */
+    widgetActionIds?: string[]
   }): Promise<{
     call: ConversationToolCall
     sourceSnapshot: Record<string, unknown>
@@ -1152,7 +1156,7 @@ export class ConversationService {
                     OR (
                       tc.continuation_json->>'type' = 'widget'
                       AND tc.continuation_json->>'widgetId' = ${input.widgetId ?? null}
-                      AND EXISTS (
+                      AND (${Boolean(input.widgetActionIds?.includes(input.actionId))} OR EXISTS (
                         SELECT 1
                         FROM build_agent_catalog_snapshots cas
                         JOIN build_agent_catalog_widgets caw
@@ -1189,7 +1193,7 @@ export class ConversationService {
                               AND (component->>'actionId' = ${input.actionId}
                                 OR component->>'submitActionId' = ${input.actionId}))
                           )
-                      )
+                      ))
                     )`
             }
           )

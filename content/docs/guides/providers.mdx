@@ -6,9 +6,16 @@ icon: reference
 
 Project provider settings control work performed by the Datool server. Your connected application keeps its own model-client credentials. Organization owners and admins manage provider settings; members can see configuration status without reading credentials.
 
+Manage AI, sandbox and storage connections in **Organization settings**. Owners
+and admins configure them once for the organization's projects; members can see
+configuration status but cannot view credentials. Existing project connections
+are preserved as imported accounts with their assignments. Organization admins
+can edit them or switch their projects to a shared default. Drives and files
+remain isolated by project even when projects use the same storage connection.
+
 ## Model providers
 
-Open **Project settings → AI providers → Add provider**, choose the provider, and save its API key. Supported choices are **Vercel AI Gateway**, **OpenAI**, and **TypeSafe AI**.
+Open **Organization settings → AI providers → Add provider**, choose the provider, and save its API key. Supported choices are **Vercel AI Gateway**, **OpenAI**, and **TypeSafe AI**.
 
 | Provider | Use |
 | --- | --- |
@@ -18,17 +25,18 @@ Open **Project settings → AI providers → Add provider**, choose the provider
 
 Choose the provider and model in the prompt or scorer editor. A saved key means configuration exists; it does not prove validity, account quota, or access to the chosen model. Test one representative example before evaluating a large dataset. Model calls can incur usage.
 
-Keys remain server-side and project-scoped. Replacing one provider's key does not change another provider. Executions do not silently switch to another key. Older providerless scorer versions retain their legacy server configuration; save a new version with an explicit provider to make selection clear.
+Keys remain server-side and organization-scoped. Replacing one provider's key does not change another provider. Executions do not silently switch to another key. Older providerless scorer versions retain their legacy server configuration; save a new version with an explicit provider to make selection clear.
 
 Prompt model metadata and displayed prices come from a cached catalog. They are not an account-specific billing quote. A runtime request establishes whether the actual account can use the selected model.
 
 ## Code scorer sandboxes
 
-JavaScript and Python scorers use **Project settings → Sandbox providers**. Configure **Local container**, **Vercel Sandbox**, or **Modal**, then choose the default provider. Other configured providers are fallbacks in the displayed order.
+JavaScript and Python scorers use **Organization settings → Sandbox providers**. Configure **Local container**, **Vercel Sandbox**, **Modal**, or **Boat**, then choose the default provider. Other configured providers are fallbacks in the displayed order.
 
 - **Local container:** the operator must configure Docker access on the server and pre-pull the required Node/Python images. The scorer runs without network access in an isolated container. A normal Datool web deployment alone does not establish local sandbox readiness.
 - **Vercel Sandbox:** supply a Vercel access token, team ID, and project ID.
 - **Modal:** supply the token ID and token secret for the workspace.
+- **Boat:** supply a Boat API key with sandbox creation, read, execution, file-write, resume and stop permissions. Datool runs restricted Docker containers inside private, no-environment Boat VMs; your Boat account secrets are not copied into them. Boat bills your account.
 
 Cloud sandboxes receive scorer code and the evidence being scored. Provider credentials are not injected into the scorer environment. Removing every sandbox provider prevents code scorers from running; there is no fallback to executing code directly on the application host.
 
@@ -39,3 +47,7 @@ Startup, authentication, and transport failures can try the next provider. A com
 Use `check_scorer_runtime` to inspect configuration without contacting providers. Explicitly use `probe_scorer_runtime` for up to three scorers on one representative case. A probe can incur model or sandbox usage and records diagnostic evidence; it does not create a saved evaluation.
 
 The deterministic AutoEvals library scorers do not need a model or hosted sandbox account. Start with [Exact match](/docs/get-started/first-evaluation) to verify the evaluation workflow, then configure the provider required by your chosen [scorer](/docs/evaluation/scorers).
+
+Agents select their compute provider explicitly in **Sandbox → Provider**; they do not use scorer fallback order. Boat supports Node.js and Python, network restrictions, and native file/command tools. Configure S3 or GCS for persistent Boat drives and select a connection under **SDK workspace storage** for SDK-managed workspaces. An unmounted workspace is temporary.
+
+Boat VMs stop after a turn, including failed runs, with a 20-minute automatic stop as a backstop. Scorer VMs disable snapshots and have a four-minute backstop. Agent VMs keep Boat snapshots for recovery after failed storage synchronization; recover pending files promptly within your Boat account's retention window (Boat documents at least 14 days for stopped sandboxes). A missing cache blocks writes rather than replacing pending data with an empty drive. Committed drive versions remain in your S3/GCS bucket independently of Boat retention. See [Boat's API](https://docs.boat.dev/api/v1) and [retention limits](https://docs.boat.dev/limits).

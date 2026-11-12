@@ -25,6 +25,10 @@ For CI and non-interactive use, set `DATOOL_BASE_URL`, `DATOOL_PROJECT_ID`, and 
 
 The CLI finds the nearest parent containing `package.json` or `.git`, loads `.env` then `.env.local`, and lets existing shell variables take precedence. Use repeated `--env-file` arguments to select files explicitly, or `--no-env` to disable file loading.
 
+## Deploy a project folder
+
+Use `datool deploy ./folder` to publish agents, skills, project MCP tools and company sources. `--dry-run` generates schema types and previews the bundle; `--plan` previews PostgreSQL migrations without applying them; `datool deploy status` reads the current deployment. See [project deployment](/docs/guides/project-deployment) for authentication, file conventions and persistent database/bucket access. Requires an updated server and CLI; it is not part of published CLI 0.4.1.
+
 ## Common commands
 
 ```sh
@@ -107,6 +111,7 @@ Generated from the CLI shipped with this server source. Use `npx datool --help` 
 Datool CLI
 
   datool connect [config.ts|handler.ts|http-url] [--mode workflow|agent] [--name name] [--watch|--no-watch]
+  datool deploy [folder] [--environment preview|production] [--dry-run | --plan] | deploy status
   datool apps sync <config.ts>
   datool datasets|scorers push <file.json> [--dry-run]
   datool datasets|scorers pull <key> --out <file.json> [--replace]

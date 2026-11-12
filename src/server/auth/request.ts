@@ -6,13 +6,8 @@ import { findAgentOperation } from "@/src/server/mcp/operations"
 import {
   type WorkspaceScope,
 } from "@/src/lib/auth/permissions"
-
-export function requireScopes(granted: readonly string[], required: readonly WorkspaceScope[]) {
-  const missingScopes = required.filter(scope => !granted.includes(scope))
-  if (missingScopes.length) throw new TracerError("UNAUTHORIZED", `Missing required permission: ${missingScopes.join(", ")}.`, {
-    status: 403, details: { reason: "INSUFFICIENT_SCOPE", missingScopes },
-  })
-}
+import { requireScopes } from "./scopes"
+export { requireScopes } from "./scopes"
 
 export function assertSameOrigin(request: Request) {
   if (!hasTrustedMutationOrigin(request))
@@ -27,6 +22,8 @@ export async function routeScopes(request: Request): Promise<WorkspaceScope[]> {
   const url = new URL(request.url)
   const resource = url.pathname.split("/")[2]
   if (url.pathname === "/api/cli/session" && request.method === "GET") return []
+  if (url.pathname === "/api/deployments" && ["GET", "POST"].includes(request.method)) return request.method === "GET" ? ["build:read"] : ["build:read", "build:write", "build:run"]
+  if (url.pathname === "/api/project-mcp" && request.method === "POST") return ["build:read", "build:run"]
   if (resource === "agent") {
     const operation = findAgentOperation(url.pathname.split("/")[3])
     if (!operation || request.method !== "POST")

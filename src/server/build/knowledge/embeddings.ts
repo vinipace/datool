@@ -5,7 +5,10 @@ import { embedMany } from "ai"
 import { sql } from "drizzle-orm"
 
 import { GATEWAY_PROVIDER, OPENAI_PROVIDER } from "@/src/lib/model-providers"
-import { getProjectProviderKey } from "@/src/server/model-providers/store"
+import {
+  getProjectProviderKey,
+  getProjectProviders,
+} from "@/src/server/model-providers/store"
 import type { BuildContext } from "../context"
 
 // The profile includes the model, dimensions and input format. Only vectors
@@ -13,7 +16,7 @@ import type { BuildContext } from "../context"
 export const KNOWLEDGE_EMBEDDING_PROFILE =
   "openai/text-embedding-3-small:1536:v1"
 export const KEYWORD_KNOWLEDGE_NOTICE =
-  "Keyword search only. Connect AI Gateway or OpenAI in project settings to enable semantic search."
+  "Keyword search only. Connect AI Gateway or OpenAI in organization settings to enable semantic search."
 const dimensions = 1536
 const batchSize = 64
 
@@ -46,14 +49,13 @@ function validVector(value: number[]) {
 }
 
 async function embeddingModel(context: BuildContext) {
-  const providers = await context.database.execute<{ provider: string }>(sql`
-    select provider from project_model_provider
-    where project_id=${context.projectId}
-      and provider in (${GATEWAY_PROVIDER}, ${OPENAI_PROVIDER})
-    order by case when provider=${GATEWAY_PROVIDER} then 0 else 1 end
-    limit 1
-  `)
-  const provider = providers.rows[0]?.provider
+  const providers = await getProjectProviders(
+    context.projectId,
+    context.database
+  )
+  const provider = [GATEWAY_PROVIDER, OPENAI_PROVIDER].find((id) =>
+    providers.some((row) => row.id === id && row.configured)
+  )
   if (!provider) return null
   const apiKey = await getProjectProviderKey(
     context.projectId,

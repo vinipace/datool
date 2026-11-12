@@ -1,0 +1,35 @@
+---
+title: Scheduled agent tasks
+description: Run agents proactively with timezone-aware schedules and preserved workspace context.
+---
+
+Open an agent's **Scheduled tasks** to view, create, edit, pause, or run a task. Choose a name, instructions, and schedule. One-time tasks use a future timestamp; recurring tasks use a five-field cron expression and an IANA timezone, such as `0 9 * * 1-5` in `America/Sao_Paulo` for weekday mornings.
+
+## Choose the task's context
+
+| Task | Creation | Execution context |
+| --- | --- | --- |
+| Shared agent task | Dashboard or `build_create_scheduled_task` | Published agent/channel settings and static drives; a new conversation for each run. |
+| SDK workspace task | `agent.tasks.create()` or `build_sdk_tasks` with `action: "create"` | Original authenticated user scope, connection, workspace drive, and conversation. |
+
+Setting a shared task's channel to `api` does not bind it to an application user. Use the SDK task operation for customer-specific work. The application server must derive `userId` and `drive` from authenticated access, never a visitor-supplied organization ID.
+
+SDK tasks and each queued run save their original connection, user scope, conversation, and drive. Dashboard edits, manual runs, retries, and workspace switches do not redirect them. Before execution, the worker verifies the saved binding. A missing or changed binding is rejected rather than using shared agent drives. The internal scope key is not returned to clients.
+
+Runs read the **current contents** of the saved drive. Creating a task does not freeze file contents. SDK sessions exclude other static drives, and replies stay in the original conversation. Scheduled tasks show the workspace name and a link to that conversation; their channel is fixed to React SDK.
+
+## Manage through MCP or REST
+
+Use `build_list_scheduled_tasks` with `agentId` to inspect tasks, including their `sdkContext`. Search matches task text and workspace names. Follow `nextCursor` with `cursor`, preserving filters. The limit is at most 100.
+
+Use `build_update_scheduled_task` to edit or pause a task with its current `expectedRevision`. Pass `enabled: false` to pause or `enabled: true` to resume, preserving the other definition fields. Use `build_run_scheduled_task` to queue a manual run without changing the schedule, then `build_list_scheduled_task_runs` to inspect its status and conversation/trace links. Creation and run-now require a stable `idempotencyKey`; deletion also requires the current revision.
+
+For application users, the server SDK exposes `tasks.list`, `create`, `update`, `pause`, `resume`, `delete`, `runNow`, and `runs` on a scoped agent client. It uses `build_sdk_tasks`; the application credential needs all three Build scopes. See the [React SDK guide](/docs/guides/react-sdk) for a complete example.
+
+## Pausing, failures, and verification
+
+Pausing stops new scheduled runs; work already started can finish. Deletion cancels unstarted runs and retains existing conversations and run history. Pause or delete a user's tasks when your app revokes their access. Pausing or disconnecting the React SDK connection prevents future SDK runs.
+
+The Build worker and Eve runtime must be running for offline execution. A queued response is not proof that a task ran. Inspect terminal states such as completed, failed, blocked, or needs attention, and read the resulting conversation. A completed run means execution finished; it does not establish the quality of its output.
+
+For an isolation check, give two synthetic workspaces different context files, schedule a task in each, and verify both the resulting file access and destination conversation. Also verify that missing bindings reject execution. Request `build_get_authoring_guide` with `topic: "scheduled-task"` for current schemas and examples.

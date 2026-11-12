@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
 
+import { deployCommand } from "./deploy"
 import { resourcesCommand } from "./resources"
 import { appRequest } from "./request"
 import { agentCommand, agentUsage } from "./agent"
@@ -17,6 +18,7 @@ import { prepareConnectionWorker, watchConnection } from "./connect-watch"
 const usage = `Datool CLI
 
   datool connect [config.ts|handler.ts|http-url] [--mode workflow|agent] [--name name] [--watch|--no-watch]
+  datool deploy [folder] [--environment preview|production] [--dry-run | --plan] | deploy status
   datool apps sync <config.ts>
   datool datasets|scorers push <file.json> [--dry-run]
   datool datasets|scorers pull <key> --out <file.json> [--replace]
@@ -76,6 +78,13 @@ if (
 ) {
   await resourcesCommand(process.argv.slice(2))
   process.exit(0)
+}
+
+if (configuration.args[0] === "deploy") {
+  try { await deployCommand(configuration.args.slice(1)) }
+  catch (error) { console.error(error instanceof Error ? error.message : "Deployment failed."); process.exitCode = 1 }
+  await new Promise<void>(resolve => process.stdout.write("", () => resolve()))
+  process.exit(process.exitCode ?? 0)
 }
 
 const agentExit = await agentCommand(process.argv.slice(2))

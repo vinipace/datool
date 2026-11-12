@@ -10,6 +10,9 @@ import {
   Users,
   UsersRound,
   ChartPie,
+  Boxes,
+  Database,
+  Sparkles,
 } from "lucide-react"
 import {
   Sidebar,
@@ -33,6 +36,17 @@ import { WorkspaceSelectors } from "./workspace-selectors"
 
 const organizationSettingsRoutes = [
   { title: "General", href: "/settings/general", icon: Settings },
+  { title: "AI providers", href: "/settings/ai-providers", icon: Sparkles },
+  {
+    title: "Sandbox providers",
+    href: "/settings/sandbox-providers",
+    icon: Boxes,
+  },
+  {
+    title: "Storage providers",
+    href: "/settings/storage-providers",
+    icon: Database,
+  },
   { title: "Members", href: "/members", icon: Users },
   { title: "Teams", href: "/teams", icon: UsersRound },
   { title: "Usage", href: "/usage", icon: ChartPie },

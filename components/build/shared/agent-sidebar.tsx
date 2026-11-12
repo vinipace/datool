@@ -185,6 +185,7 @@ export function AgentSidebarNavigation({
             {internalLink("widgets", true)}
             {internalLink("procedures", true)}
             {internalLink("guardrails", true)}
+            {internalLink("sandbox", true)}
             {internalLink("settings", true)}
           </>
         )}
@@ -200,6 +201,7 @@ export function AgentSidebarNavigation({
             </>
           )}
         {internalLink("contacts")}
+        {internalLink("schedules")}
         {internalLink("playground")}
         {internalLink("test")}
         {internalLink("channels")}

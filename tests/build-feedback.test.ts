@@ -1,33 +1,21 @@
 import { expect, test } from "bun:test"
 import { rejects } from "node:assert/strict"
 import { createAgent } from "@/src/server/build/agents"
-import { createBuildContext } from "@/src/server/build/context"
 import { recordFeedback } from "@/src/server/build/operations/analytics"
-import {
-  runAgentTurn,
-  type RuntimeDependencies,
-} from "@/src/server/build/runtime"
+import { runAgentTurn } from "@/src/server/build/runtime"
 import { TracerService } from "@/src/server/tracer/service"
 import { runTracerEffect } from "@/src/server/tracer/effect"
-import {
-  closeTracerFixture,
-  createTracerFixture,
-} from "./helpers/tracer-fixture"
-
-const model: RuntimeDependencies = {
-  generateText: (async () => ({
-    text: "Your order is on the way.",
-    usage: { inputTokens: 2, outputTokens: 7, totalTokens: 9 },
-  })) as unknown as NonNullable<RuntimeDependencies["generateText"]>,
-}
+import { createEveFixture, eveResponse } from "./helpers/eve-fixture"
 
 test("feedback follows the rated response trace and changes replace its score without crossing conversations", async () => {
-  const database = await createTracerFixture()
-  const context = createBuildContext(database)
+  const fixture = await createEveFixture()
+  const { context } = fixture
+  const database = context.database
+  fixture.provider(body => eveResponse(body, "Your order is on the way."))
   try {
     const agent = await createAgent(context, {
       name: "Feedback agent",
-      configuration: { model: "test-model" },
+      configuration: { provider: "openai", model: "gpt-4.1-mini", guardrails: { jevCheckEnabled: false } },
     })
     const first = await runAgentTurn(
       context,
@@ -37,7 +25,7 @@ test("feedback follows the rated response trace and changes replace its score wi
         requestKey: "first",
         message: "Where is my order?",
       },
-      { dependencies: model }
+      {}
     )
     const second = await runAgentTurn(
       context,
@@ -48,7 +36,7 @@ test("feedback follows the rated response trace and changes replace its score wi
         requestKey: "second",
         message: "When will it arrive?",
       },
-      { dependencies: model }
+      {}
     )
     expect(first.traceId).toBeTruthy()
     expect(first.message?.id).toBeTruthy()
@@ -110,6 +98,6 @@ test("feedback follows the rated response trace and changes replace its score wi
         ?.valueLabel
     ).toBe("Not helpful")
   } finally {
-    await closeTracerFixture(database)
+    await fixture.close()
   }
 }, 30_000)

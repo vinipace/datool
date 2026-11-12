@@ -16,7 +16,10 @@ import {
   widgetDefinitionSchema,
   type SaveAgentInput,
 } from "@/src/lib/build/contracts"
+import type { AppliedAgentDefinitions } from "./definitions"
 import type { BuildContext } from "./context"
+import { resolveSandboxDrives } from "./drives"
+import { getSandboxProviderCredentials, SandboxSettingsValidationError } from "../sandbox/providers-store"
 import {
   REDACTED_ACTION_HEADER,
   decryptActionHeaders,
@@ -61,7 +64,8 @@ async function createCatalogSnapshot(
   context: BuildContext,
   agentId: string,
   agentRevision: number,
-  sourceRevision?: number
+  sourceRevision?: number,
+  validatedCatalog?: AppliedAgentDefinitions
 ) {
   const catalogId = randomUUID()
   const now = new Date().toISOString()
@@ -77,8 +81,13 @@ async function createCatalogSnapshot(
   let actionRefs: Array<{ actionId: string; revision: number }> = []
   let procedureRefs: Array<{ procedureId: string; revision: number }> = []
   let widgetRefs: Array<{ widgetId: string; revision: number }> = []
-  let hasSourceSnapshot = false
-  if (sourceRevision !== undefined) {
+  let hasSourceSnapshot = Boolean(validatedCatalog)
+  if (validatedCatalog) {
+    actionRefs = validatedCatalog.actions.map(item => ({ actionId: item.id, revision: item.revision }))
+    procedureRefs = validatedCatalog.procedures.map(item => ({ procedureId: item.id, revision: item.revision }))
+    widgetRefs = validatedCatalog.widgets.map(item => ({ widgetId: item.id, revision: item.revision }))
+  }
+  if (!validatedCatalog && sourceRevision !== undefined) {
     const sourceRows = await tx
       .select({ id: buildAgentCatalogSnapshots.id })
       .from(buildAgentCatalogSnapshots)
@@ -134,7 +143,7 @@ async function createCatalogSnapshot(
 
   // A draft source has no snapshot. In that case an apply publishes the
   // current active definition rows as their exact immutable revisions.
-  if (sourceRevision === undefined || !hasSourceSnapshot) {
+  if (!hasSourceSnapshot) {
     const [actions, procedures, widgets] = await Promise.all([
       tx
         .select({ actionId: buildActions.id, revision: buildActions.revision })
@@ -598,12 +607,26 @@ export async function getAgent(
   return agentModel(rows[0])
 }
 
+async function validatePublishedSandbox(context: BuildContext, configuration: AgentConfiguration) {
+  if (!configuration.sandbox.enabled) return
+  try {
+    await getSandboxProviderCredentials(context.projectId, configuration.sandbox.provider, context.database)
+  } catch (error) {
+    if (error instanceof SandboxSettingsValidationError) throw new AgentValidationError(error.message)
+    throw new AgentValidationError("The sandbox provider credentials are unavailable. Update them in Organization settings → Sandbox providers.")
+  }
+}
+
 export async function createAgent(
   context: BuildContext,
   input: CreateAgentInput
 ): Promise<ManagedAgent> {
   const name = requireName(input.name)
   const config = parseConfiguration(input.configuration ?? {})
+  await resolveSandboxDrives(context, config.sandbox)
+  await validatePublishedSandbox(context, config)
+  if (config.testing.requirePassingJourneys)
+    throw new AgentValidationError("Create the agent first, then enable required journeys in Tests after adding its cases.")
   const now = new Date().toISOString()
   const id = input.id ?? randomUUID()
   const agent = {
@@ -686,7 +709,19 @@ export async function updateAgent(
         ? parseConfiguration(existing.currentConfigJson)
         : parseConfiguration(input.configuration)
     const nextRevision = existing.currentRevision + 1
+    await resolveSandboxDrives(
+      { ...context, database: tx as unknown as BuildContext["database"] },
+      config.sandbox
+    )
     const apply = input.apply !== false
+    if (apply) await validatePublishedSandbox({ ...context, database: tx as unknown as BuildContext["database"] }, config)
+    let validatedCatalog: AppliedAgentDefinitions | undefined
+    if (apply && config.testing.requirePassingJourneys) {
+      const { requirePassingJourneys } = await import("./testing/journey-gate")
+      try {
+        validatedCatalog = await requirePassingJourneys({ ...context, database: tx as unknown as BuildContext["database"] }, { ...agentModel(existing), configuration: config }, input.catalogRevision)
+      } catch (error) { throw new AgentValidationError((error as Error).message) }
+    }
     const name =
       input.name === undefined ? existing.name : requireName(input.name)
     const nextSlug =
@@ -750,7 +785,8 @@ export async function updateAgent(
         context,
         agentId,
         nextRevision,
-        catalogRevision
+        catalogRevision,
+        validatedCatalog
       )
     }
     return agentModel(updated[0])

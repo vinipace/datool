@@ -38,6 +38,12 @@ action. Auth key events may accompany an attributed organization-management
 event. Count by boundary, not as unique customer actions. A batch read records
 the operation, not a complete inventory of rows returned.
 
+An open website chat refreshes conversation history more often while a reply is
+pending than while idle. Every successful refresh is still a separate visitor
+read event, even when the conversation has not changed; fewer idle events do not
+mean auditing is disabled. Hidden tabs and closed managed chat frames pause
+background refreshes.
+
 ## Collection, access and retention
 
 Use the installation's configured logging service first. For the bundled Google

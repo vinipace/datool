@@ -3,6 +3,9 @@ import { getAgentUsage } from "../usage"
 import { assertBuildProject } from "../context"
 import { getTracerWritePool } from "@/src/server/tracer/db"
 import { z } from "zod"
+import { saveMcpConnection, saveMcpConnectionSchema } from "./custom-mcp"
+import { startMcpOAuth, startMcpOAuthSchema } from "./mcp-oauth"
+import { enableMcpTools } from "./mcp-agent-tools"
 import { registerBuildOperation } from "../api"
 import {
   connectApp,
@@ -13,12 +16,48 @@ import {
 } from "./service"
 const id = z.string().uuid()
 registerBuildOperation({
+  name: "build_enable_mcp_tools",
+  description:
+    "Discover a connected custom MCP server's tools, import missing tools for this agent and publish the updated catalog managed on the integration connection page. Preserves existing action settings and other agents. Requires project write access.",
+  scopes: ["build:write"],
+  schema: z.object({ agentId: z.string().min(1).max(200), connectionId: id }),
+  idempotency: "required",
+  openWorld: true,
+  execute: (ctx, input) =>
+    enableMcpTools(ctx, String(input.agentId), String(input.connectionId)),
+})
+registerBuildOperation({
+  name: "build_start_mcp_oauth",
+  description:
+    "Start OAuth authorization for a custom MCP server. Discovers authorization metadata, registers the client when supported, and returns the sign-in URL. Requires a signed-in project member. Credentials are encrypted.",
+  scopes: ["build:write"],
+  schema: startMcpOAuthSchema,
+  idempotency: "required",
+  openWorld: true,
+  execute: (ctx, input) => startMcpOAuth(ctx, startMcpOAuthSchema.parse(input)),
+})
+registerBuildOperation({
+  name: "build_save_mcp_connection",
+  description:
+    "Connect or update a custom Streamable HTTP MCP server by public HTTPS URL, with an optional bearer access token. Supply agentId to import and publish its tools for that agent. Omit url or token on updates to retain them; an empty token removes it. Verifies discovery before saving. Credentials are encrypted and never returned. For OAuth sign-in, use build_start_mcp_oauth.",
+  scopes: ["build:write"],
+  schema: saveMcpConnectionSchema,
+  idempotency: "required",
+  openWorld: true,
+  execute: (ctx, input) =>
+    saveMcpConnection(ctx, saveMcpConnectionSchema.parse(input)),
+})
+registerBuildOperation({
   name: "build_list_app_connections",
   description:
     "List enabled apps and project-owned connections. No credentials are returned.",
   scopes: ["build:read"],
-  schema: z.object({}),
-  execute: (ctx) => listAppConnections(ctx),
+  schema: z.object({ agentId: z.string().min(1).max(200).optional() }),
+  execute: (ctx, input) =>
+    listAppConnections(
+      ctx,
+      typeof input.agentId === "string" ? input.agentId : undefined
+    ),
 })
 registerBuildOperation({
   name: "build_connect_app",
@@ -41,7 +80,7 @@ registerBuildOperation({
 registerBuildOperation({
   name: "build_refresh_app_connection",
   description:
-    "Verify the provider's OAuth connection status. Callback parameters cannot activate connections.",
+    "Verify an app's OAuth status or check a custom MCP server. Callback parameters cannot activate connections.",
   scopes: ["build:write"],
   schema: z.object({ connectionId: id }),
   openWorld: true,
@@ -61,7 +100,7 @@ registerBuildOperation({
 registerBuildOperation({
   name: "build_list_app_tools",
   description:
-    "List approved actions and schemas for an active project app connection.",
+    "List available tools and input schemas for an active project app connection. Inspect build_list_actions to find this agent's saved definitions by connectionId/toolSlug; build_save_action changes enabled/settings while preserving its ID and revision. Apply the agent revision for runtime use. Integration tools are managed in Integrations, while Actions shows custom tools.",
   scopes: ["build:read"],
   schema: z.object({ connectionId: id }),
   openWorld: true,

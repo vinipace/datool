@@ -6,6 +6,7 @@
     "cli",
     "api",
     "operations",
+    "build-operations",
     "mcp",
     "authentication",
     "compatibility",

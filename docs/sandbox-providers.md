@@ -1,7 +1,7 @@
 # Scorer sandbox providers
 
-Open **Project settings → Sandbox providers** at
-`/p/<projectSlug>/settings/sandbox-providers`. Owners and admins can configure
+Open **Organization settings → Sandbox providers** at
+`/settings/sandbox-providers`. Owners and admins can configure
 providers; members can see configuration status and execution order.
 
 Configured providers appear in a table. **Add provider** opens the provider
@@ -60,7 +60,7 @@ Existing worker restrictions and score validation apply to every provider.
 Apply migration `0021_project_sandbox_providers.sql` with `bun run db:migrate`.
 Credentials use the existing provider encryption key
 (`DATOOL_PROVIDER_ENCRYPTION_KEY`, falling back to `BETTER_AUTH_SECRET`) and are
-bound to the project and sandbox provider. Read APIs never return credentials.
+bound to the organization and sandbox provider. Read APIs never return credentials.
 Replacing a saved key is optional when editing other settings; omitting a secret
 preserves it. The server encryption secret must be at least 32 characters.
 
@@ -71,3 +71,13 @@ bun test tests/sandbox-providers.test.ts
 DATOOL_TEST_SANDBOX_CONTAINERS=1 bun test tests/sandbox-providers.test.ts
 DATOOL_TEST_DATABASE_URL=<disposable-loopback-postgres-url> bun test tests/sandbox-providers-integration.test.ts
 ```
+
+## Organization ownership and imported accounts
+
+Connections and the execution default are managed by organization owners/admins.
+Migration `0090` preserves each project's old connection assignments and execution
+preference. Choosing a new organization execution default clears those old
+preferences. Changing the shared account for a provider preserves explicit
+imported assignments until an admin chooses **Use shared default**. When changing
+accounts, retain the account owning any existing native volumes or move those
+files first. Native volume IDs and existing drive records are unchanged.

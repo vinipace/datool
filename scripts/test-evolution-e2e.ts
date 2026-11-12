@@ -585,12 +585,14 @@ try {
     await import("../src/server/execution-credits/ledger")
   const { prepareEvolutionMedia } =
     await import("../src/server/build/channels/media")
-  const { saveProjectProviderKey, removeProjectProviderKey } =
+  const { projectProviderContext } =
+    await import("../src/server/providers/context")
+  const { saveOrganizationProviderKey, removeOrganizationProviderKey } =
     await import("../src/server/model-providers/store")
   const { encryptProviderKey } =
     await import("../src/server/model-providers/secrets")
-  await saveProjectProviderKey(
-    target.projectId,
+  await saveOrganizationProviderKey(
+    await projectProviderContext(target.projectId),
     "vercel-ai-gateway",
     "synthetic-project-gateway"
   )
@@ -782,7 +784,10 @@ try {
     0
   )
   // A project without its own key cannot use the configured server/scorer keys.
-  await removeProjectProviderKey(target.projectId, "vercel-ai-gateway")
+  await removeOrganizationProviderKey(
+    await projectProviderContext(target.projectId),
+    "vercel-ai-gateway"
+  )
   const unconfigured = await admitMedia("audio-no-project-key", "audio")
   assert.equal(
     await runMedia(unconfigured.job, () =>
@@ -798,7 +803,7 @@ try {
     "vercel-ai-gateway"
   )
   await database.execute(
-    sql`INSERT INTO project_model_provider(project_id,provider,encrypted_api_key) VALUES(${target.projectId},'vercel-ai-gateway',${foreignKey})`
+    sql`INSERT INTO organization_provider_connections(organization_id,kind,provider,name,encrypted_credentials,is_default) SELECT organization_id,'model','vercel-ai-gateway','test',${foreignKey},true FROM project WHERE id=${target.projectId}`
   )
   const foreign = await admitMedia("audio-foreign-key", "audio")
   assert.equal(
@@ -808,8 +813,8 @@ try {
     0
   )
   assert.equal(transcriptions, 1)
-  await saveProjectProviderKey(
-    target.projectId,
+  await saveOrganizationProviderKey(
+    await projectProviderContext(target.projectId),
     "vercel-ai-gateway",
     "synthetic-project-gateway"
   )

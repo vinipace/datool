@@ -32,6 +32,7 @@ let failSession = false
 let submitted: unknown[] = []
 let sessionRequests = 0
 let messageRequests = 0
+let failMessages = false
 let hostRequests = 0
 let shopifyHost = false
 let hostSession = session
@@ -39,6 +40,7 @@ let hostGate = Promise.resolve()
 let releaseHost = () => {}
 let failHost = false
 let rejectSend = false
+let pendingExecution = false
 let sendGate = Promise.resolve()
 let releaseSend = () => {}
 let conversationMessages: Array<{
@@ -85,12 +87,39 @@ const meta = {
             idempotencyKey: request.headers.get("idempotency-key"),
           })
           await sendGate
+          if (pendingExecution) {
+            conversationMessages = [
+              {
+                id: "accepted-preview",
+                direction: "inbound",
+                text: body.message,
+                providerMessageId: `${session.visitorId}:${request.headers.get("idempotency-key")}`,
+              },
+            ]
+            return HttpResponse.json(
+              {
+                error: {
+                  code: "INTERNAL_ERROR",
+                  message:
+                    "Your message was saved, but the agent service is temporarily unavailable. It will resume when the service returns.",
+                  details: {
+                    reason: "EXECUTION_PENDING",
+                    conversationId: session.conversationId,
+                    turnId: "pending-turn",
+                  },
+                },
+              },
+              { status: 503 }
+            )
+          }
           return rejectSend
             ? HttpResponse.json(
                 { error: { message: "Temporarily unavailable" } },
                 { status: 503 }
               )
-            : HttpResponse.json({ data: {} })
+            : HttpResponse.json({
+                data: { conversation: { id: session.conversationId } },
+              })
         }),
         http.post(`/api/build-public/${channelId}/session`, async () => {
           sessionRequests++
@@ -118,6 +147,11 @@ const meta = {
           async () => {
             messageRequests++
             await messagesGate
+            if (failMessages)
+              return HttpResponse.json(
+                { error: { message: "Temporarily unavailable" } },
+                { status: 503 }
+              )
             return HttpResponse.json({
               data: restored
                 ? [
@@ -205,10 +239,12 @@ const meta = {
     failSession = false
     submitted = []
     rejectSend = false
+    pendingExecution = false
     sendGate = Promise.resolve()
     releaseSend = () => {}
     sessionRequests = 0
     messageRequests = 0
+    failMessages = false
     hostRequests = 0
     shopifyHost = false
     hostSession = session
@@ -246,6 +282,87 @@ const meta = {
 } satisfies Meta<typeof PublicChat>
 export default meta
 type Story = StoryObj<typeof meta>
+
+export const AdaptiveConversationRefresh: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    releaseSession()
+    releaseMessages()
+    const input = canvas.getByRole("textbox", { name: "Message" })
+    const send = canvas.getByRole("button", { name: "Send message" })
+    await userEvent.type(input, "Where is my order?")
+    await waitFor(() => expect(send).toBeEnabled())
+    await waitFor(() => expect(messageRequests).toBeGreaterThan(0), {
+      timeout: 2500,
+    })
+    const idleReads = messageRequests
+    await new Promise((resolve) => setTimeout(resolve, 2300))
+    await expect(messageRequests).toBe(idleReads)
+
+    conversationMessages = [
+      {
+        id: "question",
+        direction: "inbound",
+        text: "Where is my order?",
+        pendingReply: true,
+      },
+    ]
+    await userEvent.click(send)
+    await waitFor(() => expect(messageRequests).toBeGreaterThan(idleReads))
+    conversationMessages = [
+      ...conversationMessages,
+      { id: "answer", direction: "outbound", text: "It is on its way." },
+    ]
+    await waitFor(
+      () => expect(canvas.getByText("It is on its way.")).toBeVisible(),
+      { timeout: 4000 }
+    )
+    const settledReads = messageRequests
+    await new Promise((resolve) => setTimeout(resolve, 2300))
+    await expect(messageRequests).toBe(settledReads)
+  },
+}
+
+export const ConversationRefreshRecovers: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    releaseSession()
+    releaseMessages()
+    const input = canvas.getByRole("textbox", { name: "Message" })
+    const send = canvas.getByRole("button", { name: "Send message" })
+    await userEvent.type(input, "Where is my order?")
+    await waitFor(() => expect(send).toBeEnabled())
+    conversationMessages = [
+      {
+        id: "question",
+        direction: "inbound",
+        text: "Where is my order?",
+        pendingReply: true,
+      },
+    ]
+    await userEvent.click(send)
+    await waitFor(() => expect(messageRequests).toBeGreaterThan(0))
+    failMessages = true
+    const beforeFailures = messageRequests
+    await waitFor(
+      () => expect(messageRequests).toBeGreaterThan(beforeFailures),
+      { timeout: 2500 }
+    )
+    const firstFailure = messageRequests
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await expect(messageRequests - firstFailure).toBeLessThanOrEqual(1)
+    failMessages = false
+    conversationMessages.push({
+      id: "answer",
+      direction: "outbound",
+      text: "It is on its way.",
+    })
+    await waitFor(
+      () => expect(canvas.getByText("It is on its way.")).toBeVisible(),
+      { timeout: 7000 }
+    )
+  },
+}
 
 export const PreloadedIframe: Story = {
   args: { preloaded: true },
@@ -825,6 +942,7 @@ export const ReadingEarlierMessages: Story = {
       direction: "outbound",
       text: "Your size is now in stock.",
     })
+    document.dispatchEvent(new Event("visibilitychange"))
     await within(log).findByText(
       "Your size is now in stock.",
       {},
@@ -851,6 +969,7 @@ export const ReadingEarlierMessages: Story = {
       direction: "outbound",
       text: "Shipping is available too.",
     })
+    document.dispatchEvent(new Event("visibilitychange"))
     await within(log).findByText(
       "Shipping is available too.",
       {},
@@ -877,6 +996,48 @@ export const PreviewFailedMessageRetry: Story = {
       <PublicChat {...args} />
     </div>
   ),
+}
+
+export const PreviewRecoversAcceptedMessage: Story = {
+  args: { previewAgentId: "preview-agent" },
+  render: (args) => (
+    <div className="h-dvh">
+      <PublicChat {...args} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    releaseSession()
+    releaseMessages()
+    pendingExecution = true
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "Message" }),
+      "heey"
+    )
+    await userEvent.click(canvas.getByRole("button", { name: "Send message" }))
+    await canvas.findByText(/Your message was saved, but the agent service/)
+    await expect(
+      canvas.queryByRole("button", { name: "Retry sending" })
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.getByRole("button", { name: "Send message" })
+    ).toBeDisabled()
+    conversationMessages.push({
+      id: "recovered-reply",
+      direction: "outbound",
+      text: "Hello! How can I help?",
+    })
+    await waitFor(
+      () => expect(canvas.getByText("Hello! How can I help?")).toBeVisible(),
+      { timeout: 3500 }
+    )
+    await expect(
+      canvas.queryByText(/Your message was saved, but the agent service/)
+    ).not.toBeInTheDocument()
+    await expect(canvas.getByRole("textbox", { name: "Message" })).toBeEnabled()
+    expect(submitted).toHaveLength(1)
+    expect(within(canvas.getByRole("log")).getAllByText("heey")).toHaveLength(1)
+  },
 }
 
 // A real remount models a storefront page navigation. Cache contents must come

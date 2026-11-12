@@ -1,0 +1,3201 @@
+---
+title: Build operation reference
+description: Discover managed agent, integration, drive, React SDK and scheduled task operations, scopes and retry contracts.
+icon: reference
+---
+
+Generated from the shared Build registry. Call these operations with `POST /api/build/OPERATION_NAME`, the MCP tool of the same name, or a compatible CLI's `datool build call OPERATION_NAME --input @input.json`. Use `build_describe_operations` (or `datool build tools`) on the target server for complete current input and available output schemas. Build must be enabled and the credential must hold every listed scope. Observe operations use a [separate endpoint and catalog](/docs/reference/operations).
+
+Use [agent configuration and drives](/docs/guides/agents), [integrations](/docs/guides/integrations), [scheduled tasks](/docs/guides/scheduled-tasks), and [React SDK](/docs/guides/react-sdk) for workflows and examples. The tool `build_get_authoring_guide` returns validated examples and semantic constraints for these topics.
+
+Successful REST results are wrapped in `{ "data": ... }`; MCP returns the same envelope in structuredContent. When outputSchema is advertised it describes that envelope. Required retry keys can be supplied as `idempotencyKey` or `requestKey` in tool input; REST also accepts the Idempotency-Key header. Use the current expectedRevision for revision-protected edits. Read a saved state before retrying an uncertain mutation.
+
+## build_describe_operations
+
+Discover Build operation names, required scopes, JSON input schemas, available structured output schemas and retry/revision policies available to the authorized project.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | No |
+
+## build_create_conversation
+
+Create or reuse a project-scoped customer conversation for an agent and channel.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | Yes |
+| `externalConversationId` | string | No |
+| `metadata` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_conversations
+
+List all customer conversations, including chats that have never been escalated to an inbox ticket.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | No |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `search` | string | No |
+| `status` | "active" or "handed_off" or "closed" or "blocked" | No |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+
+## build_get_conversation
+
+Read a customer conversation and its ownership state.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+
+## build_list_conversation_messages
+
+Read a bounded conversation transcript in chronological order.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `limit` | integer | No |
+| `before` | string | No |
+
+## build_list_conversation_tools
+
+Read persisted tool calls and continuations for a conversation.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+
+## build_append_conversation_message
+
+Append a durable customer, assistant, system, or tool message to a conversation.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `message` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_start_conversation_turn
+
+Admit one idempotent conversation turn for a worker or channel adapter.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `turn` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_run_agent_turn
+
+Run one guarded customer conversation turn through the managed agent runtime. Retries replay the durable result by request key.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | Yes |
+| `conversationId` | string | No |
+| `externalConversationId` | string | No |
+| `message` | string or array of object | Yes |
+| `metadata` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_approve_conversation_action
+
+Approve one pending guarded conversation action as the authenticated Build operator; the action input is read from its durable continuation.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `actionId` | string | Yes |
+| `continuationId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_run_manual_procedure
+
+Run one enabled manual procedure for a conversation as the authenticated Build operator.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `procedureId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_resume_conversation_wait
+
+Resume one elapsed wait step in a conversation as the authenticated Build operator.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `continuationId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_conversation_turn
+
+Read one durable conversation turn and its replay or failure state.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `turnId` | string | Yes |
+
+## build_get_conversation_message
+
+Read one durable conversation message.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `messageId` | string | Yes |
+
+## build_set_conversation_variables
+
+Replace conversation variables while preserving project and ownership scope.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `variables` | object | Yes |
+| `ownerFence` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_scheduled_tasks
+
+List an agent's scheduled tasks, next dates, latest run and saved SDK workspace/drive/conversation context. Search includes workspace names. Follow nextCursor; SDK scope keys are never returned.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `search` | string | No |
+| `cursor` | string | No |
+| `limit` | integer | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | string,null | Yes |
+
+## build_create_scheduled_task
+
+Schedule an agent prompt once or with a timezone-aware cron expression. This creates a shared agent task; each run starts a new conversation using published settings and static drives. Use build_sdk_tasks to bind a task to an authenticated user, workspace drive and existing conversation.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `name` | string | Yes |
+| `prompt` | string | Yes |
+| `schedule` | object | Yes |
+| `timezone` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `enabled` | boolean | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `name` | string | Yes |
+| `prompt` | string | Yes |
+| `schedule` | object | Yes |
+| `timezone` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | Yes |
+| `id` | string | Yes |
+| `revision` | integer | Yes |
+| `status` | "active" or "paused" or "completed" | Yes |
+| `nextRunAt` | string,null | Yes |
+| `lastRun` | object or null | Yes |
+| `createdAt` | string | Yes |
+| `updatedAt` | string | Yes |
+| `sdkContext` | object or null | No |
+
+## build_update_scheduled_task
+
+Edit or pause a scheduled task. Already started runs continue; paused tasks do not start new scheduled runs. SDK-managed tasks retain their original workspace, drive, conversation and api channel; do not supply sdkContext.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **optional**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `name` | string | Yes |
+| `prompt` | string | Yes |
+| `schedule` | object | Yes |
+| `timezone` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `enabled` | boolean | No |
+| `id` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `name` | string | Yes |
+| `prompt` | string | Yes |
+| `schedule` | object | Yes |
+| `timezone` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | Yes |
+| `id` | string | Yes |
+| `revision` | integer | Yes |
+| `status` | "active" or "paused" or "completed" | Yes |
+| `nextRunAt` | string,null | Yes |
+| `lastRun` | object or null | Yes |
+| `createdAt` | string | Yes |
+| `updatedAt` | string | Yes |
+| `sdkContext` | object or null | No |
+
+## build_delete_scheduled_task
+
+Remove a scheduled task and cancel unstarted runs. Already started runs and their conversations are retained.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `id` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `deleted` | true | Yes |
+
+## build_run_scheduled_task
+
+Queue a task now without changing its schedule. Returns the existing run when the task is already queued or running. SDK tasks keep their saved workspace and conversation. Queued does not mean completed; follow build_list_scheduled_task_runs.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `id` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `taskId` | string | Yes |
+| `source` | "schedule" or "manual" | Yes |
+| `status` | "queued" or "running" or "completed" or "blocked" or "needs_attention" or "failed" or "cancelled" | Yes |
+| `scheduledAt` | string | Yes |
+| `startedAt` | string,null | Yes |
+| `finishedAt` | string,null | Yes |
+| `conversationId` | string,null | Yes |
+| `traceId` | string,null | Yes |
+| `error` | string,null | Yes |
+
+## build_list_scheduled_task_runs
+
+Read a task's run history and links to its saved conversations and traces.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `taskId` | string | Yes |
+| `cursor` | string | No |
+| `limit` | integer | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | string,null | Yes |
+
+## build_sdk_chat
+
+Open, poll or message a React SDK conversation using identity and drive supplied by the authenticated application server. Never take another user or workspace from browser input. workspaceName is display-only. Start with request.action=session; use its conversationId for messages/send. Send retries reuse the same requestId UUID. Results can be pending; poll messages for completion.
+
+Required scopes: `build:run`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `userId` | string | Yes |
+| `drive` | string | No |
+| `workspaceName` | string | No |
+| `request` | object | Yes |
+
+**Result**
+
+Type: **object**.
+
+## build_sdk_files
+
+List, read, write, create directories or delete files in an application's isolated drive. File transfers are bounded to 256 KiB and directory listings to 500 entries. Read/write content uses base64; the SDK encodes/decodes it. Paths are relative to the drive; traversal and symlinks are rejected. Deletes never recurse. Creating a drive records its agent and workspace for Sandbox; no chat session is required.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `userId` | string | Yes |
+| `drive` | string | No |
+| `workspaceName` | string | No |
+| `request` | object | Yes |
+
+**Result**
+
+Type: **object**.
+
+## build_sdk_tasks
+
+Manage proactive tasks within a server-authenticated SDK conversation. Create through this operation, not build_create_scheduled_task, for per-user tasks. Tasks and queued runs retain the original connection, user scope, drive and conversation, including dashboard-triggered runs. Changed or missing bindings fail closed. Updates cannot rebind a task. Current file contents are read at execution. Supply idempotencyKey and current expectedRevision when required by the request action.
+
+Required scopes: `build:read`, `build:write`, `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `userId` | string | Yes |
+| `drive` | string | No |
+| `workspaceName` | string | No |
+| `conversationId` | string | Yes |
+| `request` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+**Result**
+
+Type: **object**.
+
+## build_list_storage_connections
+
+List configured storage connections without credentials. Local and Modal volumes are built in.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+
+## build_list_drive_versions
+
+List the last 100 committed versions of an S3 or GCS drive.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `driveId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+
+## build_restore_drive_version
+
+Restore a committed version as a new head of an S3 or GCS drive. Requires an idle drive and its current revision.
+
+Required scopes: `build:write`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `driveId` | string | Yes |
+| `versionId` | string | Yes |
+| `expectedRevision` | string or null | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `revision` | string | Yes |
+
+## build_recover_drive
+
+Save an expired sandbox's pending files to its object-backed drive before allowing further writes. An active sandbox cannot be recovered.
+
+Required scopes: `build:run`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `driveId` | string | Yes |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `recovered` | boolean | Yes |
+
+## build_list_drives
+
+List persistent project drives and SDK-managed workspace drives. Filter by agent to include its SDK drives alongside shared drives.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `after` | string | No |
+| `limit` | integer | No |
+| `agentId` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `items` | array of object | Yes |
+| `nextCursor` | string,null | Yes |
+
+## build_create_drive
+
+Create a persistent project drive. Contents are retained when sandboxes stop or agents unmount the drive.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `description` | string | No |
+| `provider` | "local" or "datool" or "modal" or "s3" or "gcs" | Yes |
+| `storageConnectionId` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+**Result**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `description` | string | Yes |
+| `provider` | "local" or "datool" or "modal" or "s3" or "gcs" | Yes |
+| `storageConnectionId` | string | No |
+| `id` | string | Yes |
+| `createdAt` | string | Yes |
+| `sdkContext` | object or null | No |
+| `revision` | string or null | No |
+| `syncPending` | boolean | No |
+
+## build_list_agents
+
+List active managed customer-experience agents in the current project.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `includeArchived` | boolean | No |
+
+## build_get_agent
+
+Read one managed agent and its current configuration.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `includeArchived` | boolean | No |
+
+## build_create_agent
+
+Create a managed customer-experience agent with an initial applied revision.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | No |
+| `slug` | string | No |
+| `name` | string | Yes |
+| `description` | string or null | No |
+| `configuration` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_update_agent
+
+Save an agent draft or apply it atomically using expectedRevision.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `name` | string | No |
+| `slug` | string | No |
+| `description` | string or null | No |
+| `configuration` | object | No |
+| `expectedRevision` | integer | Yes |
+| `apply` | boolean | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_clone_agent
+
+Clone an existing agent into a new managed agent.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceAgentId` | string | Yes |
+| `id` | string | No |
+| `name` | string | Yes |
+| `slug` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_archive_agent
+
+Archive an agent after checking its current revision.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_agent_revisions
+
+List immutable revisions for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+
+## build_restore_agent_revision
+
+Restore an immutable agent revision as a new applied revision.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `sourceRevision` | integer | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_actions
+
+List active action definitions for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+
+## build_get_action
+
+Read one action definition for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `actionId` | string | Yes |
+
+## build_save_action
+
+Create or update a action definition with optimistic revision checks.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **optional**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `id` | string | No |
+| `slug` | string | No |
+| `definition` | object | Yes |
+| `expectedRevision` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_action_revisions
+
+List immutable revisions for a action.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `actionId` | string | Yes |
+
+## build_delete_action
+
+Soft-delete a action definition using expectedRevision.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `actionId` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_procedures
+
+List active procedure definitions for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+
+## build_get_procedure
+
+Read one procedure definition for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `procedureId` | string | Yes |
+
+## build_save_procedure
+
+Create or update a procedure definition with optimistic revision checks.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **optional**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `id` | string | No |
+| `slug` | string | No |
+| `definition` | object | Yes |
+| `expectedRevision` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_procedure_revisions
+
+List immutable revisions for a procedure.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `procedureId` | string | Yes |
+
+## build_delete_procedure
+
+Soft-delete a procedure definition using expectedRevision.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `procedureId` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_widgets
+
+List active widget definitions for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+
+## build_get_widget
+
+Read one widget definition for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `widgetId` | string | Yes |
+
+## build_save_widget
+
+Create or update a widget definition with optimistic revision checks. Before authoring, discover build_list_widget_templates and build_get_widget_components. Supply representative states.default data; use build_validate_widget and the browser's build_validate_widget_preview, then reopen the saved widget. Saving does not prove a rendered preview.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **optional**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `id` | string | No |
+| `slug` | string | No |
+| `definition` | object | Yes |
+| `expectedRevision` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_widget_revisions
+
+List immutable revisions for a widget.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `widgetId` | string | Yes |
+
+## build_delete_widget
+
+Soft-delete a widget definition using expectedRevision.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `widgetId` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_knowledge_sources
+
+List active knowledge sources and indexing status for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `limit` | integer | No |
+| `cursor` | string | No |
+
+## build_get_knowledge_source
+
+Read a knowledge source, its text and structured Q&A pairs for editing. Does not return provider credentials.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceId` | string | Yes |
+
+## build_list_knowledge_pages
+
+Browse indexed website or sitemap pages, with URL/title search and pagination.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceId` | string | Yes |
+| `search` | string | No |
+| `offset` | integer | No |
+| `limit` | integer | No |
+
+## build_get_knowledge_page
+
+Read the stored Markdown or extracted text of one page from the active website index.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceId` | string | Yes |
+| `url` | string | Yes |
+| `revision` | integer | Yes |
+
+## build_create_knowledge_source
+
+Create text, Q&A, file, website or sitemap knowledge and queue indexing. File contentBase64 is capped at 20 MiB decoded (the JSON schema exposes the encoded bound).
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `source` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_update_knowledge_source
+
+Update a knowledge source with optional expectedRevision and queue reindexing.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **optional**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `source` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_delete_knowledge_source
+
+Delete a knowledge source and its active chunks.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_preview_knowledge_source
+
+Preview extracted knowledge content before retrieval.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceId` | string | Yes |
+
+## build_export_knowledge_source
+
+Export a knowledge source as text or JSON.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceId` | string | Yes |
+| `format` | "text" or "json" | No |
+
+## build_enqueue_knowledge_index
+
+Queue indexing or resync for a knowledge source.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sourceId` | string | Yes |
+| `kind` | "index" or "resync" | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_run_knowledge_job
+
+Claim and run one queued knowledge indexing job.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `jobId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_run_queued_knowledge_jobs
+
+Run a bounded batch of queued knowledge jobs.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_retrieve_knowledge
+
+Retrieve active indexed chunks for an agent query.
+
+Required scopes: `build:run`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `query` | string | Yes |
+| `limit` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_channels
+
+List configured delivery channels with credentials redacted.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | No |
+
+## build_get_channel
+
+Read one configured delivery channel with credentials redacted.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+
+## build_create_channel
+
+Create a channel connection. Submitted credentials are encrypted and never returned.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | No |
+| `agentId` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | Yes |
+| `label` | string | Yes |
+| `config` | object | No |
+| `credentials` | object | No |
+| `mode` | "webhook" or "polling" | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_update_channel
+
+Edit a channel name, allowed origins, visitor security or Chat Bubble display and launcher settings without changing credentials or delivery state.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `label` | string | No |
+| `originAllowlist` | array of string | No |
+| `shopifyShop` | string | No |
+| `publicAdmission` | object | No |
+| `bubble` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_update_channel_status
+
+Pause, reconnect or mark a channel connection status.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `status` | "draft" or "connected" or "paused" or "error" or "disconnected" | Yes |
+| `error` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_register_telegram
+
+Validate a Telegram bot and register its webhook or polling mode.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `mode` | "webhook" or "polling" | No |
+| `dropPendingUpdates` | boolean | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_unregister_telegram
+
+Remove a Telegram webhook and disconnect the bot.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `dropPendingUpdates` | boolean | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_enqueue_telegram_polling
+
+Queue one bounded Telegram polling pass for connected polling bots.
+
+Required scopes: `build:run`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_enqueue_outbound_message
+
+Queue an outbound channel message with a stable idempotency key.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `envelope` | object | Yes |
+| `externalConversationId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_create_contact
+
+Create or update a customer contact identity in the current project.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `externalId` | string | No |
+| `displayName` | string | No |
+| `email` | string | No |
+| `phone` | string | No |
+| `status` | "active" or "blocked" or "archived" | No |
+| `metadata` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_contact
+
+Read one customer contact.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## build_update_contact
+
+Update a customer contact and preserve its channel identities.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `externalId` | string | No |
+| `displayName` | string | No |
+| `email` | string | No |
+| `phone` | string | No |
+| `status` | "active" or "blocked" or "archived" | No |
+| `metadata` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_contacts
+
+List contacts with bounded pagination and optional agent, status and search filters.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `agentId` | string | No |
+| `status` | "active" or "blocked" or "archived" | No |
+| `search` | string | No |
+
+## build_import_contacts
+
+Import bounded contact rows idempotently and return import outcomes.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `source` | string | Yes |
+| `rows` | array of object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_export_contacts
+
+Export contacts with bounded pagination and optional agent, status and search filters.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `agentId` | string | No |
+| `status` | "active" or "blocked" or "archived" | No |
+| `search` | string | No |
+| `format` | "json" or "csv" | No |
+
+## build_request_contact_export
+
+Create a durable contact export job.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `format` | "csv" or "json" | No |
+| `filter` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_upsert_contact_identity
+
+Attach or update a channel identity for a contact.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contactId` | string | Yes |
+| `channel` | "telegram" or "web" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" | Yes |
+| `identityKey` | string | Yes |
+| `displayName` | string | No |
+| `verified` | boolean | No |
+| `metadata` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_contact_identities
+
+List linked channel identities for a contact, including each external ID and its connection name and status when available.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contactId` | string | Yes |
+
+## build_set_contact_attribute
+
+Set one collected contact attribute with source attribution.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contactId` | string | Yes |
+| `key` | string | Yes |
+| `value` | string or number or boolean or null or array of string or number or boolean or null or array of JSON or object or object | Yes |
+| `source` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_contact_attributes
+
+List collected attributes for a contact.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contactId` | string | Yes |
+
+## build_collect_data
+
+Persist a collected customer field linked to a conversation or contact.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contactId` | string | No |
+| `conversationId` | string | No |
+| `fieldKey` | string | Yes |
+| `value` | string or number or boolean or null or array of string or number or boolean or null or array of JSON or object or object | Yes |
+| `source` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_collected_data
+
+List collected fields using bounded pagination.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `agentId` | string | No |
+| `contactId` | string | No |
+| `conversationId` | string | No |
+| `fieldKey` | string | No |
+
+## build_upsert_lead
+
+Create or update a lead linked to a contact or conversation.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | No |
+| `contactId` | string | No |
+| `conversationId` | string | No |
+| `status` | string | No |
+| `score` | integer or null | No |
+| `source` | string or null | No |
+| `data` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_leads
+
+List leads using bounded pagination and optional filters.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `agentId` | string | No |
+| `status` | string | No |
+| `contactId` | string | No |
+
+## build_create_ticket
+
+Create or reuse an inbox ticket for an authoritative Build conversation.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `contactId` | string | No |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `subject` | string | No |
+| `status` | "open" or "pending" or "snoozed" or "solved" or "closed" | No |
+| `priority` | "low" or "normal" or "high" or "urgent" | No |
+| `tags` | array of string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_ticket
+
+Read one inbox ticket.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## build_list_tickets
+
+Search the inbox queue by subject or customer, with bounded status, priority, team, assignee and channel filters.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `agentId` | string | No |
+| `search` | string | No |
+| `status` | "open" or "pending" or "snoozed" or "solved" or "closed" | No |
+| `priority` | "low" or "normal" or "high" or "urgent" | No |
+| `teamId` | string | No |
+| `assigneeUserId` | string | No |
+| `channel` | "telegram" or "web" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" | No |
+| `queue` | "mine" or "mentions" or "unassigned" | No |
+| `order` | "id" or "recent" | No |
+
+## build_update_ticket
+
+Update inbox state with optional optimistic version protection.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `status` | "open" or "pending" or "snoozed" or "solved" or "closed" | No |
+| `priority` | "low" or "normal" or "high" or "urgent" | No |
+| `subject` | string | No |
+| `tags` | array of string | No |
+| `snoozeUntil` | string or null | No |
+| `expectedVersion` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_add_ticket_note
+
+Add an internal note to a ticket.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `ticketId` | string | Yes |
+| `body` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_ticket_notes
+
+List internal ticket notes.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `ticketId` | string | Yes |
+
+## build_assign_ticket
+
+Assign ticket ownership with mandatory expectedVersion conflict protection.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `ticketId` | string | Yes |
+| `assigneeUserId` | string or null | No |
+| `teamId` | string or null | No |
+| `expectedVersion` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_takeover_conversation
+
+Acquire a human conversation lease and reject a live lease held by another agent.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `teamId` | string or null | No |
+| `leaseSeconds` | integer | No |
+| `expectedVersion` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_resume_conversation
+
+Release the actor's human lease and return conversation ownership to AI.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `expectedVersion` | integer | Yes |
+| `leaseToken` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_conversation_ownership
+
+Read AI/human ownership and lease state.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+
+## build_send_human_reply
+
+Send a human reply and automatically assign the ticket to the authenticated sender. Requires an active human lease and organization membership.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | Yes |
+| `connectionId` | string | No |
+| `externalConversationId` | string | No |
+| `text` | string | Yes |
+| `attachments` | array of object | No |
+| `clientMessageId` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_ticket_events
+
+Read the immutable ticket event timeline.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `ticketId` | string | Yes |
+
+## build_request_csat
+
+Issue a pending CSAT survey for a ticket or conversation.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `ticketId` | string | No |
+| `conversationId` | string | No |
+| `contactId` | string | No |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `expiresAt` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_submit_csat
+
+Record a one-to-five CSAT rating and comment.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `surveyId` | string | Yes |
+| `rating` | integer | Yes |
+| `comment` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_csat
+
+List CSAT survey requests and responses.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `status` | "pending" or "answered" or "expired" or "cancelled" | No |
+
+## build_create_team
+
+Create an organization-wide team with optional members.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `description` | string | No |
+| `enabled` | boolean | No |
+| `memberIds` | array of string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_update_team
+
+Update an organization-wide team and optionally replace its members.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | No |
+| `description` | string | No |
+| `enabled` | boolean | No |
+| `memberIds` | array of string | No |
+| `id` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_teams
+
+List the active organization's teams and member IDs.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_list_organization_members
+
+List organization members with names and avatars for assignment.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_set_team_member
+
+Add or update team membership, availability and capacity.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `teamId` | string | Yes |
+| `userId` | string | Yes |
+| `role` | "agent" or "lead" or "manager" | No |
+| `availability` | "online" or "away" or "offline" | No |
+| `maxConcurrent` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_set_agent_availability
+
+Set availability for all organization team memberships of a user.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `userId` | string | Yes |
+| `availability` | "online" or "away" or "offline" | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_create_routing_rule
+
+Create a priority-ordered inbox routing rule.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `priority` | integer | No |
+| `enabled` | boolean | No |
+| `conditions` | object | No |
+| `teamId` | string or null | No |
+| `assigneeUserId` | string or null | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_routing_rules
+
+List inbox routing rules.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_resolve_routing
+
+Resolve the first matching rule for a ticket context.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `channel` | string | No |
+| `priority` | string | No |
+| `tags` | array of string | No |
+| `contactStatus` | string | No |
+
+## build_create_macro
+
+Create an inbox response macro.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `body` | string | Yes |
+| `actions` | array of object | No |
+| `enabled` | boolean | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_update_macro
+
+Update an inbox response macro.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `name` | string | No |
+| `body` | string | No |
+| `actions` | array of object | No |
+| `enabled` | boolean | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_macros
+
+List inbox response macros.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_apply_macro
+
+Apply bounded ticket-state actions from an enabled inbox macro.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `macroId` | string | Yes |
+| `ticketId` | string | Yes |
+| `expectedVersion` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_create_campaign
+
+Create a Telegram-first channel-aware campaign.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `name` | string | Yes |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `connectionId` | string | No |
+| `template` | object | No |
+| `audienceFilter` | object | No |
+| `suppressionFilter` | object | No |
+| `scheduledAt` | string or null | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_campaign
+
+Read campaign configuration and audience filters.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## build_list_campaigns
+
+List campaigns with audience and delivery status metrics.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `status` | "draft" or "scheduled" or "running" or "paused" or "completed" or "failed" | No |
+| `search` | string | No |
+
+## build_update_campaign
+
+Update campaign configuration before delivery.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `name` | string | No |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `connectionId` | string | No |
+| `template` | object | No |
+| `audienceFilter` | object | No |
+| `suppressionFilter` | object | No |
+| `scheduledAt` | string or null | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_set_campaign_status
+
+Transition campaign state through draft, scheduled, running, paused, completed or failed.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `campaignId` | string | Yes |
+| `status` | "draft" or "scheduled" or "running" or "paused" or "completed" or "failed" | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_run_campaign
+
+Snapshot the audience and queue a campaign for the channel worker.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_snapshot_campaign_audience
+
+Freeze eligible and suppressed contacts for a campaign.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `campaignId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_suppress_campaign_contact
+
+Add contact suppression and stop eligible or queued deliveries.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `contactId` | string | Yes |
+| `reason` | string | Yes |
+| `expiresAt` | string or null | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_queue_campaign_deliveries
+
+Create idempotent Telegram delivery jobs from a frozen audience.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `campaignId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_claim_campaign_deliveries
+
+Atomically claim queued deliveries for a channel worker.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_process_next_campaign_delivery
+
+Claim one campaign recipient and admit it to the Telegram channel outbox; provider delivery is reconciled by the channel worker.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | 1 | No |
+| `connectionId` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_acknowledge_campaign_delivery
+
+Record provider delivery state and update audience metrics.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `deliveryId` | string | Yes |
+| `state` | "sent" or "delivered" or "read" or "replied" or "failed" | Yes |
+| `providerMessageId` | string | No |
+| `error` | string | No |
+| `retryAt` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_campaign_deliveries
+
+List bounded campaign delivery receipts and failures.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `campaignId` | string | No |
+| `state` | "queued" or "sending" or "sent" or "delivered" or "read" or "replied" or "failed" or "suppressed" | No |
+
+## build_get_health
+
+Read bounded Build worker backlog, oldest jobs, failures and uncertain delivery counts for the current project.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_list_delivery_failures
+
+List bounded, sanitized failed or uncertain channel job metadata without exposing payloads or provider responses.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `status` | "failed" or "uncertain" or "all" | No |
+
+## build_retry_delivery
+
+Explicitly requeue one known pre-send channel failure; uncertain outcomes are never retried.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `jobId` | string | Yes |
+| `expectedCode` | "INVALID_CREDENTIAL" or "UNSUPPORTED_ATTACHMENT" | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_record_operation_event
+
+Record a runtime, channel or customer-operation event used by analytics.
+
+Required scopes: `build:run`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `eventType` | "message_received" or "message_sent" or "agent_failed" or "tool_failed" or "low_feedback" or "handoff" or "ticket_created" or "ticket_resolved" or "csat_submitted" or "campaign_sent" or "campaign_delivered" or "campaign_replied" | Yes |
+| `conversationId` | string | No |
+| `contactId` | string | No |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `payload` | object | No |
+| `occurredAt` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_record_feedback
+
+Record customer feedback on a response and its trace, retaining evidence for knowledge-gap discovery.
+
+Required scopes: `build:run`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `conversationId` | string | No |
+| `messageId` | string | No |
+| `contactId` | string | No |
+| `channel` | "web" or "telegram" or "whatsapp" or "messenger" or "instagram" or "email" or "slack" or "api" or "helpdesk" | No |
+| `question` | string | Yes |
+| `sentiment` | "positive" or "negative" or "unknown" | No |
+| `reason` | string | No |
+| `metadata` | object | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_operational_analytics
+
+Read actual event, ticket, conversation, channel and CSAT aggregates for a bounded period.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `from` | string | No |
+| `to` | string | No |
+
+## build_refresh_knowledge_gap_suggestions
+
+Derive knowledge gaps from runtime failures and negative feedback.
+
+Required scopes: `build:run`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_knowledge_gap_suggestions
+
+List evidence-backed knowledge-gap suggestions.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `limit` | integer | No |
+| `cursor` | string | No |
+| `status` | "open" or "ignored" or "resolved" | No |
+
+## build_update_knowledge_gap_status
+
+Mark a knowledge-gap suggestion open, ignored or resolved.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+| `status` | "open" or "ignored" or "resolved" | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_simulations
+
+List active customer simulations for a managed Build agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `includeArchived` | boolean | No |
+
+## build_get_simulation
+
+Read one immutable-revision customer simulation definition.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `definitionId` | string | Yes |
+| `includeArchived` | boolean | No |
+
+## build_create_simulation
+
+Persist a customer persona/scenario simulation definition without executing it.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `id` | string | No |
+| `definition` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_update_simulation
+
+Replace a simulation definition using optimistic revision protection; historical runs retain their snapshots.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `definitionId` | string | Yes |
+| `definition` | object | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_archive_simulation
+
+Archive a simulation definition while preserving historical runs and transcripts.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `definitionId` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_simulation_revisions
+
+List immutable simulation definition revisions.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `definitionId` | string | Yes |
+
+## build_add_simulation_tool_mock
+
+Add a deterministic action response/error mock; simulation workers never call live action endpoints.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `definitionId` | string | Yes |
+| `mock` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_simulation_tool_mocks
+
+List tool mocks attached to a simulation definition.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `definitionId` | string | Yes |
+
+## build_start_simulation
+
+Queue a simulation run against an immutable agent/configuration/source/action snapshot and expand model/repeat cases.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `definitionId` | string | Yes |
+| `models` | array of string | No |
+| `repeats` | integer | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_simulation_runs
+
+List simulation summaries with passed, failed, no-verdict and infrastructure-error counts.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `definitionId` | string | No |
+
+## build_get_simulation_run
+
+Read one simulation run and its frozen configuration snapshot metadata.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `runId` | string | Yes |
+
+## build_list_simulation_cases
+
+Read case transcripts, observed actions and distinct verdict classes for a run.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `runId` | string | Yes |
+
+## build_cancel_simulation
+
+Cancel a queued or running simulation and fence unfinished cases.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `runId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_recover_simulation
+
+Recover an expired simulation lease without rerunning completed cases.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `runId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_create_copilot_proposal
+
+Generate a reviewable management-copilot proposal for instructions, a procedure, a widget or an action. The current target is redacted and no mutation occurs.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `targetKind` | "instructions" or "procedure" or "widget" or "action" | Yes |
+| `targetId` | string or null | No |
+| `request` | string | Yes |
+| `model` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_copilot_proposals
+
+List management-copilot proposals for an agent.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `status` | "proposed" or "approved" or "rejected" or "applied" or "expired" | No |
+
+## build_get_copilot_proposal
+
+Read a copilot proposal, source snapshot, proposed value and redacted diff.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `proposalId` | string | Yes |
+
+## build_approve_copilot_proposal
+
+Approve a copilot proposal for explicit later application.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `proposalId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_reject_copilot_proposal
+
+Reject a copilot proposal without changing the agent.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `proposalId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_apply_copilot_proposal
+
+Apply an approved copilot proposal only when its optimistic source revision still matches; stale proposals expire.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **required**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `proposalId` | string | Yes |
+| `expectedRevision` | integer | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_copilot_audit
+
+List immutable audit events for a management-copilot proposal.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `proposalId` | string | Yes |
+
+## build_get_zernio_whatsapp
+
+Read official WhatsApp setup and connection status.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+
+## build_begin_zernio_whatsapp
+
+Start the official WhatsApp signup for this channel.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `mode` | "cloud" or "coexistence" | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_finish_zernio_whatsapp
+
+Verify the account returned by the official WhatsApp signup.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `signupId` | string | Yes |
+| `accountId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_disconnect_zernio_whatsapp
+
+Disconnect this official WhatsApp account from Zernio and stop local routing.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_whatsapp_setup
+
+Read WhatsApp installation readiness and public Embedded Signup settings. Never returns secrets.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_get_whatsapp_connection
+
+Read the connected business number, coexistence mode, authorization expiry and import status.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+
+## build_begin_whatsapp_signup
+
+Start a short-lived Embedded Signup session. Open connectUrl to authorize the business in Meta; tokens stay server-side.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `mode` | "cloud" or "coexistence" | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_whatsapp_signup
+
+Read the status and authorized phone choices for a project-scoped Embedded Signup session.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sessionId` | string | Yes |
+
+## build_authorize_whatsapp_signup
+
+Exchange a one-use Meta authorization code and verify the app, permissions and business account. Never returns tokens.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sessionId` | string | Yes |
+| `code` | string | Yes |
+| `wabaId` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_activate_whatsapp_signup
+
+Connect an authorized number and subscribe to webhooks. Coexistence preserves the Business App registration; cloud mode registers the number.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `sessionId` | string | Yes |
+| `phoneNumberId` | string | Yes |
+| `pin` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_refresh_whatsapp_connection
+
+Check that Meta authorization still works and read phone quality.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+
+## build_disconnect_whatsapp
+
+Stop this channel, remove locally stored credentials and cancel queued jobs. Does not deregister the phone or disrupt the Business App.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_whatsapp_templates
+
+List Meta message templates and approval status with bounded pagination.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `after` | string | No |
+
+## build_create_whatsapp_template
+
+Submit a message template to Meta for approval.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `name` | string | Yes |
+| `language` | string | Yes |
+| `category` | "UTILITY" or "MARKETING" or "AUTHENTICATION" | Yes |
+| `components` | array of object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_delete_whatsapp_template
+
+Delete a named template from the connected WhatsApp business account.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `name` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_whatsapp_recipient
+
+Read a recipient's 24-hour reply window and outbound consent for one channel.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `recipient` | string | Yes |
+
+## build_set_whatsapp_consent
+
+Record documented permission or an opt-out. Never invent permission; include the source and date in note.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `recipient` | string | Yes |
+| `optedOut` | boolean | Yes |
+| `templateOptIn` | boolean | Yes |
+| `note` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_send_whatsapp_template
+
+Queue an approved Meta template for a conversation. The worker enforces opt-in and block status before sending.
+
+Required scopes: `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `conversationId` | string | Yes |
+| `template` | object | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_sync_whatsapp_app
+
+Request a one-time, consented Business App contact or history import during Meta's onboarding window. Imported messages never trigger the agent.
+
+Required scopes: `build:write`, `build:run`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `type` | "history" or "smb_app_state_sync" | Yes |
+| `consent` | true | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_whatsapp_delivery
+
+Read provider delivery/read receipts and queue state for a project-owned outbound WhatsApp message.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `messageId` | string | Yes |
+
+## build_get_whatsapp_media
+
+Download an attachment received on this channel as base64, up to 5 MiB. Never returns a Meta access token or media URL.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `mediaId` | string | Yes |
+
+## build_get_evolution_setup
+
+Read whether the managed Evolution pilot is enabled for this project.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_get_evolution_connection
+
+Read the project's Evolution session status without credentials or QR.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+
+## build_begin_evolution_connection
+
+Accept the unofficial connection notice and pair a managed WhatsApp session. QR is sensitive and short lived.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `acceptanceVersion` | "2026-10-26" | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_get_evolution_pairing
+
+Obtain a fresh short-lived QR for this project's accepted session. Never persist or share the QR.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_refresh_evolution_connection
+
+Reconcile the authenticated Evolution session with its provider.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_disconnect_evolution
+
+Revoke this session locally, cancel queued sends, and delete its remote instance. Retry completes pending cleanup.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_channel_links
+
+Read the latest 20 sent links with estimated clicks and automated visits. Repeated visits count; this is not unique-person attribution.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+
+## build_list_skill_templates
+
+List built-in skill template IDs, categories and descriptions, optionally filtered by search/category. This bounded gallery is shared with the UI. Use build_get_skill_template for an editable disabled definition; listing does not save anything.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `search` | string | No |
+| `category` | string | No |
+
+## build_get_skill_template
+
+Read a built-in skill template by discovered ID. Returns a copy of its complete disabled definition for build_save_procedure. Suggested actions are guidance, not connected action IDs. Does not save or execute anything.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `id` | string | Yes |
+
+## build_get_authoring_guide
+
+Get authoritative input JSON Schema, a valid example and authoring workflow for an agent configuration, action, skill (procedure), widget, sandbox/drives, integration tool, React SDK or scheduled task. Includes semantic constraints beyond JSON Schema, safe save/apply guidance, SDK workspace isolation, scheduling context and translation support. Does not validate or save user content.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `topic` | "agent" or "action" or "skill" or "widget" or "sandbox" or "integration" or "react-sdk" or "scheduled-task" | Yes |
+
+## build_list_widget_templates
+
+Discover widget starters from the same catalog as the Widgets editor. Search name, description and category; get a template's complete JSX, schema and representative default data with build_get_widget_template before creating a widget.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `search` | string | No |
+| `category` | string | No |
+
+## build_get_widget_template
+
+Read a complete editable widget starter, including JSX, Zod schema, example state and Function placeholders. Examples are synthetic, actions are unbound and templates are disabled. Does not create a widget or connect a service.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `templateId` | string | No |
+| `id` | string | No |
+
+## build_get_widget_components
+
+Read supported widget components, their props and insertion examples, allowed imports, helpers and Function binding contract. These are the Widgets editor's components; do not assume application UI imports are available.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+
+## build_validate_widget
+
+Check a proposed widget definition without saving: syntax, selected example state and unbound Functions. Never executes JSX or Zod source on the server. Returns rendered:false and schemaValidated:false; use build_validate_widget_preview in the browser's Widgets section for actual rendering, schema, image and empty-preview checks.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `state` | string | No |
+| `allowEmpty` | boolean | No |
+| `definition` | object | Yes |
+
+## build_enable_mcp_tools
+
+Discover a connected custom MCP server's tools, import missing tools for this agent and publish the updated catalog managed on the integration connection page. Preserves existing action settings and other agents. Requires project write access.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | Yes |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_start_mcp_oauth
+
+Start OAuth authorization for a custom MCP server. Discovers authorization metadata, registers the client when supported, and returns the sign-in URL. Requires a signed-in project member. Credentials are encrypted.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | No |
+| `agentId` | string | No |
+| `name` | string | Yes |
+| `url` | string | No |
+| `clientId` | string | No |
+| `clientSecret` | string | No |
+| `returnTo` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_save_mcp_connection
+
+Connect or update a custom Streamable HTTP MCP server by public HTTPS URL, with an optional bearer access token. Supply agentId to import and publish its tools for that agent. Omit url or token on updates to retain them; an empty token removes it. Verifies discovery before saving. Credentials are encrypted and never returned. For OAuth sign-in, use build_start_mcp_oauth.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | No |
+| `agentId` | string | No |
+| `name` | string | Yes |
+| `url` | string | No |
+| `authType` | "none" or "token" or "oauth" | No |
+| `token` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_app_connections
+
+List enabled apps and project-owned connections. No credentials are returned.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | No |
+
+## build_connect_app
+
+Start a private OAuth app connection for the current project. Open the returned HTTPS URL to authorize.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `toolkit` | string | Yes |
+| `shop` | string | No |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_refresh_app_connection
+
+Verify an app's OAuth status or check a custom MCP server. Callback parameters cannot activate connections.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_disconnect_app
+
+Disconnect a project app and revoke its use by all agent revisions.
+
+Required scopes: `build:write`. Idempotency key: **optional**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |
+
+## build_list_app_tools
+
+List available tools and input schemas for an active project app connection. Inspect build_list_actions to find this agent's saved definitions by connectionId/toolSlug; build_save_action changes enabled/settings while preserving its ID and revision. Apply the agent revision for runtime use. Integration tools are managed in Integrations, while Actions shows custom tools.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+
+## build_get_usage
+
+Read model tokens and integration calls by agent and conversation within the current paid period (UTC month for self-hosting). Summaries include all events; breakdowns return the 100 most recently active groups.
+
+Required scopes: `build:read`. Idempotency key: **none**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `agentId` | string | No |
+| `conversationId` | string | No |
+
+## build_configure_shopify_chat
+
+Connect the installed Shopify app's storefront chat to an enabled project web channel. The merchant must enable the Datool chat app embed in the theme editor.
+
+Required scopes: `build:write`. Idempotency key: **required**. Expected revision: **none**.
+
+**Request fields**
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `connectionId` | string | Yes |
+| `channelId` | string | Yes |
+| `idempotencyKey` | string | No |
+| `requestKey` | string | No |

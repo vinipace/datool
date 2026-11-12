@@ -256,13 +256,15 @@ export function MessageTranscript({
           const text = messageText(message.content)
           const isUser = message.role.toLowerCase() === "user"
           const isAssistant = message.role.toLowerCase() === "assistant"
-          const isOutgoing = perspective === "operator" ? isAssistant : isUser
+          const isOutgoing = perspective === "operator" && variant === "inbox"
+            ? message.isViewer === true
+            : perspective === "operator" ? isAssistant : isUser
           const isHumanReply =
             isAssistant && message.metadata?.source === "human"
           const label =
             perspective === "operator"
               ? isUser
-                ? "Customer"
+                ? message.author?.name || "Customer"
                 : isAssistant
                   ? isHumanReply
                     ? message.author?.name.trim() || "Unknown sender"
@@ -322,11 +324,12 @@ export function MessageTranscript({
                 (variant !== "default" || isOutgoing) &&
                   "flex flex-col items-start",
                 isOutgoing && "items-end",
-                inbox && "py-0"
+                inbox && "py-0",
+                inbox && !isOutgoing && "pl-9"
               )}
             >
               {startsDay && (
-                <div className="mb-5 flex w-full items-center justify-center gap-4 self-stretch before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+                <div className={cn("mb-5 flex w-full items-center justify-center gap-4 self-stretch before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border", inbox && !isOutgoing && "-ml-9 w-[calc(100%+2.25rem)]")}>
                   <time
                     dateTime={message.createdAt}
                     className="py-1 text-[11px] font-medium text-foreground-muted"
@@ -339,11 +342,31 @@ export function MessageTranscript({
                   </time>
                 </div>
               )}
-              {(customer || inbox) && isHumanReply && !continuesGroup && (
+              {customer && isHumanReply && !continuesGroup && (
                 <ChatMessageAuthor
                   name={message.author?.name || "Support teammate"}
                   image={message.author?.image ?? null}
                 />
+              )}
+              {inbox && !isOutgoing && (
+                <div className="relative mb-1.5 flex max-w-full items-baseline gap-2 text-xs font-semibold text-foreground">
+                  <span className="absolute top-0 -left-9">
+                    {isAssistant && !isHumanReply ? (
+                      <AgentAvatar appearance={message.author?.agentAvatar} className="size-7" />
+                    ) : (
+                      <UserAvatarImage name={label} image={message.author?.image ?? null} />
+                    )}
+                  </span>
+                  <span className="min-w-0 truncate">{label}{isAssistant && !isHumanReply ? " · AI" : ""}</span>
+                  {message.createdAt && (
+                    <time dateTime={message.createdAt} className="shrink-0 text-[10px] font-normal text-foreground-muted">
+                      {new Date(message.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                  )}
+                </div>
               )}
               {!customer && !inbox && (
                 <span
@@ -408,12 +431,6 @@ export function MessageTranscript({
                         : "bg-muted text-foreground")
                   )}
                 >
-                  {inbox && isAssistant && !isHumanReply && (
-                    <p className="mb-1 text-xs font-semibold text-inherit">
-                      {label}
-                      {!isHumanReply && " · AI"}
-                    </p>
-                  )}
                   {text !== null && (
                     <div
                       className={cn(
@@ -508,7 +525,7 @@ export function MessageTranscript({
                       onCodeStatus={onCodeStatus}
                     />
                   )}
-                  {inbox && message.createdAt && (
+                  {inbox && isOutgoing && message.createdAt && (
                     <time
                       dateTime={message.createdAt}
                       className="mt-1 block text-right text-[10px] text-inherit opacity-70"

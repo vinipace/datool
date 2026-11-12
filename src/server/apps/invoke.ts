@@ -1,5 +1,6 @@
 import type { AppDefinition } from "@/src/lib/playground/contracts"
 import { executeAgentEvaluation, type resolveAgentEvaluation } from "../build/evaluation"
+import { agentFingerprintAttribute, journeyResultAttribute } from "@/src/lib/build/agent-journey"
 import type { PromptRunScope } from "@/src/lib/tracer/prompt-overrides"
 import { randomUUID, createHash } from "node:crypto"
 import type {
@@ -140,6 +141,7 @@ export async function beginInvocation(
         "datool.span.kind":
           app.buildAgent || app.definition.mode === "agent" ? "agent" : "workflow",
         "datool.app.revision": app.definition.revision,
+        ...(app.buildAgent ? { [agentFingerprintAttribute]: app.buildAgent.fingerprint } : {}),
         "datool.trace.coverage": "invocation-only",
       },
     })
@@ -149,17 +151,18 @@ export async function executeInvocation(
   service: TracerService,
   app: ResolvedApp,
   trace: TraceDetail,
-  promptScope?: PromptRunScope
+  promptScope?: PromptRunScope,
+  execution?: { assertActive: () => Promise<void>; leaseOwner: string }
 ) {
   try {
     validateAppInput(app, trace.input)
     let flushed = false
     const agentResult = app.buildAgent
-      ? await executeAgentEvaluation(app.buildAgent, trace.input, String(trace.attributes["datool.call.id"]), promptScope)
+      ? await executeAgentEvaluation(app.buildAgent, trace.input, String(trace.attributes["datool.call.id"]), promptScope, execution)
       : null
     if (agentResult) flushed = true
-    if (agentResult?.traceId) {
-      const linked = await runTracerEffect(service.getTraceArtifact(agentResult.traceId))
+    for (const traceId of agentResult?.traceIds ?? []) {
+      const linked = await runTracerEffect(service.getTraceArtifact(traceId))
       await runTracerEffect(service.patchTrace(linked.id, { attributes: { ...linked.attributes, "datool.call.id": trace.attributes["datool.call.id"], "datool.eval.run.id": promptScope?.runId ?? null } }))
       flushed = true
     }
@@ -185,6 +188,7 @@ export async function executeInvocation(
         attributes: {
           ...trace.attributes,
           "datool.telemetry.flushed": flushed,
+          ...(agentResult?.journey ? { [journeyResultAttribute]: agentResult.journey as unknown as JsonValue } : {}),
         },
       })
     )

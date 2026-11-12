@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { NextNavigationProvider } from "@/components/navigation/next-navigation"
 import {
   BookOpenCheck,
+  Boxes,
   LoaderCircle,
   Play,
   ArrowLeft,
@@ -48,7 +49,11 @@ import { WorkspacePageLayout } from "./workspace-page-layout"
 
 import { useReactViewWebMcp } from "./use-react-view-webmcp"
 import { useViewLibraryWebMcp } from "./use-view-library-webmcp"
-import { productIcons, selectedProductIcon, selectedProductIcons } from "@/components/product-icons"
+import {
+  productIcons,
+  selectedProductIcon,
+  selectedProductIcons,
+} from "@/components/product-icons"
 import { InspectorPanels } from "./inspector-panels"
 import { useOrganizationSessionSync } from "@/lib/workspace-selection"
 import {
@@ -138,16 +143,6 @@ const settingsRoutes = [
     href: "/settings/members",
     icon: productIcons.members,
     label: pageTitles.members,
-  },
-  {
-    href: "/settings/ai-providers",
-    icon: productIcons.aiProviders,
-    label: pageTitles.aiProviders,
-  },
-  {
-    href: "/settings/sandbox-providers",
-    icon: productIcons.sandboxProviders,
-    label: pageTitles.sandboxProviders,
   },
   {
     href: "/settings/api-keys",
@@ -245,7 +240,9 @@ function AppSidebar({
   const inHome = pathname === prefix || pathname === `${prefix}/`
   const inInbox = buildEnabled && pathname === `${prefix}/build/inbox`
   const HomeIcon = inHome ? selectedProductIcons.home : productIcons.home
-  const InboxIcon = inInbox ? selectedProductIcons.buildInbox : productIcons.buildInbox
+  const InboxIcon = inInbox
+    ? selectedProductIcons.buildInbox
+    : productIcons.buildInbox
   const inSettings =
     pathname === `${prefix}/settings` ||
     pathname.startsWith(`${prefix}/settings/`)
@@ -296,6 +293,26 @@ function AppSidebar({
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                {buildEnabled && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      className="h-8 text-xs"
+                      isActive={(pathname === `${prefix}/deployments` || pathname.startsWith(`${prefix}/deployments/`))}
+                      aria-current={
+                        (pathname === `${prefix}/deployments` || pathname.startsWith(`${prefix}/deployments/`))
+                          ? "page"
+                          : undefined
+                      }
+                      onClick={closeMobileNavigation}
+                      render={
+                        <Link href={`${prefix}/deployments`} prefetch={true} />
+                      }
+                    >
+                      <Boxes />
+                      <span>{pageTitles.deployments}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroup>
           )}
@@ -318,7 +335,9 @@ function AppSidebar({
                         pathname.startsWith(`${href}/`)) ||
                       (route.href === "/playground" &&
                         pathname.startsWith(`${prefix}/apps/`))
-                    const Icon = active ? selectedProductIcon(route.icon) : route.icon
+                    const Icon = active
+                      ? selectedProductIcon(route.icon)
+                      : route.icon
                     const link = (
                       <SidebarMenuButton
                         className="h-8 text-xs group-data-[collapsible=icon]/sidebar:size-8"
