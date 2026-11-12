@@ -1,3 +1,4 @@
+import { parseEnvironment } from "./context"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
 import {
@@ -7,14 +8,20 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { getDeployment, invokeDeploymentTool } from "./service"
-import type { BuildContext } from "../build/context"
+import type { DeploymentContext } from "./context"
 import { TracerError } from "../tracer/errors"
 
 export async function projectMcp(
-  context: BuildContext,
+  context: DeploymentContext,
   request: Request,
   parsedBody: unknown
 ) {
+  context = {
+    ...context,
+    environment: parseEnvironment(
+      new URL(request.url).searchParams.get("environment")
+    ),
+  }
   const deployment = await getDeployment(context)
   if (!deployment)
     throw new TracerError("NOT_FOUND", "Deploy a folder to this project first.")
@@ -63,7 +70,7 @@ export async function projectMcp(
     ...deployment.bundle_json.skills,
   ]
   const uri = (path: string) =>
-    `datool://project/${encodeURIComponent(context.projectId)}/${encodeURIComponent(path)}`
+    `datool://project/${encodeURIComponent(context.projectId)}/${deployment.environment}/${encodeURIComponent(path)}`
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
     resources: documents.map((d) => ({
       uri: uri(d.path),

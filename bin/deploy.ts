@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import {
   readdir,
   readFile,
@@ -6,12 +8,14 @@ import {
   mkdir,
   writeFile,
 } from "node:fs/promises"
-import { resolve, relative, sep, extname } from "node:path"
+import { resolve, relative, sep, extname, basename } from "node:path"
 import { prepareDatabase } from "./deploy-database"
 import { build, type BuildOptions } from "esbuild"
 import { appRequest } from "./request"
 import {
   deploymentBundle,
+  deploymentEnvironment,
+  deploymentMetadata,
   deploymentConfig,
   deploymentMaxBytes,
   type DeploymentBundle,
@@ -183,15 +187,50 @@ export async function packDeployment(
   return bundle
 }
 
+async function folderMetadata(folder: string) {
+  const cwd = resolve(folder)
+  const git = async (...args: string[]) =>
+    (
+      await promisify(execFile)("git", args, {
+        cwd,
+        timeout: 5000,
+        maxBuffer: 64 * 1024,
+      })
+    ).stdout.trim()
+  try {
+    const [commit, branch, title, dirty] = await Promise.all([
+      git("rev-parse", "HEAD"),
+      git("branch", "--show-current"),
+      git("log", "-1", "--format=%s"),
+      git("status", "--porcelain", "--", "."),
+    ])
+    return deploymentMetadata.parse({
+      commit,
+      ...(branch ? { branch: branch.slice(0, 200) } : {}),
+      title: title.slice(0, 200) || basename(cwd),
+      dirty: Boolean(dirty),
+    })
+  } catch {
+    return { title: basename(cwd).slice(0, 200) || "CLI deployment" }
+  }
+}
+
 export async function deployCommand(args: string[]) {
   const origin =
     process.env.DATOOL_BASE_URL ??
     process.env.DATOOL_URL ??
     "http://127.0.0.1:3000"
-  if (args[0] === "status") {
-    console.info(
-      JSON.stringify(await appRequest(origin, "/api/deployments"), null, 2)
+  const environmentIndex = args.indexOf("--environment")
+  const environment = deploymentEnvironment.parse(
+    environmentIndex < 0 ? "production" : args[environmentIndex + 1]
+  )
+  if (environmentIndex >= 0)
+    args = args.filter(
+      (_, index) => index !== environmentIndex && index !== environmentIndex + 1
     )
+  const endpoint = `/api/deployments?environment=${environment}`
+  if (args[0] === "status") {
+    console.info(JSON.stringify(await appRequest(origin, endpoint), null, 2))
     return
   }
   const unknown = args.filter(
@@ -200,13 +239,16 @@ export async function deployCommand(args: string[]) {
   if (unknown.length) throw new Error(`Unknown deploy option: ${unknown[0]}`)
   const paths = args.filter((arg) => !arg.startsWith("-"))
   if (paths.length > 1)
-    throw new Error("Usage: datool deploy [folder] [--dry-run | --plan]")
+    throw new Error(
+      "Usage: datool deploy [folder] [--environment preview|production] [--dry-run | --plan]"
+    )
   const bundle = await packDeployment(paths[0] ?? ".")
   if (args.includes("--dry-run")) {
     console.info(
       JSON.stringify(
         {
           dryRun: true,
+          environment,
           postgres: Boolean(bundle.database),
           agents: bundle.agents.map((a) => a.slug),
           tools: bundle.tools,
@@ -221,10 +263,7 @@ export async function deployCommand(args: string[]) {
     )
     return
   }
-  const current = await appRequest<{ id: string } | null>(
-    origin,
-    "/api/deployments"
-  )
+  const current = await appRequest<{ id: string } | null>(origin, endpoint)
   const data = await appRequest<{
     database?: {
       hash: string
@@ -233,9 +272,11 @@ export async function deployCommand(args: string[]) {
     }
   }>(
     origin,
-    "/api/deployments",
+    endpoint,
     {
       bundle,
+      metadata: await folderMetadata(paths[0] ?? "."),
+      environment,
       expectedDeploymentId: current?.id ?? null,
       planOnly: args.includes("--plan"),
     },

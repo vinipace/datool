@@ -13,6 +13,7 @@ export const pageTitles = {
   organizations: "Organizations",
   newOrganization: "New organization",
   projects: "Projects",
+  deployments: "Deployments",
   projectSettings: "Project settings",
   storageProviders: "Storage providers",
   sandboxProviders: "Sandbox providers",

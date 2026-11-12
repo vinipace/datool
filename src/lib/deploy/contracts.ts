@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+export const deploymentEnvironment = z.enum(["preview", "production"])
+export type DeploymentEnvironment = z.infer<typeof deploymentEnvironment>
 export const deploymentMaxBytes = 4 * 1024 * 1024
 export const deploymentName = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/)
 export const deploymentPath = z
@@ -88,9 +90,22 @@ export const deploymentTool = z
   })
   .strict()
 export type DeploymentTool = z.infer<typeof deploymentTool>
+export const deploymentMetadata = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    commit: z
+      .string()
+      .regex(/^[a-f0-9]{40,64}$/)
+      .optional(),
+    branch: z.string().min(1).max(200).optional(),
+    dirty: z.boolean().optional(),
+  })
+  .strict()
 export const deployInput = z
   .object({
     bundle: deploymentBundle,
+    metadata: deploymentMetadata.default({}),
+    environment: deploymentEnvironment.default("production"),
     expectedDeploymentId: z.string().uuid().nullable(),
     planOnly: z.boolean().optional(),
   })
@@ -114,4 +129,41 @@ export const brainTool: DeploymentTool = {
     required: ["query"],
     additionalProperties: false,
   },
+}
+
+export type DeploymentSummary = {
+  title: string
+  commit: string | null
+  branch: string | null
+  dirty: boolean
+  durationMs: number | null
+  active?: boolean
+  author?: { name: string; image: string | null } | null
+  environment: DeploymentEnvironment
+  id: string
+  hash: string
+  createdAt: string
+  sandbox: string
+  agents: string[]
+  tools: string[]
+  sources: string[]
+  postgres: boolean
+  mcpPath: string
+}
+export type DeploymentHistory = {
+  items: DeploymentSummary[]
+  activeId: string | null
+  nextCursor: string | null
+}
+export type DeploymentDetail = {
+  deployment: DeploymentSummary
+  active: boolean
+  tools: DeploymentTool[]
+  documents: {
+    path: string
+    title: string
+    kind: "source" | "skill"
+    characters: number
+  }[]
+  collectors: string[]
 }

@@ -1,9 +1,10 @@
+import { environmentOf, resourceScope } from "./context"
 import { createHash, randomUUID } from "node:crypto"
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { sql } from "drizzle-orm"
 import { z } from "zod"
-import type { BuildContext } from "../build/context"
+import type { DeploymentContext } from "./context"
 import { assertBuildProject } from "../build/context"
 import { publicHttpRequest } from "../build/http"
 import { objectStorage } from "../build/storage/objects"
@@ -35,7 +36,7 @@ const conflict = () =>
   )
 
 export async function searchBrain(
-  context: BuildContext,
+  context: DeploymentContext,
   deploymentId: string,
   raw: unknown
 ) {
@@ -53,14 +54,16 @@ export async function searchBrain(
   return { items: result.rows }
 }
 
-async function bucketStore(context: BuildContext) {
+async function bucketStore(context: DeploymentContext) {
   const rows = await context.database.execute<{
     storage_connection_id: string | null
   }>(
-    sql`SELECT storage_connection_id FROM project_deployment_state WHERE project_id=${context.projectId}`
+    sql`SELECT storage_connection_id FROM project_deployment_state WHERE project_id=${context.projectId} AND environment=${environmentOf(context)}`
   )
   const connectionId = rows.rows[0]?.storage_connection_id
-  const project = createHash("sha256").update(context.projectId).digest("hex")
+  const project = createHash("sha256")
+    .update(resourceScope(context))
+    .digest("hex")
   if (connectionId) {
     const connection = await storageConnection(context, connectionId)
     const storage = objectStorage(
@@ -94,7 +97,7 @@ async function bucketStore(context: BuildContext) {
 }
 
 export function deploymentCapabilities(
-  context: BuildContext,
+  context: DeploymentContext,
   options: {
     deploymentId?: string
     sandbox: AgentSandboxProvider
@@ -134,7 +137,7 @@ export function deploymentCapabilities(
     if (op === "db.get") {
       const value = documentKey.parse(input)
       const rows = await context.database.execute(
-        sql`SELECT value,revision FROM project_documents WHERE project_id=${context.projectId} AND collection=${value.collection} AND key=${value.key}`
+        sql`SELECT value,revision FROM project_documents WHERE project_id=${context.projectId} AND environment=${environmentOf(context)} AND collection=${value.collection} AND key=${value.key}`
       )
       return rows.rows[0] ?? null
     }
@@ -152,14 +155,14 @@ export function deploymentCapabilities(
       const rows =
         value.expectedRevision === 0
           ? await context.database.execute(
-              sql`INSERT INTO project_documents(project_id,collection,key,value) VALUES(${context.projectId},${value.collection},${value.key},${json}::jsonb) ON CONFLICT DO NOTHING RETURNING revision`
+              sql`INSERT INTO project_documents(project_id,environment,collection,key,value) VALUES(${context.projectId},${environmentOf(context)},${value.collection},${value.key},${json}::jsonb) ON CONFLICT DO NOTHING RETURNING revision`
             )
           : value.expectedRevision !== undefined
             ? await context.database.execute(
-                sql`UPDATE project_documents SET value=${json}::jsonb,revision=revision+1,updated_at=now() WHERE project_id=${context.projectId} AND collection=${value.collection} AND key=${value.key} AND revision=${value.expectedRevision} RETURNING revision`
+                sql`UPDATE project_documents SET value=${json}::jsonb,revision=revision+1,updated_at=now() WHERE project_id=${context.projectId} AND environment=${environmentOf(context)} AND collection=${value.collection} AND key=${value.key} AND revision=${value.expectedRevision} RETURNING revision`
               )
             : await context.database.execute(
-                sql`INSERT INTO project_documents(project_id,collection,key,value) VALUES(${context.projectId},${value.collection},${value.key},${json}::jsonb) ON CONFLICT(project_id,collection,key) DO UPDATE SET value=excluded.value,revision=project_documents.revision+1,updated_at=now() RETURNING revision`
+                sql`INSERT INTO project_documents(project_id,environment,collection,key,value) VALUES(${context.projectId},${environmentOf(context)},${value.collection},${value.key},${json}::jsonb) ON CONFLICT(project_id,environment,collection,key) DO UPDATE SET value=excluded.value,revision=project_documents.revision+1,updated_at=now() RETURNING revision`
               )
       if (!rows.rows.length) throw conflict()
       return rows.rows[0]
@@ -170,7 +173,7 @@ export function deploymentCapabilities(
         .strict()
         .parse(input)
       const rows = await context.database.execute(
-        sql`DELETE FROM project_documents WHERE project_id=${context.projectId} AND collection=${value.collection} AND key=${value.key} ${value.expectedRevision === undefined ? sql`` : sql`AND revision=${value.expectedRevision}`} RETURNING key`
+        sql`DELETE FROM project_documents WHERE project_id=${context.projectId} AND environment=${environmentOf(context)} AND collection=${value.collection} AND key=${value.key} ${value.expectedRevision === undefined ? sql`` : sql`AND revision=${value.expectedRevision}`} RETURNING key`
       )
       if (!rows.rows.length && value.expectedRevision !== undefined)
         throw conflict()
@@ -189,7 +192,7 @@ export function deploymentCapabilities(
         value: unknown
         revision: number
       }>(
-        sql`SELECT key,value,revision FROM project_documents WHERE project_id=${context.projectId} AND collection=${value.collection} ${value.cursor ? sql`AND key>${value.cursor}` : sql``} ${value.where ? sql`AND value @> ${JSON.stringify(value.where)}::jsonb` : sql``} ORDER BY key LIMIT ${value.limit + 1}`
+        sql`SELECT key,value,revision FROM project_documents WHERE project_id=${context.projectId} AND environment=${environmentOf(context)} AND collection=${value.collection} ${value.cursor ? sql`AND key>${value.cursor}` : sql``} ${value.where ? sql`AND value @> ${JSON.stringify(value.where)}::jsonb` : sql``} ORDER BY key LIMIT ${value.limit + 1}`
       )
       const items = [] as typeof rows.rows
       let bytes = 0
@@ -210,7 +213,7 @@ export function deploymentCapabilities(
         .strict()
         .parse(input)
       const rows = await context.database.execute<{ key: string }>(
-        sql`SELECT key,size,content_type AS "contentType" FROM project_bucket_objects WHERE project_id=${context.projectId} AND starts_with(key,${value.prefix}) ${value.cursor ? sql`AND key>${value.cursor}` : sql``} ORDER BY key LIMIT ${value.limit + 1}`
+        sql`SELECT key,size,content_type AS "contentType" FROM project_bucket_objects WHERE project_id=${context.projectId} AND environment=${environmentOf(context)} AND starts_with(key,${value.prefix}) ${value.cursor ? sql`AND key>${value.cursor}` : sql``} ORDER BY key LIMIT ${value.limit + 1}`
       )
       const items = rows.rows.slice(0, value.limit)
       return {
@@ -243,7 +246,7 @@ export function deploymentCapabilities(
             content_type: string
             size: number
           }>(
-            sql`SELECT object_id,content_type,size FROM project_bucket_objects WHERE project_id=${context.projectId} AND key=${value.key}`
+            sql`SELECT object_id,content_type,size FROM project_bucket_objects WHERE project_id=${context.projectId} AND environment=${environmentOf(context)} AND key=${value.key}`
           )
           const object = rows.rows[0]
           return object
@@ -256,7 +259,7 @@ export function deploymentCapabilities(
         }
         if (op === "bucket.delete") {
           const rows = await context.database.execute<{ object_id: string }>(
-            sql`DELETE FROM project_bucket_objects WHERE project_id=${context.projectId} AND key=${value.key} RETURNING object_id`
+            sql`DELETE FROM project_bucket_objects WHERE project_id=${context.projectId} AND environment=${environmentOf(context)} AND key=${value.key} RETURNING object_id`
           )
           if (rows.rows[0]) await store.remove(rows.rows[0].object_id)
           return { deleted: rows.rows.length > 0 }
@@ -271,7 +274,7 @@ export function deploymentCapabilities(
         await store.put(id, bytes)
         try {
           await context.database.execute(
-            sql`INSERT INTO project_bucket_objects(project_id,key,object_id,size,content_type) VALUES(${context.projectId},${value.key},${id}::uuid,${bytes.length},${upload.contentType}) ON CONFLICT(project_id,key) DO UPDATE SET object_id=excluded.object_id,size=excluded.size,content_type=excluded.content_type,updated_at=now()`
+            sql`INSERT INTO project_bucket_objects(project_id,environment,key,object_id,size,content_type) VALUES(${context.projectId},${environmentOf(context)},${value.key},${id}::uuid,${bytes.length},${upload.contentType}) ON CONFLICT(project_id,environment,key) DO UPDATE SET object_id=excluded.object_id,size=excluded.size,content_type=excluded.content_type,updated_at=now()`
           )
         } catch (error) {
           await store.remove(id).catch(() => undefined)

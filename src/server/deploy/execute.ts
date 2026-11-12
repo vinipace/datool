@@ -6,7 +6,7 @@ import {
 } from "@/src/lib/build/sandbox"
 import { deploymentRunner } from "./runner"
 import { deploymentCapabilities } from "./capabilities"
-import type { BuildContext } from "../build/context"
+import type { DeploymentContext } from "./context"
 import { runAgentSandboxCommand } from "../build/sandbox-runtime"
 import type { DeploymentTool } from "@/src/lib/deploy/contracts"
 
@@ -84,7 +84,7 @@ export function validateToolInput(tool: DeploymentTool, input: unknown) {
 }
 
 export async function executeDeploymentModule(
-  context: BuildContext,
+  context: DeploymentContext,
   options: {
     code: string
     sandbox: AgentSandboxProvider

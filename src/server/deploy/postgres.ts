@@ -1,3 +1,4 @@
+import { environmentOf, resourceScope } from "./context"
 import { createHash, randomBytes } from "node:crypto"
 import { Client, Query, types } from "pg"
 import { sql } from "drizzle-orm"
@@ -7,7 +8,7 @@ import {
   type DrizzleSnapshotJSON,
 } from "drizzle-kit/api"
 import { z } from "zod"
-import type { BuildContext } from "../build/context"
+import type { DeploymentContext } from "./context"
 import {
   encryptProviderKey,
   decryptProviderKey,
@@ -23,37 +24,39 @@ type Credentials = { owner: string; writer: string; reader: string }
 
 /** Serialize preparation, migrations and publication, including the first deploy. */
 export async function withDeploymentLock<T>(
-  context: BuildContext,
+  context: DeploymentContext,
   run: () => Promise<T>
 ) {
   const client = await getTracerWritePool(context.database).connect()
   try {
     await client.query("SET lock_timeout='30s'")
     await client.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [
-      `deploy:${context.projectId}`,
+      `deploy:${resourceScope(context)}`,
     ])
     return await run()
   } finally {
     await client
       .query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [
-        `deploy:${context.projectId}`,
+        `deploy:${resourceScope(context)}`,
       ])
       .catch(() => {})
     await client.query("RESET lock_timeout").catch(() => {})
     client.release()
   }
 }
-async function credentials(context: BuildContext): Promise<Credentials | null> {
+async function credentials(
+  context: DeploymentContext
+): Promise<Credentials | null> {
   const rows = await context.database.execute<{
     encrypted_credentials: string
   }>(
-    sql`SELECT encrypted_credentials FROM project_postgres WHERE project_id=${context.projectId}`
+    sql`SELECT encrypted_credentials FROM project_postgres WHERE project_id=${context.projectId} AND environment=${environmentOf(context)}`
   )
   return rows.rows[0]
     ? JSON.parse(
         decryptProviderKey(
           rows.rows[0].encrypted_credentials,
-          context.projectId,
+          resourceScope(context),
           "project-postgres"
         )
       )
@@ -78,7 +81,7 @@ function client(url: string, stream = false) {
   })
   return connection
 }
-async function provision(context: BuildContext) {
+async function provision(context: DeploymentContext) {
   const previous = await credentials(context)
   if (previous) return previous
   const configured = process.env.DATOOL_PROJECT_DATABASE_ADMIN_URL
@@ -90,7 +93,7 @@ async function provision(context: BuildContext) {
     )
   const admin = client(configured)
   // Random suffix avoids adopting an existing database or role after an interrupted provision.
-  const name = `dtp_${digest(context.projectId).slice(0, 16)}_${randomBytes(6).toString("hex")}`
+  const name = `dtp_${digest(resourceScope(context)).slice(0, 16)}_${randomBytes(6).toString("hex")}`
   const roles = {
     owner: `${name}_owner`,
     writer: `${name}_writer`,
@@ -141,7 +144,7 @@ async function provision(context: BuildContext) {
     // database once binding starts; never leave a committed binding pointing at a dropped database.
     bindingAttempted = true
     await context.database.execute(
-      sql`INSERT INTO project_postgres(project_id,encrypted_credentials) VALUES(${context.projectId},${encryptProviderKey(JSON.stringify(result), context.projectId, "project-postgres")})`
+      sql`INSERT INTO project_postgres(project_id,environment,encrypted_credentials) VALUES(${context.projectId},${environmentOf(context)},${encryptProviderKey(JSON.stringify(result), resourceScope(context), "project-postgres")})`
     )
     return result
   } catch (error) {
@@ -283,7 +286,10 @@ function additive(previous: DrizzleSnapshotJSON, next: DrizzleSnapshotJSON) {
     }
   }
 }
-export async function planProjectDatabase(context: BuildContext, raw: unknown) {
+export async function planProjectDatabase(
+  context: DeploymentContext,
+  raw: unknown
+) {
   const next = snapshot(raw)
   let previous = generateDrizzleJson({})
   let appliedMigration: { hash: string; statements: string[] } | undefined
@@ -329,7 +335,7 @@ export async function planProjectDatabase(context: BuildContext, raw: unknown) {
   }
 }
 export async function migrateProjectDatabase(
-  context: BuildContext,
+  context: DeploymentContext,
   plan: Awaited<ReturnType<typeof planProjectDatabase>>,
   signal: AbortSignal
 ) {
@@ -387,7 +393,7 @@ export async function migrateProjectDatabase(
 }
 
 export async function queryProjectDatabase(
-  context: BuildContext,
+  context: DeploymentContext,
   raw: unknown,
   readOnly: boolean,
   signal: AbortSignal

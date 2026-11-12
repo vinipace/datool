@@ -12,6 +12,11 @@ const date = (id: string): SearchFieldSpec => ({ id, kind: "date" })
 
 /** Shared editor fields and validation; consumers apply the predicate to their collection. */
 export const collectionFilterFields = {
+  deployments: [
+    text("title"), text("id"), text("commit"), text("branch"),
+    {id: "environment", label: "Environment", kind: "enum", options: ["production", "preview"]},
+    date("createdAt"),
+  ],
   alerts: [
     text("id"),
     text("name"),

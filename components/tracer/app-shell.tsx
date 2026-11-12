@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { NextNavigationProvider } from "@/components/navigation/next-navigation"
 import {
   BookOpenCheck,
+  Boxes,
   LoaderCircle,
   Play,
   ArrowLeft,
@@ -289,6 +290,26 @@ function AppSidebar({
                     >
                       <InboxIcon />
                       <span>Inbox</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+                {buildEnabled && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      className="h-8 text-xs"
+                      isActive={(pathname === `${prefix}/deployments` || pathname.startsWith(`${prefix}/deployments/`))}
+                      aria-current={
+                        (pathname === `${prefix}/deployments` || pathname.startsWith(`${prefix}/deployments/`))
+                          ? "page"
+                          : undefined
+                      }
+                      onClick={closeMobileNavigation}
+                      render={
+                        <Link href={`${prefix}/deployments`} prefetch={true} />
+                      }
+                    >
+                      <Boxes />
+                      <span>{pageTitles.deployments}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}

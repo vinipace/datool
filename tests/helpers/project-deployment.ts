@@ -157,6 +157,21 @@ try {
     }
   }`
   await writeFile(toolFile, source)
+  const git = (args: string[]) =>
+    promisify(execFile)("git", args, { cwd: directory })
+  await git(["init", "-b", "feature/deployment-ui"])
+  await git(["add", "tools", "sources", "skills", "agents"])
+  await git([
+    "-c",
+    "user.name=Deployment Test",
+    "-c",
+    "user.email=deployment@example.test",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "-m",
+    "Publish bicycle company tools",
+  ])
   const preview = JSON.parse((await cli([directory, "--dry-run"])).stdout)
   assert.deepEqual(preview.tools, ["records"])
   assert.equal((await request("/api/deployments")).status, 200)
@@ -172,6 +187,86 @@ try {
   )
   const deployed = JSON.parse((await cli([directory])).stdout)
   assert.equal(deployed.unchanged, false)
+  assert.equal(deployed.title, "Publish bicycle company tools")
+  assert.equal(deployed.branch, "feature/deployment-ui")
+  assert.equal(deployed.dirty, false)
+  assert.match(deployed.commit, /^[a-f0-9]{40}$/)
+  assert.ok(deployed.durationMs > 0)
+
+  // The UI reads the published snapshot with Build read permission only.
+  const readView = async (
+    query: Record<string, string>,
+    projectId = project
+  ) => {
+    const response = await request(
+      `/api/deployments?${new URLSearchParams(query as Record<string, string>)}`,
+      undefined,
+      {
+        Authorization: `Bearer ${readKey.key}`,
+        "x-project-id": projectId,
+      }
+    )
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get("cache-control"), "no-store")
+    return (await response.json()).data
+  }
+  const firstDetail = await readView({ view: "detail", id: deployed.id })
+  assert.equal(firstDetail.active, true)
+  assert.deepEqual(
+    firstDetail.tools.find((tool: { name: string }) => tool.name === "records")
+      .inputSchema.required,
+    ["mode"]
+  )
+  assert.equal(
+    firstDetail.documents.find(
+      (doc: { path: string }) => doc.path === "sources/company.md"
+    ).characters,
+    39
+  )
+  assert.deepEqual(firstDetail.collectors, ["fetch_sources"])
+  const firstSource = await readView({
+    view: "source",
+    id: deployed.id,
+    kind: "source",
+    path: "sources/company.md",
+  })
+  assert.equal(firstSource.text, "Our company makes bicycles in Portugal.")
+  assert.match(
+    (
+      await readView({
+        view: "source",
+        id: deployed.id,
+        kind: "skill",
+        path: "skills/research.md",
+      })
+    ).text,
+    /Find company policies/
+  )
+  // Metadata must not expose executable bundles or provider configuration.
+  assert.deepEqual(Object.keys(firstDetail).sort(), [
+    "active",
+    "collectors",
+    "deployment",
+    "documents",
+    "tools",
+  ])
+  assert.equal("text" in firstDetail.documents[0], false)
+  for (const query of [
+    "view=unknown",
+    "view=history&cursor=invalid",
+    "view=history&limit=51",
+    "view=detail&id=invalid",
+  ]) {
+    assert.equal((await request(`/api/deployments?${query}`)).status, 400)
+  }
+  assert.equal(
+    (
+      await request(
+        `/api/deployments?view=source&id=${deployed.id}&kind=source&path=tools/records.ts`
+      )
+    ).status,
+    404
+  )
   await client.connect(
     new StreamableHTTPClientTransport(new URL(origin + deployed.mcpPath), {
       requestInit: { headers },
@@ -268,9 +363,65 @@ try {
     "export default async () => []"
   )
   await writeFile(toolFile, source.replace("return 'v1'", "return 'v2'"))
+  await writeFile(
+    join(directory, "sources/company.md"),
+    "Our company now makes electric bicycles."
+  )
   const updated = JSON.parse((await cli([directory])).stdout)
   assert.notEqual(updated.id, deployed.id)
   assert.equal(result(await call("version")), "v2")
+  // Microseconds must survive the cursor or adjacent versions disappear between pages.
+  await db.query("UPDATE project_deployments SET created_at=$2 WHERE id=$1", [
+    deployed.id,
+    "2026-11-12T01:00:00.000001Z",
+  ])
+  await db.query("UPDATE project_deployments SET created_at=$2 WHERE id=$1", [
+    updated.id,
+    "2026-11-12T01:00:00.000002Z",
+  ])
+  const latest = await readView({ view: "history", limit: "1" })
+  assert.deepEqual(
+    latest.items.map((item: { id: string }) => item.id),
+    [updated.id]
+  )
+  assert.equal(latest.activeId, updated.id)
+  const older = await readView({
+    view: "history",
+    limit: "1",
+    cursor: latest.nextCursor,
+  })
+  assert.deepEqual(
+    older.items.map((item: { id: string }) => item.id),
+    [deployed.id]
+  )
+  assert.equal(older.nextCursor, null)
+  assert.equal(
+    (await readView({ view: "detail", id: deployed.id })).active,
+    false
+  )
+  assert.equal(
+    (
+      await readView({
+        view: "source",
+        id: deployed.id,
+        kind: "source",
+        path: "sources/company.md",
+      })
+    ).text,
+    firstSource.text
+  )
+  assert.equal(
+    (
+      await readView({
+        view: "source",
+        id: updated.id,
+        kind: "source",
+        path: "sources/company.md",
+      })
+    ).text,
+    "Our company now makes electric bicycles."
+  )
+
   assert.equal(
     await invokeDeploymentTool(context, deployed.id, "records", {
       mode: "version",
@@ -345,6 +496,135 @@ try {
     [project]
   )
   assert.deepEqual(restoredAgent.rows[0], { id: agent, status: "active" })
+  // Preview publication, agents and durable capabilities cannot alter Production.
+  const productionId = (await (await request("/api/deployments")).json()).data
+    .id
+  await writeFile(
+    toolFile,
+    source
+      .replace("Bicycle", "Preview bicycle")
+      .replace("return 'v1'", "return 'preview'")
+  )
+  await writeFile(
+    join(directory, "sources/company.md"),
+    "Preview company makes scooters."
+  )
+  const previewDeployment = JSON.parse(
+    (await cli([directory, "--environment", "preview"])).stdout
+  )
+  assert.equal(previewDeployment.environment, "preview")
+  assert.equal(previewDeployment.dirty, true)
+  assert.equal(
+    (await (await request("/api/deployments")).json()).data.id,
+    productionId
+  )
+  assert.equal(
+    JSON.parse((await cli(["status", "--environment", "preview"])).stdout).id,
+    previewDeployment.id
+  )
+  const previewClient = new Client({ name: "preview-test", version: "1" })
+  try {
+    await previewClient.connect(
+      new StreamableHTTPClientTransport(
+        new URL(origin + previewDeployment.mcpPath),
+        { requestInit: { headers } }
+      )
+    )
+    const previewCall = (mode: string) =>
+      previewClient.callTool({ name: "records", arguments: { mode } })
+    assert.deepEqual(result(await previewCall("read")), {
+      record: null,
+      file: null,
+    })
+    await previewCall("write")
+    assert.equal(
+      (
+        result(await previewCall("read")) as {
+          record: { value: { name: string } }
+        }
+      ).record.value.name,
+      "Preview bicycle"
+    )
+    assert.equal(
+      (result(await call("read")) as { record: { value: { name: string } } })
+        .record.value.name,
+      "Bicycle"
+    )
+    assert.equal(result(await call("version")), "v2")
+    assert.equal(result(await previewCall("version")), "preview")
+    const brain = await previewClient.callTool({
+      name: "brain_search",
+      arguments: { query: "scooters" },
+    })
+    assert.match(JSON.stringify(brain), /Preview company makes scooters/)
+    assert.doesNotMatch(
+      JSON.stringify(
+        await client.callTool({
+          name: "brain_search",
+          arguments: { query: "scooters" },
+        })
+      ),
+      /Preview company makes scooters/
+    )
+  } finally {
+    await previewClient.close()
+  }
+  const previewHistory = await readView({
+    view: "history",
+    filter: 'environment = "preview"',
+  })
+  assert.deepEqual(
+    previewHistory.items.map((row: { id: string }) => row.id),
+    [previewDeployment.id]
+  )
+  assert.equal(previewHistory.items[0].active, true)
+  assert.equal(
+    (
+      await readView({
+        view: "history",
+        filter: 'branch = "feature/deployment-ui" environment = "production"',
+      })
+    ).items.some((row: { id: string }) => row.id === previewDeployment.id),
+    false
+  )
+  assert.equal(
+    (await readView({ view: "history", filter: '"bicycle"' })).items.some(
+      (row: { id: string }) => row.id === previewDeployment.id
+    ),
+    true
+  )
+  for (const path of [
+    "/api/deployments?environment=staging",
+    "/api/deployments?view=history&filter=environment%20%3D%20%22staging%22",
+  ])
+    assert.equal((await request(path)).status, 400)
+  const previewAgent = (
+    await db.query(
+      "SELECT agent_id FROM project_deployed_agents WHERE project_id=$1 AND environment='preview'",
+      [project]
+    )
+  ).rows[0].agent_id
+  assert.notEqual(previewAgent, agent)
+  await rm(join(directory, "agents/foo/instructions.md"))
+  await cli([directory, "--environment", "preview"])
+  assert.equal(
+    (
+      await db.query("SELECT status FROM build_agents WHERE id=$1", [
+        previewAgent,
+      ])
+    ).rows[0].status,
+    "archived"
+  )
+  assert.equal(
+    (await db.query("SELECT status FROM build_agents WHERE id=$1", [agent]))
+      .rows[0].status,
+    "active"
+  )
+  await writeFile(
+    join(directory, "agents/foo/instructions.md"),
+    "Use the company brain and deployed tools."
+  )
+  await writeFile(toolFile, source.replace("return 'v1'", "return 'v2'"))
   const foreign = crypto.randomUUID()
   await db.query(
     "INSERT INTO project(id,organization_id,name,slug) VALUES($1,$2,'Second',$1)",
@@ -360,6 +640,30 @@ try {
     ).data,
     null
   )
+  assert.deepEqual((await readView({ view: "history" }, foreign)).items, [])
+  for (const query of [
+    { view: "detail", id: deployed.id },
+    {
+      view: "source",
+      id: deployed.id,
+      kind: "source",
+      path: "sources/company.md",
+    },
+  ]) {
+    assert.equal(
+      (
+        await request(
+          `/api/deployments?${new URLSearchParams(query as Record<string, string>)}`,
+          undefined,
+          {
+            Authorization: `Bearer ${readKey.key}`,
+            "x-project-id": foreign,
+          }
+        )
+      ).status,
+      404
+    )
+  }
   const second = JSON.parse((await cli([directory], foreign)).stdout)
   assert.notEqual(second.id, updated.id)
   const foreignContext = {

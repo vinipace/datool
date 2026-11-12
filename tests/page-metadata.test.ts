@@ -10,6 +10,12 @@ const appDirectory = fileURLToPath(new URL("../app", import.meta.url))
 
 // These pages only redirect. A route that starts rendering must declare metadata.
 const redirectPages = new Set([
+  "(app)/p/[projectSlug]/settings/storage-providers/page.tsx",
+  "(app)/p/[projectSlug]/settings/sandbox-providers/page.tsx",
+  "(app)/p/[projectSlug]/settings/ai-providers/page.tsx",
+  "(app)/p/[projectSlug]/build/agents/page.tsx",
+  "(app)/p/[projectSlug]/build/conversations/page.tsx",
+  "(app)/p/[projectSlug]/build/page.tsx",
   "(app)/p/[projectSlug]/build/tests/page.tsx",
   "(app)/p/[projectSlug]/build/campaigns/page.tsx",
   "(app)/reports/page.tsx",

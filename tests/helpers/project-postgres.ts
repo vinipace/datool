@@ -108,6 +108,27 @@ return ctx.sql.select().from(projects).limit(5);
       0,
       "Projects must have distinct physical databases"
     )
+    const preview = JSON.parse(
+      (await cli([root, "--environment", "preview"], ids[0])).stdout
+    )
+    const previewMcp = new Client({ name: "preview-sql-test", version: "1" })
+    clients.push(previewMcp)
+    await previewMcp.connect(
+      new StreamableHTTPClientTransport(new URL(origin + preview.mcpPath), {
+        requestInit: { headers: { ...headers, "x-project-id": ids[0] } },
+      })
+    )
+    assert.equal(
+      result(await call(2, "read")).length,
+      0,
+      "Preview must have a separate physical database"
+    )
+    assert.equal(result(await call(2, "insert"))[0].id, 1)
+    assert.equal(
+      result(await call(0, "read")).length,
+      1,
+      "Preview inserts must not reach Production"
+    )
     for (const mode of [
       "ddl",
       "host",
@@ -213,24 +234,25 @@ return ctx.sql.select().from(projects).limit(5);
     try {
       for (const id of ids) {
         const stored = await db.query(
-          "SELECT encrypted_credentials FROM project_postgres WHERE project_id=$1",
+          "SELECT encrypted_credentials,environment FROM project_postgres WHERE project_id=$1",
           [id]
         )
-        if (!stored.rows[0]) continue
-        const access = JSON.parse(
-          decryptProviderKey(
-            stored.rows[0].encrypted_credentials,
-            id,
-            "project-postgres"
+        for (const row of stored.rows) {
+          const access = JSON.parse(
+            decryptProviderKey(
+              row.encrypted_credentials,
+              row.environment === "preview" ? `${id}:preview` : id,
+              "project-postgres"
+            )
+          ) as Record<string, string>
+          const url = new URL(access.owner)
+          const q = (value: string) => '"' + value.replaceAll('"', '""') + '"'
+          await admin.query(
+            `DROP DATABASE ${q(url.pathname.slice(1))} WITH (FORCE)`
           )
-        ) as Record<string, string>
-        const url = new URL(access.owner)
-        const q = (value: string) => '"' + value.replaceAll('"', '""') + '"'
-        await admin.query(
-          `DROP DATABASE ${q(url.pathname.slice(1))} WITH (FORCE)`
-        )
-        for (const value of Object.values(access))
-          await admin.query(`DROP ROLE ${q(new URL(value).username)}`)
+          for (const value of Object.values(access))
+            await admin.query(`DROP ROLE ${q(new URL(value).username)}`)
+        }
       }
     } finally {
       await admin.end()

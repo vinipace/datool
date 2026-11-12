@@ -91,6 +91,11 @@ export function ProjectDeploymentCard({
           >
             Copy commands
           </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/p/${encodeURIComponent(projectSlug)}/deployments`}>
+              Browse deployments
+            </Link>
+          </Button>
           <Button asChild size="sm" variant="ghost">
             <Link href="/docs/guides/project-deployment">Deployment guide</Link>
           </Button>

@@ -5,7 +5,25 @@ description: Publish managed agents, project MCP tools, persistent data and comp
 
 Deploy the same folder from a laptop or CI. Datool hosts the MCP endpoint and executes the JavaScript in the organization's sandbox provider. You do not need a Next.js app, an HTTP server or a listener running on your laptop.
 
-This feature requires a server with migrations through `0092_project_postgres.sql` and a CLI built from the same release. It is not available in the previously published CLI 0.4.1.
+This feature requires a server with migrations through `0094_deployment_metadata.sql` and a CLI built from the same release. It is not available in the previously published CLI 0.4.1.
+
+## Browse deployments in the UI
+
+Open **Deployments** in the project sidebar. The list shows published versions from both environments, with titles, status, duration, Git commit and branch when available. Use the shared filter, for example `environment = "preview"`, to narrow the list. Select a deployment, then open **MCP tools** or **Sources** to inspect that version's tool schemas and exact source and skill snapshots.
+
+**Connect MCP** provides the endpoint for that environment's active deployment. Browsing an older version does not activate it. Failed attempts are not published versions and do not appear in this list.
+
+## Preview and Production
+
+Each project has two deployment environments. Existing deployments belong to Production. Preview has its own active deployment, managed agents, company brain, document store, bucket files and PostgreSQL database. Both use the organization's configured providers. An API key with project access can deploy or invoke either environment; environments isolate data, not user permissions.
+
+```sh
+datool deploy ./company --environment preview
+datool deploy status --environment preview
+datool deploy ./company --environment production
+```
+
+Omitting `--environment` targets Production for compatibility. Deploying Preview does not modify Production. Preview agents are named with a `(Preview)` suffix. PostgreSQL migrations run independently in each environment. **Connect MCP** includes the environment in the endpoint URL; existing endpoints without it continue to serve Production.
 
 ## Connect and deploy
 
