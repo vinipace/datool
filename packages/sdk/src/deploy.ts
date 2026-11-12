@@ -1,5 +1,3 @@
-import { drizzle, type PgRemoteDatabase } from "drizzle-orm/pg-proxy"
-
 /** Runtime capabilities injected into deployed tools and source collectors. */
 export type ProjectContext = {
   /** Transport used by the generated typed PostgreSQL client. */
@@ -95,16 +93,14 @@ export function defineTool<Input, Output>(tool: ProjectTool<Input, Output>) {
   return tool
 }
 
-/** Used by datool.generated.ts; schema imports retain Drizzle's inferred types. */
-export function createProject<Schema extends Record<string, unknown>>(
-  schema: Schema
+/** The generated client owns its database instance so schema and query types match. */
+export function createProject<Database>(
+  createDatabase: (context: ProjectContext) => Database
 ) {
-  type Context = ProjectContext & { sql: PgRemoteDatabase<Schema> }
+  type Context = ProjectContext & { sql: Database }
   const context = (ctx: ProjectContext): Context => ({
     ...ctx,
-    sql: drizzle((query, params, method) => ctx.query(query, params, method), {
-      schema,
-    }),
+    sql: createDatabase(ctx),
   })
   return {
     defineTool<Input, Output>(
