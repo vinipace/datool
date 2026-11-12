@@ -9,7 +9,7 @@ const deployment = {
   agents: ["foo"],
   tools: ["search_projects", "brain_search"],
   sources: ["sources/company.md"],
-  mcpPath: "/api/project-mcp?projectId=project-demo",
+  mcpPath: "/api/project-mcp/11111111-1111-4111-8111-111111111111",
 }
 const meta = {
   title: "Workspace/ProjectDeployment",
@@ -77,7 +77,7 @@ export const Retry: Story = {
     await expect(
       canvas.findByLabelText("Project MCP URL")
     ).resolves.toHaveValue(
-      "https://datool.example.test/api/project-mcp?projectId=project-demo"
+      "https://datool.example.test/api/project-mcp/11111111-1111-4111-8111-111111111111"
     )
   },
 }

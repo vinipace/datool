@@ -139,8 +139,8 @@ export function ProjectDeploymentCard({
               className="font-mono text-xs"
             />
             <p className="text-xs text-foreground-muted">
-              Connect using a Bearer API key with Build read and run
-              permissions.
+              Sign in with your MCP client, or use a Bearer API key with Build
+              read and run permissions.
             </p>
           </div>
         ) : (

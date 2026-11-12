@@ -80,6 +80,9 @@ const meta = {
           await delay("infinite")
           return HttpResponse.json({ data: null })
         }),
+        http.get("/api/page-views", () =>
+          HttpResponse.json({ data: { items: [], nextCursor: null } })
+        ),
         ...traceHandlers,
         ...datasetsEvalsHandlers,
         ...storybookAuthHandlers,
@@ -98,7 +101,7 @@ type Story = StoryObj<typeof meta>
 export const TraceLoadingStages: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
-    const title = args.resource === "traces" ? "Traces" : "Evals"
+    const title = args.resource === "traces" ? "Logs" : "Evals"
     const geometry = () => {
       const headers = canvas.getAllByRole("banner", { name: "Page controls" })
       expect(headers).toHaveLength(1)
@@ -122,7 +125,10 @@ export const TraceLoadingStages: Story = {
     }
     const initial = geometry()
     await expect(initial.headerTop).toBe(0)
-    await expect(initial.headerHeight).toBe(40)
+    const headerWidth = canvas
+      .getByRole("banner", { name: "Page controls" })
+      .getBoundingClientRect().width
+    await expect(initial.headerHeight).toBe(headerWidth < 640 ? 45 : 40)
     for (const action of ["Show project shell", "Load page module"]) {
       await userEvent.click(canvas.getByRole("button", { name: action }))
       await expect(geometry()).toEqual(initial)
@@ -131,7 +137,7 @@ export const TraceLoadingStages: Story = {
     await userEvent.click(
       within(header).getByRole("button", { name: "Toggle sidebar" })
     )
-    await expect(canvas.getByRole("link", { name: "Traces" })).toBeVisible()
+    await expect(canvas.getByRole("link", { name: "Logs" })).toBeVisible()
   },
 }
 
@@ -168,7 +174,7 @@ export const ServerRenderedWorkspaceFallback: Story = {
     const canvas = within(canvasElement)
     const header = canvas.getByRole("banner", { name: "Page controls" })
     await expect(
-      within(header).getByRole("heading", { name: "Traces" })
+      within(header).getByRole("heading", { name: "Logs" })
     ).toBeVisible()
     await expect(header.getBoundingClientRect().height).toBe(40)
     await expect(header.getBoundingClientRect().top).toBe(0)

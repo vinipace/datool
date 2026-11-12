@@ -101,7 +101,7 @@ export const WorkspaceShell: Story = {
       canvas.queryByRole("link", { name: "Conversations" })
     ).not.toBeInTheDocument()
     expect(canvas.queryByText("Build", { exact: true })).not.toBeInTheDocument()
-    expect(canvas.getByRole("link", { name: "Traces" })).toHaveAttribute(
+    expect(canvas.getByRole("link", { name: "Logs" })).toHaveAttribute(
       "href",
       `${prefix}/traces`
     )
@@ -143,7 +143,7 @@ export const InboxSidebar: Story = {
       prefix
     )
     await expect(
-      canvas.queryByRole("link", { name: "Traces" })
+      canvas.queryByRole("link", { name: "Logs" })
     ).not.toBeInTheDocument()
   },
 }
@@ -163,7 +163,7 @@ export const BuildEnabled: Story = {
     await expect(
       canvas.queryByRole("navigation", { name: "Workspace area" })
     ).not.toBeInTheDocument()
-    await expect(canvas.getByRole("link", { name: "Traces" })).toBeVisible()
+    await expect(canvas.getByRole("link", { name: "Logs" })).toBeVisible()
     await expect(canvas.getByRole("link", { name: "Inbox" })).toHaveAttribute(
       "href",
       `${prefix}/build/inbox`
@@ -228,7 +228,7 @@ export const BuildNavigation: Story = {
     await expect(
       canvas.getByRole("link", { name: "Sessions" })
     ).toHaveAttribute("aria-current", "page")
-    const traces = canvas.getByRole("link", { name: "Traces" })
+    const traces = canvas.getByRole("link", { name: "Logs" })
     await expect(traces).toHaveAttribute("href", `${prefix}/traces`)
     await expect(traces).not.toHaveAttribute("aria-current")
   },
@@ -253,7 +253,7 @@ export const SettingsNavigation: Story = {
       canvas.getByRole("link", { name: "MCP connections" })
     ).toHaveAttribute("href", `${prefix}/settings/mcp`)
     await expect(
-      canvas.queryByRole("link", { name: "Traces" })
+      canvas.queryByRole("link", { name: "Logs" })
     ).not.toBeInTheDocument()
     await expect(
       canvas.getByRole("link", { name: "Back to project" })

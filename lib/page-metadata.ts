@@ -39,7 +39,7 @@ export const pageTitles = {
   buildChannel: "Channel settings",
   buildTests: "Conversation tests",
   publicChat: "Chat",
-  traces: "Traces",
+  traces: "Logs",
   projectHome: "Home",
   traceDetail: "Trace details",
   playground: "Playground",

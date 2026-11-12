@@ -1,6 +1,14 @@
 import { strict as assert } from "node:assert"
 import { makeSignature } from "better-auth/crypto"
 import { createHash } from "node:crypto"
+import {
+  selectResourceURL,
+  type OAuthClientProvider,
+} from "@modelcontextprotocol/sdk/client/auth.js"
+import { GET as protectedResource } from "../../app/.well-known/oauth-protected-resource/route"
+import { GET as mainProtectedResource } from "../../app/.well-known/oauth-protected-resource/api/mcp/route"
+import { POST as projectMcpPost } from "../../app/api/project-mcp/[id]/route"
+import { brainTool } from "../../src/lib/deploy/contracts"
 import { getAuth } from "../../lib/auth"
 import { db, analyticsDb } from "../../lib/db"
 import {
@@ -21,6 +29,20 @@ import {
 } from "../../src/lib/auth/permissions"
 
 const base = process.env.BETTER_AUTH_URL!
+// Inspector falls back to origin discovery for project and deployment endpoints.
+// Use the SDK's default resource validation, without a custom provider override.
+const discovery = await (await protectedResource()).json()
+await selectResourceURL(
+  new URL(
+    `${base}/api/project-mcp?projectId=${crypto.randomUUID()}&environment=production`
+  ),
+  {} as OAuthClientProvider,
+  discovery
+)
+assert.equal(
+  (await (await mainProtectedResource()).json()).resource,
+  `${base}/api/mcp`
+)
 const audit: Record<string, unknown>[] = []
 const originalInfo = console.info
 console.info = (...args: unknown[]) => {
@@ -409,6 +431,152 @@ try {
   assert.equal(oauthSaved.notesProvenance.clientId, registration.client_id)
   assert.equal(oauthSaved.humanVerified, false)
   console.log("PASS real OAuth review attribution")
+  const observedMcp = await db.query("SELECT attributes_json FROM traces WHERE project_id=$1 AND operation='mcp.tools.call'", [projectId])
+  assert(observedMcp.rows.some(row => row.attributes_json["mcp.auth.type"] === "oauth" && row.attributes_json["mcp.client.id"] === registration.client_id), "Main MCP calls have no project-scoped OAuth traces")
+  // A real project grant must survive discovery, DCR, PKCE, consent and the MCP HTTP boundary.
+  const projectRegistration = await call(
+    "/oauth2/register",
+    {
+      application_type: "native",
+      client_name: "Project MCP test",
+      redirect_uris: ["http://127.0.0.1:39871/callback"],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      scope: "build:read build:run offline_access",
+    },
+    { cookie: "" }
+  )
+  cookie = ownerCookie
+  const projectQuery = new URLSearchParams(query)
+  projectQuery.set("client_id", projectRegistration.client_id)
+  projectQuery.set("scope", "build:read build:run offline_access")
+  projectQuery.set("resource", discovery.resource)
+  const projectStart = await withOAuthProject(projectId, () =>
+    auth.handler(
+      new Request(`${base}/api/auth/oauth2/authorize?${projectQuery}`, {
+        headers: headers(),
+      })
+    )
+  )
+  const projectLocation =
+    projectStart.headers.get("location") ?? (await projectStart.json()).url
+  assert(
+    projectLocation.includes("/mcp/consent"),
+    `Expected project consent: ${projectLocation}`
+  )
+  const projectGrant = await withOAuthProject(projectId, () =>
+    call("/oauth2/consent", {
+      accept: true,
+      oauth_query: new URL(projectLocation, base).search.slice(1),
+    })
+  )
+  const projectToken = await exchange({
+    ...tokenBody,
+    client_id: projectRegistration.client_id,
+    code: new URL(projectGrant.url).searchParams.get("code")!,
+    resource: discovery.resource,
+  })
+  assert(projectToken.response.ok, JSON.stringify(projectToken.data))
+  const deploymentId = crypto.randomUUID()
+  await db.query(
+    `INSERT INTO project_deployments (id,project_id,content_hash,bundle_json,tools_json,sandbox_provider)
+    VALUES ($1,$2,'oauth-fixture',$3,$4,'local')`,
+    [
+      deploymentId,
+      projectId,
+      JSON.stringify({ sources: [], skills: [] }),
+      JSON.stringify([brainTool]),
+    ]
+  )
+  await db.query(
+    "INSERT INTO project_deployment_state (project_id,organization_id,active_id) VALUES ($1,$2,$3)",
+    [projectId, org.id, deploymentId]
+  )
+  await db.query(
+    "INSERT INTO project_brain_chunks (project_id,deployment_id,source_path,title,ordinal,content) VALUES ($1,$2,'policy.md','Returns',0,'Bicycle returns take thirty days.')",
+    [projectId, deploymentId]
+  )
+  process.env.DATOOL_BUILD_ENABLED = "true"
+  const projectRequest = (
+    id = projectId,
+    accessToken = projectToken.data.access_token
+  ) =>
+    projectMcpPost(
+      new Request(`${base}/api/project-mcp/${id}`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "brain_search", arguments: { query: "returns" } },
+        }),
+      }),
+      { params: Promise.resolve({ id }) }
+    )
+  for (const id of [projectId, deploymentId.replaceAll("-", "")]) {
+    await selectResourceURL(
+      new URL(`${base}/api/project-mcp/${id}`),
+      {} as OAuthClientProvider,
+      discovery
+    )
+    const response = await projectRequest(id)
+    assert.equal(response.status, 200, await response.clone().text())
+    assert.equal(
+      (await response.json()).result.structuredContent.result.items[0].text,
+      "Bicycle returns take thirty days."
+    )
+  }
+  assert.equal(
+    (await projectRequest(crypto.randomUUID())).status,
+    403,
+    "OAuth token crossed the project boundary"
+  )
+  assert.equal(
+    (await projectRequest(projectId, token.data.access_token)).status,
+    401,
+    "Main MCP token accepted by project MCP"
+  )
+  await assert.rejects(() =>
+    authenticate(
+      new Request(`${base}/api/mcp`, {
+        headers: { authorization: `Bearer ${projectToken.data.access_token}` },
+      }),
+      mcpConfig()
+    )
+  )
+  const projectRefresh = await exchange({
+    grant_type: "refresh_token",
+    client_id: projectRegistration.client_id,
+    refresh_token: projectToken.data.refresh_token,
+    resource: discovery.resource,
+  })
+  assert(projectRefresh.response.ok, JSON.stringify(projectRefresh.data))
+  assert.equal(
+    (await projectRequest(projectId, projectRefresh.data.access_token)).status,
+    200
+  )
+  const projectConsent = await db.query<{ id: string }>(
+    'SELECT id FROM "oauthConsent" WHERE "clientId"=$1 AND "referenceId"=$2',
+    [projectRegistration.client_id, projectId]
+  )
+  await auth.api.deleteOAuthConsent({
+    headers: headers(),
+    body: { id: projectConsent.rows[0].id },
+  })
+  assert.equal(
+    (await projectRequest()).status,
+    403,
+    "Revoked project grant still called tools"
+  )
+  console.log(
+    "PASS OAuth project MCP discovery, tools, audience, project binding, refresh and revocation"
+  )
   // Exercise the new resource through real DCR, PKCE, project consent and token validation.
   const explorerRegistration = await call(
     "/oauth2/register",
@@ -491,10 +659,7 @@ try {
     .result
   assert(!explorerResult.isError, JSON.stringify(explorerResult.content))
   assert.equal(explorerResult.structuredContent.data.project.id, projectId)
-  assert.equal(
-    explorerResult.structuredContent.data.page.items[0].id,
-    "oauth-trace"
-  )
+  assert(explorerResult.structuredContent.data.page.items.some((item: { id: string }) => item.id === "oauth-trace"))
   const explorerRefresh = await exchange({
     grant_type: "refresh_token",
     client_id: explorerRegistration.client_id,

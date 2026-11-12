@@ -1,5 +1,6 @@
 import { collectionSqlFilter } from "../tracer/collection-sql"
 import { environmentOf, parseEnvironment } from "./context"
+import { projectMcpPath } from "@/src/lib/deploy/urls"
 import { createHash, randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import { z } from "zod"
@@ -101,7 +102,7 @@ export function deploymentSummary(row: DeploymentRow): DeploymentSummary {
     tools: row.tools_json.map((t) => t.name),
     agents: row.bundle_json.agents.map((a) => a.slug),
     sources: row.bundle_json.sources.map((s) => s.path),
-    mcpPath: `/api/project-mcp?projectId=${encodeURIComponent(row.project_id)}&environment=${row.environment}`,
+    mcpPath: projectMcpPath(row.project_id, row.id, row.environment),
   }
 }
 
@@ -184,7 +185,7 @@ export async function readDeploymentView(
     `)
     const items = rows.rows.slice(0, limit).map((row) => ({
       ...row,
-      mcpPath: `/api/project-mcp?projectId=${encodeURIComponent(scope.projectId)}&environment=${row.environment}`,
+      mcpPath: projectMcpPath(scope.projectId, row.id, row.environment),
     }))
     const last = items.at(-1)
     return {

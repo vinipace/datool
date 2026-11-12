@@ -26,7 +26,7 @@ const production: DeploymentSummary = {
   tools: ["search_projects", "brain_search"],
   sources: ["sources/company.md"],
   postgres: true,
-  mcpPath: "/api/project-mcp?projectId=project-demo&environment=production",
+  mcpPath: "/api/project-mcp/11111111-1111-4111-8111-111111111111",
   active: true,
 }
 const preview: DeploymentSummary = {
@@ -36,7 +36,7 @@ const preview: DeploymentSummary = {
   title: "Test the returns policy",
   branch: "feature/returns-policy",
   active: false,
-  mcpPath: "/api/project-mcp?projectId=project-demo&environment=preview",
+  mcpPath: "/api/project-mcp/00000000000040008000000000000002",
 }
 const handler = http.get("/api/deployments", ({ request }) => {
   if (request.headers.get("x-project-id") !== "project-demo")
@@ -168,7 +168,7 @@ export const Published: Story = {
     await waitFor(() => expect(source).toHaveFocus())
     await userEvent.click(canvas.getByRole("button", { name: "Connect MCP" }))
     await expect(body.findByLabelText("MCP server URL")).resolves.toHaveValue(
-      "https://datool.example.test/api/project-mcp?projectId=project-demo&environment=preview"
+      "https://datool.example.test/api/project-mcp/00000000000040008000000000000002"
     )
     await userEvent.keyboard("{Escape}")
   },

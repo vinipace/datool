@@ -11,7 +11,7 @@ This feature requires a server with migrations through `0094_deployment_metadata
 
 Open **Deployments** in the project sidebar. The list shows published versions from both environments, with titles, status, duration, Git commit and branch when available. Use the shared filter, for example `environment = "preview"`, to narrow the list. Select a deployment, then open **MCP tools** or **Sources** to inspect that version's tool schemas and exact source and skill snapshots.
 
-**Connect MCP** provides the endpoint for that environment's active deployment. Browsing an older version does not activate it. Failed attempts are not published versions and do not appear in this list.
+**Connect MCP** provides the production endpoint or the selected deployment's immutable endpoint. Browsing an older version does not activate it. Failed attempts are not published versions and do not appear in this list.
 
 ## Preview and Production
 
@@ -23,7 +23,7 @@ datool deploy status --environment preview
 datool deploy ./company --environment production
 ```
 
-Omitting `--environment` targets Production for compatibility. Deploying Preview does not modify Production. Preview agents are named with a `(Preview)` suffix. PostgreSQL migrations run independently in each environment. **Connect MCP** includes the environment in the endpoint URL; existing endpoints without it continue to serve Production.
+Omitting `--environment` targets Production for compatibility. Deploying Preview does not modify Production. Preview agents are named with a `(Preview)` suffix. PostgreSQL migrations run independently in each environment. Production uses a stable project URL; Preview uses an immutable deployment URL.
 
 ## Connect and deploy
 
@@ -81,7 +81,11 @@ export default {
 
 Tools receive `ctx.db`, `ctx.bucket`, `ctx.sandbox`, `ctx.brain` and `ctx.fetch`. They never receive the deployment API key, database password or provider credentials. Input schemas support object properties, arrays, primitive types, enums, required fields, bounds and schema alternatives. References, patterns and formats are not supported.
 
-The returned MCP URL is `/api/project-mcp?projectId=YOUR_PROJECT_ID`. Configure your MCP client with `Authorization: Bearer YOUR_API_KEY`, using a key with Build read and run permissions. The endpoint supports stateless Streamable HTTP POST. It lists the deployed tools and `brain_search`, and exposes source and skill documents as MCP resources. Each request selects the active deployment; an in-flight call retains its selected version.
+The production MCP URL is `/api/project-mcp/YOUR_PROJECT_ID`. It follows the latest production deployment; an in-flight call retains its selected version. Preview URLs use `/api/project-mcp/DEPLOYMENT_HASH` and stay pinned to that deployment. Every deployment also has this immutable URL, using its deployment ID without hyphens. In **Connect MCP**, production deployments let you choose **Production** or **This deployment**. Existing query-based URLs continue to work.
+
+Connect with Streamable HTTP and sign in through your MCP client, selecting the deployment's project and granting Build read and run access. Alternatively, set `Authorization: Bearer YOUR_API_KEY` with those permissions; the URL supplies the project, so no project header is needed. OAuth discovery uses the installation's origin as the resource audience, with access tokens bound to the selected project. The endpoint lists the deployed tools and `brain_search`, and exposes source and skill documents as MCP resources.
+
+Authenticated MCP protocol requests appear in **Logs**, including initialization, tool listing and resource reads. Tool calls include a tool span with their input, output, duration, status and deployment environment. Each input and output is capped at 64 KiB; larger values include a truncated preview. Credential fields and the request's bearer token are redacted. Authentication failures remain in the installation's security audit logs.
 
 Agents from `agents/NAME/instructions.md` appear in Datool with the project's tools and skills attached. `agent.json` optionally supplies agent configuration such as `provider`, `model` and `temperature`. Sources are shared company knowledge for the deployed project's agents through `brain_search`. Each applied agent revision pins its tool and knowledge deployment. Redeploying updates only the folder's managed agents; removing an agent folder archives that managed agent. Removing tools or skills disables their managed definitions. Agents created in the UI are preserved, and conflicting names cause publication to fail.
 

@@ -20,6 +20,10 @@ import { db } from "../../lib/db"
 import { permissionStatements } from "../../src/lib/auth/permissions"
 import { GET, POST } from "../../app/api/deployments/route"
 import { POST as mcpPOST } from "../../app/api/project-mcp/route"
+import {
+  POST as deploymentMcpPOST,
+  OPTIONS as mcpOPTIONS,
+} from "../../app/api/project-mcp/[id]/route"
 import { packDeployment } from "../../bin/deploy"
 import { getRuntimeAppliedDefinitions } from "../../src/server/build/definitions"
 import { createTracerDatabase } from "../../src/server/tracer/db"
@@ -56,7 +60,13 @@ const server = createServer(async (incoming, outgoing) => {
         ? await (request.method === "GET" ? GET(request) : POST(request))
         : path === "/api/project-mcp"
           ? await mcpPOST(request)
-          : new Response(null, { status: 404 })
+          : path.startsWith("/api/project-mcp/")
+            ? request.method === "OPTIONS"
+              ? mcpOPTIONS(request)
+              : await deploymentMcpPOST(request, {
+                  params: Promise.resolve({ id: path.split("/").at(-1)! }),
+                })
+            : new Response(null, { status: 404 })
     outgoing.writeHead(response.status, Object.fromEntries(response.headers))
     outgoing.end(Buffer.from(await response.arrayBuffer()))
   } catch {
@@ -186,6 +196,67 @@ try {
     403
   )
   const deployed = JSON.parse((await cli([directory])).stdout)
+  assert.equal(deployed.mcpPath, `/api/project-mcp/${project}`)
+  const rpcBody = { jsonrpc: "2.0", id: 1, method: "tools/list" }
+  const challenge = await request(deployed.mcpPath, rpcBody, {
+    Authorization: "",
+    Origin: "http://127.0.0.1:3000",
+  })
+  assert.equal(challenge.status, 401)
+  assert.match(
+    challenge.headers.get("www-authenticate")!,
+    /resource_metadata="http:\/\/127\.0\.0\.1:3000\/\.well-known\/oauth-protected-resource"/
+  )
+  assert.match(
+    challenge.headers.get("access-control-expose-headers")!,
+    /WWW-Authenticate/
+  )
+  const legacy = await request(
+    `/api/project-mcp?projectId=${project}&environment=production`,
+    rpcBody,
+    { Accept: "application/json, text/event-stream" }
+  )
+  assert.equal(legacy.status, 200)
+  for (const path of [
+    deployed.mcpPath,
+    `/api/project-mcp/${deployed.id.replaceAll("-", "")}`,
+  ]) {
+    assert.equal(
+      (await request(path, rpcBody, { Authorization: `Bearer ${readKey.key}` }))
+        .status,
+      403
+    )
+    assert.equal(
+      (await request(path, rpcBody, { "x-project-id": crypto.randomUUID() }))
+        .status,
+      403
+    )
+    assert.equal(
+      (await request(path + "?projectId=" + crypto.randomUUID(), rpcBody))
+        .status,
+      403
+    )
+    assert.equal(
+      (await request(path, rpcBody, { Origin: "https://evil.example" })).status,
+      403
+    )
+  }
+  assert.equal(
+    (await request(deployed.mcpPath + "?environment=preview", rpcBody)).status,
+    400
+  )
+  const preflight = await fetch(origin + deployed.mcpPath, {
+    method: "OPTIONS",
+    headers: {
+      Origin: "http://127.0.0.1:3000",
+      "Access-Control-Request-Method": "POST",
+    },
+  })
+  assert.equal(preflight.status, 204)
+  assert.equal(
+    preflight.headers.get("access-control-allow-origin"),
+    "http://127.0.0.1:3000"
+  )
   assert.equal(deployed.unchanged, false)
   assert.equal(deployed.title, "Publish bicycle company tools")
   assert.equal(deployed.branch, "feature/deployment-ui")
@@ -269,7 +340,7 @@ try {
   )
   await client.connect(
     new StreamableHTTPClientTransport(new URL(origin + deployed.mcpPath), {
-      requestInit: { headers },
+      requestInit: { headers: { Authorization: headers.Authorization } },
     })
   )
   const tools = await client.listTools()
@@ -290,12 +361,72 @@ try {
     file: "hello",
   })
   assert.equal((await call("conflict")).isError, true)
+  const recordedCalls = await db.query(
+    `SELECT id,status,input_json::jsonb AS input_json,output_json::jsonb AS output_json,attributes_json,duration_ms
+    FROM traces WHERE project_id=$1 AND operation='mcp.tools.call' ORDER BY started_at_ms`,
+    [project]
+  )
+  const written = recordedCalls.rows.find(
+    (row) => row.input_json?.mode === "write"
+  )
+  assert(written, "MCP tool execution was not persisted as a trace")
+  assert.equal(written.status, "completed")
+  assert.equal(written.output_json.structuredContent.result.shell, "sandbox-ok")
+  assert.equal(written.attributes_json["mcp.deployment.id"], deployed.id)
+  assert.equal(
+    written.attributes_json["mcp.deployment.environment"],
+    "production"
+  )
+  assert.ok(written.duration_ms >= 0)
+  assert.equal(
+    recordedCalls.rows.find((row) => row.input_json?.mode === "conflict")
+      ?.status,
+    "errored"
+  )
+  assert.equal(
+    (
+      await db.query(
+        "SELECT kind FROM spans WHERE project_id=$1 AND trace_id=$2",
+        [project, written.id]
+      )
+    ).rows[0].kind,
+    "tool"
+  )
+  const protocolTraces = await db.query(
+    "SELECT DISTINCT operation FROM traces WHERE project_id=$1",
+    [project]
+  )
+  assert(protocolTraces.rows.some((row) => row.operation === "mcp.initialize"))
+  assert(protocolTraces.rows.some((row) => row.operation === "mcp.tools.list"))
   assert.equal((await call("escape")).isError, true)
   assert.equal(
     (await client.callTool({ name: "records", arguments: { mode: 123 } }))
       .isError,
     true
   )
+  const rejected = await request(deployed.mcpPath, {
+    jsonrpc: "2.0",
+    id: "bounded-log",
+    method: "tools/call",
+    params: {
+      name: "records",
+      arguments: {
+        mode: 123,
+        password: "must-not-be-logged",
+        note: `${key.key} ${"x".repeat(70 * 1024)}`,
+      },
+    },
+  })
+  const rejectedTrace = await db.query(
+    "SELECT input_json,status FROM traces WHERE project_id=$1 AND id=$2",
+    [project, rejected.headers.get("x-datool-trace-id")]
+  )
+  assert.equal(rejectedTrace.rows[0].status, "errored")
+  const loggedInput = rejectedTrace.rows[0].input_json
+  assert.doesNotMatch(loggedInput, /must-not-be-logged/)
+  assert.equal(loggedInput.includes(key.key), false)
+  assert.equal(JSON.parse(loggedInput).truncated, true)
+  assert.ok(loggedInput.length < 67 * 1024)
   assert.equal(
     (result(await call("list")) as { items: unknown[] }).items.length,
     1
@@ -513,6 +644,7 @@ try {
     (await cli([directory, "--environment", "preview"])).stdout
   )
   assert.equal(previewDeployment.environment, "preview")
+  assert.match(previewDeployment.mcpPath, /^\/api\/project-mcp\/[a-f0-9]{32}$/)
   assert.equal(previewDeployment.dirty, true)
   assert.equal(
     (await (await request("/api/deployments")).json()).data.id,
@@ -527,7 +659,7 @@ try {
     await previewClient.connect(
       new StreamableHTTPClientTransport(
         new URL(origin + previewDeployment.mcpPath),
-        { requestInit: { headers } }
+        { requestInit: { headers: { Authorization: headers.Authorization } } }
       )
     )
     const previewCall = (mode: string) =>
@@ -552,6 +684,18 @@ try {
     )
     assert.equal(result(await call("version")), "v2")
     assert.equal(result(await previewCall("version")), "preview")
+    const previewTrace = await db.query(
+      "SELECT attributes_json FROM traces WHERE project_id=$1 AND input_json::jsonb->>'mode'='version' ORDER BY started_at_ms DESC LIMIT 1",
+      [project]
+    )
+    assert.equal(
+      previewTrace.rows[0].attributes_json["mcp.deployment.id"],
+      previewDeployment.id
+    )
+    assert.equal(
+      previewTrace.rows[0].attributes_json["mcp.deployment.environment"],
+      "preview"
+    )
     const brain = await previewClient.callTool({
       name: "brain_search",
       arguments: { query: "scooters" },
@@ -606,7 +750,34 @@ try {
   ).rows[0].agent_id
   assert.notEqual(previewAgent, agent)
   await rm(join(directory, "agents/foo/instructions.md"))
+  await writeFile(
+    toolFile,
+    source.replace("return 'v1'", "return 'preview-v2'")
+  )
   await cli([directory, "--environment", "preview"])
+  const pinned = new Client({ name: "pinned-preview", version: "1" })
+  try {
+    await pinned.connect(
+      new StreamableHTTPClientTransport(
+        new URL(origin + previewDeployment.mcpPath),
+        {
+          requestInit: { headers: { Authorization: headers.Authorization } },
+        }
+      )
+    )
+    assert.equal(
+      result(
+        await pinned.callTool({
+          name: "records",
+          arguments: { mode: "version" },
+        })
+      ),
+      "preview"
+    )
+    assert.match(JSON.stringify(await pinned.listResources()), /\/preview\//)
+  } finally {
+    await pinned.close()
+  }
   assert.equal(
     (
       await db.query("SELECT status FROM build_agents WHERE id=$1", [

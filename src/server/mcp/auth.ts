@@ -7,6 +7,7 @@ import {
   roleScopes,
   mcpResourceScopes,
   workspaceScopes,
+  projectMcpScopes,
 } from "@/src/lib/auth/permissions"
 export { mcpScopes, mcpResourceScopes } from "@/src/lib/auth/permissions"
 export type McpConfig = {
@@ -19,6 +20,15 @@ export type McpConfig = {
 export function cliConfig(env = process.env): McpConfig {
   const config = mcpConfig(env)
   return { ...config, resource: new URL("/api/cli", config.resource).href, scopes: workspaceScopes }
+}
+/** Project endpoints share an origin audience; tokens remain bound to one project. */
+export function projectMcpConfig(env = process.env): McpConfig {
+  const config = mcpConfig(env)
+  return {
+    ...config,
+    resource: new URL(config.resource).origin,
+    scopes: projectMcpScopes,
+  }
 }
 export type McpIdentity = {
   kind?: "oauth" | "api-key"
@@ -223,7 +233,7 @@ export function authFailure(error: unknown, config?: McpConfig) {
   if (config && (status === 401 || status === 403))
     headers.set(
       "WWW-Authenticate",
-      `Bearer resource_metadata="${new URL("/.well-known/oauth-protected-resource/api/mcp", config.resource).href}", error="${status === 401 ? "invalid_token" : "insufficient_scope"}"`
+      `Bearer resource_metadata="${new URL(`/.well-known/oauth-protected-resource${new URL(config.resource).pathname.replace(/\/$/, "")}`, config.resource).href}", scope="${(config.scopes ?? mcpResourceScopes).join(" ")}", error="${status === 401 ? "invalid_token" : "insufficient_scope"}"`
     )
   return Response.json(
     {

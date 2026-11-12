@@ -3,6 +3,7 @@ import { getTracerService } from "../tracer/service"
 import { withWorkspace } from "@/src/server/auth/context"
 import { audited, securityAudit } from "@/src/server/security/audit"
 import { createMcpServer } from "./server"
+import { traceMcpRequest } from "./tracing"
 import { agentRequestMaxBytes } from "@/src/lib/tracer/dataset-payload"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { TracerService } from "../tracer/service"
@@ -111,6 +112,7 @@ export async function handleMcp(
         const body = await response.arrayBuffer()
         const headers = new Headers(response.headers)
         headers.set("Cache-Control", "no-store")
+        headers.set("Access-Control-Expose-Headers", "WWW-Authenticate, X-Datool-Trace-Id")
         const origin = request.headers.get("origin")
         if (origin) {
           headers.set("Access-Control-Allow-Origin", origin)
@@ -136,7 +138,9 @@ export async function handleMcp(
             scopes: identity.scopes,
             kind: identity.kind ?? "oauth",
           },
-          () => audited({ action: `mcp.${auditMethod}` }, respond)
+          () => audited({ action: `mcp.${auditMethod}` }, () => traceMcpRequest(
+            request, parsedBody, { "mcp.endpoint": new URL(config!.resource).pathname }, respond
+          ))
         )
       : await audited({ action: `mcp.${auditMethod}`, identity: { actorType: "unknown" } }, respond)
   } catch (error) {
@@ -164,7 +168,7 @@ export function mcpOptions(request: Request, configFactory = mcpConfig) {
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers":
         "Authorization, Content-Type, Accept, MCP-Protocol-Version, X-Project-Id",
-      "Access-Control-Expose-Headers": "WWW-Authenticate",
+      "Access-Control-Expose-Headers": "WWW-Authenticate, X-Datool-Trace-Id",
       Vary: "Origin",
     })
     const origin = request.headers.get("origin")

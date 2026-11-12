@@ -31,6 +31,7 @@ import {
   mcpResourceScopes,
   roleScopes,
   workspaceScopes,
+  projectMcpScopes,
 } from "@/src/lib/auth/permissions"
 import {
   invitationLifetimeSeconds,
@@ -411,6 +412,11 @@ export function organizationAuthOptions(
         resourceSeedMode: "merge",
         resources: [
           {
+            identifier: baseURL,
+            allowedScopes: [...projectMcpScopes, "offline_access"],
+            accessTokenTtl: 300,
+          },
+          {
             identifier: `${baseURL}/api/cli`,
             allowedScopes: [...workspaceScopes, "offline_access"],
             accessTokenTtl: 300,
@@ -427,10 +433,12 @@ export function organizationAuthOptions(
           },
         ],
         clientRegistrationDefaultResources: [
+          baseURL,
           resource,
           `${baseURL}/api/mcp/trace-explorer`,
         ],
         clientRegistrationAllowedResources: [
+          baseURL,
           `${baseURL}/api/cli`,
           `${baseURL}/api/mcp/trace-explorer`,
         ],

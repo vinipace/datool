@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { authClient } from "@/lib/auth-client"
-import { mcpScopes } from "@/src/lib/auth/permissions"
+import { workspaceScopes } from "@/src/lib/auth/permissions"
 type Project = { id: string; name: string; organizationName: string }
 export function McpAuthorization({ consent = false }: { consent?: boolean }) {
   const search = useSearchParams()
@@ -119,7 +119,7 @@ export function McpAuthorization({ consent = false }: { consent?: boolean }) {
           <ul className="space-y-1 text-sm">
             {requested
               .filter((scope) =>
-                (mcpScopes as readonly string[]).includes(scope)
+                (workspaceScopes as readonly string[]).includes(scope)
               )
               .map((scope) => (
                 <li key={scope}>{scope.replace(":", ": ")}</li>

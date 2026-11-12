@@ -59,6 +59,7 @@ import {
 import { JsonCode } from "@/components/tracer/json-code"
 import { useRemote } from "@/components/tracer/hooks"
 import { useProjectScope } from "@/components/tracer/project-scope-context"
+import { deploymentMcpPath } from "@/src/lib/deploy/urls"
 import type {
   DeploymentHistory,
   DeploymentDetail,
@@ -601,7 +602,12 @@ function McpConnection({
   projectSlug: string
 }) {
   const [copyStatus, setCopyStatus] = useState("")
-  const url = origin + deployment.mcpPath
+  const [endpoint, setEndpoint] = useState("production")
+  const production =
+    deployment.environment === "production" && endpoint === "production"
+  const url =
+    origin +
+    (production ? deployment.mcpPath : deploymentMcpPath(deployment.id))
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -616,37 +622,57 @@ function McpConnection({
             Connect to {environmentLabel(deployment.environment)}
           </DialogTitle>
           <DialogDescription>
-            This endpoint serves the active {deployment.environment} deployment.
+            {production
+              ? "Always connects to the latest production deployment."
+              : "Connects to this deployment, even after a newer version is published."}
           </DialogDescription>
         </DialogHeader>
-        <label htmlFor="deployment-mcp-url" className="text-sm">
-          MCP server URL
-        </label>
-        <div className="flex gap-2">
-          <Input
-            id="deployment-mcp-url"
-            value={url}
-            readOnly
-            className="min-w-0 font-mono text-xs"
-          />
-          <Button
-            size="icon"
-            variant="outline"
-            aria-label="Copy MCP URL"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(url)
-                setCopyStatus("MCP URL copied.")
-              } catch {
-                setCopyStatus("Select the URL to copy it.")
-              }
-            }}
-          >
-            <Copy className="size-4" />
-          </Button>
-        </div>
+        <Tabs
+          value={endpoint}
+          onValueChange={(value) => {
+            setEndpoint(value)
+            setCopyStatus("")
+          }}
+          className="space-y-3"
+        >
+          {deployment.environment === "production" && (
+            <TabsList aria-label="MCP endpoint">
+              <TabsTrigger value="production">Production</TabsTrigger>
+              <TabsTrigger value="deployment">This deployment</TabsTrigger>
+            </TabsList>
+          )}
+          <TabsContent value={endpoint} className="space-y-2">
+            <label htmlFor="deployment-mcp-url" className="text-sm">
+              MCP server URL
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="deployment-mcp-url"
+                value={url}
+                readOnly
+                className="min-w-0 font-mono text-xs"
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                aria-label="Copy MCP URL"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(url)
+                    setCopyStatus("MCP URL copied.")
+                  } catch {
+                    setCopyStatus("Select the URL to copy it.")
+                  }
+                }}
+              >
+                <Copy className="size-4" />
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
         <p className="text-sm text-foreground-muted">
-          Use a project API key with Build read and run access.
+          Sign in with your MCP client, or use an API key with Build read and
+          run access.
         </p>
         <Button asChild size="sm" variant="outline">
           <Link
