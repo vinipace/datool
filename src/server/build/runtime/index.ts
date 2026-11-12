@@ -27,6 +27,7 @@ import { McpRuntimeError } from "../integrations/mcp-errors"
 
 import type { ModelMessage } from "ai"
 import { sql } from "drizzle-orm"
+import { withAgentMcpTrace } from "@/src/server/mcp/agent-trace"
 import { z } from "zod"
 import { getModels } from "tokenlens/models"
 
@@ -3446,35 +3447,39 @@ export async function executeEveRuntimeTool(context: BuildRuntimeContext, turnId
     let metadata: Record<string, unknown> = {}
     let actionRefs = run.state.actionRefs ?? []
     let handoffOwnerId = run.state.handoffOwnerId
-    if (capability.kind === "procedure") {
-      const id = capability.id
-      const claim = await ctx.database.execute(sql`UPDATE build_eve_executions SET state_json=jsonb_set(state_json,'{procedures}',coalesce(state_json->'procedures','[]'::jsonb) || ${JSON.stringify([id])}::jsonb),updated_at=now()
-        WHERE project_id=${ctx.projectId} AND turn_id=${turnId} AND NOT (coalesce(state_json->'procedures','[]'::jsonb) ? ${id}) RETURNING turn_id`)
-      if (!claim.rows.length) throw new BuildRuntimeError("PROCEDURE_ALREADY_RAN", "This skill already ran in this turn.")
-      const result = await runProcedure(ctx, service, conversation, turn, run.plan.inputText, catalog.procedures, actionMap, simulationActionDependencies(run.plan.simulation), run.plan.configuration.guardrails.requireHumanForActions, signal, {}, undefined, id)
-      if (!result) throw new BuildRuntimeError("PROCEDURE_NOT_FOUND", "This skill is not available on the published revision.")
-      actionRefs = [...new Set([...actionRefs, ...(result.actionRefs ?? [])])]
-      metadata = result.integrationMetadata ?? {}
-      continuations = result.continuations
-      if (result.handoff) handoffOwnerId = result.handoffOwnerId
-      output = { text: result.text, ...metadata, instructions: result.instructions, actions: actionRefs.map(id => ({ toolName: eveCapabilityName("action", id, actionMap.get(id)?.definition), actionId: id })), continuations }
-    } else {
-      const action = actionMap.get(capability.id)!
-      const result = await executeAction(ctx, service, conversation, turn, action.definition, input, {
-        dependencies: simulationActionDependencies(run.plan.simulation), availableActions: actionMap, toolCallId, question: run.plan.inputText,
-        requireHumanForActions: run.plan.configuration.guardrails.requireHumanForActions, signal,
-      })
-      output = result.output
-      metadata = integrationOutputMetadata(action.definition, result.status, output)
-      continuations = result.continuation ? [result.continuation] : []
-      if (result.continuation?.type === "handoff") handoffOwnerId = result.continuation.teamId ?? `team:${run.agentId}`
-    }
+    let failed = false
+    await withAgentMcpTrace(trace?.mcpTrace, async () => {
+      if (capability.kind === "procedure") {
+        const id = capability.id
+        const claim = await ctx.database.execute(sql`UPDATE build_eve_executions SET state_json=jsonb_set(state_json,'{procedures}',coalesce(state_json->'procedures','[]'::jsonb) || ${JSON.stringify([id])}::jsonb),updated_at=now()
+          WHERE project_id=${ctx.projectId} AND turn_id=${turnId} AND NOT (coalesce(state_json->'procedures','[]'::jsonb) ? ${id}) RETURNING turn_id`)
+        if (!claim.rows.length) throw new BuildRuntimeError("PROCEDURE_ALREADY_RAN", "This skill already ran in this turn.")
+        const result = await runProcedure(ctx, service, conversation, turn, run.plan.inputText, catalog.procedures, actionMap, simulationActionDependencies(run.plan.simulation), run.plan.configuration.guardrails.requireHumanForActions, signal, {}, undefined, id)
+        if (!result) throw new BuildRuntimeError("PROCEDURE_NOT_FOUND", "This skill is not available on the published revision.")
+        actionRefs = [...new Set([...actionRefs, ...(result.actionRefs ?? [])])]
+        metadata = result.integrationMetadata ?? {}
+        continuations = result.continuations
+        if (result.handoff) handoffOwnerId = result.handoffOwnerId
+        output = { text: result.text, ...metadata, instructions: result.instructions, actions: actionRefs.map(id => ({ toolName: eveCapabilityName("action", id, actionMap.get(id)?.definition), actionId: id })), continuations }
+      } else {
+        const action = actionMap.get(capability.id)!
+        const result = await executeAction(ctx, service, conversation, turn, action.definition, input, {
+          dependencies: simulationActionDependencies(run.plan.simulation), availableActions: actionMap, toolCallId, question: run.plan.inputText,
+          requireHumanForActions: run.plan.configuration.guardrails.requireHumanForActions, signal,
+        })
+        failed = result.status === "failed"
+        output = result.output
+        metadata = integrationOutputMetadata(action.definition, result.status, output)
+        continuations = result.continuation ? [result.continuation] : []
+        if (result.continuation?.type === "handoff") handoffOwnerId = result.continuation.teamId ?? `team:${run.agentId}`
+      }
+    })
     await patchEveState(ctx, turn.id, {
       actionRefs: actionRefs.filter(id => !run.state.actionRefs?.includes(id)), integrationMetadata: metadata,
       continuations, handoffOwnerId,
     })
     await ctx.database.execute(sql`UPDATE build_eve_tool_dispatches SET status='completed',output_json=${JSON.stringify(output ?? null)}::jsonb WHERE turn_id=${turnId} AND call_id=${callId}`)
-    await trace?.(output)
+    await trace?.(output, undefined, failed)
     return output
   } catch (error) {
     const safe = safeError(error)
@@ -3577,7 +3582,7 @@ export async function startEveModelTrace(context: BuildRuntimeContext, run: EveE
     attributes: { "gen_ai.request.model": run.plan.configuration.model, "build.engine": "eve", "build.turn.id": turn.id },
   })).catch(() => null)
   if (!span) return null
-  return async (output: unknown, usage?: unknown, failed = false, cancelled = false) => {
+  return Object.assign(async (output: unknown, usage?: unknown, failed = false, cancelled = false) => {
     const measured = (usage ?? {}) as Record<string, unknown>
     const tokens = (value: unknown) => typeof value === "number" ? value : value && typeof value === "object" ? Number((value as { total?: number }).total ?? 0) : 0
     const inputTokens = tokens(measured.inputTokens)
@@ -3590,5 +3595,5 @@ export async function startEveModelTrace(context: BuildRuntimeContext, run: EveE
         ...(capturedError ? { "error.type": capturedError.kind ?? "ACTION_FAILED", "error.message": capturedError.message ?? "The execution failed.", ...(capturedError.details ? { "error.details": capturedError.details } : {}) } : {}),
       }),
     })).catch(() => undefined)
-  }
+  }, { mcpTrace: { projectId: context.projectId, traceId: turn.traceId, spanId: span.id } })
 }

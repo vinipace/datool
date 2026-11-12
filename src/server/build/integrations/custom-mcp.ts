@@ -18,6 +18,7 @@ import { composioUserId } from "./provider"
 import { mcpOAuthFetch, mcpOAuthProvider, type McpConfig } from "./mcp-oauth"
 import { McpRuntimeError } from "./mcp-errors"
 import { getTracerWritePool, type TracerDatabase } from "@/src/server/tracer/db"
+import { agentMcpTraceHeaders } from "@/src/server/mcp/agent-trace"
 
 export const CUSTOM_MCP_TOOLKIT = "custom_mcp"
 export const saveMcpConnectionSchema = z
@@ -115,7 +116,10 @@ async function withClient<T>(
       if (init?.method === "GET") return new Response(null, { status: 405 })
       const response = await publicHttpRequest(url.href, {
         method: init?.method ?? "POST",
-        headers: Object.fromEntries(new Headers(init?.headers)),
+        headers: {
+          ...Object.fromEntries(new Headers(init?.headers)),
+          ...agentMcpTraceHeaders(url, typeof init?.body === "string" ? init.body : undefined),
+        },
         body: typeof init?.body === "string" ? init.body : undefined,
         maxResponseBytes: 2 * 1024 * 1024,
         timeoutMs: 30_000,

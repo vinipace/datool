@@ -83,10 +83,7 @@ export function AgentAvatar({
         className="size-full object-cover"
       />
       <AvatarPrimitive.Fallback
-        className={cn(
-          "size-full",
-          shape ? "bg-avatar-canvas" : color.className
-        )}
+        className={cn("size-full", !shape && color.className)}
       >
         {shape ? (
           <svg

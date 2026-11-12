@@ -87,6 +87,8 @@ Connect with Streamable HTTP and sign in through your MCP client, selecting the 
 
 Authenticated MCP protocol requests appear in **Logs**, including initialization, tool listing and resource reads. Tool calls include a tool span with their input, output, duration, status and deployment environment. Each input and output is capped at 64 KiB; larger values include a truncated preview. Credential fields and the request's bearer token are redacted. Authentication failures remain in the installation's security audit logs.
 
+When a Datool agent calls this installation's MCP for the same project, the call stays in the agent's existing trace with one tool span. Initialization and discovery during that call do not create additional logs. Calls from other MCP clients are logged independently.
+
 Agents from `agents/NAME/instructions.md` appear in Datool with the project's tools and skills attached. `agent.json` optionally supplies agent configuration such as `provider`, `model` and `temperature`. Sources are shared company knowledge for the deployed project's agents through `brain_search`. Each applied agent revision pins its tool and knowledge deployment. Redeploying updates only the folder's managed agents; removing an agent folder archives that managed agent. Removing tools or skills disables their managed definitions. Agents created in the UI are preserved, and conflicting names cause publication to fail.
 
 ## Persistent database and bucket

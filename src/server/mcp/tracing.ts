@@ -3,6 +3,7 @@ import { workspaceIdentity } from "../auth/context"
 import { securityAudit } from "../security/audit"
 import { runTracerEffect } from "../tracer/effect"
 import { getTracerService } from "../tracer/service"
+import { existingAgentMcpTrace } from "./agent-trace"
 
 const maxPayloadBytes = 64 * 1024
 const secretField =
@@ -36,6 +37,17 @@ export async function traceMcpRequest(
 ) {
   const identity = workspaceIdentity()
   if (!identity) return action()
+  const agentTraceId = await existingAgentMcpTrace(
+    request,
+    body,
+    identity.projectId
+  )
+  if (agentTraceId) {
+    // The agent owns the tool span, its result and failures. Do not count it twice.
+    const response = await action()
+    response.headers.set("X-Datool-Trace-Id", agentTraceId)
+    return response
+  }
   const message = body as {
     method?: unknown
     params?: { name?: unknown; arguments?: unknown }

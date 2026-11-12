@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import { afterEach, expect, spyOn, test } from "bun:test"
 import { Pool } from "pg"
 import {
@@ -47,6 +49,37 @@ const cleanup: (() => Promise<unknown> | void)[] = []
 afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close()
 })
+
+test("Datool agent calling its own MCP keeps one trace and one tool span", async () => {
+  const target = await createIsolatedPostgres()
+  try {
+    await migrateIsolatedPostgres(target)
+    await seedTestWorkspace(target)
+    const result = await promisify(execFile)(
+      process.execPath,
+      ["--no-env-file", "tests/helpers/mcp-agent-tracing.ts"],
+      {
+        env: {
+          ...process.env,
+          DATABASE_URL: target.databaseUrl,
+          TEST_WORKSPACE: JSON.stringify(target),
+          BETTER_AUTH_URL: "https://mcp.example.com",
+          BETTER_AUTH_SECRET:
+            "mcp-agent-trace-test-secret-at-least-32-characters",
+          DATOOL_PROVIDER_ENCRYPTION_KEY:
+            "mcp-agent-trace-encryption-at-least-32-characters",
+          DATOOL_BUILD_ENABLED: "true",
+          DATOOL_BILLING_ENABLED: "false",
+        },
+        timeout: 90_000,
+        maxBuffer: 1024 * 1024,
+      }
+    )
+    expect(result.stdout).toContain("PASS agent MCP trace ownership")
+  } finally {
+    await target.close()
+  }
+}, 120_000)
 
 async function fixture(jsonResponse: boolean, oauth = false) {
   const originalKey = process.env.DATOOL_PROVIDER_ENCRYPTION_KEY
