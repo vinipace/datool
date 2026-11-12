@@ -1,6 +1,6 @@
 import { SyntaxCode } from "@/components/ui/syntax-code"
 
 /** Render tokens as React text nodes, never as injected HTML. */
-export function JsonCode({ text }: { text: string }) {
+export function JsonCode({ text }: { text: string | null | undefined }) {
   return <SyntaxCode text={text} language="json" />
 }
