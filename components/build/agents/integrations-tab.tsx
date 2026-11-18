@@ -374,7 +374,8 @@ export function IntegrationsTab({
                     <div className="space-y-3">
                       <p className="text-sm text-foreground-muted">
                         Choose your store and review Datool’s requested access
-                        in Shopify. Your existing Datool billing stays in place.
+                        in Shopify. Plans for connected stores are billed through
+                        Shopify.
                       </p>
                       {authorization ? (
                         <Button asChild>
