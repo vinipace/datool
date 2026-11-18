@@ -20,10 +20,13 @@ import {
 } from "./shopify-provider"
 import { composioUserId } from "./provider"
 import { SHOPIFY_PRIVACY_VERSION } from "@/src/lib/shopify-privacy"
+import {
+  SHOPIFY_INSTALL_COOKIE as cookieName,
+  shopifyInstallReceipt,
+} from "@/src/server/billing/shopify-access"
 
 const digest = (s: string) => createHash("sha256").update(s).digest("hex")
 const secret = () => randomBytes(32).toString("base64url")
-const cookieName = "__Host-datool-shopify-install"
 const headers = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -42,15 +45,6 @@ type Intent = {
   source: "datool" | "shopify"
   session_encrypted: string | null
   claimed_project_id: string | null
-}
-function receipt(request: Request) {
-  const value = request.headers
-    .get("cookie")
-    ?.split(";")
-    .map((v) => v.trim())
-    .find((v) => v.startsWith(`${cookieName}=`))
-    ?.slice(cookieName.length + 1)
-  return value && /^[\w-]{43}$/.test(value) ? value : null
 }
 function setReceipt(response: Response, value: string) {
   response.headers.append(
@@ -71,6 +65,16 @@ function appListing() {
 export async function createShopifyInstallIntent(context: BuildContext) {
   const ctx = await assertBuildProject(context)
   appListing()
+  const billing = await getTracerWritePool(ctx.database).query(
+    `SELECT 1 FROM organization_billing WHERE organization_id=$1 AND provider='stripe'
+     AND (customer_id IS NOT NULL OR subscription_id IS NOT NULL OR checkout_session_id IS NOT NULL)`,
+    [ctx.organizationId]
+  )
+  if (billing.rowCount)
+    throw new TracerError(
+      "CONFLICT",
+      "This organization has an existing payment relationship. Open Datool in the Shopify App Store and create a separate organization for your store. Your current subscription will not change."
+    )
   const id = randomUUID(),
     token = secret()
   await getTracerWritePool(ctx.database).query(
@@ -118,7 +122,7 @@ export async function beginShopifyInstall(pool: Pool, request: Request) {
     !(await api.utils.validateHmac(query))
   )
     throw unavailable()
-  const previous = receipt(request)
+  const previous = shopifyInstallReceipt(request.headers)
   const existing = previous
     ? await pool.query<Intent>(
         `SELECT * FROM shopify_install_intent WHERE browser_hash=$1 AND client_id=$2 AND expires_at>now() AND claimed_project_id IS NULL`,
@@ -161,7 +165,7 @@ export async function completeShopifyInstall(
   )
   const intent = found.rows[0]
   if (!intent) return null
-  const browser = receipt(request),
+  const browser = shopifyInstallReceipt(request.headers),
     api = nativeShopify()
   if (
     !browser ||
@@ -213,7 +217,7 @@ export async function completeShopifyInstall(
 }
 
 export async function getShopifyInstall(pool: Pool, request: Request) {
-  const browser = receipt(request)
+  const browser = shopifyInstallReceipt(request.headers)
   if (!browser) throw unavailable()
   const { rows } = await pool.query<Intent>(
     "SELECT * FROM shopify_install_intent WHERE browser_hash=$1 AND client_id=$2 AND expires_at>now()",
@@ -318,15 +322,18 @@ export async function claimShopifyInstall(
             "CONFLICT",
             "This organization already bills through another Shopify store. Connect this store to a separate organization."
           )
-        // External customers keep their existing payment relationship. A pending
-        // Stripe checkout also stays external, so it cannot race a second charge.
-        if (
-          current.source === "shopify" &&
-          billing.provider === "stripe" &&
-          !billing.customer_id &&
-          !billing.subscription_id &&
-          !billing.checkout_session_id
-        ) {
+        // Never silently replace a payment relationship or allow a second charge.
+        // Both App Store and Datool-origin installs must use Shopify billing.
+        if (billing.provider === "stripe") {
+          if (
+            billing.customer_id ||
+            billing.subscription_id ||
+            billing.checkout_session_id
+          )
+            throw new TracerError(
+              "CONFLICT",
+              "This organization has an existing payment relationship. Create a separate organization for Shopify billing. Your current subscription will not change."
+            )
           await client.query(
             `UPDATE organization_billing SET provider='shopify',shopify_shop=$2,shopify_shop_id=$3,shopify_client_id=$4 WHERE organization_id=$1`,
             [organizationId, current.shop, current.shop_id, current.client_id]

@@ -1,4 +1,5 @@
 import { shopifyPricingUrl, syncShopifyBilling } from "./shopify"
+import { shopifyBillingDestination } from "./shopify-access"
 import { syncExecutionGrant } from "@/src/server/execution-credits/grants"
 import {
   emitProductEvent,
@@ -366,6 +367,11 @@ export async function createCheckout(
 ) {
   return withBillingLock(organizationId, async (client, row) => {
     if (row.provider === "shopify") return shopifyPricingUrl(row.shopify_shop!)
+    if (await shopifyBillingDestination(client, { organizationId }))
+      throw new TracerError(
+        "CONFLICT",
+        "Open Shopify to connect a Shopify-billed organization before choosing a plan."
+      )
     const config = billingConfig()
     await cloudPrice(plan)
     const stripe = getStripe()
@@ -487,21 +493,27 @@ export async function createCheckout(
 }
 
 export async function createPortal(organizationId: string) {
-  const row = await readBilling(organizationId)
-  if (row?.provider === "shopify") return shopifyPricingUrl(row.shopify_shop!)
-  if (!row?.customer_id)
-    throw new TracerError(
-      "VALIDATION_ERROR",
-      "Start a subscription before managing billing."
-    )
-  const session = await getStripe().billingPortal.sessions.create({
-    customer: row.customer_id,
-    return_url: `${billingConfig().origin}/billing`,
-    ...(process.env.STRIPE_PORTAL_CONFIGURATION_ID
-      ? { configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID }
-      : {}),
+  return withBillingLock(organizationId, async (client, row) => {
+    if (row?.provider === "shopify") return shopifyPricingUrl(row.shopify_shop!)
+    if (await shopifyBillingDestination(client, { organizationId }))
+      throw new TracerError(
+        "CONFLICT",
+        "Open Shopify to connect a Shopify-billed organization before managing your plan."
+      )
+    if (!row?.customer_id)
+      throw new TracerError(
+        "VALIDATION_ERROR",
+        "Start a subscription before managing billing."
+      )
+    const session = await getStripe().billingPortal.sessions.create({
+      customer: row.customer_id,
+      return_url: `${billingConfig().origin}/billing`,
+      ...(process.env.STRIPE_PORTAL_CONFIGURATION_ID
+        ? { configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID }
+        : {}),
+    })
+    return session.url
   })
-  return session.url
 }
 
 export async function processBillingEvent(event: Stripe.Event) {

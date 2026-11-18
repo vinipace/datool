@@ -20,15 +20,85 @@ type Organization = {
   id: string
   name: string
   projects: { id: string; name: string }[]
+  billingConflict?: boolean
 }
+
+export function ShopifyBillingStart({
+  organizations,
+  installUrl,
+}: {
+  organizations: { id: string; name: string }[]
+  installUrl: string | null
+}) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState("")
+  async function open(id: string) {
+    setBusy(id)
+    setError("")
+    try {
+      await selectOrganization(id)
+      navigateWorkspace("/billing")
+    } catch {
+      setError("Could not open your organization. Please try again.")
+      setBusy(null)
+    }
+  }
+  return (
+    <main className="mx-auto max-w-xl space-y-6 px-4 py-10 sm:px-6">
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold">Your Shopify workspace</h1>
+        <p className="text-foreground-muted">
+          Choose your store’s organization to manage its plan in Shopify, or
+          connect a store to get started.
+        </p>
+      </div>
+      {error ? (
+        <Notice variant="error" role="alert">
+          {error}
+        </Notice>
+      ) : null}
+      <div className="space-y-3">
+        {organizations.map((organization) => (
+          <Button
+            key={organization.id}
+            variant="outline"
+            className="w-full justify-start"
+            disabled={!!busy}
+            loading={busy === organization.id}
+            onClick={() => void open(organization.id)}
+          >
+            {organization.name}
+          </Button>
+        ))}
+        {installUrl ? (
+          <Button asChild>
+            <a href={installUrl}>
+              {organizations.length
+                ? "Connect another store"
+                : "Continue to Shopify"}
+            </a>
+          </Button>
+        ) : (
+          <Notice variant="warning">
+            Shopify connection is temporarily unavailable. Please contact
+            support.
+          </Notice>
+        )}
+      </div>
+      <p className="text-sm text-foreground-muted">
+        Subscriptions and plan changes are approved in Shopify. Connecting a
+        store does not create a charge.
+      </p>
+    </main>
+  )
+}
+
 export function ShopifyOnboarding({
   shop,
-  source,
   organizations,
   projectId,
 }: {
   shop: string
-  source: "datool" | "shopify"
   organizations: Organization[]
   projectId?: string
 }) {
@@ -92,9 +162,9 @@ export function ShopifyOnboarding({
         <p className="text-sm text-foreground-muted">{shop}</p>
       </div>
       <Notice>
-        {source === "datool"
-          ? "Your store will keep your current billing setup."
-          : "Already paying Datool? Choose that organization to keep your current billing. New Shopify subscriptions are managed through Shopify."}
+        All plans for this store are billed through Shopify. If you already pay
+        for a Datool organization separately, create a new organization for your
+        store. Your existing subscription will not change.
       </Notice>
       {error ? (
         <Notice variant="error" role="alert">
@@ -122,12 +192,14 @@ export function ShopifyOnboarding({
                 name="shopify-organization"
                 value={o.id}
                 checked={organizationId === o.id}
+                disabled={o.billingConflict}
                 onChange={() => {
                   setOrganizationId(o.id)
                   setProject(projectId ?? "")
                 }}
               >
                 {o.name}
+                {o.billingConflict ? " — separate subscription" : ""}
               </RadioCard>
             ))}
           {!projectId ? (
@@ -222,6 +294,7 @@ export function ShopifyOnboarding({
           loading={busy}
           disabled={
             busy ||
+            !!selected?.billingConflict ||
             !privacyAccepted ||
             (!organizationId && (!name.trim() || !!projectId))
           }

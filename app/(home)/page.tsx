@@ -14,6 +14,7 @@ import { getWorkspaceSession } from "@/lib/workspace-access"
 import { projectHref } from "@/lib/workspace-api"
 import { workspaceReturnPath } from "@/lib/workspace-routing"
 import { getBillingRedirect } from "@/lib/billing-access"
+import { shopifyBillingDestination } from "@/src/server/billing/shopify-access"
 import { MarketingShell } from "@/components/cms/marketing-shell"
 import { cmsEnabled } from "@/lib/cms/config"
 import LandingPage, {
@@ -76,6 +77,15 @@ export default async function HomePage({
     ({ id }) => id === activeOrganizationId
   )
   const plan = billingPlanFromPath(destination)
+  const shopifyDestination = billingEnabled()
+    ? await shopifyBillingDestination(db, {
+        organizationId: activeOrganization?.id,
+        userId,
+        headers: session.headers,
+      })
+    : null
+  if (shopifyDestination === "/shopify/connect" || (plan && shopifyDestination))
+    redirect(shopifyDestination)
   if (activeOrganization && !plan) {
     const billingRedirect = await getBillingRedirect(activeOrganization.id)
     if (billingRedirect) redirect(billingRedirect)

@@ -6,6 +6,8 @@ import { getAuth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { workspaceReturnPath } from "@/lib/workspace-routing"
 import { getBillingRedirect } from "@/lib/billing-access"
+import { shopifyBillingDestination } from "@/src/server/billing/shopify-access"
+import { billingEnabled } from "@/src/server/billing/config"
 
 export const getWorkspaceSession = cache(async () => {
   const requestHeaders = await headers()
@@ -71,10 +73,27 @@ export async function requireActiveOrganization(callbackUrl = "/") {
   )
   const organization = result.rows[0]
   if (!organization) redirect(selectionHref)
-  const billingRedirect = await getBillingRedirect(organization.id)
   const pathname = new URL(returnTo, "https://datool.invalid").pathname
-  if (billingRedirect && pathname !== "/billing" && pathname !== "/pricing")
-    redirect(billingRedirect)
+  const shopifyDestination = billingEnabled()
+    ? await shopifyBillingDestination(db, {
+        organizationId: organization.id,
+        userId,
+        headers: requestHeaders,
+      })
+    : null
+  if (
+    (pathname === "/billing" || pathname === "/pricing") &&
+    shopifyDestination &&
+    shopifyDestination !== pathname
+  )
+    redirect(shopifyDestination)
+  const billingRedirect = await getBillingRedirect(organization.id)
+  const destination =
+    billingRedirect === "/pricing" && shopifyDestination
+      ? shopifyDestination
+      : billingRedirect
+  if (destination && pathname !== "/billing" && pathname !== "/pricing")
+    redirect(destination)
   return {
     headers: requestHeaders,
     userId,
