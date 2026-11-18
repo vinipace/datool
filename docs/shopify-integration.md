@@ -147,12 +147,19 @@ it cannot create an order, refund or invoice.
 
 ## Billing ownership
 
-- Starting in Datool keeps that organization's current billing provider.
-- Starting in Shopify uses Shopify App Pricing for a new organization. An
-  existing organization with a Stripe customer, subscription or pending checkout
-  keeps Stripe billing, preventing two payment relationships.
+- Both Datool-origin and App Store installs use Shopify App Pricing. An
+  organization with an existing Stripe customer, subscription or pending checkout
+  cannot claim a store. Create a separate organization through the App Store
+  instead; the existing subscription is not canceled or converted automatically.
 - Shopify organizations use Shopify's hosted plan selector for subscriptions,
-  upgrades and cancellation. They cannot create Stripe checkout sessions.
+  upgrades and cancellation. They cannot create Stripe checkout or portal sessions.
+- Verified pending installs and users belonging to a Shopify organization are
+  routed from generic pricing and billing links back to Shopify setup or billing,
+  including after switching organizations. Store URLs alone do not establish this
+  association. Disconnected store history still blocks Stripe.
+- Legacy organizations with both a store connection and Stripe billing are blocked
+  from external checkout and portal access. Resolve their payment ownership with
+  the merchant before resubmission; do not move a store or cancel charges silently.
 - One Shopify store bills one organization. Stores already linked to a project
   cannot be moved to another project through a reconnect.
 
@@ -170,7 +177,8 @@ plans. An upgrade does not issue a second allowance within the same cycle.
 ## Installation setup
 
 1. Apply migrations through `0070_shopify_install_lifecycle.sql` using the normal release
-   flow. Existing organizations retain Stripe ownership.
+   flow. Migrations do not alter existing payment relationships. Audit legacy
+   mixed-provider connections before release; see [the review runbook](shopify-app-review.md).
 2. Configure a public standalone Shopify app with application URL
    `https://YOUR_DATOOL_HOST/api/shopify/install`, redirect URI
    `https://YOUR_DATOOL_HOST/api/shopify/callback`, and

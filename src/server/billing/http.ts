@@ -20,6 +20,8 @@ import {
   hasSubscriptionAccess,
 } from "./store"
 import { getCloudUsage } from "./usage"
+import { db } from "@/lib/db"
+import { shopifyBillingDestination } from "./shopify-access"
 
 export async function billingRequest(
   request: Request,
@@ -44,6 +46,22 @@ export async function billingRequest(
       { manage: action !== "status" }
     )
     if (authorization.kind !== "ok") return accessError(authorization.kind)
+    const destination = await shopifyBillingDestination(db, {
+      organizationId,
+      userId: session.user.id,
+      headers: request.headers,
+    })
+    if (destination === "/shopify/connect") {
+      if (action !== "status")
+        return Response.json(
+          { url: destination },
+          { headers: { "Cache-Control": "no-store" } }
+        )
+      throw new TracerError(
+        "CONFLICT",
+        "Connect a Shopify-billed organization to manage your plan."
+      )
+    }
     if (action === "status") {
       const row = await getBilling(organizationId, true)
       let purchase = null

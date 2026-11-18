@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import { createHmac } from "node:crypto"
 import { makeSignature } from "better-auth/crypto"
 import { db, analyticsDb } from "../../lib/db"
+import { getStripe } from "../../src/server/billing/config"
+import { createPortal } from "../../src/server/billing/store"
 import { getAuth } from "../../lib/auth"
 import {
   createCheckout,
@@ -17,6 +19,7 @@ import {
 } from "../../src/server/build/integrations/shopify-install"
 import { POST as claim } from "../../app/api/shopify/claim/route"
 import { POST as checkout } from "../../app/api/billing/checkout/route"
+import { POST as portal } from "../../app/api/billing/portal/route"
 import { GET as status } from "../../app/api/billing/status/route"
 import {
   executionCredits,
@@ -142,6 +145,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     return Response.json({ data: { shop: { shopPolicies: [] } } })
   throw new Error("Unexpected external request")
 }) as typeof fetch
+let stripeRequests = 0
+getStripe().prices.retrieve = (async () => {
+  stripeRequests++
+  throw new Error("Unexpected Stripe price request during Shopify onboarding")
+}) as ReturnType<typeof getStripe>["prices"]["retrieve"]
 const auth = await getAuth().$context
 const session = await auth.internalAdapter.createSession(owner)
 assert(session)
@@ -311,6 +319,22 @@ try {
     ).status,
     403
   )
+  // A verified install must survive navigation to generic pricing before linking.
+  for (const [path, action] of [
+    ["checkout", checkout],
+    ["portal", portal],
+  ] as const) {
+    const payment = await action(
+      request(`/api/billing/${path}`, cookie, { plan: "pro" })
+    )
+    assert.equal(
+      stripeRequests,
+      0,
+      "Shopify navigation must not contact Stripe"
+    )
+    assert.equal(payment.status, 200)
+    assert.equal((await payment.json()).url, "/shopify/connect")
+  }
   const response = await claim(request("/api/shopify/claim", cookie, body))
   assert.equal(response.status, 200, await response.clone().text())
   assert.equal((await response.json()).provider, "shopify")
@@ -488,7 +512,7 @@ try {
     connection.id
   )
 
-  // Existing Stripe customers keep their relationship even on an App Store install.
+  // An existing Stripe relationship cannot become a paid Shopify integration.
   const external = crypto.randomUUID(),
     externalProject = crypto.randomUUID()
   await db.query(
@@ -515,8 +539,17 @@ try {
       projectId: externalProject,
     })
   )
-  assert.equal(linked.status, 200)
-  assert.equal((await linked.json()).provider, "stripe")
+  assert.equal(linked.status, 409)
+  assert.match((await linked.json()).error.message, /separate organization/i)
+  assert.equal(
+    (
+      await db.query(
+        "SELECT 1 FROM build_shopify_connections WHERE project_id=$1",
+        [externalProject]
+      )
+    ).rowCount,
+    0
+  )
   assert.equal(
     (
       await db.query(
@@ -532,6 +565,59 @@ try {
     projectId: externalProject,
   })
   try {
+    for (const relationship of [
+      {
+        customer: "cus_existing",
+        subscription: "sub_existing",
+        checkout: null,
+      },
+      { customer: "cus_existing", subscription: null, checkout: null },
+      { customer: null, subscription: null, checkout: "cs_pending" },
+    ]) {
+      await db.query(
+        "UPDATE organization_billing SET customer_id=$2,subscription_id=$3,checkout_session_id=$4 WHERE organization_id=$1",
+        [
+          external,
+          relationship.customer,
+          relationship.subscription,
+          relationship.checkout,
+        ]
+      )
+      const refused = await claim(
+        request("/api/shopify/claim", `${authCookie}; ${externalBrowser}`, {
+          privacyPolicyVersion: "2026-10-29",
+          organizationId: external,
+          projectId: externalProject,
+        })
+      )
+      assert.equal(refused.status, 409)
+      assert.match(
+        (await refused.json()).error.message,
+        /separate organization/i
+      )
+      await assert.rejects(
+        createShopifyInstallIntent({
+          database: directDb,
+          projectId: externalProject,
+          organizationId: external,
+        }),
+        /separate organization/
+      )
+      assert.equal(
+        (
+          await db.query(
+            "SELECT provider FROM organization_billing WHERE organization_id=$1",
+            [external]
+          )
+        ).rows[0].provider,
+        "stripe"
+      )
+    }
+    // A new organization with no payment relationship can start from Datool.
+    await db.query(
+      "UPDATE organization_billing SET customer_id=NULL,subscription_id=NULL,checkout_session_id=NULL WHERE organization_id=$1",
+      [external]
+    )
     const start = await createShopifyInstallIntent({
       database: directDb,
       projectId: externalProject,
@@ -560,10 +646,54 @@ try {
       })
     )
     assert.equal(result.status, 200)
-    assert.equal((await result.json()).provider, "stripe")
+    assert.equal((await result.json()).provider, "shopify")
   } finally {
     await closeTracerDatabase(directDb)
   }
+  // Old mixed-provider installations must also fail closed at the store boundary.
+  await db.query(
+    "UPDATE organization_billing SET provider='stripe',customer_id='cus_legacy' WHERE organization_id=$1",
+    [external]
+  )
+  await assert.rejects(
+    createCheckout(external, "pro", "fixture@example.test"),
+    /Shopify-billed/
+  )
+  await assert.rejects(createPortal(external), /Shopify-billed/)
+  // Switching organizations cannot expose Stripe to a Shopify merchant.
+  await db.query('UPDATE session SET "activeOrganizationId"=$1 WHERE id=$2', [
+    external,
+    session.id,
+  ])
+  for (const [path, action] of [
+    ["checkout", checkout],
+    ["portal", portal],
+  ] as const) {
+    const payment = await action(
+      request(`/api/billing/${path}`, authCookie, { plan: "pro" })
+    )
+    assert.equal(
+      stripeRequests,
+      0,
+      "Shopify navigation must not contact Stripe"
+    )
+    assert.equal(payment.status, 200)
+    assert.equal((await payment.json()).url, "/shopify/connect")
+  }
+  // A newly created organization still belongs to the same Shopify merchant.
+  await db.query("DELETE FROM build_shopify_connections WHERE project_id=$1", [
+    externalProject,
+  ])
+  await db.query(
+    "UPDATE organization_billing SET customer_id=NULL WHERE organization_id=$1",
+    [external]
+  )
+  const switched = await checkout(
+    request("/api/billing/checkout", authCookie, { plan: "core" })
+  )
+  assert.equal(switched.status, 200)
+  assert.equal((await switched.json()).url, "/shopify/connect")
+  assert.equal(stripeRequests, 0)
   console.log("PASS Shopify billing lifecycle")
 } finally {
   await closeTracerDatabase(database)
