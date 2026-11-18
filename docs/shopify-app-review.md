@@ -45,6 +45,10 @@ lint and typecheck before pushing.
   chat channel, enable the theme app embed, show product discovery and cart,
   verify order ownership, and demonstrate teammate handoff. Clearly distinguish
   fixture previews from a live development-store installation.
+- Before recording, verify that opening and closing the storefront chat sends
+  its visibility state without browser errors, and that replies arrive without
+  refreshing the page. Exercise a fresh product card through cart and checkout.
+  The loader regression is covered by `tests/public-widget-navigation.test.ts`.
 - Replace the listing's desktop screenshots and reviewer video link only after
   checking the final files. Confirm the reviewer can access the video and any
   test credentials through the submission's designated private fields.
