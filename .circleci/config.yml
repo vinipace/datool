@@ -207,7 +207,9 @@ jobs:
           command: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run:
           name: Check dependency security advisories
-          command: bun audit --audit-level high
+          # Withdrawn on 2026-11-18; remove the exception once npm stops returning it.
+          # https://github.com/advisories/GHSA-fc5q-39xc-vjpf
+          command: bun audit --audit-level high --ignore GHSA-fc5q-39xc-vjpf
       - start-services
       - run:
           name: Verify ingestion retries, retention, and safe diagnostics
