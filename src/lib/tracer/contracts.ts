@@ -208,6 +208,7 @@ export type DatasetDetail = Dataset & {
 export type DatasetItemField = DatasetField | "sourceSpanEvidence"
 
 export type DatasetEvaluation = {
+  functional?: import("@/src/lib/build/agent-journey").JourneyResult | null
   targetId: string
   traceId: string
   runId: string

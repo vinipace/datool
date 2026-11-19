@@ -23,10 +23,12 @@ export function DockedInspector({
   title,
   mobileOpen,
   onMobileClose,
+  defaultSize = 34,
 }: React.PropsWithChildren<{
   title: string
   mobileOpen: boolean
   onMobileClose: () => void
+  defaultSize?: number
 }>) {
   const desktop = React.useSyncExternalStore(
     subscribe,
@@ -37,13 +39,13 @@ export function DockedInspector({
   const setOpen = panel?.setOpen
   const setDefaultSize = panel?.setDefaultSize
   React.useEffect(() => {
-    setDefaultSize?.(34)
+    setDefaultSize?.(defaultSize)
     setOpen?.(desktop)
     return () => {
       setOpen?.(false)
       setDefaultSize?.(45)
     }
-  }, [desktop, setOpen, setDefaultSize])
+  }, [desktop, setOpen, setDefaultSize, defaultSize])
   if (!desktop)
     return (
       <Dialog

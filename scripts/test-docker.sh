@@ -53,6 +53,17 @@ docker run --rm "${environment[@]}" "$image" bun run cms:seed --database datool 
 docker run --rm "${environment[@]}" "$image" bun run cms:seed --database datool --apply
 docker run --rm "${environment[@]}" "$image" bun run db:alerts-reader
 docker run --rm "${environment[@]}" "$image" bun run db:alerts-reader
+# The non-root release image must execute the browser and continuation pipeline,
+# rather than only containing the browser dependency or passing a source build.
+# Share only the disposable database's network namespace so the fixture's
+# loopback-only safety guard remains intact. Use its separate postgres database,
+# leaving the acceptance application's datool database untouched.
+docker run --rm --network "container:$prefix-db" \
+  -e DATOOL_TEST_DATABASE_URL=postgresql://datool:isolated-test@127.0.0.1:5432/postgres \
+  --mount "type=bind,source=$PWD/tests,target=/app/tests,readonly" \
+  --mount "type=bind,source=$PWD/scripts/test.mjs,target=/app/scripts/test.mjs,readonly" \
+  --mount "type=bind,source=$PWD/vitest.agent-journeys.config.mts,target=/app/vitest.agent-journeys.config.mts,readonly" \
+  "$image" bun --no-env-file scripts/test.mjs --journeys-only
 docker run -d --name "$prefix-web" "${environment[@]}" -v "$prefix-data:/app/.data" "$image" >/dev/null
 docker run -d --name "$prefix-worker" "${environment[@]}" "$image" bun run worker:ingestion >/dev/null
 docker run -d --name "$prefix-buildworker" "${environment[@]}" "$image" bun run worker:build >/dev/null

@@ -113,6 +113,7 @@ export async function pinContinuationWidgets(
     agentId: string
     agentRevision: unknown
     continuations: RuntimeContinuation[]
+    widgets?: import("../definitions").AppliedAgentDefinitions["widgets"]
   }
 ) {
   const continuations = input.continuations
@@ -131,7 +132,7 @@ export async function pinContinuationWidgets(
   const agentRevision = Number(input.agentRevision)
   if (!Number.isInteger(agentRevision) || agentRevision < 1)
     throw new Error("The conversation turn has no pinned agent revision.")
-  const definitions = await getRuntimeAppliedDefinitions(
+  const definitions = input.widgets ? { widgets: input.widgets } : await getRuntimeAppliedDefinitions(
     context,
     input.agentId,
     agentRevision

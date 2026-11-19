@@ -12,6 +12,89 @@ Start with a few common requests and known failures. Keep expected outputs align
 
 Review input/output formatting in the editor before starting a run. Dataset values may be structured JSON, text, or messages, depending on the connected app's contract.
 
+## Agent interaction cases
+
+Agent **Tests** uses the same datasets and evaluation runs. Choose **Add test**,
+enter the starting customer message and the expected answer. Add browser-test code only when the case needs interaction checks.
+The editor provides completions for `page`, `expect`, `agent`, and `test.step`.
+**Import tests** is available in the collection menu.
+
+```javascript
+await test.step("Choose a model", async () => {
+  const model = page.getByRole("button", { name: "Camisa de linho", exact: true });
+  await model.click();
+  await expect(model).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+});
+await page.getByLabel("Data do evento").fill("2030-12-30");
+await agent.expectHandoff("Falar com a equipe", { message: "2030-12-30" });
+```
+
+Optional test code uses JavaScript with async/await, variables, loops and functions. It runs
+inside an isolated Chromium frame; browser commands use the saved widget and
+its real conversation continuations. `page` is scoped to the current widget.
+Supported locators are `getByRole`, `getByLabel`, `getByText`,
+`getByPlaceholder`, `getByTestId`, and CSS `locator`, with `first`, `last`,
+and `nth` for disambiguation. Selectors and text expectations use strings.
+
+Controls support `click`, `fill`, `selectOption`, `check`, `uncheck` and
+`setChecked`. Read text, values, attributes or counts and use awaited
+Playwright assertions such as `toBeVisible`, `toHaveText`, `toContainText`,
+`toHaveValue`, `toHaveAttribute` and `toHaveCount`; `.not` is supported.
+Value assertions include `toBe`, `toEqual`, `toContain`, `toBeTruthy` and
+`toBeFalsy`. `agent.expectText` checks either the answer or widget text;
+`agent.sendMessage` sends another customer turn, and `agent.expectAction`
+checks submitted action fields. Handoff link clicks are observed without
+opening the external service.
+
+Expected appears last in the form, with JSON and Code tabs. JSON supplies reference data for answer scorers. Code runs optional executable browser assertions, without requiring an expected final reply. Switching modes retains the JSON reference and keeps code available while editing. Without browser code, the test renders the initial response and uses the selected answer scorers.
+
+Each code test must complete at least one assertion, and has a 30-second,
+160-operation limit. Imports, Node APIs, navigation and arbitrary browser
+`evaluate` calls are not part of this scoped API. Assertion failures retain
+the operation name, error and a bounded screenshot when Chromium can capture
+one. Syntax errors, timeouts and caught assertion failures still fail the test.
+
+Through REST, MCP or import, set `input.journey.code` to the JavaScript string
+and omit `steps`. Existing step-based cases remain executable and appear as
+editable code in the editor. Editing them saves code without the legacy steps.
+The older structured input remains supported:
+
+```json
+{
+  "message": "Quero uma roupa personalizada",
+  "channel": "web",
+  "journey": {
+    "name": "Escolher modelos e preencher a data",
+    "required": true,
+    "width": 390,
+    "locale": "pt-BR",
+    "steps": [
+      { "type": "click", "name": "Camisa de linho" },
+      { "type": "expect_selected", "name": "Camisa de linho" },
+      { "type": "fill", "name": "Data do evento", "value": "2030-12-30" },
+      { "type": "click", "name": "Continuar" },
+      { "type": "expect_text", "text": "Revise seu pedido" },
+      { "type": "expect_link", "name": "Falar com a equipe", "message": "2030-12-30" }
+    ],
+    "actionMocks": []
+  }
+}
+```
+
+Use exact accessible button and field labels. Other steps include `select`,
+`check`, `expect_value`, `expect_action` with an action ID and expected input,
+and `message` for another customer turn. A link assertion can check an exact
+`href` and text contained in its decoded `text` query parameter. Action input
+checks match the provided fields and allow additional fields. Define external
+responses in `actionMocks` as `{ "actionId": "lookup", "response": {} }`, or
+use `error` instead of `response` to exercise failure handling. Widget and form
+continuations use their saved definitions rather than mock responses.
+
+Run with `start_eval_run` using `agentId`, `datasetId`, and optional scorer IDs.
+The [journey run guide](/docs/evaluation/runs#test-an-agents-customer-journey)
+explains interaction results and the publishing policy.
+
 ## Import and export
 
 The CLI supports portable dataset files:

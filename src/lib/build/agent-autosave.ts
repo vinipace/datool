@@ -32,7 +32,8 @@ export function createAgentAutosave(
   save: (
     draft: AgentDraft,
     saved: ManagedAgent | undefined,
-    changes: Partial<AgentDraft>
+    changes: Partial<AgentDraft>,
+    options?: { apply: boolean }
   ) => Promise<ManagedAgent>,
   delay = 600
 ) {
@@ -115,6 +116,42 @@ export function createAgentAutosave(
     },
     pending,
     flush,
+    async apply() {
+      await flush()
+      if (!state.saved) return
+      if (!validAgentDraft(state.draft) || pending())
+        throw new Error("Complete and save the draft before publishing.")
+      const publication = (async () => {
+        publish({ status: "saving", error: null })
+        try {
+          const saved = await save(
+            state.draft,
+            state.saved,
+            {},
+            { apply: true }
+          )
+          publish({ saved })
+          // Writes queued during publication must use its acknowledged revision.
+          await drain()
+          return saved
+        } catch (cause) {
+          const error =
+            cause instanceof Error
+              ? cause
+              : new Error("Could not publish changes.")
+          publish({ status: "error", error })
+          throw error
+        }
+      })()
+      flight = publication
+        .then(() => {})
+        .finally(() => {
+          flight = undefined
+        })
+      // The caller owns publication errors; flush callers observe the same failure.
+      void flight.catch(() => {})
+      return publication
+    },
     update(draft: AgentDraft) {
       // The editor has one name; retain the appearance field for channel consumers.
       if (draft.name !== state.draft.name) {

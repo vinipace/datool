@@ -225,13 +225,13 @@ function BuildAgentEditorContent({
   const searchParams = useSearchParams()
   const workspaceHref = useWorkspaceHref()
   const [store] = React.useState(() =>
-    createAgentAutosave(agent, (draft, saved, changes) =>
+    createAgentAutosave(agent, (draft, saved, changes, options) =>
       saved
         ? buildCall<ManagedAgent>(buildOperations.updateAgent, {
             agentId: saved.id,
             ...changes,
             expectedRevision: saved.currentRevision,
-            apply: true,
+            apply: options?.apply ?? !draft.configuration.testing.requirePassingJourneys,
           })
         : buildCall<ManagedAgent>(buildOperations.createAgent, draft)
     )
@@ -504,7 +504,7 @@ function BuildAgentEditorContent({
           aria-label="Agent editor"
           className={`min-h-0 min-w-0 flex-1 ${active === "playground" || active === "conversations" || active === "contacts" ? "overflow-hidden" : "overflow-y-auto"}`}
         >
-          {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} /> : null}
+          {active === "test" && saved ? <AgentTests agentId={saved.id} agentName={saved.name} requireJourneys={draft.configuration.testing.requirePassingJourneys} onRequireJourneys={required => updateDraft("configuration", { ...draft.configuration, testing: { requirePassingJourneys: required } })} onPublish={() => store.apply()} pending={pending} unpublished={saved.currentRevision !== saved.appliedRevision} /> : null}
           {active === "overview" && saved ? (
             <AgentOverview key={saved.id} agentId={saved.id} />
           ) : null}

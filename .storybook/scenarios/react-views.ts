@@ -16,7 +16,9 @@ export const storybookReactView: ReactView = {
 }
 export function reactViewHandlers(views: ReactView[] = []) {
   return [
-    http.get("/api/react-views", () =>
+    http.post("/api/agent/get_view_preference", () => HttpResponse.json({ data: { revision: 0, value: {} } })),
+    http.post("/api/agent/save_view_preference", () => HttpResponse.json({ data: { revision: 1, value: {} } })),
+    http.get("/api/object-views", () =>
       HttpResponse.json({
         data: {
           items: views.map(({ code, ...view }) => {
@@ -27,7 +29,7 @@ export function reactViewHandlers(views: ReactView[] = []) {
         },
       })
     ),
-    http.get("/api/react-views/:id", ({ params }) => {
+    http.get("/api/object-views/:id", ({ params }) => {
       const view = views.find((view) => view.id === params.id)
       return view
         ? HttpResponse.json({ data: view })

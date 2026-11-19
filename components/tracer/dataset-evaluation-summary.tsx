@@ -9,37 +9,30 @@ export function DatasetEvaluationSummary({
   return (
     <section
       aria-label="Test results summary"
-      className="shrink-0 border-b border-border px-4 py-3"
+      className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-3 py-2 text-xs"
     >
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-        <div>
-          <div className="text-xs text-foreground-muted">Success rate</div>
-          <div className="mt-1 font-mono text-2xl">
-            <PercentageCell value={summary?.successRate} />
-          </div>
-        </div>
-        {summary ? (
-          <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            {[
-              ["Passed", summary.passed],
-              ["Failed", summary.failed],
-              ["Pending", summary.pending],
-              ["Not run", summary.notRun],
-              ...(summary.unscored ? [["Unscored", summary.unscored]] : []),
-              ...(summary.cancelled ? [["Cancelled", summary.cancelled]] : []),
-            ].map(([label, count]) => (
-              <div key={label}>
-                <dt className="text-xs text-foreground-muted">{label}</dt>
-                <dd className="mt-1 font-mono tabular-nums">{count}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <span className="text-xs text-foreground-muted">
-            Loading results…
-          </span>
-        )}
-      </div>
+      <span aria-label="Success rate" className="font-mono text-sm">
+        <PercentageCell value={summary?.successRate} />
+      </span>
+      {summary ? (
+        <dl className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {[
+            ["passed", summary.passed],
+            ["failed", summary.failed],
+            ...(summary.pending ? [["pending", summary.pending]] : []),
+            ...(summary.notRun ? [["not run", summary.notRun]] : []),
+            ...(summary.unscored ? [["unscored", summary.unscored]] : []),
+            ...(summary.cancelled ? [["cancelled", summary.cancelled]] : []),
+          ].map(([label, count]) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <dt className="text-foreground-muted">{label}</dt>
+              <dd className="order-first font-mono tabular-nums">{count}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <span className="text-foreground-muted">Loading…</span>
+      )}
     </section>
   )
 }

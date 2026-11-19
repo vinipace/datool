@@ -13,6 +13,7 @@ import {
   inlineIntegrationContinuation,
 } from "../integrations/action-runtime"
 import { createHash, randomUUID } from "node:crypto"
+import { widgetAsCode } from "@/src/lib/build/widget-code"
 import { beginModelUsage, finishModelUsage } from "../usage"
 
 import { createGateway } from "@ai-sdk/gateway"
@@ -114,6 +115,8 @@ export type RuntimeBudgetReservation = {
 }
 
 export type RuntimeDependencies = {
+  /** Evaluations and simulations replace integration preparation as well as transport. */
+  mockExternalActions?: boolean
   resolveAgent?: (
     context: BuildRuntimeContext,
     agentId: string
@@ -844,7 +847,7 @@ async function invokeBuildHttp(
   return { output }
 }
 
-function actionContinuation(
+export function actionContinuation(
   action: ActionDefinition,
   input: Record<string, unknown>,
   continuationId: string,
@@ -970,7 +973,8 @@ async function continuationMessageMetadata(
   context: BuildRuntimeContext,
   conversation: Conversation,
   turn: ConversationTurn,
-  continuations: RuntimeContinuation[]
+  continuations: RuntimeContinuation[],
+  widgets?: import("../definitions").AppliedAgentDefinitions["widgets"]
 ): Promise<RuntimeJsonRecord> {
   if (!continuations.length) return {}
   const pinned = await pinContinuationWidgets(context, {
@@ -978,6 +982,7 @@ async function continuationMessageMetadata(
     agentId: conversation.agentId,
     agentRevision: turn.snapshot.agentRevision,
     continuations,
+    widgets,
   })
   return continuationMessageContent(pinned)
 }
@@ -1212,6 +1217,10 @@ type ProcedureResult = {
 }
 
 export type RunAgentTurnOptions = {
+  /** Server-owned frozen catalog for evaluating saved changes before applying them. */
+  catalog?: import("../definitions").AppliedAgentDefinitions
+  /** Evaluation conversations retain submissions without creating live leads or contact data. */
+  recordFormData?: boolean
   /** Server-decoded media only; never populated from public metadata or URLs. */
   trustedChannelImages?: import("@/src/lib/build/channels").ChannelImage[]
   dependencies?: RuntimeDependencies
@@ -1394,7 +1403,7 @@ async function executeAction(
     }
   }
   const integration =
-    action.type === "integration"
+    action.type === "integration" && !options.dependencies.mockExternalActions
       ? integrationExecution(
           context,
           service,
@@ -2164,7 +2173,7 @@ export async function runAgentTurn(
         turn.ownerFence
       )
 
-    const appliedDefinitions =
+    const appliedDefinitions = options.catalog ?? (
       dependencies.resolveActions && dependencies.resolveProcedures
         ? null
         : await getRuntimeAppliedDefinitions(
@@ -2172,6 +2181,9 @@ export async function runAgentTurn(
             agent.id,
             agent.appliedRevision
           )
+    )
+    if (appliedDefinitions && (appliedDefinitions.projectId !== context.projectId || appliedDefinitions.agentId !== agent.id))
+      throw new BuildRuntimeError("INVALID_INPUT", "The agent definition catalog is not scoped to this agent.")
     const actions = dependencies.resolveActions
       ? await dependencies.resolveActions(context, agent)
       : (appliedDefinitions?.actions ?? [])
@@ -2241,7 +2253,8 @@ export async function runAgentTurn(
                     context,
                     conversation,
                     turn,
-                    procedureResult.continuations
+                    procedureResult.continuations,
+                    options.catalog?.widgets
                   )),
                 },
               },
@@ -2377,6 +2390,8 @@ export async function runAgentTurn(
         widgetId: interaction.widgetId,
         continuationId: interaction.continuationId,
         allowApproval,
+        widgetActionIds: options.catalog?.widgets.find(widget => widget.id === interaction.widgetId) &&
+          widgetAsCode(options.catalog.widgets.find(widget => widget.id === interaction.widgetId)!.definition).functions.flatMap(fn => fn.actionId ? [fn.actionId] : []),
       })
       if (!claimed) {
         throw new BuildRuntimeError(
@@ -2390,7 +2405,7 @@ export async function runAgentTurn(
       let continuationWidgets = appliedDefinitions?.widgets ?? []
       try {
         if (
-          !dependencies.resolveActions &&
+          !options.catalog && !dependencies.resolveActions &&
           Number.isInteger(sourceRevision) &&
           sourceRevision > 0
         ) {
@@ -2727,7 +2742,7 @@ export async function runAgentTurn(
               ? conversation.metadata.contactId.trim()
               : undefined
           const form = action.definition
-          await (context as BuildContext).database.transaction(async (tx) => {
+          if (options.recordFormData !== false) await (context as BuildContext).database.transaction(async (tx) => {
             const formContext = {
               ...context,
               database: tx,
@@ -3030,7 +3045,8 @@ export async function runAgentTurn(
                     context,
                     conversation,
                     turn,
-                    continuations
+                    continuations,
+                    options.catalog?.widgets
                   )),
                 },
               },
@@ -3623,7 +3639,8 @@ export async function runAgentTurn(
                   context,
                   conversation,
                   turn,
-                  continuations
+                  continuations,
+                  options.catalog?.widgets
                 )),
               },
             },

@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { Plus } from "lucide-react"
 import { tracerApi } from "@/components/tracer/api"
 import { DatasetDetailPage } from "@/components/tracer/datasets-page"
 import { useRemote } from "@/components/tracer/hooks"
@@ -11,6 +10,7 @@ import type { Dataset } from "@/src/lib/tracer/contracts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Notice } from "@/components/ui/notice"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -29,9 +29,19 @@ import {
 export function AgentTests({
   agentId,
   agentName,
+  requireJourneys = false,
+  onRequireJourneys,
+  onPublish,
+  pending,
+  unpublished,
 }: {
   agentId: string
   agentName: string
+  requireJourneys?: boolean
+  onRequireJourneys?: (required: boolean) => void
+  onPublish?: () => Promise<unknown>
+  pending?: boolean
+  unpublished?: boolean
 }) {
   const params = useSearchParams()
   const state = useRemote(
@@ -50,7 +60,7 @@ export function AgentTests({
       } while (cursor)
       return items
     },
-    [agentId],
+    [agentId]
   )
   const [created, setCreated] = React.useState<Dataset | null>(null)
   const datasets =
@@ -99,11 +109,18 @@ export function AgentTests({
         <Select
           value={datasetId ?? null}
           onValueChange={(id) => {
-            if (id) choose(id)
+            if (id === "__new_test_dataset__") {
+              setError("")
+              setName("")
+              setOpen(true)
+            } else if (id) choose(id)
           }}
-          items={datasets.map((d) => ({ value: d.id, label: d.name }))}
+          items={[
+            ...datasets.map((d) => ({ value: d.id, label: d.name })),
+            { value: "__new_test_dataset__", label: "New dataset" },
+          ]}
         >
-          <SelectTrigger aria-label="Test dataset" className="w-64 max-w-full">
+          <SelectTrigger aria-label="Test dataset" className="w-56 max-w-full">
             <SelectValue placeholder="Choose dataset" />
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
@@ -112,18 +129,39 @@ export function AgentTests({
                 {d.name}
               </SelectItem>
             ))}
+            <SelectItem value="__new_test_dataset__">New dataset</SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            setError("")
-            setOpen(true)
-          }}
-        >
-          <Plus className="size-3.5" /> New dataset
-        </Button>
+        <div className="ml-auto flex items-center gap-3">
+          {onRequireJourneys ? (
+            <label
+              title="Required tests must pass before publishing"
+              className="flex items-center gap-2 text-xs"
+            >
+              <Checkbox
+                aria-label="Require tests before publishing"
+                checked={requireJourneys}
+                disabled={pending}
+                onChange={(event) => onRequireJourneys(event.target.checked)}
+              />
+              Require tests
+            </label>
+          ) : null}
+          {requireJourneys && unpublished ? (
+            <span className="text-xs text-foreground-muted">Draft</span>
+          ) : null}
+          {requireJourneys && onPublish ? (
+            <Button
+              size="sm"
+              aria-label="Publish tested version"
+              disabled={pending || !unpublished}
+              loading={pending}
+              onClick={() => void onPublish().catch(() => {})}
+            >
+              Publish
+            </Button>
+          ) : null}
+        </div>
       </div>
       {state.error ? (
         <ErrorState error={state.error} onRetry={state.refresh} />

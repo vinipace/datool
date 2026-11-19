@@ -2528,7 +2528,7 @@ export class TracerService {
           sourceApp,
           mode: app ? "connected" : "evidence",
           agentId: input.agentId ?? null,
-          ...(app?.buildAgent ? { agentRevision: app.definition.revision, externalActions: "disabled" } : {}),
+          ...(app?.buildAgent ? { agentRevision: app.definition.revision, externalActions: "mocked-or-disabled" } : {}),
           // Reserved provenance: caller metadata cannot replace the actual overrides.
           inputOverrides: inputOverrides ?? {},
           concurrency: input.concurrency ?? 4,

@@ -141,6 +141,7 @@ export const agentConfigurationSchema = z.object({
     dailyTurnLimit: null,
     dailyBudgetUsd: null,
   }),
+  testing: z.object({ requirePassingJourneys: z.boolean().default(false) }).default({ requirePassingJourneys: false }),
   metadata: z.record(z.string().max(120), z.json()).default({}),
 })
 export type AgentConfiguration = z.infer<typeof agentConfigurationSchema>

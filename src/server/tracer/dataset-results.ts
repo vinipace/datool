@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm"
+import { journeyResultAttribute } from "@/src/lib/build/agent-journey"
 import type {
   DatasetEvaluation,
   DatasetEvaluationSummary,
@@ -18,7 +19,10 @@ function latestResultsSource(
         when latest.status='cancelled' then 'cancelled'
         when latest.status in ('error','blocked') or judgments.errors>0 then 'failed'
         when latest.status<>'completed' then 'pending'
+        when latest.functional->>'status' in ('failed','error') then 'failed'
         when judgments.failed>0 then 'failed'
+        when latest.functional->>'status'='passed' and judgments.total=0
+          and not exists(select 1 from eval_run_evaluators re where re.project_id=${project} and re.run_id=latest."runId") then 'passed'
         when judgments.total>0 and judgments.passed=judgments.total
           and judgments.total=(select count(*) from eval_run_evaluators re
             where re.project_id=${project} and re.run_id=latest."runId") then 'passed'
@@ -32,7 +36,8 @@ function latestResultsSource(
         left(case when jsonb_typeof(t.snapshot_json::jsonb #> '{trace,output}')='string'
           then t.snapshot_json::jsonb #>> '{trace,output}'
           else nullif((t.snapshot_json::jsonb #> '{trace,output}')::text, 'null') end, 500) as output,
-        left(coalesce(t.execution_error, t.snapshot_json::jsonb #>> '{trace,attributes,error.message}'), 1000) as error
+        left(coalesce(t.execution_error, t.snapshot_json::jsonb #>> '{trace,attributes,error.message}', t.snapshot_json::jsonb->'trace'->'attributes'->${journeyResultAttribute}->>'error'), 1000) as error,
+        t.snapshot_json::jsonb->'trace'->'attributes'->${journeyResultAttribute} as functional
       from eval_run_targets t
       join eval_runs r on r.project_id=t.project_id and r.id=t.run_id
       where t.project_id=${project} and r.dataset_id=${datasetId}

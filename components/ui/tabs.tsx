@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 export const Tabs = Primitive.Root
 type TabsVariant = "default" | "panel" | "underline" | "sidebar"
 const TabsVariantContext = React.createContext<TabsVariant>("default")
+const TabsSizeContext = React.createContext<"default" | "sm">("default")
 const triggerVariants: Record<TabsVariant, string> = {
   default: "h-8 rounded-md data-[state=active]:bg-muted",
   panel:
@@ -20,19 +21,25 @@ const triggerVariants: Record<TabsVariant, string> = {
 export function TabsList({
   className,
   variant = "default",
+  size = "default",
   ...props
-}: React.ComponentProps<typeof Primitive.List> & { variant?: TabsVariant }) {
+}: React.ComponentProps<typeof Primitive.List> & {
+  variant?: TabsVariant
+  size?: "default" | "sm"
+}) {
   return (
     <TabsVariantContext.Provider value={variant}>
-      <Primitive.List
-        className={cn(
-          "flex shrink-0 items-center gap-1",
-          variant === "panel" && "relative top-px h-full items-end gap-0.5",
-          variant === "underline" && "-mb-px gap-6",
-          className
-        )}
-        {...props}
-      />
+      <TabsSizeContext.Provider value={size}>
+        <Primitive.List
+          className={cn(
+            "flex shrink-0 items-center gap-1",
+            variant === "panel" && "relative top-px h-full items-end gap-0.5",
+            variant === "underline" && "-mb-px gap-6",
+            className
+          )}
+          {...props}
+        />
+      </TabsSizeContext.Provider>
     </TabsVariantContext.Provider>
   )
 }
@@ -44,11 +51,13 @@ export function TabsTrigger({
   size?: "default" | "icon"
 }) {
   const variant = React.useContext(TabsVariantContext)
+  const listSize = React.useContext(TabsSizeContext)
   return (
     <Primitive.Trigger
       className={cn(
         "inline-flex items-center justify-center gap-1.5 px-3 text-xs whitespace-nowrap text-foreground-muted outline-none hover:bg-muted hover:text-foreground focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[state=active]:text-foreground [&_svg]:shrink-0",
         triggerVariants[variant],
+        variant === "underline" && listSize === "sm" && "h-8 text-xs",
         size === "icon" && "size-8 p-0 [&_svg]:size-4",
         className
       )}

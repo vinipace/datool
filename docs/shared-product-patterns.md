@@ -468,6 +468,15 @@ Snapshot inspectors continue to use their frozen evidence without network reads.
 
 ## Dataset item links
 
+Agent Tests embeds the dataset workflow and adds structured customer journeys.
+The case inspector uses the guided journey editor and keeps raw input collapsed
+under Advanced input. Steps target accessible controls, support a preview width
+and locale, and use explicit mocks for external actions. Dataset rows display
+interaction status separately from answer scores; trace inspection shows the
+failing step and skipped successors. Required journeys may gate publication of
+saved configuration/catalog/knowledge revisions without auto-applying drafts.
+Existing message-only cases and ordinary app datasets retain their current flow.
+
 Dataset inspectors use `/p/[projectSlug]/datasets/[datasetId]/[itemId]`, with
 `itemTab` (`form`, `runs`, or `views`) and `objectView` query parameters.
 Opening a row, changing its tab or Object View,

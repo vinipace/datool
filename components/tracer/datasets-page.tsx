@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Braces, Check, ChevronRight, Info, Loader2, Plus, Save, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { Notice } from "@/components/ui/notice"
 import type {
@@ -41,6 +42,7 @@ import { useDatasetItemLocation } from "./use-dataset-item-location"
 import { TraceInspectorOverlay } from "./trace-list-overlay"
 import { DatasetItemsTable } from "./dataset-items-table"
 import { DatasetEvaluationSummary } from "./dataset-evaluation-summary"
+import { newJourneyInput } from "@/src/lib/build/agent-journey"
 import { DatasetSchemaDialog } from "./dataset-schema-dialog"
 import { DockedInspector } from "./docked-inspector"
 import { DatasetKindIcon } from "./dataset-kind-icon"
@@ -284,13 +286,13 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
     } catch (error) { setPageError((error as Error).message) }
   }
 
-  function addRow() {
+  function addRow(input?: DatasetItem["input"]) {
     const id = `ditem_${crypto.randomUUID()}`
     const timestamp = new Date().toISOString()
     const row: DatasetItem = {
       id,
       datasetId,
-      input: testAgent ? "" : {},
+      input: input ?? (testAgent ? "" : {}),
       expectedOutput: testAgent ? "" : {},
       metadata: {},
       sourceTraceId: null,
@@ -389,18 +391,14 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
       {testAgent && <DatasetEvaluationSummary summary={page.data?.evaluationSummary} />}
       <CollectionPanel label="Dataset rows">
         <HeaderSlot name="actions">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload className="size-3.5" />
-            <PanelActionLabel>Import</PanelActionLabel>
-          </Button>
-          <Button size="sm" variant="outline" onClick={addRow}>
-            <Plus className="size-3.5" />
-            <PanelActionLabel>Row</PanelActionLabel>
-          </Button>
+          {testAgent ? (
+            <Button size="sm" variant="outline" onClick={() => addRow(newJourneyInput())}>
+              <Plus className="size-3.5" /> Add test
+            </Button>
+          ) : <>
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-3.5" /><PanelActionLabel>Import</PanelActionLabel></Button>
+            <Button size="sm" variant="outline" onClick={() => addRow()}><Plus className="size-3.5" /><PanelActionLabel>Row</PanelActionLabel></Button>
+          </>}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -451,6 +449,7 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
           }}
           className="p-2"
           header={{
+            menuActions: testAgent ? <DropdownMenuItem onSelect={() => setImportOpen(true)}><Upload className="size-3.5" />Import tests</DropdownMenuItem> : undefined,
             onExportJson: () => void exportItems(items),
             exportName: dataset.name.split("/").at(-1) ?? "dataset-rows",
             children: (
@@ -489,6 +488,7 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
         title={selectedId ? "Dataset row" : "Dataset details"}
         mobileOpen={!!selectedId || mobileDetails}
         onMobileClose={close}
+        defaultSize={testAgent ? 60 : undefined}
       >
         <div className="h-full min-h-0">
           <div className={selectedId ? "hidden" : "h-full"}>
@@ -508,6 +508,7 @@ function DatasetDetailSession({ datasetId, testAgent }: DatasetDetailProps) {
           )}
           {selected ? (
             <DatasetItemInspector
+              agentTest={Boolean(testAgent)}
               key={selected.id}
               item={selected}
               activeTab={itemLocation.tab}
